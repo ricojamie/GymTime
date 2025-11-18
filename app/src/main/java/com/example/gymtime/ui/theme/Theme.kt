@@ -1,0 +1,40 @@
+package com.example.gymtime.ui.theme
+
+import android.app.Activity
+import android.os.Build
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+
+private val DarkColorScheme = darkColorScheme(
+    primary = PrimaryAccent,
+    secondary = PrimaryAccent, // Using PrimaryAccent for secondary as well for consistency
+    tertiary = PrimaryAccent, // Using PrimaryAccent for tertiary as well for consistency
+    background = BackgroundCanvas,
+    surface = SurfaceCards,
+    onPrimary = TextPrimary,
+    onSecondary = TextPrimary,
+    onTertiary = TextPrimary,
+    onBackground = TextPrimary,
+    onSurface = TextPrimary,
+)
+
+@Composable
+fun GymTimeTheme(
+    darkTheme: Boolean = true, // Always dark theme
+    content: @Composable () -> Unit
+) {
+    val colorScheme = DarkColorScheme
+
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = Typography,
+        content = content
+    )
+}
