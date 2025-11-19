@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -36,44 +37,51 @@ data class Workout(
 )
 
 @Composable
-fun RecentHistory(workouts: List<Workout>) {
-    LazyColumn(
-        modifier = Modifier.fillMaxWidth()
+fun RecentWorkoutCard(workout: Workout?) {
+    if (workout == null) return
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
     ) {
-        items(workouts) { workout ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(text = workout.name, fontWeight = FontWeight.Bold)
-                        Text(text = getRelativeDateString(workout.date), color = PrimaryAccent)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(painter = painterResource(id = R.drawable.ic_weight), contentDescription = "Volume")
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "Volume: ${workout.totalVolume} lbs")
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(painter = painterResource(id = R.drawable.ic_bicep), contentDescription = "Muscles")
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "Muscles: ${workout.musclesHit.joinToString()}")
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(painter = painterResource(id = R.drawable.ic_timer), contentDescription = "Duration")
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "Duration: ${workout.duration}")
-                    }
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_timer),
+                    contentDescription = "Recent Workout",
+                    tint = PrimaryAccent
+                )
+
+                Column {
+                    Text(
+                        text = workout.name,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = "${getRelativeDateString(workout.date)} • ${workout.duration}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
+
+            Text(
+                text = "Repeat",
+                color = PrimaryAccent,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
@@ -99,13 +107,10 @@ private fun getRelativeDateString(dateString: String): String {
 
 @Preview(showBackground = true)
 @Composable
-fun RecentHistoryPreview() {
+fun RecentWorkoutCardPreview() {
     GymTimeTheme {
-        RecentHistory(
-            workouts = listOf(
-                Workout("Chest Day", "2025-11-17", 10000, listOf("Chest", "Triceps"), "1h 15m"),
-                Workout("Back Day", "2025-11-16", 12000, listOf("Back", "Biceps"), "1h 30m"),
-            )
+        RecentWorkoutCard(
+            workout = Workout("Upper Body Power", "2025-11-17", 10000, listOf("Chest", "Triceps"), "1h 15m")
         )
     }
 }

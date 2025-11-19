@@ -46,28 +46,43 @@
 ## 5. UI/UX Guidelines
 
 *   **Color Palette:**
-    *   `Primary/Accent (Deep Amethyst)`: `#8B48F7` - Vibrant, saturated purple for key actions (e.g., "Log Set" button, timer overlay).
+    *   `Primary/Accent (Lime Green)`: `#A3E635` - Modern, energetic lime green for key actions, text highlights, and icons. Conveys growth, progress, and vitality.
+    *   `Primary Accent Dark`: `#84CC16` - Darker shade for pressed states and variation.
+    *   `Primary Accent Light`: `#BEF264` - Lighter shade for highlights and hover effects.
     *   `Background (Almost Black)`: `#121212` - Standard dark theme compliant, high contrast, minimizes eye strain.
     *   `Surface (Slightly Lighter)`: `#1E1E1E` - For cards and containers, provides depth.
+    *   `Gradient Start`: `#0A1A0A` - Dark green tint for background gradient (top).
+    *   `Gradient End`: `#121212` - Almost black for background gradient (bottom).
+    *   `Card Gradient`: Almost entirely `#121212` (black) with **very subtle** green glow (12% alpha) positioned in top-left corner. Cards should feel dark and premium, not overtly green.
     *   `Text (Near White)`: `#FFFFFF` or `#E0E0E0` - High contrast, easy to read.
+    *   `Text Tertiary (Muted)`: `#9CA3AF` - For labels, subtitles, and secondary information.
     *   `Success/Fresh (Emerald Green)`: `#2ECC71` - For "Fresh" status on Muscle Heat Map.
     *   `Warning/Fatigued (Alizarin Red)`: `#E74C3C` - For "Fatigued" status on Muscle Heat Map.
-    *   `Gradient Start`: `#1A0033` - Used in background gradient.
 
 *   **Typography:**
     *   **Font System:** Two-font system.
         *   `Inter`: Used for all general text content.
         *   `Bebas Neue`: Used specifically for workout names.
     *   **Hierarchy:** Achieved through font weight variations (e.g., `FontWeight.Bold`, `FontWeight.Medium`) rather than different font families.
-    *   **Letter Spacing:** Slight increase to letter spacing for easier scanning during sets.
+    *   **Letter Spacing:** Increased letter spacing (2sp for labels) for better readability and modern aesthetic.
+    *   **Split-Color Branding**: App name "IronLog" uses white for "Iron" and lime green for "Log".
 
 *   **Component Styling:**
-    *   **Buttons:** Generally square with subtle shadows.
+    *   **Cards:** Rounded corners (16dp), **almost entirely dark** with barely-visible corner glow (12% alpha green), subtle elevation (8dp). Premium, understated aesthetic - not flashy.
+    *   **Gradient Cards:** Use `GradientCard` and `PrimaryGradientCard` composables for consistent styling.
+    *   **Hero Cards:** Full-width, prominent cards for primary actions (e.g., "Start Workout").
+    *   **Status Tags:** Small uppercase labels with increased letter spacing (e.g., "EMPTY SESSION", "VOLUME TREND").
+    *   **Buttons:** Use gradient cards instead of traditional buttons for a cohesive look.
     *   **Dates:** Use relative date language (e.g., "Today", "Yesterday", "Monday") for recent history entries.
-    *   **Bottom Navigation:** Active tabs should be highlighted with `PrimaryAccent`.
+    *   **Bottom Navigation:** Active tabs should be highlighted with `PrimaryAccent` (lime green).
 
 *   **Layout Principles:**
-    *   Prioritize single-page views where possible, avoid excessive scrolling.
+    *   **Focus on Key Actions**: Full-width hero cards for primary workflows (Quick Start).
+    *   **Two-Column Metrics**: Side-by-side cards for quick glanceable data (Routines + Volume).
+    *   **Minimal Scrolling**: Show only the most recent workout as a reminder, not full history.
+    *   **Personalization**: Header shows "WELCOME BACK" + user's name + split-color app branding.
+    *   **Clean Information Hierarchy**: Use spacing and typography weight to guide attention, not excessive visual elements.
+    *   **Breathing Room**: Embrace empty space. Less is more. Don't fill every pixel - let content breathe.
 
 ## 6. Coding Standards
 * **Compose:** Use `Stateless` composables where possible. Hoist state to the ViewModel.
