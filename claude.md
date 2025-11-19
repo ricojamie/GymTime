@@ -58,10 +58,10 @@ _Do not hallucinate new tables. Use this structure._
   - `Primary Accent Dark`: `#84CC16` - Darker shade for pressed states and variation.
   - `Primary Accent Light`: `#BEF264` - Lighter shade for highlights and hover effects.
   - `Background (Almost Black)`: `#121212` - Standard dark theme compliant, high contrast, minimizes eye strain.
-  - `Surface (Slightly Lighter)`: `#1E1E1E` - For cards and containers, provides depth.
+  - `Surface (Very Dark)`: `#0D0D0D` - For cards and containers, almost black for premium feel.
   - `Gradient Start`: `#0A1A0A` - Dark green tint for background gradient (top).
-  - `Gradient End`: `#121212` - Almost black for background gradient (bottom).
-  - `Card Gradient`: Almost entirely `#121212` (black) with **very subtle** green glow (12% alpha) positioned in top-left corner. Cards should feel dark and premium, not overtly green.
+  - `Gradient End`: `#0A0A0A` - Very dark black for background gradient (bottom).
+  - `Card Border Glow`: 1dp horizontal gradient border from lime green (20% alpha) fading to transparent over 400px. Very subtle left-edge glow, not a full card gradient. Cards are nearly black (`#0D0D0D`) with minimal green accent.
   - `Text (Near White)`: `#FFFFFF` or `#E0E0E0` - High contrast, easy to read.
   - `Text Tertiary (Muted)`: `#9CA3AF` - For labels, subtitles, and secondary information.
   - `Success/Fresh (Emerald Green)`: `#2ECC71` - For "Fresh" status on Muscle Heat Map.
@@ -78,7 +78,7 @@ _Do not hallucinate new tables. Use this structure._
 
 - **Component Styling:**
 
-  - **Cards:** Rounded corners (16dp), **almost entirely dark** with barely-visible corner glow (12% alpha green), subtle elevation (8dp). Premium, understated aesthetic - not flashy.
+  - **Cards:** Rounded corners (16dp), **very dark** (`#0D0D0D`) with subtle left-edge green glow (1dp border, 20% alpha, fades over 400px). Elevation (8dp). Premium, understated aesthetic - nearly black with minimal accent.
   - **Gradient Cards:** Use `GradientCard` and `PrimaryGradientCard` composables for consistent styling.
   - **Hero Cards:** Full-width, prominent cards for primary actions (e.g., "Start Workout").
   - **Status Tags:** Small uppercase labels with increased letter spacing (e.g., "EMPTY SESSION", "VOLUME TREND").

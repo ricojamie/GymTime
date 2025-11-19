@@ -24,15 +24,15 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gymtime.R
-import com.example.gymtime.ui.components.PrimaryGradientCard
+import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.GymTimeTheme
 import com.example.gymtime.ui.theme.PrimaryAccent
 import com.example.gymtime.ui.theme.TextPrimary
 import com.example.gymtime.ui.theme.TextTertiary
 
 @Composable
-fun QuickStartCard(onClick: () -> Unit) {
-    PrimaryGradientCard(
+fun QuickStartCard(isOngoing: Boolean, onClick: () -> Unit) {
+    GlowCard(
         modifier = Modifier
             .fillMaxWidth()
             .height(180.dp),
@@ -45,7 +45,7 @@ fun QuickStartCard(onClick: () -> Unit) {
         ) {
             // "EMPTY SESSION" tag in top right
             Text(
-                text = "EMPTY SESSION",
+                text = if (isOngoing) "IN PROGRESS" else "EMPTY SESSION",
                 modifier = Modifier.align(Alignment.TopEnd),
                 style = MaterialTheme.typography.labelSmall,
                 color = PrimaryAccent,
@@ -68,7 +68,7 @@ fun QuickStartCard(onClick: () -> Unit) {
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "Start Workout",
+                    text = if (isOngoing) "Resume Workout" else "Start Workout",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = PrimaryAccent
@@ -77,7 +77,7 @@ fun QuickStartCard(onClick: () -> Unit) {
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "Build as you go",
+                    text = if (isOngoing) "Continue your session" else "Build as you go",
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextTertiary
                 )

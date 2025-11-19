@@ -58,5 +58,6 @@ fun getIconForScreen(screen: Screen): Int {
         Screen.Home -> R.drawable.ic_home
         Screen.History -> R.drawable.ic_history
         Screen.Library -> R.drawable.ic_library
+        Screen.Workout -> R.drawable.ic_home // Not in bottom bar, but needs to be exhaustive
     }
 }

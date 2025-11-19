@@ -16,27 +16,18 @@ import androidx.compose.ui.unit.dp
 import com.example.gymtime.ui.theme.BackgroundCanvas
 import com.example.gymtime.ui.theme.PrimaryAccent
 import com.example.gymtime.ui.theme.PrimaryAccentDark
+import com.example.gymtime.ui.theme.SurfaceCards
 
 @Composable
-fun GradientCard(
+fun GlowCard(
     modifier: Modifier = Modifier,
-    gradientColors: List<Color> = listOf(
-        PrimaryAccentDark.copy(alpha = 0.08f),
-        BackgroundCanvas,
-        BackgroundCanvas
-    ),
-    centerX: Float = 0.1f, // Position glow in corner (0.0 = left, 1.0 = right)
-    centerY: Float = 0.1f, // Position glow in corner (0.0 = top, 1.0 = bottom)
-    onClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
     content: @Composable () -> Unit
 ) {
     Card(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .then(
-                if (onClick != null) Modifier.clickable { onClick() }
-                else Modifier
-            ),
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
@@ -46,10 +37,14 @@ fun GradientCard(
                 .fillMaxWidth()
                 .background(
                     brush = Brush.radialGradient(
-                        colors = gradientColors,
+                        colors = listOf(
+                            PrimaryAccent.copy(alpha = 0.12f), // Very subtle green glow
+                            SurfaceCards,
+                            SurfaceCards
+                        ),
                         center = androidx.compose.ui.geometry.Offset(
-                            x = centerX,
-                            y = centerY
+                            x = 0.15f, // Top-left corner glow position (0.0 = left, 1.0 = right)
+                            y = 0.15f  // Top-left corner glow position (0.0 = top, 1.0 = bottom)
                         ),
                         radius = 600f
                     )
@@ -58,24 +53,4 @@ fun GradientCard(
             content()
         }
     }
-}
-
-@Composable
-fun PrimaryGradientCard(
-    modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null,
-    content: @Composable () -> Unit
-) {
-    GradientCard(
-        modifier = modifier,
-        gradientColors = listOf(
-            PrimaryAccent.copy(alpha = 0.12f), // Very subtle green glow
-            BackgroundCanvas,
-            BackgroundCanvas
-        ),
-        centerX = 0.15f, // Top-left corner glow
-        centerY = 0.15f,
-        onClick = onClick,
-        content = content
-    )
 }

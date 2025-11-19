@@ -22,19 +22,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.gymtime.R
+import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.ui.theme.GymTimeTheme
+import com.example.gymtime.ui.theme.PrimaryAccent
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
-import com.example.gymtime.ui.theme.PrimaryAccent
-
-data class Workout(
-    val name: String,
-    val date: String,
-    val totalVolume: Int,
-    val musclesHit: List<String>,
-    val duration: String
-)
 
 @Composable
 fun RecentWorkoutCard(workout: Workout?) {
@@ -64,12 +58,12 @@ fun RecentWorkoutCard(workout: Workout?) {
 
                 Column {
                     Text(
-                        text = workout.name,
+                        text = workout.name ?: "Unnamed Workout",
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.bodyLarge
                     )
                     Text(
-                        text = "${getRelativeDateString(workout.date)} • ${workout.duration}",
+                        text = "${getRelativeDateString(workout.startTime)} • ${workout.endTime?.let { getDurationString(workout.startTime, it) } ?: "Ongoing"}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -86,9 +80,13 @@ fun RecentWorkoutCard(workout: Workout?) {
     }
 }
 
-private fun getRelativeDateString(dateString: String): String {
-    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    val date = dateFormat.parse(dateString) ?: return dateString
+private fun getDurationString(start: Date, end: Date): String {
+    val diff = end.time - start.time
+    val minutes = diff / (1000 * 60)
+    return "${minutes}m"
+}
+
+private fun getRelativeDateString(date: Date): String {
     val calendar = Calendar.getInstance()
     val today = calendar.time
     calendar.add(Calendar.DAY_OF_YEAR, -1)
@@ -101,7 +99,7 @@ private fun getRelativeDateString(dateString: String): String {
         android.text.format.DateUtils.isToday(date.time) -> "Today"
         android.text.format.DateUtils.isToday(yesterday.time) -> "Yesterday"
         date.after(lastWeek) -> SimpleDateFormat("EEEE", Locale.getDefault()).format(date)
-        else -> dateString
+        else -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(date)
     }
 }
 
@@ -110,7 +108,7 @@ private fun getRelativeDateString(dateString: String): String {
 fun RecentWorkoutCardPreview() {
     GymTimeTheme {
         RecentWorkoutCard(
-            workout = Workout("Upper Body Power", "2025-11-17", 10000, listOf("Chest", "Triceps"), "1h 15m")
+            workout = Workout(id = 1, name = "Upper Body Power", startTime = Date(), endTime = Date(), note = null)
         )
     }
 }

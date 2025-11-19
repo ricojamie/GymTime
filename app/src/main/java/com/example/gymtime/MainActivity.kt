@@ -74,9 +74,10 @@ class MainActivity : ComponentActivity() {
                                 startDestination = Screen.Home.route,
                                 modifier = Modifier.padding(innerPadding)
                             ) {
-                                composable(Screen.Home.route) { HomeScreen() }
+                                composable(Screen.Home.route) { HomeScreen(navController = navController) }
                                 composable(Screen.History.route) { HistoryScreen() }
                                 composable(Screen.Library.route) { LibraryScreen() }
+                                composable(Screen.Workout.route) { com.example.gymtime.ui.workout.WorkoutScreen() }
                             }
                         }
                     }
@@ -87,8 +88,14 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun HomeScreen(modifier: Modifier = Modifier, viewModel: HomeViewModel = hiltViewModel()) {
+fun HomeScreen(
+    modifier: Modifier = Modifier,
+    viewModel: HomeViewModel = hiltViewModel(),
+    navController: androidx.navigation.NavController
+) {
     val userName by viewModel.userName.collectAsState(initial = "Athlete")
+    val workouts by viewModel.workouts.collectAsState(initial = emptyList())
+    val ongoingWorkout by viewModel.ongoingWorkout.collectAsState()
 
     Column(
         modifier = modifier
@@ -101,7 +108,8 @@ fun HomeScreen(modifier: Modifier = Modifier, viewModel: HomeViewModel = hiltVie
 
         // Quick Start button - full width
         com.example.gymtime.ui.QuickStartCard(
-            onClick = { /* TODO: Handle Quick Start */ }
+            isOngoing = ongoingWorkout != null,
+            onClick = { navController.navigate(Screen.Workout.route) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -120,7 +128,8 @@ fun HomeScreen(modifier: Modifier = Modifier, viewModel: HomeViewModel = hiltVie
 
             com.example.gymtime.ui.components.WeeklyVolumeCard(
                 modifier = Modifier.weight(1f),
-                weeklyVolume = viewModel.poundsLifted
+                weeklyVolume = viewModel.poundsLifted,
+                onClick = {}
             )
         }
 
@@ -138,7 +147,7 @@ fun HomeScreen(modifier: Modifier = Modifier, viewModel: HomeViewModel = hiltVie
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "${viewModel.workouts.firstOrNull()?.name ?: "No workouts"}",
+                text = workouts.firstOrNull()?.name ?: "No workouts",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -148,8 +157,13 @@ fun HomeScreen(modifier: Modifier = Modifier, viewModel: HomeViewModel = hiltVie
 
         // Single recent workout card
         com.example.gymtime.ui.RecentWorkoutCard(
-            workout = viewModel.workouts.firstOrNull()
+            workout = workouts.firstOrNull()
         )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Personal Best Card
+        com.example.gymtime.ui.components.PersonalBestCard()
     }
 }
 
@@ -157,6 +171,6 @@ fun HomeScreen(modifier: Modifier = Modifier, viewModel: HomeViewModel = hiltVie
 @Composable
 fun HomeScreenPreview() {
     GymTimeTheme {
-        HomeScreen()
+        HomeScreen(navController = rememberNavController())
     }
 }

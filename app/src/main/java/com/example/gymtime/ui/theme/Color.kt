@@ -9,9 +9,9 @@ val PrimaryAccentLight = Color(0xFFBEF264) // Lighter Lime
 
 // Background & Surface Colors
 val BackgroundCanvas = Color(0xFF121212) // Almost Black
-val SurfaceCards = Color(0xFF1E1E1E) // Slightly Lighter
+val SurfaceCards = Color(0xFF0D0D0D) // Very dark, almost black
 val GradientStart = Color(0xFF0A1A0A) // Dark green tint for gradient
-val GradientEnd = Color(0xFF121212) // Almost Black
+val GradientEnd = Color(0xFF0A0A0A) // Very dark black
 
 // Text Colors
 val TextPrimary = Color(0xFFFFFFFF) // Near White

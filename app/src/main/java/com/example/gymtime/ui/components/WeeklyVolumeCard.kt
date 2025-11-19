@@ -27,11 +27,13 @@ import com.example.gymtime.ui.theme.TextTertiary
 @Composable
 fun WeeklyVolumeCard(
     modifier: Modifier = Modifier,
-    weeklyVolume: Int
+    weeklyVolume: Int,
+    onClick: () -> Unit
 ) {
-    GradientCard(
+    GlowCard(
         modifier = modifier
-            .height(150.dp)
+            .height(150.dp),
+        onClick = onClick
     ) {
         Box(
             modifier = Modifier

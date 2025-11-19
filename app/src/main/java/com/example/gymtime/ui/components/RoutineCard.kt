@@ -29,7 +29,7 @@ fun RoutineCard(
     routineName: String?,
     onClick: () -> Unit
 ) {
-    GradientCard(
+    GlowCard(
         modifier = modifier
             .height(150.dp),
         onClick = onClick
