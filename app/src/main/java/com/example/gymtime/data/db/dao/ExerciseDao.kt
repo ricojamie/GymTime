@@ -1,6 +1,7 @@
 package com.example.gymtime.data.db.dao
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
@@ -14,6 +15,12 @@ interface ExerciseDao {
 
     @Update
     suspend fun updateExercise(exercise: Exercise)
+
+    @Delete
+    suspend fun deleteExercise(exercise: Exercise)
+
+    @Query("DELETE FROM exercises WHERE id = :id")
+    suspend fun deleteExerciseById(id: Long)
 
     @Query("SELECT * FROM exercises")
     fun getAllExercises(): Flow<List<Exercise>>

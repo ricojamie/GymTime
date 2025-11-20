@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.Workout
+import com.example.gymtime.data.db.entity.WorkoutWithMuscles
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -24,7 +25,7 @@ class HomeViewModel @Inject constructor(
         initialValue = null
     )
 
-    val workouts: Flow<List<Workout>> = workoutDao.getAllWorkouts()
+    val workouts: Flow<List<WorkoutWithMuscles>> = workoutDao.getWorkoutsWithMuscles()
 
     // TODO: Replace with real data
     val hasActiveRoutine = true

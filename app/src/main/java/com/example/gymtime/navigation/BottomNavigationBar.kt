@@ -31,17 +31,22 @@ fun BottomNavigationBar(navController: NavController) {
                 selected = currentRoute == screen.route,
                 onClick = {
                     navController.navigate(screen.route) {
-                        // Pop up to the start destination of the graph to
-                        // avoid building up a large stack of destinations
-                        // on the back stack as users select items
-                        popUpTo(navController.graph.startDestinationId) {
-                            saveState = true
+                        if (screen == Screen.Home) {
+                            // For Home button: clear the entire back stack and go to Home
+                            popUpTo(navController.graph.startDestinationId) {
+                                inclusive = true
+                                saveState = false
+                            }
+                            launchSingleTop = true
+                            restoreState = false
+                        } else {
+                            // For other buttons: use standard navigation
+                            popUpTo(navController.graph.startDestinationId) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
                         }
-                        // Avoid multiple copies of the same destination when
-                        // reselecting the same item
-                        launchSingleTop = true
-                        // Restore state when reselecting a previously selected item
-                        restoreState = true
                     }
                 },
                 colors = NavigationBarItemDefaults.colors(
@@ -59,5 +64,7 @@ fun getIconForScreen(screen: Screen): Int {
         Screen.History -> R.drawable.ic_history
         Screen.Library -> R.drawable.ic_library
         Screen.Workout -> R.drawable.ic_home // Not in bottom bar, but needs to be exhaustive
+        Screen.ExerciseSelection -> R.drawable.ic_home // Not in bottom bar
+        Screen.ExerciseLogging -> R.drawable.ic_home // Not in bottom bar
     }
 }

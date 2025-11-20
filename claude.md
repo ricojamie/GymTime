@@ -112,3 +112,27 @@ _Do not hallucinate new tables. Use this structure._
 - **No Boilerplate Explanations:** I understand Compose and Kotlin fundamentals. Focus on the specific solution.
 - **Mobile-First Thinking:** All UI suggestions should prioritize thumb-reachability and one-handed use.
 - **Reference the Schema:** When discussing features that touch data, explicitly reference the Room entities above.
+
+## 8. Development Workflow
+
+For all coding-related requests:
+
+1. **Plan First:** Create a detailed plan of attack before writing any code. Include:
+   - What files will be created/modified
+   - High-level implementation approach
+   - Architectural decisions and reasoning
+   - Any potential pitfalls or edge cases
+
+2. **Identify Clarifications:** Ponder potential ambiguities, edge cases, and design decisions that need your input.
+
+3. **Present to You:** Show both:
+   - Any clarifying questions you need to answer
+   - The proposed implementation plan
+
+4. **Wait for Approval:** Do not proceed with implementation until you explicitly approve or provide edits to the plan.
+
+5. **Execute:** Only after approval, implement the plan according to the agreed specifications.
+
+6. **Code Review:** For complex changes, consider using code-review agents to validate the implementation before final delivery.
+
+This applies to all coding tasks, regardless of size. Speed comes from clear planning and alignment, not from skipping steps.

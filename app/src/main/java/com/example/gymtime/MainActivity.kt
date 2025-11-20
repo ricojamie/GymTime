@@ -76,8 +76,21 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 composable(Screen.Home.route) { HomeScreen(navController = navController) }
                                 composable(Screen.History.route) { HistoryScreen() }
-                                composable(Screen.Library.route) { LibraryScreen() }
+                                composable(Screen.Library.route) {
+                                    com.example.gymtime.ui.exercise.ExerciseSelectionScreen(navController = navController)
+                                }
                                 composable(Screen.Workout.route) { com.example.gymtime.ui.workout.WorkoutScreen() }
+                                composable(Screen.ExerciseSelection.route) {
+                                    com.example.gymtime.ui.exercise.ExerciseSelectionScreen(navController = navController)
+                                }
+                                composable(
+                                    route = Screen.ExerciseLogging.route,
+                                    arguments = listOf(androidx.navigation.navArgument("exerciseId") {
+                                        type = androidx.navigation.NavType.LongType
+                                    })
+                                ) {
+                                    com.example.gymtime.ui.exercise.ExerciseLoggingScreen(navController = navController)
+                                }
                             }
                         }
                     }
@@ -109,7 +122,7 @@ fun HomeScreen(
         // Quick Start button - full width
         com.example.gymtime.ui.QuickStartCard(
             isOngoing = ongoingWorkout != null,
-            onClick = { navController.navigate(Screen.Workout.route) }
+            onClick = { navController.navigate(Screen.ExerciseSelection.route) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -135,30 +148,7 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Recent Workout section header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Recent:",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = workouts.firstOrNull()?.name ?: "No workouts",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Single recent workout card
-        com.example.gymtime.ui.RecentWorkoutCard(
-            workout = workouts.firstOrNull()
-        )
 
         Spacer(modifier = Modifier.height(24.dp))
 

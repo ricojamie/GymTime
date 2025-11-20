@@ -1,0 +1,281 @@
+package com.example.gymtime.ui.exercise
+
+import android.util.Log
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavController
+import com.example.gymtime.R
+import com.example.gymtime.data.db.entity.Exercise
+
+import com.example.gymtime.navigation.Screen
+import com.example.gymtime.ui.components.GlowCard
+import com.example.gymtime.ui.theme.GymTimeTheme
+import com.example.gymtime.ui.theme.PrimaryAccent
+import com.example.gymtime.ui.theme.SurfaceCards
+import com.example.gymtime.ui.theme.TextPrimary
+import com.example.gymtime.ui.theme.TextTertiary
+
+private const val TAG = "ExerciseSelectionScreen"
+
+@Composable
+fun ExerciseSelectionScreen(
+    navController: NavController,
+    viewModel: ExerciseSelectionViewModel = hiltViewModel()
+) {
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val selectedMuscles by viewModel.selectedMuscles.collectAsState()
+    val availableMuscles by viewModel.availableMuscles.collectAsState(initial = emptyList())
+    val filteredExercises by viewModel.filteredExercises.collectAsState(initial = emptyList())
+
+    Log.d(TAG, "ExerciseSelectionScreen recomposed: availableMuscles=${availableMuscles.size}, filteredExercises=${filteredExercises.size}")
+    Log.d(TAG, "Available muscles: $availableMuscles")
+    Log.d(TAG, "Filtered exercises count: ${filteredExercises.size}")
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        // Search Box
+        SearchBox(
+            query = searchQuery,
+            onQueryChange = { viewModel.updateSearchQuery(it) }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Filter Pills
+        if (availableMuscles.isNotEmpty()) {
+            FilterPills(
+                muscles = availableMuscles,
+                selectedMuscles = selectedMuscles,
+                onMuscleToggle = { viewModel.toggleMuscleFilter(it) }
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Exercise List
+        if (filteredExercises.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No exercises found",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = TextTertiary
+                )
+            }
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(filteredExercises) { exercise ->
+                    ExerciseListItem(
+                        exercise = exercise,
+                        onClick = {
+                            navController.navigate(Screen.ExerciseLogging.createRoute(exercise.id))
+                        },
+                        onDelete = {
+                            viewModel.deleteExercise(exercise.id)
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchBox(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    GlowCard(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(56.dp),
+        onClick = { /* Not clickable as a card, text field is interactive */ }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier
+                    .weight(1f)
+                    .align(Alignment.CenterVertically),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary),
+                decorationBox = { innerTextField ->
+                    if (query.isEmpty()) {
+                        Text(
+                            text = "Search exercises...",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = TextTertiary
+                        )
+                    }
+                    innerTextField()
+                },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                singleLine = true
+            )
+        }
+    }
+}
+
+@Composable
+private fun FilterPills(
+    muscles: List<String>,
+    selectedMuscles: Set<String>,
+    onMuscleToggle: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(muscles) { muscle ->
+            FilterChip(
+                selected = muscle in selectedMuscles,
+                onClick = { onMuscleToggle(muscle) },
+                label = {
+                    Text(
+                        text = muscle,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = PrimaryAccent,
+                    selectedLabelColor = Color.Black,
+                    containerColor = SurfaceCards,
+                    labelColor = TextPrimary
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    enabled = true,
+                    selected = muscle in selectedMuscles,
+                    borderColor = if (muscle in selectedMuscles) PrimaryAccent else TextTertiary,
+                    selectedBorderColor = PrimaryAccent
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExerciseListItem(
+    exercise: Exercise,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var showMenu by remember { mutableStateOf(false) }
+
+    GlowCard(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(64.dp),
+        onClick = onClick,
+        onLongClick = { showMenu = true }
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = exercise.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = exercise.targetMuscle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextTertiary
+                    )
+                }
+            }
+
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false },
+                modifier = Modifier.background(SurfaceCards)
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Edit", color = TextPrimary) },
+                    onClick = {
+                        showMenu = false
+                        // TODO: Navigate to edit screen
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                    onClick = {
+                        showMenu = false
+                        onDelete()
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun ExerciseSelectionScreenPreview() {
+    GymTimeTheme {
+        // This would be a mock preview without actual navigation
+    }
+}

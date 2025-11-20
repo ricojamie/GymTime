@@ -3,6 +3,7 @@ package com.example.gymtime.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -20,6 +21,7 @@ class UserPreferencesRepository @Inject constructor(
 ) {
     private object PreferencesKeys {
         val USER_NAME = stringPreferencesKey("user_name")
+        val EXERCISES_SEEDED = booleanPreferencesKey("exercises_seeded")
     }
 
     val userName: Flow<String> = context.dataStore.data
@@ -27,9 +29,20 @@ class UserPreferencesRepository @Inject constructor(
             preferences[PreferencesKeys.USER_NAME] ?: "Athlete"
         }
 
+    val exercisesSeeded: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.EXERCISES_SEEDED] ?: false
+        }
+
     suspend fun setUserName(name: String) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.USER_NAME] = name
+        }
+    }
+
+    suspend fun setExercisesSeeded(seeded: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.EXERCISES_SEEDED] = seeded
         }
     }
 }
