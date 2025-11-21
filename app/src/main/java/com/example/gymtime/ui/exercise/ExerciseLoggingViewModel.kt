@@ -1,14 +1,17 @@
 package com.example.gymtime.ui.exercise
 
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.SetDao
+import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
+import com.example.gymtime.util.OneRepMaxCalculator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +21,19 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Date
 import javax.inject.Inject
+
+data class WorkoutStats(
+    val totalSets: Int,
+    val totalVolume: Float,
+    val exerciseCount: Int,
+    val duration: String
+)
+
+data class PersonalRecords(
+    val heaviestWeight: Set?,
+    val bestE1RM: Pair<Set, Float>?, // Set and calculated E1RM
+    val bestE10RM: Pair<Set, Float>?  // Set and calculated E10RM (premium feature)
+)
 
 @HiltViewModel
 class ExerciseLoggingViewModel @Inject constructor(
@@ -57,11 +73,23 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _isTimerRunning = MutableStateFlow(false)
     val isTimerRunning: StateFlow<Boolean> = _isTimerRunning
 
+    // Last workout data
+    private val _lastWorkoutSets = MutableStateFlow<List<Set>>(emptyList())
+    val lastWorkoutSets: StateFlow<List<Set>> = _lastWorkoutSets
+
+    // Workout overview data
+    private val _workoutOverview = MutableStateFlow<List<WorkoutExerciseSummary>>(emptyList())
+    val workoutOverview: StateFlow<List<WorkoutExerciseSummary>> = _workoutOverview
+
+    // Flag to track if pre-fill has happened
+    private var hasPrefilled = false
+
     init {
         viewModelScope.launch {
             // Load exercise
             exerciseDao.getExerciseById(exerciseId).collectLatest { exercise ->
                 _exercise.value = exercise
+                Log.d("ExerciseLoggingVM", "Exercise loaded: ${exercise?.name}")
             }
         }
 
@@ -70,6 +98,7 @@ class ExerciseLoggingViewModel @Inject constructor(
             val ongoing = workoutDao.getOngoingWorkout().first()
             if (ongoing != null) {
                 _currentWorkout.value = ongoing
+                Log.d("ExerciseLoggingVM", "Ongoing workout found: ${ongoing.id}")
             } else {
                 // Create new workout
                 val newWorkout = Workout(
@@ -81,12 +110,35 @@ class ExerciseLoggingViewModel @Inject constructor(
                 val workoutId = workoutDao.insertWorkout(newWorkout)
                 val createdWorkout = workoutDao.getWorkoutById(workoutId).first()
                 _currentWorkout.value = createdWorkout
+                Log.d("ExerciseLoggingVM", "New workout created: ${createdWorkout.id}")
             }
 
             // Load logged sets for this exercise in current workout
             _currentWorkout.value?.let { workout ->
                 setDao.getSetsForWorkout(workout.id).collectLatest { sets ->
                     _loggedSets.value = sets.filter { it.exerciseId == exerciseId }
+                    Log.d("ExerciseLoggingVM", "Logged sets updated: ${_loggedSets.value.size}")
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            // Load last workout data for pre-fill
+            _currentWorkout.value?.let { workout ->
+                val previousSets = setDao.getLastWorkoutSetsForExercise(
+                    exerciseId = exerciseId,
+                    currentWorkoutId = workout.id
+                )
+                _lastWorkoutSets.value = previousSets
+                Log.d("ExerciseLoggingVM", "Last workout sets loaded: ${previousSets.size}")
+
+                // Auto-prefill if this is the first set AND we have previous data
+                if (!hasPrefilled && previousSets.isNotEmpty() && _loggedSets.value.isEmpty()) {
+                    val lastSet = previousSets.first() // First set from previous workout
+                    lastSet.weight?.let { _weight.value = it.toString() }
+                    lastSet.reps?.let { _reps.value = it.toString() }
+                    hasPrefilled = true
+                    Log.d("ExerciseLoggingVM", "Pre-filled: ${lastSet.weight} x ${lastSet.reps}")
                 }
             }
         }
@@ -149,5 +201,82 @@ class ExerciseLoggingViewModel @Inject constructor(
             val updatedWorkout = workout.copy(endTime = Date())
             workoutDao.updateWorkout(updatedWorkout)
         }
+    }
+
+    // Load workout overview data
+    fun loadWorkoutOverview() {
+        viewModelScope.launch {
+            _currentWorkout.value?.let { workout ->
+                val overview = setDao.getWorkoutExerciseSummaries(workout.id)
+                _workoutOverview.value = overview
+                Log.d("ExerciseLoggingVM", "Workout overview loaded: ${overview.size} exercises")
+            }
+        }
+    }
+
+    // Calculate personal records for the current exercise
+    suspend fun getPersonalRecords(): PersonalRecords {
+        val heaviest = setDao.getPersonalBest(exerciseId)
+        val workingSets = setDao.getWorkingSetsForE1RMCalculation(exerciseId)
+
+        // Find best E1RM
+        val bestE1RM = workingSets
+            .mapNotNull { set ->
+                val e1rm = OneRepMaxCalculator.calculateE1RM(
+                    set.weight ?: return@mapNotNull null,
+                    set.reps ?: return@mapNotNull null
+                )
+                e1rm?.let { set to it }
+            }
+            .maxByOrNull { it.second }
+
+        // Find best E10RM (premium feature)
+        val bestE10RM = workingSets
+            .mapNotNull { set ->
+                val e10rm = OneRepMaxCalculator.calculateE10RM(
+                    set.weight ?: return@mapNotNull null,
+                    set.reps ?: return@mapNotNull null
+                )
+                e10rm?.let { set to it }
+            }
+            .maxByOrNull { it.second }
+
+        return PersonalRecords(
+            heaviestWeight = heaviest,
+            bestE1RM = bestE1RM,
+            bestE10RM = bestE10RM
+        )
+    }
+
+    // Get exercise history grouped by workout
+    suspend fun getExerciseHistory(): Map<Long, List<Set>> {
+        val allSets = setDao.getExerciseHistoryByWorkout(exerciseId)
+        return allSets.groupBy { it.workoutId }
+    }
+
+    // Calculate workout stats
+    fun getWorkoutStats(): WorkoutStats {
+        val workout = _currentWorkout.value
+        val overview = _workoutOverview.value
+
+        val totalSets = overview.sumOf { it.setCount }
+        val totalVolume = overview.sumOf { summary ->
+            ((summary.bestWeight ?: 0f) * summary.setCount).toDouble()
+        }.toFloat()
+
+        val duration = workout?.let {
+            val durationMs = Date().time - it.startTime.time
+            val minutes = durationMs / 1000 / 60
+            val hours = minutes / 60
+            val remainingMinutes = minutes % 60
+            if (hours > 0) "${hours}h ${remainingMinutes}m" else "${minutes}m"
+        } ?: "0m"
+
+        return WorkoutStats(
+            totalSets = totalSets,
+            totalVolume = totalVolume,
+            exerciseCount = overview.size,
+            duration = duration
+        )
     }
 }

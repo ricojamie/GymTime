@@ -8,6 +8,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,6 +40,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Date
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExerciseLoggingScreen(
     navController: NavController,
@@ -49,12 +54,38 @@ fun ExerciseLoggingScreen(
     val rpe by viewModel.rpe.collectAsState()
     val restTime by viewModel.restTime.collectAsState()
     val isWarmup by viewModel.isWarmup.collectAsState()
+    val lastWorkoutSets by viewModel.lastWorkoutSets.collectAsState()
+    val workoutOverview by viewModel.workoutOverview.collectAsState()
 
     val isTimerRunning by viewModel.isTimerRunning.collectAsState()
 
     var showFinishDialog by remember { mutableStateOf(false) }
+    var showWorkoutOverview by remember { mutableStateOf(false) }
+    var showExerciseHistory by remember { mutableStateOf(false) }
+    var personalRecords by remember { mutableStateOf<PersonalRecords?>(null) }
+    var exerciseHistory by remember { mutableStateOf<Map<Long, List<com.example.gymtime.data.db.entity.Set>>>(emptyMap()) }
+
     val view = LocalView.current
     val scope = rememberCoroutineScope()
+
+    // Load workout overview when bottom sheet opens
+    LaunchedEffect(showWorkoutOverview) {
+        if (showWorkoutOverview) {
+            viewModel.loadWorkoutOverview()
+        }
+    }
+
+    // Load exercise history when bottom sheet opens
+    LaunchedEffect(showExerciseHistory) {
+        if (showExerciseHistory) {
+            personalRecords = viewModel.getPersonalRecords()
+            exerciseHistory = viewModel.getExerciseHistory()
+        }
+    }
+
+    // Get last workout data for inline "Last:" display
+    val lastWeight = lastWorkoutSets.firstOrNull()?.weight?.toString()
+    val lastReps = lastWorkoutSets.firstOrNull()?.reps?.toString()
 
     // Timer countdown
     LaunchedEffect(isTimerRunning) {
@@ -68,35 +99,86 @@ fun ExerciseLoggingScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(GradientStart, GradientEnd)
-                )
-            )
-            .padding(16.dp)
-    ) {
-        // Exercise Header
-        exercise?.let { ex ->
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = ex.name,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 28.sp,
-                    color = TextPrimary
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = ex.targetMuscle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = PrimaryAccent
+    Scaffold(
+        topBar = {
+            exercise?.let { ex ->
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(
+                                text = ex.name,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = ex.targetMuscle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = PrimaryAccent,
+                                fontSize = 12.sp
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            navController.navigate(Screen.ExerciseSelection.route)
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "Back",
+                                tint = TextPrimary
+                            )
+                        }
+                    },
+                    actions = {
+                        // Workout overview icon
+                        IconButton(onClick = { showWorkoutOverview = true }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.List,
+                                contentDescription = "Workout Overview",
+                                tint = PrimaryAccent
+                            )
+                        }
+
+                        // Vertical divider
+                        Divider(
+                            modifier = Modifier
+                                .height(24.dp)
+                                .width(1.dp)
+                                .padding(horizontal = 4.dp),
+                            color = TextTertiary.copy(alpha = 0.3f)
+                        )
+
+                        // Exercise history icon
+                        IconButton(onClick = { showExerciseHistory = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Exercise History",
+                                tint = PrimaryAccent
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent
+                    )
                 )
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
+        },
+        containerColor = Color.Transparent
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(GradientStart, GradientEnd)
+                    )
+                )
+                .padding(paddingValues)
+                .padding(16.dp)
+        ) {
+            exercise?.let { ex ->
+                Spacer(modifier = Modifier.height(8.dp))
 
             // Timer Row
             Row(
@@ -155,7 +237,8 @@ fun ExerciseLoggingScreen(
                     label = "WEIGHT",
                     value = weight,
                     onValueChange = { viewModel.updateWeight(it) },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    lastValue = lastWeight?.let { "$it lbs" }
                 )
 
                 // Reps Input
@@ -163,7 +246,8 @@ fun ExerciseLoggingScreen(
                     label = "REPS",
                     value = reps,
                     onValueChange = { viewModel.updateReps(it) },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    lastValue = lastReps?.let { "$it reps" }
                 )
             }
 
@@ -232,11 +316,11 @@ fun ExerciseLoggingScreen(
 
             // Logged Sets List
             LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.weight(1.5f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(loggedSets) { set ->
-                    ExerciseSetLogCard(set)
+                items(loggedSets.size) { index ->
+                    ExerciseSetLogCard(loggedSets[index], setNumber = index + 1)
                 }
             }
 
@@ -268,13 +352,62 @@ fun ExerciseLoggingScreen(
                     Text("Finish Workout", fontWeight = FontWeight.Bold)
                 }
             }
-        } ?: run {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = PrimaryAccent)
+            } ?: run {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = PrimaryAccent)
+                }
             }
+        }
+    }
+
+    // Workout Overview Bottom Sheet
+    if (showWorkoutOverview) {
+        ModalBottomSheet(
+            onDismissRequest = { showWorkoutOverview = false },
+            containerColor = SurfaceCards
+        ) {
+            WorkoutOverviewContent(
+                exercises = workoutOverview,
+                currentExerciseId = exercise?.id,
+                workoutStats = viewModel.getWorkoutStats(),
+                onExerciseClick = { exerciseId ->
+                    showWorkoutOverview = false
+                    if (exerciseId != exercise?.id) {
+                        // Navigate to the selected exercise, replacing current logging screen
+                        navController.navigate(
+                            Screen.ExerciseLogging.createRoute(exerciseId)
+                        ) {
+                            // Pop the current exercise logging screen before navigating
+                            popUpTo(Screen.ExerciseLogging.route) {
+                                inclusive = true
+                            }
+                        }
+                    }
+                    // If clicking the same exercise, just close the sheet
+                },
+                onAddExercise = {
+                    showWorkoutOverview = false
+                    navController.navigate(Screen.ExerciseSelection.route)
+                }
+            )
+        }
+    }
+
+    // Exercise History Bottom Sheet
+    if (showExerciseHistory) {
+        ModalBottomSheet(
+            onDismissRequest = { showExerciseHistory = false },
+            containerColor = SurfaceCards
+        ) {
+            ExerciseHistoryContent(
+                exerciseName = exercise?.name ?: "",
+                personalRecords = personalRecords,
+                history = exerciseHistory,
+                onDismiss = { showExerciseHistory = false }
+            )
         }
     }
 
@@ -314,7 +447,8 @@ private fun InputCard(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    lastValue: String? = null
 ) {
     Card(
         modifier = modifier.height(140.dp),
@@ -327,12 +461,28 @@ private fun InputCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = TextTertiary,
-                letterSpacing = 1.sp
-            )
+            // Header row with label and last value
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = TextTertiary,
+                    letterSpacing = 1.sp
+                )
+
+                lastValue?.let {
+                    Text(
+                        text = "Last: $it",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextTertiary.copy(alpha = 0.7f),
+                        fontSize = 11.sp
+                    )
+                }
+            }
 
             TextField(
                 value = value,
@@ -406,7 +556,10 @@ private fun LogSetButton(
 }
 
 @Composable
-private fun ExerciseSetLogCard(set: com.example.gymtime.data.db.entity.Set) {
+private fun ExerciseSetLogCard(
+    set: com.example.gymtime.data.db.entity.Set,
+    setNumber: Int
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = SurfaceCards),
@@ -415,16 +568,16 @@ private fun ExerciseSetLogCard(set: com.example.gymtime.data.db.entity.Set) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "${set.id}",
+                    text = "$setNumber",
                     style = MaterialTheme.typography.titleMedium,
                     color = TextTertiary,
                     fontWeight = FontWeight.Bold
@@ -467,6 +620,343 @@ private fun ExerciseSetLogCard(set: com.example.gymtime.data.db.entity.Set) {
                             )
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkoutOverviewContent(
+    exercises: List<com.example.gymtime.data.db.dao.WorkoutExerciseSummary>,
+    currentExerciseId: Long?,
+    workoutStats: WorkoutStats,
+    onExerciseClick: (Long) -> Unit,
+    onAddExercise: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+    ) {
+        // Header
+        Text(
+            text = "Current Workout",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Stats row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "Duration: ${workoutStats.duration}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextTertiary
+            )
+            Text(
+                text = "·",
+                color = TextTertiary
+            )
+            Text(
+                text = "${workoutStats.totalSets} sets",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextTertiary
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Exercise list
+        exercises.forEach { summary ->
+            val isActive = summary.exerciseId == currentExerciseId
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isActive) PrimaryAccent.copy(alpha = 0.1f) else Color(0xFF0D0D0D)
+                ),
+                shape = RoundedCornerShape(12.dp),
+                onClick = { onExerciseClick(summary.exerciseId) }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Status indicator
+                        Text(
+                            text = if (isActive) "→" else "✓",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = if (isActive) PrimaryAccent else TextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Column {
+                            Text(
+                                text = summary.exerciseName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isActive) PrimaryAccent else TextPrimary
+                            )
+                            Text(
+                                text = summary.targetMuscle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextTertiary,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+
+                    Column(
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text(
+                            text = "${summary.setCount} sets",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextTertiary
+                        )
+                        summary.bestWeight?.let { weight ->
+                            Text(
+                                text = "${weight.toInt()} lbs",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextTertiary.copy(alpha = 0.7f),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Add Exercise button
+        OutlinedButton(
+            onClick = onAddExercise,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = PrimaryAccent
+            )
+        ) {
+            Text("+ Add Another Exercise", fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun ExerciseHistoryContent(
+    exerciseName: String,
+    personalRecords: PersonalRecords?,
+    history: Map<Long, List<com.example.gymtime.data.db.entity.Set>>,
+    onDismiss: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+    ) {
+        // Header
+        Text(
+            text = exerciseName,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "PERSONAL RECORDS",
+            style = MaterialTheme.typography.labelMedium,
+            color = TextTertiary,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // PR Badges
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Heaviest Weight PR
+            personalRecords?.heaviestWeight?.let { set ->
+                PRBadge(
+                    title = "Heaviest Weight",
+                    value = "${set.weight?.toInt()} lbs",
+                    subtitle = "×${set.reps} reps",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // Best E1RM PR
+            personalRecords?.bestE1RM?.let { (set, e1rm) ->
+                PRBadge(
+                    title = "Best E1RM",
+                    value = "${e1rm.toInt()} lbs",
+                    subtitle = "from ${set.weight?.toInt()}×${set.reps}",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // TODO: Best E10RM (premium feature - show lock icon for free users)
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "RECENT HISTORY",
+            style = MaterialTheme.typography.labelMedium,
+            color = TextTertiary,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // History list
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 300.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            history.entries.take(10).forEach { (workoutId, sets) ->
+                item {
+                    WorkoutHistoryCard(sets = sets)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Close button
+        TextButton(
+            onClick = onDismiss,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        ) {
+            Text("Close", color = TextTertiary)
+        }
+    }
+}
+
+@Composable
+private fun PRBadge(
+    title: String,
+    value: String,
+    subtitle: String,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = PrimaryAccent.copy(alpha = 0.1f)
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "🏆",
+                style = MaterialTheme.typography.headlineMedium
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelSmall,
+                color = TextTertiary,
+                fontSize = 10.sp
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = PrimaryAccent
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = TextTertiary,
+                fontSize = 11.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun WorkoutHistoryCard(
+    sets: List<com.example.gymtime.data.db.entity.Set>
+) {
+    val firstSet = sets.firstOrNull()
+    val dateStr = firstSet?.timestamp?.let {
+        val formatter = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.US)
+        formatter.format(it)
+    } ?: "Unknown date"
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF0D0D0D)
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            Text(
+                text = dateStr,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            sets.forEachIndexed { index, set ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Set ${index + 1}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextTertiary
+                    )
+                    Text(
+                        text = buildString {
+                            set.weight?.let { append("${it.toInt()} lbs") }
+                            append(" × ")
+                            set.reps?.let { append("$it reps") }
+                            if (set.isWarmup) append(" (WU)")
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextPrimary
+                    )
+                }
+                if (index < sets.size - 1) {
+                    Spacer(modifier = Modifier.height(4.dp))
                 }
             }
         }

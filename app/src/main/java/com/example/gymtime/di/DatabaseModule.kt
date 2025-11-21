@@ -15,6 +15,11 @@ import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.MuscleGroup
+import com.example.gymtime.data.db.entity.Workout
+import com.example.gymtime.data.db.entity.Set
+import java.util.Calendar
+import java.util.Date
+import kotlin.random.Random
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -60,6 +65,10 @@ object DatabaseModule {
             try {
                 Log.d(TAG, "Checking if exercises need to be seeded...")
                 populateInitialData(database.exerciseDao(), database.muscleGroupDao(), context)
+
+                // Seed historical workouts for testing (8 weeks of PPL)
+                Log.d(TAG, "Checking if historical workouts need to be seeded...")
+                seedHistoricalWorkouts(database.workoutDao(), database.setDao(), database.exerciseDao())
             } catch (e: Exception) {
                 Log.e(TAG, "Error seeding database", e)
             }
@@ -150,6 +159,153 @@ object DatabaseModule {
         } catch (e: Exception) {
             Log.e(TAG, "Error during seed population", e)
         }
+    }
+
+    private suspend fun seedHistoricalWorkouts(
+        workoutDao: WorkoutDao,
+        setDao: SetDao,
+        exerciseDao: ExerciseDao
+    ) {
+        try {
+            // Check if we already have workouts (skip if data exists)
+            val existingWorkouts = workoutDao.getAllWorkouts().first()
+            if (existingWorkouts.isNotEmpty()) {
+                Log.d(TAG, "Historical workouts already exist, skipping seed...")
+                return
+            }
+
+            Log.d(TAG, "Seeding 8 weeks of historical Push/Pull/Legs workouts...")
+
+            val exercises = exerciseDao.getAllExercises().first()
+            val exerciseMap = exercises.associateBy { it.name }
+
+            // Define Push/Pull/Legs exercises
+            val pushExercises = listOf("Barbell Bench Press", "Incline Dumbbell Press", "Overhead Press", "Dumbbell Lateral Raise", "Skull Crusher")
+            val pullExercises = listOf("Deadlift", "Barbell Row", "Pull-Ups", "Lat Pulldown", "Barbell Curl", "Hammer Curl")
+            val legExercises = listOf("Barbell Squat", "Romanian Deadlift", "Leg Press", "Leg Curl", "Calf Raise")
+
+            val calendar = Calendar.getInstance()
+            var workoutCount = 0
+
+            // Go back 8 weeks (56 days)
+            for (weeksAgo in 8 downTo 1) {
+                val weekNumber = 9 - weeksAgo
+                val isDeloadWeek = weekNumber % 4 == 0 // Every 4th week is deload
+
+                // 3-4 workouts per week (Monday, Wednesday, Friday, sometimes Sunday)
+                val workoutDays = if (weeksAgo % 2 == 0) listOf(1, 3, 5) else listOf(1, 3, 5, 7) // Mon/Wed/Fri or Mon/Wed/Fri/Sun
+
+                for (dayOfWeek in workoutDays) {
+                    calendar.timeInMillis = System.currentTimeMillis()
+                    calendar.add(Calendar.WEEK_OF_YEAR, -weeksAgo)
+                    calendar.set(Calendar.DAY_OF_WEEK, dayOfWeek)
+                    calendar.set(Calendar.HOUR_OF_DAY, 18 + Random.nextInt(3)) // 6-9 PM
+                    calendar.set(Calendar.MINUTE, Random.nextInt(60))
+
+                    val workoutType = when (workoutCount % 3) {
+                        0 -> "Push"
+                        1 -> "Pull"
+                        else -> "Legs"
+                    }
+
+                    val selectedExercises = when (workoutType) {
+                        "Push" -> pushExercises
+                        "Pull" -> pullExercises
+                        else -> legExercises
+                    }.take(5)
+
+                    // Create workout
+                    val workoutStart = Date(calendar.timeInMillis)
+                    calendar.add(Calendar.MINUTE, 45 + Random.nextInt(30)) // 45-75 min workouts
+                    val workoutEnd = Date(calendar.timeInMillis)
+
+                    val workoutId = workoutDao.insertWorkout(
+                        Workout(
+                            startTime = workoutStart,
+                            endTime = workoutEnd,
+                            name = "$workoutType Day",
+                            note = null
+                        )
+                    )
+
+                    // Add sets for each exercise
+                    val setTimestamp = workoutStart.time
+                    selectedExercises.forEach { exerciseName ->
+                        val exercise = exerciseMap[exerciseName] ?: return@forEach
+                        val baseWeight = getBaseWeight(exerciseName, weekNumber, isDeloadWeek)
+
+                        // 3-5 sets per exercise
+                        val numSets = 3 + Random.nextInt(3)
+                        repeat(numSets) { setIndex ->
+                            val isWarmup = setIndex == 0 && Random.nextBoolean()
+                            val weight = if (isWarmup) baseWeight * 0.6f else baseWeight
+                            val reps = getTargetReps(exerciseName, setIndex, numSets)
+
+                            setDao.insertSet(
+                                Set(
+                                    workoutId = workoutId,
+                                    exerciseId = exercise.id,
+                                    weight = if (exercise.logType == LogType.WEIGHT_REPS) weight else null,
+                                    reps = if (exercise.logType == LogType.REPS_ONLY || exercise.logType == LogType.WEIGHT_REPS) reps else null,
+                                    rpe = null,
+                                    durationSeconds = if (exercise.logType == LogType.DURATION) 60 + Random.nextInt(60) else null,
+                                    distanceMeters = null,
+                                    isWarmup = isWarmup,
+                                    isComplete = true,
+                                    timestamp = Date(setTimestamp + (setIndex * 3 * 60 * 1000)) // 3 min between sets
+                                )
+                            )
+                        }
+                    }
+
+                    workoutCount++
+                }
+            }
+
+            Log.d(TAG, "Successfully seeded $workoutCount historical workouts")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error seeding historical workouts", e)
+        }
+    }
+
+    private fun getBaseWeight(exerciseName: String, weekNumber: Int, isDeloadWeek: Boolean): Float {
+        val baseWeights = mapOf(
+            "Barbell Bench Press" to 185f,
+            "Incline Dumbbell Press" to 60f,
+            "Overhead Press" to 95f,
+            "Dumbbell Lateral Raise" to 25f,
+            "Skull Crusher" to 60f,
+            "Deadlift" to 225f,
+            "Barbell Row" to 135f,
+            "Lat Pulldown" to 140f,
+            "Barbell Curl" to 70f,
+            "Hammer Curl" to 35f,
+            "Barbell Squat" to 185f,
+            "Romanian Deadlift" to 155f,
+            "Leg Press" to 270f,
+            "Leg Curl" to 90f,
+            "Calf Raise" to 135f
+        )
+
+        val base = baseWeights[exerciseName] ?: 100f
+        val progression = (weekNumber - 1) * 5f // 5 lbs per week progression
+        val deloadMultiplier = if (isDeloadWeek) 0.9f else 1f
+
+        return (base + progression) * deloadMultiplier
+    }
+
+    private fun getTargetReps(exerciseName: String, setIndex: Int, totalSets: Int): Int {
+        // First set highest reps, gradual fatigue
+        val baseReps = when {
+            exerciseName.contains("Lateral Raise") || exerciseName.contains("Curl") -> 12
+            exerciseName.contains("Squat") || exerciseName.contains("Deadlift") -> 6
+            exerciseName == "Pull-Ups" -> 8
+            else -> 8
+        }
+
+        // Simulate fatigue (lose 0-2 reps per set)
+        val fatigueLoss = if (setIndex > 0) Random.nextInt(3) else 0
+        return (baseReps - fatigueLoss).coerceAtLeast(3)
     }
 
     @Provides
