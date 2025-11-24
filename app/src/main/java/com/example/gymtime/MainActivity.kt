@@ -75,7 +75,7 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier.padding(innerPadding)
                             ) {
                                 composable(Screen.Home.route) { HomeScreen(navController = navController) }
-                                composable(Screen.History.route) { HistoryScreen() }
+                                composable(Screen.History.route) { HistoryScreen(navController = navController) }
                                 composable(Screen.Library.route) {
                                     com.example.gymtime.ui.exercise.ExerciseSelectionScreen(navController = navController)
                                 }

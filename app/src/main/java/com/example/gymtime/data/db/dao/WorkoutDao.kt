@@ -8,6 +8,8 @@ import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.db.entity.WorkoutWithMuscles
 import kotlinx.coroutines.flow.Flow
 
+import androidx.room.Delete
+
 @Dao
 interface WorkoutDao {
     @Insert
@@ -15,6 +17,9 @@ interface WorkoutDao {
 
     @Update
     suspend fun updateWorkout(workout: Workout)
+
+    @Delete
+    suspend fun deleteWorkout(workout: Workout)
 
     @Query("SELECT * FROM workouts WHERE id = :id")
     fun getWorkoutById(id: Long): Flow<Workout>
@@ -26,7 +31,7 @@ interface WorkoutDao {
     fun getOngoingWorkout(): Flow<Workout?>
 
     @Query("""
-        SELECT 
+        SELECT
             w.*,
             GROUP_CONCAT(DISTINCT e.targetMuscle) as muscleGroups
         FROM workouts w

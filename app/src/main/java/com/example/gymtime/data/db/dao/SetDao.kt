@@ -125,4 +125,18 @@ interface SetDao {
         LIMIT 50
     """)
     suspend fun getExerciseHistoryByWorkout(exerciseId: Long): List<Set>
+
+    // Get set count for a workout
+    @Query("SELECT COUNT(*) FROM sets WHERE workoutId = :workoutId")
+    suspend fun getSetCountForWorkout(workoutId: Long): Int
+
+    // Get all sets for a workout with exercise info
+    @Query("""
+        SELECT s.*, e.name as exerciseName, e.targetMuscle as targetMuscle
+        FROM sets s
+        INNER JOIN exercises e ON s.exerciseId = e.id
+        WHERE s.workoutId = :workoutId
+        ORDER BY s.timestamp ASC
+    """)
+    suspend fun getWorkoutSetsWithExercises(workoutId: Long): List<SetWithExerciseInfo>
 }
