@@ -3,6 +3,7 @@ package com.example.gymtime.ui.exercise
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -64,6 +66,12 @@ fun ExerciseLoggingScreen(
     var showExerciseHistory by remember { mutableStateOf(false) }
     var personalRecords by remember { mutableStateOf<PersonalRecords?>(null) }
     var exerciseHistory by remember { mutableStateOf<Map<Long, List<com.example.gymtime.data.db.entity.Set>>>(emptyMap()) }
+
+    // Set editing/deletion
+    var selectedSetToEdit by remember { mutableStateOf<com.example.gymtime.data.db.entity.Set?>(null) }
+    var selectedSetToDelete by remember { mutableStateOf<com.example.gymtime.data.db.entity.Set?>(null) }
+    var editWeight by remember { mutableStateOf("") }
+    var editReps by remember { mutableStateOf("") }
 
     val view = LocalView.current
     val scope = rememberCoroutineScope()
@@ -194,6 +202,20 @@ fun ExerciseLoggingScreen(
                 )
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { viewModel.startTimer() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = PrimaryAccent,
+                            contentColor = Color.Black
+                        ),
+                        modifier = Modifier
+                            .height(40.dp)
+                            .padding(horizontal = 12.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("START", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                    }
+
                     OutlinedButton(
                         onClick = { viewModel.updateRestTime(maxOf(0, restTime - 15)) },
                         colors = ButtonDefaults.outlinedButtonColors(
@@ -320,7 +342,18 @@ fun ExerciseLoggingScreen(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(loggedSets.size) { index ->
-                    ExerciseSetLogCard(loggedSets[index], setNumber = index + 1)
+                    ExerciseSetLogCard(
+                        set = loggedSets[index],
+                        setNumber = index + 1,
+                        onEdit = { selectedSet ->
+                            selectedSetToEdit = selectedSet
+                            editWeight = selectedSet.weight?.toString() ?: ""
+                            editReps = selectedSet.reps?.toString() ?: ""
+                        },
+                        onDelete = { selectedSet ->
+                            selectedSetToDelete = selectedSet
+                        }
+                    )
                 }
             }
 
@@ -435,6 +468,79 @@ fun ExerciseLoggingScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showFinishDialog = false }) {
+                    Text("Cancel", color = TextTertiary)
+                }
+            }
+        )
+    }
+
+    // Edit Set Dialog
+    if (selectedSetToEdit != null) {
+        AlertDialog(
+            onDismissRequest = { selectedSetToEdit = null },
+            title = { Text("Edit Set", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    OutlinedTextField(
+                        value = editWeight,
+                        onValueChange = { editWeight = it },
+                        label = { Text("Weight (lbs)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = editReps,
+                        onValueChange = { editReps = it },
+                        label = { Text("Reps") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        selectedSetToEdit?.let { set ->
+                            val updatedSet = set.copy(
+                                weight = editWeight.toFloatOrNull(),
+                                reps = editReps.toIntOrNull()
+                            )
+                            viewModel.updateSet(updatedSet)
+                            selectedSetToEdit = null
+                        }
+                    }
+                ) {
+                    Text("Save", color = PrimaryAccent, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedSetToEdit = null }) {
+                    Text("Cancel", color = TextTertiary)
+                }
+            }
+        )
+    }
+
+    // Delete Set Confirmation Dialog
+    if (selectedSetToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { selectedSetToDelete = null },
+            title = { Text("Delete Set?", fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to delete this set? This action cannot be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        selectedSetToDelete?.let { set ->
+                            viewModel.deleteSet(set)
+                            selectedSetToDelete = null
+                        }
+                    }
+                ) {
+                    Text("Delete", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedSetToDelete = null }) {
                     Text("Cancel", color = TextTertiary)
                 }
             }
@@ -558,10 +664,19 @@ private fun LogSetButton(
 @Composable
 private fun ExerciseSetLogCard(
     set: com.example.gymtime.data.db.entity.Set,
-    setNumber: Int
+    setNumber: Int,
+    onEdit: (com.example.gymtime.data.db.entity.Set) -> Unit = {},
+    onDelete: (com.example.gymtime.data.db.entity.Set) -> Unit = {}
 ) {
+    var showContextMenu by remember { mutableStateOf(false) }
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = {},
+                onLongClick = { showContextMenu = true }
+            ),
         colors = CardDefaults.cardColors(containerColor = SurfaceCards),
         shape = RoundedCornerShape(12.dp)
     ) {
@@ -573,6 +688,7 @@ private fun ExerciseSetLogCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
+                modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -622,6 +738,35 @@ private fun ExerciseSetLogCard(
                     )
                 }
             }
+
+            // Three-dot menu icon (affordance hint)
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "More options",
+                tint = TextTertiary.copy(alpha = 0.4f),
+                modifier = Modifier.size(16.dp)
+            )
+        }
+
+        // Context menu
+        DropdownMenu(
+            expanded = showContextMenu,
+            onDismissRequest = { showContextMenu = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Edit") },
+                onClick = {
+                    showContextMenu = false
+                    onEdit(set)
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Delete") },
+                onClick = {
+                    showContextMenu = false
+                    onDelete(set)
+                }
+            )
         }
     }
 }

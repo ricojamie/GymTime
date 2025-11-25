@@ -339,6 +339,56 @@ Status Indicators:
 - [ ] Add exercise edit functionality (long-press → Edit)
 
 ### Short Term (Foundation)
+
+#### Gamification Roadmap (Approved Strategy - Starting Nov 25)
+**v0.2.0 (Dec 15, 2025) - Hero Features**
+- [ ] **Volume Orb** (per-muscle-group weekly progress, visual fill from 0-100%+)
+  - Animated circular progress indicator (lime green → gold)
+  - Real-time update as sets logged (weight × reps)
+  - Caps at 120% visually (prevents obsessive volume chasing)
+  - Resets weekly (Monday 12am)
+  - Baseline = rolling 4-week average of volume per muscle
+  - Freemium gate: Free users see 3 muscle groups, Premium sees all 8
+  - Lives on: Exercise Logging Screen (top-center), Home Dashboard (8 mini-orbs), Post-Workout Summary
+  - **Celebration**: Gold glow + particle effects when hitting 100%+, haptic feedback
+  - **Estimated effort**: 4-5 weeks (5 sprints), 2-3 developers
+
+- [ ] **PR Detection** (animated badge on new personal records)
+  - Algorithm: 1RM estimation (weight × reps × 0.0333 + weight)
+  - Animated popup: "New PR! 225 lbs x 8"
+  - Gold star icon on PR sets in session log
+  - Haptic feedback on detection
+
+- [ ] **Post-Workout Summary Screen**
+  - Final orb states for all trained muscles
+  - Volume comparison ("12% more than last week")
+  - PR callouts ("2 new personal records!")
+  - Text export/share button (no social integration)
+
+**v0.3.0 (Jan 15, 2026) - Set-Level Engagement**
+- [ ] **Ghost Reps** (show previous best set for comparison)
+  - Faded text on input screens: "Last time: 185 lbs × 10"
+  - Beat your ghost: green checkmark if current > previous
+  - Historical cycling: toggle through last 5 sessions
+
+- [ ] **Session Comparison Card**
+  - "8% more volume than last chest day"
+  - Visual improvement trending
+
+**v0.4.0 (Mar 1, 2026) - Pre-Workout Planning**
+- [ ] **Muscle Readiness Heatmap** (recovery tracking)
+  - Color-coded muscle groups: Green (fresh), Yellow (moderate), Red (fatigued)
+  - Algorithm: days since last trained + volume intensity
+  - Tap muscle: "Ready to train in 18 hours"
+  - Pre-session planner: suggested fresh muscle groups
+
+**v0.5.0 (May 1, 2026) - Long-Term Motivation**
+- [ ] **Tonnage Milestones** (lifetime achievements)
+  - "100,000 lbs lifted", "1 Million Pounds Club", "Iron Titan (10M lbs)"
+  - Progress bar: "847,392 / 1,000,000 lbs to Iron Lord"
+  - Unlockable badges (no social sharing)
+
+#### Other Foundation Features
 - [ ] One Rep Max (1RM) estimation from logged sets
 - [ ] Personal records (PRs) detection and tracking
 - [ ] Volume calculations (total pounds lifted per muscle per week)

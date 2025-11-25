@@ -7,7 +7,9 @@
       "Bash(git config:*)",
       "Bash(git add:*)",
       "Bash(./gradlew build:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git checkout:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []

@@ -184,15 +184,32 @@ class ExerciseLoggingViewModel @Inject constructor(
 
             setDao.insertSet(newSet)
 
-            // Clear form
-            _weight.value = ""
-            _reps.value = ""
+            // Clear RPE only (weight/reps persist for next set)
             _rpe.value = ""
             _isWarmup.value = false
-            
-            // Start timer
-            _isTimerRunning.value = true
         }
+    }
+
+    fun updateSet(set: Set) {
+        viewModelScope.launch {
+            setDao.updateSet(set)
+            Log.d("ExerciseLoggingVM", "Set updated: id=${set.id}")
+        }
+    }
+
+    fun deleteSet(set: Set) {
+        viewModelScope.launch {
+            setDao.deleteSet(set)
+            Log.d("ExerciseLoggingVM", "Set deleted: id=${set.id}")
+        }
+    }
+
+    fun startTimer() {
+        _isTimerRunning.value = true
+    }
+
+    fun stopTimer() {
+        _isTimerRunning.value = false
     }
 
     fun finishWorkout() {
