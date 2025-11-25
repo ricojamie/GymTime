@@ -88,19 +88,24 @@ fun WorkoutScreen() {
 fun LogTab() {
     var weight by remember { mutableStateOf("") }
     var reps by remember { mutableStateOf("") }
-    var restTime by remember { mutableIntStateOf(91) } // 1:31 in seconds
+    var restTime by remember { mutableIntStateOf(90) } // Default 90s
+    var isTimerRunning by remember { mutableStateOf(false) }
     var currentSetNumber by remember { mutableIntStateOf(2) }
     var loggedSets by remember { mutableStateOf(listOf(LoggedSet(1, "185", "6"))) }
     var showFinishDialog by remember { mutableStateOf(false) }
+    var showTimerDialog by remember { mutableStateOf(false) }
 
     val view = LocalView.current
     val scope = rememberCoroutineScope()
 
-    // Timer countdown
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1000)
-            if (restTime > 0) restTime--
+    // Timer countdown logic
+    LaunchedEffect(isTimerRunning) {
+        if (isTimerRunning) {
+            while (restTime > 0 && isTimerRunning) {
+                delay(1000)
+                restTime--
+            }
+            isTimerRunning = false // Stop when 0
         }
     }
 
@@ -109,7 +114,7 @@ fun LogTab() {
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Exercise Header
+        // Exercise Header + Timer Pill
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -130,44 +135,37 @@ fun LogTab() {
                     color = PrimaryAccent
                 )
             }
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Timer Row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = String.format("%d:%02d", restTime / 60, restTime % 60),
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = PrimaryAccent
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = { restTime = maxOf(0, restTime - 15) },
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = TextTertiary
-                    )
+            // Timer Pill
+            Surface(
+                onClick = { showTimerDialog = true },
+                shape = androidx.compose.foundation.shape.CircleShape,
+                color = SurfaceCards,
+                border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryAccent.copy(alpha = 0.5f)),
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text("-15s")
-                }
-                OutlinedButton(
-                    onClick = { restTime += 15 },
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = TextTertiary
+                    Icon(
+                        painter = androidx.compose.ui.res.painterResource(id = com.example.gymtime.R.drawable.ic_timer),
+                        contentDescription = "Timer",
+                        tint = PrimaryAccent,
+                        modifier = Modifier.size(16.dp)
                     )
-                ) {
-                    Text("+15s")
+                    Text(
+                        text = String.format("%d:%02d", restTime / 60, restTime % 60),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryAccent
+                    )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Current Set Label
         Text(
@@ -219,6 +217,7 @@ fun LogTab() {
 
                     // Reset timer
                     restTime = 90
+                    isTimerRunning = true // Auto-start timer on log (optional, but good UX)
                 }
             },
             enabled = weight.isNotBlank() && reps.isNotBlank()
@@ -286,6 +285,68 @@ fun LogTab() {
                 Text("Finish Workout", fontWeight = FontWeight.Bold)
             }
         }
+    }
+
+    // Timer Dialog
+    if (showTimerDialog) {
+        AlertDialog(
+            onDismissRequest = { showTimerDialog = false },
+            title = {
+                Text(
+                    text = "Rest Timer",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = String.format("%d:%02d", restTime / 60, restTime % 60),
+                        style = MaterialTheme.typography.displayLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryAccent
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { restTime = maxOf(0, restTime - 15) },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextTertiary)
+                        ) {
+                            Text("-15s")
+                        }
+                        OutlinedButton(
+                            onClick = { restTime += 15 },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextTertiary)
+                        ) {
+                            Text("+15s")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isTimerRunning = true
+                        showTimerDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent)
+                ) {
+                    Text("Start Timer", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimerDialog = false }) {
+                    Text("Close", color = TextTertiary)
+                }
+            },
+            containerColor = SurfaceCards
+        )
     }
 
     // Finish Workout Confirmation Dialog
