@@ -44,7 +44,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Date
 
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -263,27 +265,36 @@ fun ExerciseLoggingScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Warmup Checkbox
-            Row(
+            // Warmup Toggle Pill
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                contentAlignment = Alignment.CenterStart
             ) {
-                Checkbox(
-                    checked = isWarmup,
-                    onCheckedChange = { viewModel.toggleWarmup() },
-                    colors = CheckboxDefaults.colors(
-                        checkedColor = PrimaryAccent,
-                        uncheckedColor = TextTertiary
-                    )
-                )
-                Text(
-                    text = "Warmup",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextTertiary
-                )
+                Surface(
+                    onClick = { viewModel.toggleWarmup() },
+                    shape = RoundedCornerShape(50), // Pill shape
+                    color = if (isWarmup) PrimaryAccent else Color.Transparent,
+                    border = if (isWarmup) null else androidx.compose.foundation.BorderStroke(1.dp, TextTertiary),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        if (isWarmup) {
+                            Text(text = "🔥 ", fontSize = 14.sp)
+                        }
+                        Text(
+                            text = "Warmup",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isWarmup) Color.Black else TextTertiary
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -535,7 +546,11 @@ private fun InputCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f), // Fill remaining space
+                    .weight(1f) // Fill remaining space
+                    .background(
+                        color = Color.White.copy(alpha = 0.05f),
+                        shape = RoundedCornerShape(8.dp)
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 BasicTextField(
@@ -572,12 +587,14 @@ private fun LogSetButton(
         ),
         label = "button_scale"
     )
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     val scope = rememberCoroutineScope()
 
     Button(
         onClick = {
             isPressed = true
+            keyboardController?.hide()
             scope.launch {
                 delay(100)
                 isPressed = false

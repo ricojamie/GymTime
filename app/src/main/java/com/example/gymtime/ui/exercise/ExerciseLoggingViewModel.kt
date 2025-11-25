@@ -120,7 +120,9 @@ class ExerciseLoggingViewModel @Inject constructor(
             // Load logged sets for this exercise in current workout
             _currentWorkout.value?.let { workout ->
                 setDao.getSetsForWorkout(workout.id).collectLatest { sets ->
-                    _loggedSets.value = sets.filter { it.exerciseId == exerciseId }
+                    _loggedSets.value = sets
+                        .filter { it.exerciseId == exerciseId }
+                        .sortedBy { it.timestamp }
                     Log.d("ExerciseLoggingVM", "Logged sets updated: ${_loggedSets.value.size}")
                 }
             }
