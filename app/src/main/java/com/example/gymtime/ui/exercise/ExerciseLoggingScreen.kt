@@ -661,6 +661,7 @@ private fun LogSetButton(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun ExerciseSetLogCard(
     set: com.example.gymtime.data.db.entity.Set,
