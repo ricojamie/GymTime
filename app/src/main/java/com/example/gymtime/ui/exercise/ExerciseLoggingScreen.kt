@@ -60,6 +60,7 @@ fun ExerciseLoggingScreen(
     val workoutOverview by viewModel.workoutOverview.collectAsState()
 
     val isTimerRunning by viewModel.isTimerRunning.collectAsState()
+    val editingSet by viewModel.editingSet.collectAsState()
 
     var showFinishDialog by remember { mutableStateOf(false) }
     var showWorkoutOverview by remember { mutableStateOf(false) }
@@ -67,11 +68,8 @@ fun ExerciseLoggingScreen(
     var personalRecords by remember { mutableStateOf<PersonalRecords?>(null) }
     var exerciseHistory by remember { mutableStateOf<Map<Long, List<com.example.gymtime.data.db.entity.Set>>>(emptyMap()) }
 
-    // Set editing/deletion
-    var selectedSetToEdit by remember { mutableStateOf<com.example.gymtime.data.db.entity.Set?>(null) }
+    // Set deletion
     var selectedSetToDelete by remember { mutableStateOf<com.example.gymtime.data.db.entity.Set?>(null) }
-    var editWeight by remember { mutableStateOf("") }
-    var editReps by remember { mutableStateOf("") }
 
     val view = LocalView.current
     val scope = rememberCoroutineScope()
@@ -300,17 +298,60 @@ fun ExerciseLoggingScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Log Set Button
-            LogSetButton(
-                onClick = {
-                    if (weight.isNotBlank() && reps.isNotBlank()) {
-                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        viewModel.logSet()
-                        viewModel.updateRestTime(90) // Reset timer
+            // Log Set Button (or Save Edit if editing)
+            if (editingSet != null) {
+                // Editing mode - show Save and Cancel buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { viewModel.cancelEditing() },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = TextTertiary
+                        )
+                    ) {
+                        Text("Cancel")
                     }
-                },
-                enabled = weight.isNotBlank() && reps.isNotBlank()
-            )
+                    Button(
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            viewModel.saveEditedSet()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(64.dp),
+                        enabled = weight.isNotBlank() && reps.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = PrimaryAccent,
+                            disabledContainerColor = PrimaryAccent.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(
+                            text = "SAVE EDIT ✓",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 18.sp,
+                            letterSpacing = 1.sp,
+                            color = Color.Black
+                        )
+                    }
+                }
+            } else {
+                // Normal mode - show LOG SET button
+                LogSetButton(
+                    onClick = {
+                        if (weight.isNotBlank() && reps.isNotBlank()) {
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            viewModel.logSet()
+                            viewModel.updateRestTime(90) // Reset timer
+                        }
+                    },
+                    enabled = weight.isNotBlank() && reps.isNotBlank()
+                )
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -346,9 +387,7 @@ fun ExerciseLoggingScreen(
                         set = loggedSets[index],
                         setNumber = index + 1,
                         onEdit = { selectedSet ->
-                            selectedSetToEdit = selectedSet
-                            editWeight = selectedSet.weight?.toString() ?: ""
-                            editReps = selectedSet.reps?.toString() ?: ""
+                            viewModel.startEditingSet(selectedSet)
                         },
                         onDelete = { selectedSet ->
                             selectedSetToDelete = selectedSet
@@ -468,53 +507,6 @@ fun ExerciseLoggingScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showFinishDialog = false }) {
-                    Text("Cancel", color = TextTertiary)
-                }
-            }
-        )
-    }
-
-    // Edit Set Dialog
-    if (selectedSetToEdit != null) {
-        AlertDialog(
-            onDismissRequest = { selectedSetToEdit = null },
-            title = { Text("Edit Set", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    OutlinedTextField(
-                        value = editWeight,
-                        onValueChange = { editWeight = it },
-                        label = { Text("Weight (lbs)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = editReps,
-                        onValueChange = { editReps = it },
-                        label = { Text("Reps") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        selectedSetToEdit?.let { set ->
-                            val updatedSet = set.copy(
-                                weight = editWeight.toFloatOrNull(),
-                                reps = editReps.toIntOrNull()
-                            )
-                            viewModel.updateSet(updatedSet)
-                            selectedSetToEdit = null
-                        }
-                    }
-                ) {
-                    Text("Save", color = PrimaryAccent, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { selectedSetToEdit = null }) {
                     Text("Cancel", color = TextTertiary)
                 }
             }

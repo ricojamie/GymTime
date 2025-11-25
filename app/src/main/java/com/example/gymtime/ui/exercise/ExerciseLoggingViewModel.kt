@@ -73,6 +73,10 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _isTimerRunning = MutableStateFlow(false)
     val isTimerRunning: StateFlow<Boolean> = _isTimerRunning
 
+    // Set editing state
+    private val _editingSet = MutableStateFlow<Set?>(null)
+    val editingSet: StateFlow<Set?> = _editingSet
+
     // Last workout data
     private val _lastWorkoutSets = MutableStateFlow<List<Set>>(emptyList())
     val lastWorkoutSets: StateFlow<List<Set>> = _lastWorkoutSets
@@ -190,11 +194,40 @@ class ExerciseLoggingViewModel @Inject constructor(
         }
     }
 
-    fun updateSet(set: Set) {
+    fun startEditingSet(set: Set) {
+        _editingSet.value = set
+        _weight.value = set.weight?.toString() ?: ""
+        _reps.value = set.reps?.toString() ?: ""
+        _isWarmup.value = set.isWarmup
+    }
+
+    fun saveEditedSet() {
         viewModelScope.launch {
-            setDao.updateSet(set)
-            Log.d("ExerciseLoggingVM", "Set updated: id=${set.id}")
+            _editingSet.value?.let { set ->
+                val updatedSet = set.copy(
+                    weight = _weight.value.toFloatOrNull(),
+                    reps = _reps.value.toIntOrNull(),
+                    isWarmup = _isWarmup.value
+                )
+                setDao.updateSet(updatedSet)
+                Log.d("ExerciseLoggingVM", "Set updated: id=${set.id}")
+
+                // Clear editing state and form
+                _editingSet.value = null
+                _weight.value = ""
+                _reps.value = ""
+                _rpe.value = ""
+                _isWarmup.value = false
+            }
         }
+    }
+
+    fun cancelEditing() {
+        _editingSet.value = null
+        _weight.value = ""
+        _reps.value = ""
+        _rpe.value = ""
+        _isWarmup.value = false
     }
 
     fun deleteSet(set: Set) {
