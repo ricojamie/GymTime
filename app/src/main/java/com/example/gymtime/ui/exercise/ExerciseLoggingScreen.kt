@@ -63,6 +63,7 @@ fun ExerciseLoggingScreen(
     val editingSet by viewModel.editingSet.collectAsState()
 
     var showFinishDialog by remember { mutableStateOf(false) }
+    var showTimerDialog by remember { mutableStateOf(false) }
     var showWorkoutOverview by remember { mutableStateOf(false) }
     var showExerciseHistory by remember { mutableStateOf(false) }
     var personalRecords by remember { mutableStateOf<PersonalRecords?>(null) }
@@ -137,13 +138,32 @@ fun ExerciseLoggingScreen(
                         }
                     },
                     actions = {
-                        // Workout overview icon
-                        IconButton(onClick = { showWorkoutOverview = true }) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.List,
-                                contentDescription = "Workout Overview",
-                                tint = PrimaryAccent
-                            )
+                        // Timer Pill Action
+                        Surface(
+                            onClick = { showTimerDialog = true },
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            color = SurfaceCards,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryAccent.copy(alpha = 0.5f)),
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    painter = androidx.compose.ui.res.painterResource(id = com.example.gymtime.R.drawable.ic_timer),
+                                    contentDescription = "Timer",
+                                    tint = PrimaryAccent,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = String.format("%d:%02d", restTime / 60, restTime % 60),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PrimaryAccent
+                                )
+                            }
                         }
 
                         // Vertical divider
@@ -154,6 +174,15 @@ fun ExerciseLoggingScreen(
                                 .padding(horizontal = 4.dp),
                             color = TextTertiary.copy(alpha = 0.3f)
                         )
+
+                        // Workout overview icon
+                        IconButton(onClick = { showWorkoutOverview = true }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.List,
+                                contentDescription = "Workout Overview",
+                                tint = PrimaryAccent
+                            )
+                        }
 
                         // Exercise history icon
                         IconButton(onClick = { showExerciseHistory = true }) {
@@ -186,54 +215,9 @@ fun ExerciseLoggingScreen(
             exercise?.let { ex ->
                 Spacer(modifier = Modifier.height(8.dp))
 
-            // Timer Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = String.format("%d:%02d", restTime / 60, restTime % 60),
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = PrimaryAccent
-                )
+            // Removed dedicated Timer Row (Moved to TopAppBar)
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = { viewModel.startTimer() },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = PrimaryAccent,
-                            contentColor = Color.Black
-                        ),
-                        modifier = Modifier
-                            .height(40.dp)
-                            .padding(horizontal = 12.dp),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("START", fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                    }
-
-                    OutlinedButton(
-                        onClick = { viewModel.updateRestTime(maxOf(0, restTime - 15)) },
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = TextTertiary
-                        )
-                    ) {
-                        Text("-15s")
-                    }
-                    OutlinedButton(
-                        onClick = { viewModel.updateRestTime(restTime + 15) },
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = TextTertiary
-                        )
-                    ) {
-                        Text("+15s")
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Current Set Label
             Text(
@@ -245,7 +229,7 @@ fun ExerciseLoggingScreen(
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Input Fields
             Row(
@@ -271,7 +255,7 @@ fun ExerciseLoggingScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Warmup Checkbox
             Row(
@@ -296,7 +280,7 @@ fun ExerciseLoggingScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Log Set Button (or Save Edit if editing)
             if (editingSet != null) {
@@ -321,7 +305,7 @@ fun ExerciseLoggingScreen(
                         },
                         modifier = Modifier
                             .weight(1f)
-                            .height(64.dp),
+                            .height(56.dp),
                         enabled = weight.isNotBlank() && reps.isNotBlank(),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = PrimaryAccent,
@@ -346,6 +330,7 @@ fun ExerciseLoggingScreen(
                         if (weight.isNotBlank() && reps.isNotBlank()) {
                             view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                             viewModel.logSet()
+                            viewModel.startTimer() // Auto-start timer
                             viewModel.updateRestTime(90) // Reset timer
                         }
                     },
@@ -353,7 +338,7 @@ fun ExerciseLoggingScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Session Log Header
             Row(
@@ -375,7 +360,7 @@ fun ExerciseLoggingScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Logged Sets List
             LazyColumn(
@@ -435,107 +420,65 @@ fun ExerciseLoggingScreen(
         }
     }
 
-    // Workout Overview Bottom Sheet
-    if (showWorkoutOverview) {
-        ModalBottomSheet(
-            onDismissRequest = { showWorkoutOverview = false },
-            containerColor = SurfaceCards
-        ) {
-            WorkoutOverviewContent(
-                exercises = workoutOverview,
-                currentExerciseId = exercise?.id,
-                workoutStats = viewModel.getWorkoutStats(),
-                onExerciseClick = { exerciseId ->
-                    showWorkoutOverview = false
-                    if (exerciseId != exercise?.id) {
-                        // Navigate to the selected exercise, replacing current logging screen
-                        navController.navigate(
-                            Screen.ExerciseLogging.createRoute(exerciseId)
+    // Timer Dialog
+    if (showTimerDialog) {
+        AlertDialog(
+            onDismissRequest = { showTimerDialog = false },
+            title = {
+                Text(
+                    text = "Rest Timer",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = String.format("%d:%02d", restTime / 60, restTime % 60),
+                        style = MaterialTheme.typography.displayLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryAccent
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { viewModel.updateRestTime(maxOf(0, restTime - 15)) },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextTertiary)
                         ) {
-                            // Pop the current exercise logging screen before navigating
-                            popUpTo(Screen.ExerciseLogging.route) {
-                                inclusive = true
-                            }
+                            Text("-15s")
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.updateRestTime(restTime + 15) },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextTertiary)
+                        ) {
+                            Text("+15s")
                         }
                     }
-                    // If clicking the same exercise, just close the sheet
-                },
-                onAddExercise = {
-                    showWorkoutOverview = false
-                    navController.navigate(Screen.ExerciseSelection.route)
                 }
-            )
-        }
-    }
-
-    // Exercise History Bottom Sheet
-    if (showExerciseHistory) {
-        ModalBottomSheet(
-            onDismissRequest = { showExerciseHistory = false },
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.startTimer()
+                        showTimerDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent)
+                ) {
+                    Text("Start Timer", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimerDialog = false }) {
+                    Text("Close", color = TextTertiary)
+                }
+            },
             containerColor = SurfaceCards
-        ) {
-            ExerciseHistoryContent(
-                exerciseName = exercise?.name ?: "",
-                personalRecords = personalRecords,
-                history = exerciseHistory,
-                onDismiss = { showExerciseHistory = false }
-            )
-        }
-    }
-
-    // Finish Workout Confirmation Dialog
-    if (showFinishDialog) {
-        AlertDialog(
-            onDismissRequest = { showFinishDialog = false },
-            title = { Text("Finish Workout?", fontWeight = FontWeight.Bold) },
-            text = { Text("Are you sure you want to end this workout session?") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.finishWorkout()
-                        scope.launch {
-                            delay(300)
-                            navController.navigate(Screen.Home.route) {
-                                popUpTo(Screen.Home.route) { inclusive = true }
-                            }
-                        }
-                        showFinishDialog = false
-                    }
-                ) {
-                    Text("Finish", color = PrimaryAccent, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showFinishDialog = false }) {
-                    Text("Cancel", color = TextTertiary)
-                }
-            }
-        )
-    }
-
-    // Delete Set Confirmation Dialog
-    if (selectedSetToDelete != null) {
-        AlertDialog(
-            onDismissRequest = { selectedSetToDelete = null },
-            title = { Text("Delete Set?", fontWeight = FontWeight.Bold) },
-            text = { Text("Are you sure you want to delete this set? This action cannot be undone.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        selectedSetToDelete?.let { set ->
-                            viewModel.deleteSet(set)
-                            selectedSetToDelete = null
-                        }
-                    }
-                ) {
-                    Text("Delete", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { selectedSetToDelete = null }) {
-                    Text("Cancel", color = TextTertiary)
-                }
-            }
         )
     }
 }
@@ -549,7 +492,7 @@ private fun InputCard(
     lastValue: String? = null
 ) {
     Card(
-        modifier = modifier.height(140.dp),
+        modifier = modifier.height(100.dp),
         colors = CardDefaults.cardColors(containerColor = SurfaceCards),
         shape = RoundedCornerShape(16.dp)
     ) {
@@ -588,7 +531,7 @@ private fun InputCard(
                 textStyle = MaterialTheme.typography.displaySmall.copy(
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
-                    fontSize = 48.sp
+                    fontSize = 40.sp
                 ),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 colors = TextFieldDefaults.colors(
@@ -635,7 +578,7 @@ private fun LogSetButton(
         enabled = enabled,
         modifier = modifier
             .fillMaxWidth()
-            .height(70.dp)
+            .height(56.dp)
             .scale(scale),
         colors = ButtonDefaults.buttonColors(
             containerColor = PrimaryAccent,
