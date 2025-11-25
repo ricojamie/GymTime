@@ -1,6 +1,7 @@
 package com.example.gymtime.data.db.dao
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.Query
@@ -32,6 +33,9 @@ interface SetDao {
 
     @Update
     suspend fun updateSet(set: Set)
+
+    @Delete
+    suspend fun deleteSet(set: Set)
 
     @Query("SELECT * FROM sets WHERE workoutId = :workoutId ORDER BY timestamp DESC")
     fun getSetsForWorkout(workoutId: Long): Flow<List<Set>>

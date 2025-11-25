@@ -73,6 +73,10 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _isTimerRunning = MutableStateFlow(false)
     val isTimerRunning: StateFlow<Boolean> = _isTimerRunning
 
+    // Set editing state
+    private val _editingSet = MutableStateFlow<Set?>(null)
+    val editingSet: StateFlow<Set?> = _editingSet
+
     // Last workout data
     private val _lastWorkoutSets = MutableStateFlow<List<Set>>(emptyList())
     val lastWorkoutSets: StateFlow<List<Set>> = _lastWorkoutSets
@@ -184,15 +188,61 @@ class ExerciseLoggingViewModel @Inject constructor(
 
             setDao.insertSet(newSet)
 
-            // Clear form
-            _weight.value = ""
-            _reps.value = ""
+            // Clear RPE only (weight/reps persist for next set)
             _rpe.value = ""
             _isWarmup.value = false
-            
-            // Start timer
-            _isTimerRunning.value = true
         }
+    }
+
+    fun startEditingSet(set: Set) {
+        _editingSet.value = set
+        _weight.value = set.weight?.toString() ?: ""
+        _reps.value = set.reps?.toString() ?: ""
+        _isWarmup.value = set.isWarmup
+    }
+
+    fun saveEditedSet() {
+        viewModelScope.launch {
+            _editingSet.value?.let { set ->
+                val updatedSet = set.copy(
+                    weight = _weight.value.toFloatOrNull(),
+                    reps = _reps.value.toIntOrNull(),
+                    isWarmup = _isWarmup.value
+                )
+                setDao.updateSet(updatedSet)
+                Log.d("ExerciseLoggingVM", "Set updated: id=${set.id}")
+
+                // Clear editing state and form
+                _editingSet.value = null
+                _weight.value = ""
+                _reps.value = ""
+                _rpe.value = ""
+                _isWarmup.value = false
+            }
+        }
+    }
+
+    fun cancelEditing() {
+        _editingSet.value = null
+        _weight.value = ""
+        _reps.value = ""
+        _rpe.value = ""
+        _isWarmup.value = false
+    }
+
+    fun deleteSet(set: Set) {
+        viewModelScope.launch {
+            setDao.deleteSet(set)
+            Log.d("ExerciseLoggingVM", "Set deleted: id=${set.id}")
+        }
+    }
+
+    fun startTimer() {
+        _isTimerRunning.value = true
+    }
+
+    fun stopTimer() {
+        _isTimerRunning.value = false
     }
 
     fun finishWorkout() {
