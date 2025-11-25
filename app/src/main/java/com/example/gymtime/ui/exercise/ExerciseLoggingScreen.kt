@@ -483,6 +483,10 @@ fun ExerciseLoggingScreen(
     }
 }
 
+import androidx.compose.foundation.text.BasicTextField
+
+// ... (other imports)
+
 @Composable
 private fun InputCard(
     label: String,
@@ -525,25 +529,28 @@ private fun InputCard(
                 }
             }
 
-            TextField(
-                value = value,
-                onValueChange = onValueChange,
-                textStyle = MaterialTheme.typography.displaySmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    fontSize = 40.sp
-                ),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
+            // Input Area - Using BasicTextField for better control
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f), // Fill remaining space
+                contentAlignment = Alignment.Center
+            ) {
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    textStyle = MaterialTheme.typography.displaySmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        fontSize = 34.sp,
+                        color = TextPrimary
+                    ),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    cursorBrush = Brush.solidColor(PrimaryAccent),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }
