@@ -234,6 +234,7 @@ class ExerciseLoggingViewModel @Inject constructor(
 
     fun deleteSet(set: Set) {
         viewModelScope.launch {
+            Log.e("DELETE_DEBUG", "Attempting to delete set: ${set.id}")
             setDao.deleteSet(set)
             Log.d("ExerciseLoggingVM", "Set deleted: id=${set.id}")
         }

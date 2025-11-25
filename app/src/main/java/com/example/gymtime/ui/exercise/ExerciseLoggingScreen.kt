@@ -7,6 +7,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -384,9 +385,12 @@ fun ExerciseLoggingScreen(
                 modifier = Modifier.weight(1.5f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(loggedSets.size) { index ->
+                itemsIndexed(
+                    items = loggedSets,
+                    key = { _, item -> item.id }
+                ) { index, set ->
                     ExerciseSetLogCard(
-                        set = loggedSets[index],
+                        set = set,
                         setNumber = index + 1,
                         onEdit = { selectedSet ->
                             viewModel.startEditingSet(selectedSet)
