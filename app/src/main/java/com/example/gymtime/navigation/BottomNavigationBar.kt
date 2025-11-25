@@ -8,15 +8,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -25,9 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.gymtime.R
@@ -47,24 +42,30 @@ fun BottomNavigationBar(navController: NavController) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(100.dp) // Taller to allow for smooth fade
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        Color.Black.copy(alpha = 0.8f),
-                        Color.Black
-                    ),
-                    startY = 0f,
-                    endY = Float.POSITIVE_INFINITY
-                )
-            )
+            .background(Color.Black)
     ) {
+        // Top Neon Border
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .align(Alignment.TopCenter)
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            PrimaryAccent,
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 16.dp), // Lift items up a bit
+                .navigationBarsPadding() // Handle system gesture bar
+                .padding(vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -98,23 +99,16 @@ fun BottomNavigationBar(navController: NavController) {
                                 }
                             }
                         }
-                        .padding(12.dp) // Touch target padding
+                        .padding(16.dp) // Touch target padding
                 ) {
                     Icon(
                         painter = painterResource(id = getIconForScreen(screen)),
                         contentDescription = screen.route,
                         tint = color,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(26.dp)
                     )
                     
-                    if (isSelected) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(4.dp)
-                                .background(PrimaryAccent, shape = androidx.compose.foundation.shape.CircleShape)
-                        )
-                    }
+                    // Removed the dot indicator as requested for "Option 2" clean look
                 }
             }
         }

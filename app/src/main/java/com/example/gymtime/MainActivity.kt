@@ -51,7 +51,7 @@ class MainActivity : ComponentActivity() {
                 Surface(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(
@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
                     ) {
                         val navController = rememberNavController()
                         Scaffold(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.weight(1f),
                             containerColor = Color.Transparent
                         ) { innerPadding ->
                             NavHost(
@@ -103,12 +103,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         
-                        // Floating Navigation Bar
-                        Box(
-                            modifier = Modifier.align(Alignment.BottomCenter)
-                        ) {
-                            BottomNavigationBar(navController = navController)
-                        }
+                        BottomNavigationBar(navController = navController)
                     }
                 }
             }
