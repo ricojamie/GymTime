@@ -44,6 +44,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Date
 
+import androidx.compose.ui.text.style.TextOverflow
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExerciseLoggingScreen(
@@ -111,10 +113,6 @@ fun ExerciseLoggingScreen(
     Scaffold(
         topBar = {
             exercise?.let { ex ->
-import androidx.compose.ui.text.style.TextOverflow
-
-// ... inside the file ...
-
                 TopAppBar(
                     title = {
                         Column {
