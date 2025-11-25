@@ -37,6 +37,9 @@ interface SetDao {
     @Delete
     suspend fun deleteSet(set: Set)
 
+    @Query("DELETE FROM sets WHERE id = :setId")
+    suspend fun deleteSetById(setId: Long)
+
     @Query("SELECT * FROM sets WHERE workoutId = :workoutId ORDER BY timestamp DESC")
     fun getSetsForWorkout(workoutId: Long): Flow<List<Set>>
 
