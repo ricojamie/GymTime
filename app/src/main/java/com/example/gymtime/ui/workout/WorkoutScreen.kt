@@ -132,7 +132,7 @@ fun LogTab() {
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Timer Row
         Row(
@@ -167,7 +167,7 @@ fun LogTab() {
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Current Set Label
         Text(
@@ -179,7 +179,7 @@ fun LogTab() {
             modifier = Modifier.align(Alignment.CenterHorizontally)
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // Input Fields
         Row(
@@ -203,7 +203,7 @@ fun LogTab() {
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Log Set Button
         LogSetButton(
@@ -224,7 +224,7 @@ fun LogTab() {
             enabled = weight.isNotBlank() && reps.isNotBlank()
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Session Log
         Row(
@@ -321,7 +321,7 @@ fun InputCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.height(140.dp),
+        modifier = modifier.height(100.dp),
         colors = CardDefaults.cardColors(containerColor = SurfaceCards),
         shape = RoundedCornerShape(16.dp)
     ) {
@@ -344,7 +344,7 @@ fun InputCard(
                 textStyle = MaterialTheme.typography.displaySmall.copy(
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
-                    fontSize = 48.sp
+                    fontSize = 40.sp
                 ),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 colors = TextFieldDefaults.colors(
@@ -410,7 +410,7 @@ fun LogSetButton(
         enabled = enabled,
         modifier = modifier
             .fillMaxWidth()
-            .height(70.dp)
+            .height(56.dp)
             .scale(scale * prScale),
         colors = ButtonDefaults.buttonColors(
             containerColor = PrimaryAccent,
