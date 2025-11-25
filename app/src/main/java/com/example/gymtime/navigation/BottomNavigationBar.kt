@@ -65,6 +65,7 @@ fun getIconForScreen(screen: Screen): Int {
         Screen.Library -> R.drawable.ic_library
         Screen.Workout -> R.drawable.ic_home // Not in bottom bar, but needs to be exhaustive
         Screen.ExerciseSelection -> R.drawable.ic_home // Not in bottom bar
+        Screen.WorkoutResume -> R.drawable.ic_home // Not in bottom bar
         Screen.ExerciseLogging -> R.drawable.ic_home // Not in bottom bar
     }
 }

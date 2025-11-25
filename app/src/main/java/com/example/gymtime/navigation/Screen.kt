@@ -6,6 +6,7 @@ sealed class Screen(val route: String) {
     object Library : Screen("library")
     object Workout : Screen("workout")
     object ExerciseSelection : Screen("exercise_selection")
+    object WorkoutResume : Screen("workout_resume")
     object ExerciseLogging : Screen("exercise_logging/{exerciseId}") {
         fun createRoute(exerciseId: Long) = "exercise_logging/$exerciseId"
     }

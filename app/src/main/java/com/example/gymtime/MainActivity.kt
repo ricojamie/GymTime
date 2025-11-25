@@ -83,6 +83,16 @@ class MainActivity : ComponentActivity() {
                                 composable(Screen.ExerciseSelection.route) {
                                     com.example.gymtime.ui.exercise.ExerciseSelectionScreen(navController = navController)
                                 }
+                                composable(Screen.WorkoutResume.route) {
+                                    com.example.gymtime.ui.workout.WorkoutResumeScreen(
+                                        onExerciseClick = { exerciseId ->
+                                            navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId))
+                                        },
+                                        onAddExerciseClick = {
+                                            navController.navigate(Screen.ExerciseSelection.route)
+                                        }
+                                    )
+                                }
                                 composable(
                                     route = Screen.ExerciseLogging.route,
                                     arguments = listOf(androidx.navigation.navArgument("exerciseId") {
@@ -122,7 +132,13 @@ fun HomeScreen(
         // Quick Start button - full width
         com.example.gymtime.ui.QuickStartCard(
             isOngoing = ongoingWorkout != null,
-            onClick = { navController.navigate(Screen.ExerciseSelection.route) }
+            onClick = {
+                if (ongoingWorkout != null) {
+                    navController.navigate(Screen.WorkoutResume.route)
+                } else {
+                    navController.navigate(Screen.ExerciseSelection.route)
+                }
+            }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
