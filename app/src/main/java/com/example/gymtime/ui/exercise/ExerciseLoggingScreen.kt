@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -21,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -109,14 +111,20 @@ fun ExerciseLoggingScreen(
     Scaffold(
         topBar = {
             exercise?.let { ex ->
+import androidx.compose.ui.text.style.TextOverflow
+
+// ... inside the file ...
+
                 TopAppBar(
                     title = {
                         Column {
                             Text(
                                 text = ex.name,
-                                style = MaterialTheme.typography.titleLarge,
+                                style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary
+                                color = TextPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = ex.targetMuscle,
@@ -483,10 +491,6 @@ fun ExerciseLoggingScreen(
     }
 }
 
-import androidx.compose.foundation.text.BasicTextField
-
-// ... (other imports)
-
 @Composable
 private fun InputCard(
     label: String,
@@ -546,7 +550,7 @@ private fun InputCard(
                         color = TextPrimary
                     ),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    cursorBrush = Brush.solidColor(PrimaryAccent),
+                    cursorBrush = SolidColor(PrimaryAccent),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
