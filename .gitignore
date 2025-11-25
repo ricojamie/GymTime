@@ -68,3 +68,6 @@ Thumbs.db
 
 # Kotlin
 .kotlin/
+
+.gemini/
+gha-creds-*.json

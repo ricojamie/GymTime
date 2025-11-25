@@ -66,7 +66,6 @@ class MainActivity : ComponentActivity() {
                         val navController = rememberNavController()
                         Scaffold(
                             modifier = Modifier.fillMaxSize(),
-                            bottomBar = { BottomNavigationBar(navController = navController) },
                             containerColor = Color.Transparent
                         ) { innerPadding ->
                             NavHost(
@@ -102,6 +101,13 @@ class MainActivity : ComponentActivity() {
                                     com.example.gymtime.ui.exercise.ExerciseLoggingScreen(navController = navController)
                                 }
                             }
+                        }
+                        
+                        // Floating Navigation Bar
+                        Box(
+                            modifier = Modifier.align(Alignment.BottomCenter)
+                        ) {
+                            BottomNavigationBar(navController = navController)
                         }
                     }
                 }
