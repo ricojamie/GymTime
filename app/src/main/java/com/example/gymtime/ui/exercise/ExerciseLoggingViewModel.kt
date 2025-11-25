@@ -232,11 +232,11 @@ class ExerciseLoggingViewModel @Inject constructor(
         _isWarmup.value = false
     }
 
-    fun deleteSet(set: Set) {
+    fun deleteSet(setId: Long) {
         viewModelScope.launch {
-            Log.e("DELETE_DEBUG", "Attempting to delete set: ${set.id}")
-            setDao.deleteSetById(set.id)
-            Log.d("ExerciseLoggingVM", "Set deleted: id=${set.id}")
+            Log.e("DELETE_DEBUG", "Attempting to delete set: $setId")
+            setDao.deleteSetById(setId)
+            Log.d("ExerciseLoggingVM", "Set deleted: id=$setId")
         }
     }
 
