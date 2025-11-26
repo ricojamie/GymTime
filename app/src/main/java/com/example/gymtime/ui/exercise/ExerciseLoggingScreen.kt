@@ -502,6 +502,47 @@ fun ExerciseLoggingScreen(
             containerColor = SurfaceCards
         )
     }
+
+    // Delete Confirmation Dialog
+    selectedSetToDelete?.let { setToDelete ->
+        AlertDialog(
+            onDismissRequest = { selectedSetToDelete = null },
+            title = {
+                Text(
+                    text = "Delete Set?",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to delete this set? This action cannot be undone.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextTertiary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteSet(setToDelete.id)
+                        selectedSetToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFE74C3C) // Red for destructive action
+                    )
+                ) {
+                    Text("Delete", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedSetToDelete = null }) {
+                    Text("Cancel", color = TextTertiary)
+                }
+            },
+            containerColor = SurfaceCards
+        )
+    }
 }
 
 @Composable
