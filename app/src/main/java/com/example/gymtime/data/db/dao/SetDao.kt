@@ -81,7 +81,7 @@ interface SetDao {
         GROUP BY e.id
         ORDER BY MIN(s.timestamp) ASC
     """)
-    suspend fun getWorkoutExerciseSummaries(workoutId: Long): List<WorkoutExerciseSummary>
+    fun getWorkoutExerciseSummaries(workoutId: Long): Flow<List<WorkoutExerciseSummary>>
 
     // Get all sets for exercise history screen
     @Query("""

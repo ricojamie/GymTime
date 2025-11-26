@@ -73,11 +73,23 @@ fun ExerciseLoggingScreen(
     var showTimerDialog by remember { mutableStateOf(false) }
     var showWorkoutOverview by remember { mutableStateOf(false) }
     var showExerciseHistory by remember { mutableStateOf(false) }
+
     var personalRecords by remember { mutableStateOf<PersonalRecords?>(null) }
     var exerciseHistory by remember { mutableStateOf<Map<Long, List<com.example.gymtime.data.db.entity.Set>>>(emptyMap()) }
 
     // Set deletion
     var selectedSetToDelete by remember { mutableStateOf<com.example.gymtime.data.db.entity.Set?>(null) }
+
+    // Observe navigation events from ViewModel
+    LaunchedEffect(Unit) {
+        viewModel.navigationEvents.collect {
+            navController.navigate(Screen.Home.route) {
+                popUpTo(navController.graph.id) {
+                    inclusive = true
+                }
+            }
+        }
+    }
 
     val view = LocalView.current
     val scope = rememberCoroutineScope()

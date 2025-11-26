@@ -1,6 +1,6 @@
 # 2025-11-25 - UI Polish: Navigation & Compact Logging
 
-**Duration:** 2 hours
+**Duration:** 3 hours
 **Status:** Completed
 **Branch:** `main` (merged from `feature/glass-fade-nav` and `feature/compact-logging-ui`)
 
@@ -25,9 +25,15 @@ Enhance the application's core UI by modernizing the bottom navigation bar and o
   - **Structure:** Moved from a floating overlay to a solid column layout to prevent content occlusion.
   - **Impact:** Aligned the navigation bar with the app's "IronLog" premium dark theme.
 
+- **[UI Polish]** - Refined interaction feedback based on Agent Persona review.
+  - **Input Affordance:** Added a subtle background to input fields so they don't look "floaty".
+  - **Warmup Toggle:** Replaced checkbox with a large, clickable "Pill" toggle for better touch targets.
+  - **Keyboard Handling:** "Log Set" button now auto-dismisses the keyboard.
+
 ### Technical Improvements
-- **[Build Validation]** - Utilized "syntax error injection" to confirm Android Studio build synchronization and resolved subsequent `kapt` and import issues.
+- **[Build Validation]** - Utilized "syntax error injection" to confirm Android Studio build synchronization.
 - **[Layout Refactor]** - Standardized layout approach across `WorkoutScreen` (prototype) and `ExerciseLoggingScreen` (actual feature).
+- **[Sorting Fix]** - Corrected the sorting order of logged sets to `timestamp ASC` (Oldest First) so Set 1 remains Set 1.
 
 ---
 
@@ -35,10 +41,10 @@ Enhance the application's core UI by modernizing the bottom navigation bar and o
 
 | File | Changes | Lines Modified |
 |------|---------|----------------|
-| `app/.../ui/exercise/ExerciseLoggingScreen.kt` | Major layout refactor (Timer, Inputs, Spacing) | +180 / -145 |
+| `app/.../ui/exercise/ExerciseLoggingScreen.kt` | Major layout refactor (Timer, Inputs, Spacing) | +250 / -200 |
 | `app/.../navigation/BottomNavigationBar.kt` | Custom "Neon Deck" UI implementation | +60 / -40 |
-| `app/.../MainActivity.kt` | Layout structure update (Box -> Column) | +15 / -10 |
-| `app/.../ui/workout/WorkoutScreen.kt` | Updated prototype to match logging screen changes | +100 / -80 |
+| `app/.../data/db/dao/SetDao.kt` | Added `deleteSetById` query | +3 / -0 |
+| `app/.../ui/exercise/ExerciseLoggingViewModel.kt` | Sorting fix & Delete by ID refactor | +10 / -5 |
 
 ---
 
@@ -50,23 +56,25 @@ Enhance the application's core UI by modernizing the bottom navigation bar and o
   - [x] Bottom Navigation switching
   - [x] Exercise Logging Layout rendering
   - [x] Timer Dialog interaction
+  - [x] Set Sorting (1, 2, 3...)
 
 **Issues Found:**
-- Initial confusion between `WorkoutScreen.kt` (prototype) and `ExerciseLoggingScreen.kt` (actual) caused a delay in seeing changes. Resolved by identifying the correct file.
-- `TopAppBar` title ("Barbell Bench Press") was truncating due to the new Timer Pill. Resolved by reducing font to `20.sp` and handling overflow.
+- **CRITICAL BUG:** **Set Deletion is NOT working.** The UI dialog triggers, the ViewModel is called, the DB query is executed (Delete by ID), but the row remains in the database/UI.
+  - Attempts to fix: Switched to explicit `DELETE FROM sets WHERE id = :id`, verified IDs are valid (non-zero), verified UI sorting. Issue persists across app restarts.
+  - **Status:** Deferred to next session.
 
 ---
 
 ## 🎯 Next Session Priorities
 
-### 🥇 Priority 1: Database Seeding
-**Why:** The app currently has zero exercises on first launch. Users cannot test it in the gym without manually creating exercises.
-**Effort:** Low/Medium
+### 🥇 Priority 1: Fix Set Deletion Bug
+**Why:** Basic CRUD functionality is broken. This is a release blocker.
+**Effort:** High (Requires deep debugging of Room/Flow)
 **Blockers:** None
 
-### 🥈 Priority 2: Workout Data Connection
-**Why:** `WorkoutScreen` (the dashboard) is still a hardcoded prototype. It needs to display real active session data (exercises performed, volume).
-**Effort:** Medium
+### 🥈 Priority 2: Database Seeding
+**Why:** The app currently has zero exercises on first launch. Users cannot test it in the gym without manually creating exercises.
+**Effort:** Low/Medium
 **Blockers:** None
 
 ---
@@ -74,33 +82,23 @@ Enhance the application's core UI by modernizing the bottom navigation bar and o
 ## 💡 Key Decisions Made
 
 1. **Timer Relocation**
-   - **Options Considered:** Action Button Badge vs. Header Pill vs. dedicated row.
    - **Choice:** Header Pill (Top Right).
    - **Rationale:** Saved the most vertical space (entire row) without hiding the timer or cluttering the critical input fields.
 
 2. **Input Field Component**
-   - **Options Considered:** Standard `TextField` vs. `BasicTextField`.
-   - **Choice:** `BasicTextField`.
-   - **Rationale:** Standard `TextField` enforced minimum height and padding that made compact cards (`100dp`) impossible to style cleanly. `BasicTextField` allowed precise centering.
+   - **Choice:** `BasicTextField` wrapped in a Box.
+   - **Rationale:** Standard `TextField` enforced minimum height and padding that made compact cards (`100dp`) impossible to style cleanly.
+
+3. **Deletion Strategy**
+   - **Choice:** Delete by ID (`Long`) instead of Entity (`Set`).
+   - **Rationale:** Eliminates potential object equality issues, though the bug persists.
 
 ---
 
 ## 🔍 Technical Insights
 
 **Lessons Learned:**
-- **File Confusion:** Always verify the `NavHost` route mapping to ensure edits are applied to the active screen, especially when prototypes (`WorkoutScreen`) exist alongside real features (`ExerciseLoggingScreen`).
-- **Build Caching:** If Android Studio refuses to update the UI despite file changes, force a syntax error to "wake up" the compiler.
-
----
-
-## 📊 Project Health
-
-**Codebase Stats:**
-- Build time: ~34 seconds (successful)
-- Compilation errors: 0 (fixed import issues)
-
-**Architecture Status:**
-- ✅ MVVM pattern maintained (ViewModels handle timer logic).
-- ✅ UI components remain largely stateless.
+- **Room Deletion:** Even direct SQL queries can fail silently or appear to fail if the reactive Flow isn't updating correctly. This needs investigation.
+- **Compose Keys:** Always use `key = { item.id }` in LazyColumn to ensure stable rendering during list updates.
 
 ---

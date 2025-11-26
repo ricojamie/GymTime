@@ -13,7 +13,8 @@ import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.util.OneRepMaxCalculator
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -84,6 +85,10 @@ class ExerciseLoggingViewModel @Inject constructor(
     // Workout overview data
     private val _workoutOverview = MutableStateFlow<List<WorkoutExerciseSummary>>(emptyList())
     val workoutOverview: StateFlow<List<WorkoutExerciseSummary>> = _workoutOverview
+
+    private val _navigationEvents = Channel<Unit>(Channel.BUFFERED)
+    val navigationEvents = _navigationEvents.receiveAsFlow()
+
 
     // Flag to track if pre-fill has happened
     private var hasPrefilled = false
@@ -253,6 +258,7 @@ class ExerciseLoggingViewModel @Inject constructor(
             val workout = _currentWorkout.value ?: return@launch
             val updatedWorkout = workout.copy(endTime = Date())
             workoutDao.updateWorkout(updatedWorkout)
+            _navigationEvents.send(Unit) // Send event to trigger navigation
         }
     }
 
@@ -260,9 +266,10 @@ class ExerciseLoggingViewModel @Inject constructor(
     fun loadWorkoutOverview() {
         viewModelScope.launch {
             _currentWorkout.value?.let { workout ->
-                val overview = setDao.getWorkoutExerciseSummaries(workout.id)
-                _workoutOverview.value = overview
-                Log.d("ExerciseLoggingVM", "Workout overview loaded: ${overview.size} exercises")
+                setDao.getWorkoutExerciseSummaries(workout.id).collectLatest { overview ->
+                    _workoutOverview.value = overview
+                    Log.d("ExerciseLoggingVM", "Workout overview loaded: ${overview.size} exercises")
+                }
             }
         }
     }
