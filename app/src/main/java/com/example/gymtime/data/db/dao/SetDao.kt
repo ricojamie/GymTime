@@ -146,4 +146,7 @@ interface SetDao {
         ORDER BY s.timestamp ASC
     """)
     suspend fun getWorkoutSetsWithExercises(workoutId: Long): List<SetWithExerciseInfo>
+
+    @Query("SELECT timestamp FROM sets WHERE workoutId = :workoutId ORDER BY timestamp DESC LIMIT 1")
+    suspend fun getLastSetTimestamp(workoutId: Long): java.util.Date?
 }

@@ -346,6 +346,8 @@ Status Indicators:
 
 ### Git Workflow
 
+- **NEVER merge into main without explicit user approval.**
+- **NEVER make any code changes without making a branch first.**
 - All features on `main` (no feature branches currently)
 - Commit messages: descriptive, start with verb (Feat:, Fix:, Refactor:, etc)
 - Always include Co-Authored-By footer with Claude credit
