@@ -56,11 +56,21 @@ import com.patrykandpatrick.vico.compose.axis.horizontal.rememberBottomAxis
 import com.patrykandpatrick.vico.compose.axis.vertical.rememberStartAxis
 import com.patrykandpatrick.vico.compose.chart.Chart
 import com.patrykandpatrick.vico.compose.chart.line.lineChart
+import com.patrykandpatrick.vico.compose.component.lineComponent
+import com.patrykandpatrick.vico.compose.component.overlayingComponent
+import com.patrykandpatrick.vico.compose.component.shapeComponent
+import com.patrykandpatrick.vico.compose.component.textComponent
+import com.patrykandpatrick.vico.compose.dimensions.dimensionsOf
 import com.patrykandpatrick.vico.core.axis.AxisPosition
 import com.patrykandpatrick.vico.core.axis.formatter.AxisValueFormatter
 import com.patrykandpatrick.vico.core.chart.line.LineChart
+import com.patrykandpatrick.vico.core.component.marker.MarkerComponent
+import com.patrykandpatrick.vico.core.component.shape.DashedShape
+import com.patrykandpatrick.vico.core.component.shape.Shapes
 import com.patrykandpatrick.vico.core.entry.FloatEntry
 import com.patrykandpatrick.vico.core.entry.entryModelOf
+import com.patrykandpatrick.vico.core.marker.Marker
+import com.patrykandpatrick.vico.core.marker.MarkerLabelFormatter
 import kotlinx.coroutines.launch
 
 @Composable
@@ -242,6 +252,10 @@ fun TargetSelectionContent(
 
 @Composable
 fun MainLineChart(data: ChartData) {
+    val markerLabelMap = remember(data) {
+        data.actuals.associate { it.date.toFloat() to it.label }
+    }
+
     GlowCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -284,6 +298,8 @@ fun MainLineChart(data: ChartData) {
 
             val lines = if (trendEntries.isNotEmpty()) listOf(actualLine, trendLine) else listOf(actualLine)
             
+            val marker = rememberMarker(markerLabelMap)
+            
             Chart(
                 chart = lineChart(
                     lines = lines,
@@ -296,9 +312,65 @@ fun MainLineChart(data: ChartData) {
                 bottomAxis = rememberBottomAxis(
                     valueFormatter = bottomAxisFormatter
                 ),
-                // Marker skipped due to Vico 1.x complexity/build issues
+                marker = marker,
                 modifier = Modifier.padding(16.dp)
             )
+        }
+    }
+}
+
+@Composable
+internal fun rememberMarker(labelMap: Map<Float, String>): Marker {
+    val labelBackgroundColor = Color(0xFF1E1E1E)
+    val labelBackground = shapeComponent(
+        shape = Shapes.pillShape,
+        color = labelBackgroundColor
+    )
+    val label = textComponent(
+        background = labelBackground,
+        lineCount = 2,
+        padding = dimensionsOf(8.dp, 4.dp),
+        color = Color.White,
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+    )
+    val indicatorInner = shapeComponent(
+        shape = Shapes.pillShape,
+        color = PrimaryAccent
+    )
+    val indicatorCenter = shapeComponent(
+        shape = Shapes.pillShape,
+        color = Color.White
+    )
+    val indicatorOuter = shapeComponent(
+        shape = Shapes.pillShape,
+        color = Color.White
+    )
+    val indicator = overlayingComponent(
+        outer = indicatorOuter,
+        inner = overlayingComponent(
+            outer = indicatorCenter,
+            inner = indicatorInner,
+            innerPaddingAll = 3.dp
+        ),
+        innerPaddingAll = 2.dp
+    )
+    val guideline = lineComponent(
+        color = Color.White.copy(alpha = 0.2f),
+        thickness = 2.dp,
+        shape = DashedShape(Shapes.pillShape, 10f, 5f)
+    )
+
+    return remember(label, indicator, guideline) {
+        object : MarkerComponent(label, indicator, guideline) {
+            init {
+                labelFormatter = MarkerLabelFormatter { markedEntries, _ ->
+                    val x = markedEntries.firstOrNull()?.entry?.x ?: return@MarkerLabelFormatter ""
+                    val y = markedEntries.firstOrNull()?.entry?.y ?: return@MarkerLabelFormatter ""
+                    val dateLabel = labelMap[x] ?: ""
+                    val formattedValue = String.format("%,.0f", y)
+                    "$dateLabel\n$formattedValue"
+                }
+            }
         }
     }
 }
