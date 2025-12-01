@@ -24,7 +24,7 @@ import com.example.gymtime.data.db.entity.Workout
         RoutineExercise::class,
         MuscleGroup::class
     ],
-    version = 2, // Increment version for schema change
+    version = 3, // Added timestamp index for analytics queries
     exportSchema = false
 )
 @TypeConverters(Converters::class)

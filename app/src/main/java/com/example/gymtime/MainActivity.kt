@@ -85,6 +85,9 @@ class MainActivity : ComponentActivity() {
                                 composable(Screen.Library.route) {
                                     com.example.gymtime.ui.exercise.ExerciseSelectionScreen(navController = navController)
                                 }
+                                composable(Screen.Analytics.route) {
+                                    com.example.gymtime.ui.analytics.AnalyticsScreen()
+                                }
                                 composable(Screen.Workout.route) { com.example.gymtime.ui.workout.WorkoutScreen() }
                                 composable(Screen.ExerciseSelection.route) {
                                     com.example.gymtime.ui.exercise.ExerciseSelectionScreen(navController = navController)

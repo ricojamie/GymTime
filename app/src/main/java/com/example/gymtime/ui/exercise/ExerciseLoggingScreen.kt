@@ -555,6 +555,90 @@ fun ExerciseLoggingScreen(
             containerColor = SurfaceCards
         )
     }
+
+    // Finish Workout Dialog
+    if (showFinishDialog) {
+        AlertDialog(
+            onDismissRequest = { showFinishDialog = false },
+            title = {
+                Text(
+                    text = "Finish Workout?",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to finish this workout session?",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextTertiary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.finishWorkout()
+                        showFinishDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent)
+                ) {
+                    Text("Finish", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFinishDialog = false }) {
+                    Text("Cancel", color = TextTertiary)
+                }
+            },
+            containerColor = SurfaceCards
+        )
+    }
+
+    // Workout Overview Bottom Sheet
+    if (showWorkoutOverview) {
+        ModalBottomSheet(
+            onDismissRequest = { showWorkoutOverview = false },
+            containerColor = SurfaceCards,
+            scrimColor = Color.Black.copy(alpha = 0.5f)
+        ) {
+            WorkoutOverviewContent(
+                exercises = workoutOverview,
+                currentExerciseId = exercise?.id,
+                workoutStats = viewModel.getWorkoutStats(),
+                onExerciseClick = { exerciseId ->
+                    showWorkoutOverview = false
+                    if (exerciseId != exercise?.id) {
+                        navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId)) {
+                            launchSingleTop = true
+                        }
+                    }
+                },
+                onAddExercise = {
+                    showWorkoutOverview = false
+                    navController.navigate(Screen.ExerciseSelection.route)
+                }
+            )
+        }
+    }
+
+    // Exercise History Bottom Sheet
+    if (showExerciseHistory) {
+        ModalBottomSheet(
+            onDismissRequest = { showExerciseHistory = false },
+            containerColor = SurfaceCards,
+            scrimColor = Color.Black.copy(alpha = 0.5f)
+        ) {
+            exercise?.let { ex ->
+                ExerciseHistoryContent(
+                    exerciseName = ex.name,
+                    personalRecords = personalRecords,
+                    history = exerciseHistory,
+                    onDismiss = { showExerciseHistory = false }
+                )
+            }
+        }
+    }
 }
 
 @Composable

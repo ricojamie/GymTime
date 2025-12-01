@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.db.GymTimeDatabase
@@ -38,6 +39,14 @@ private const val TAG = "DatabaseModule"
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
+    // Migration from version 2 to 3: Add timestamp index for analytics performance
+    private val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            Log.d(TAG, "Running migration 2 -> 3: Adding timestamp index to sets table")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_sets_timestamp ON sets(timestamp)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): GymTimeDatabase {
@@ -46,6 +55,7 @@ object DatabaseModule {
             GymTimeDatabase::class.java,
             "gym_time_db"
         )
+        .addMigrations(MIGRATION_2_3)
         .fallbackToDestructiveMigration() // For development simplicity
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {

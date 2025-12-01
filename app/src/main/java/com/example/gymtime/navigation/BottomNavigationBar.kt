@@ -33,7 +33,8 @@ fun BottomNavigationBar(navController: NavController) {
     val items = listOf(
         Screen.Home,
         Screen.History,
-        Screen.Library
+        Screen.Library,
+        Screen.Analytics
     )
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -120,9 +121,10 @@ fun getIconForScreen(screen: Screen): Int {
         Screen.Home -> R.drawable.ic_home
         Screen.History -> R.drawable.ic_history
         Screen.Library -> R.drawable.ic_library
-        Screen.Workout -> R.drawable.ic_home 
-        Screen.ExerciseSelection -> R.drawable.ic_home 
-        Screen.WorkoutResume -> R.drawable.ic_home 
-        Screen.ExerciseLogging -> R.drawable.ic_home 
+        Screen.Analytics -> R.drawable.ic_history // TODO: Create ic_analytics icon (trending up)
+        Screen.Workout -> R.drawable.ic_home
+        Screen.ExerciseSelection -> R.drawable.ic_home
+        Screen.WorkoutResume -> R.drawable.ic_home
+        Screen.ExerciseLogging -> R.drawable.ic_home
     }
 }

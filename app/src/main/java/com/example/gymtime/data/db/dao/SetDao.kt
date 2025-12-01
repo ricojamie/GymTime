@@ -26,6 +26,22 @@ data class SetWithExerciseInfo(
     val targetMuscle: String
 )
 
+// Data class for personal records (analytics)
+data class PersonalRecordData(
+    val exerciseId: Long,
+    val exerciseName: String,
+    val weight: Float,
+    val reps: Int,
+    val timestamp: Long
+)
+
+// Data class for volume by muscle (analytics)
+data class MuscleVolumeData(
+    val muscle: String,
+    val week: String,
+    val volume: Float
+)
+
 @Dao
 interface SetDao {
     @Insert
@@ -149,4 +165,71 @@ interface SetDao {
 
     @Query("SELECT timestamp FROM sets WHERE workoutId = :workoutId ORDER BY timestamp DESC LIMIT 1")
     suspend fun getLastSetTimestamp(workoutId: Long): java.util.Date?
+
+    // ===== ANALYTICS QUERIES =====
+
+    // Training frequency - count distinct workout days in date range
+    @Query("""
+        SELECT COUNT(DISTINCT DATE(timestamp / 1000, 'unixepoch')) as days
+        FROM sets
+        WHERE timestamp BETWEEN :startDate AND :endDate
+    """)
+    suspend fun getTrainingDaysCount(startDate: Long, endDate: Long): Int
+
+    // Total volume for a time period (for hero card)
+    @Query("""
+        SELECT SUM(s.weight * s.reps) as totalVolume
+        FROM sets s
+        WHERE s.weight IS NOT NULL
+          AND s.reps IS NOT NULL
+          AND s.isWarmup = 0
+          AND s.timestamp BETWEEN :startDate AND :endDate
+    """)
+    suspend fun getTotalVolume(startDate: Long, endDate: Long): Float?
+
+    // Best sets for 1RM calculation (across all exercises in date range)
+    @Query("""
+        SELECT * FROM sets
+        WHERE weight IS NOT NULL
+          AND reps IS NOT NULL
+          AND isWarmup = 0
+          AND timestamp BETWEEN :startDate AND :endDate
+        ORDER BY weight DESC
+        LIMIT 50
+    """)
+    suspend fun getTopSetsForE1RM(startDate: Long, endDate: Long): List<Set>
+
+    // Enhanced personal records (all exercises)
+    @Query("""
+        SELECT
+            e.id as exerciseId,
+            e.name as exerciseName,
+            MAX(s.weight) as weight,
+            s.reps as reps,
+            s.timestamp as timestamp
+        FROM exercises e
+        INNER JOIN sets s ON e.id = s.exerciseId
+        WHERE s.weight IS NOT NULL
+          AND s.isWarmup = 0
+        GROUP BY e.id
+        ORDER BY s.timestamp DESC
+    """)
+    suspend fun getAllPersonalRecords(): List<PersonalRecordData>
+
+    // Volume by muscle and week (for volume chart)
+    @Query("""
+        SELECT
+            e.targetMuscle as muscle,
+            strftime('%Y-%W', datetime(s.timestamp / 1000, 'unixepoch')) as week,
+            SUM(s.weight * s.reps) as volume
+        FROM sets s
+        INNER JOIN exercises e ON s.exerciseId = e.id
+        WHERE s.weight IS NOT NULL
+          AND s.reps IS NOT NULL
+          AND s.isWarmup = 0
+          AND s.timestamp BETWEEN :startDate AND :endDate
+        GROUP BY e.targetMuscle, week
+        ORDER BY week ASC
+    """)
+    suspend fun getVolumeByMuscleAndWeek(startDate: Long, endDate: Long): List<MuscleVolumeData>
 }

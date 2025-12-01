@@ -27,4 +27,7 @@ interface ExerciseDao {
 
     @Query("SELECT * FROM exercises WHERE id = :id")
     fun getExerciseById(id: Long): Flow<Exercise>
+
+    @Query("SELECT * FROM exercises WHERE id = :id")
+    suspend fun getExerciseByIdSync(id: Long): Exercise?
 }

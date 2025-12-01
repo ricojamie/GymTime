@@ -5,7 +5,7 @@
 **Name:** IronLog
 **Type:** Offline-first, privacy-centric strength training tracker for serious lifters
 **Philosophy:** "Buy Once, Own Forever" - No ads, no subscriptions, no algorithm, no social bloat
-**Status:** Early MVP - Core logging loop functional, exercise selection complete, database seeding working
+**Status:** Polished MVP - Core logging loop robust, navigation fluid, auto-cleanup implemented.
 
 ### Core Values
 
@@ -25,7 +25,7 @@ MainActivity (Single Activity, No Fragments)
 ├── Scaffold with BottomNavigationBar
 ├── NavHost with 4 visible routes:
 │   ├── Home (Dashboard) - Welcome, quick stats, quick start
-│   ├── History - Placeholder (not yet implemented)
+│   ├── History - Shows past workouts, details, deletion
 │   ├── Library - Redirects to ExerciseSelectionScreen
 │   └── (Hidden routes accessed from above)
 │       ├── ExerciseSelection - Browse/filter/select exercises
@@ -37,7 +37,7 @@ MainActivity (Single Activity, No Fragments)
 ### MVVM + Clean Architecture
 
 - **Activity**: MainActivity (only UI entry point)
-- **ViewModels**: HomeViewModel, ExerciseSelectionViewModel, ExerciseLoggingViewModel
+- **ViewModels**: MainViewModel (App-wide logic), HomeViewModel, ExerciseSelectionViewModel, ExerciseLoggingViewModel, HistoryViewModel
 - **Repositories**: UserPreferencesRepository (DataStore)
 - **DAOs**: ExerciseDao, WorkoutDao, SetDao, RoutineDao, MuscleGroupDao
 - **State Management**: Flow/StateFlow for reactive data, ViewModel for business logic
@@ -97,6 +97,7 @@ MainActivity (Single Activity, No Fragments)
 ### ✅ Exercise Logging Flow
 
 - Exercise header (name + target muscle)
+- **Contextual Navigation:** Top bar icons for "Workout Overview" (Superset switching) and "Exercise History" (Stats)
 - Auto-countdown rest timer (starts at 90s, configurable)
 - Weight input card (large, 48sp font for thumb-friendly input)
 - Reps input card (large, 48sp font)
@@ -104,7 +105,13 @@ MainActivity (Single Activity, No Fragments)
 - Log Set button (animated, haptic feedback, large hit target)
 - Session log (shows all sets logged in this exercise this session)
 - Add Exercise button (returns to selection, same workout session active)
-- Finish Workout button (ends session, saves to database)
+- Finish Workout button (ends session with confirmation dialog, saves to database)
+
+### ✅ History & Session Management
+
+- **History Screen:** View past workouts, see details (exercises, sets), delete workouts.
+- **Auto-Finish:** App checks for stale sessions (>4 hours inactive) on launch. Deletes empty ones, finishes active ones.
+- **Workout Resume:** Smartly resumes active sessions or starts fresh based on state.
 
 ### ✅ Database Seeding
 
@@ -317,13 +324,11 @@ Status Indicators:
    - Feature scope
    - Trade-offs to confirm
 
-3. **Present Plan to User**: Show both questions + proposed approach
+3. **Present Plan to User**: Show both questions + proposed approach.
+   - **CRITICAL**: Get explicit approval BEFORE proceeding with ANY code changes or Git operations (branching, committing, merging).
+   - Adjust based on feedback.
 
-   - Get explicit approval before proceeding
-   - Adjust based on feedback
-
-4. **Execute**: Only after approval
-
+4. **Execute**: Only after explicit approval.
    - Write code following standards below
    - Test compilation
    - Verify functionality
@@ -346,12 +351,11 @@ Status Indicators:
 
 ### Git Workflow
 
-- **NEVER merge into main without explicit user approval.**
-- **NEVER make any code changes without making a branch first.**
+- **CRITICAL**: ALWAYS present your plan for any code changes or Git operations (branching, committing, merging) to the user and await explicit approval BEFORE execution.
+- NEVER merge into main without explicit user approval.
+- NEVER make any code changes without making a branch first.
 - All features on `main` (no feature branches currently)
 - Commit messages: descriptive, start with verb (Feat:, Fix:, Refactor:, etc)
-- Always include Co-Authored-By footer with Claude credit
-- Push to GitHub after approval
 
 ### Known Issues & Workarounds
 
@@ -366,13 +370,9 @@ Status Indicators:
 
 ### Immediate (Next Sessions)
 
-- [ ] Test exercise seeding on fresh install (uninstall/reinstall app)
-- [ ] Verify exercises appear in selection screen
-- [ ] Test "Add Exercise" flow (same workout, multiple exercises)
-- [ ] Test "Finish Workout" flow (saves session)
-- [ ] Test home button navigation (from all screens)
-- [ ] Implement History screen (show past workouts, re-run features)
-- [ ] Add exercise edit functionality (long-press → Edit)
+- [ ] **Gamification v0.2.0**: Implement Volume Orb and PR Detection
+- [ ] **UI Polish**: Smooth out transitions for BottomSheets
+- [ ] **Rest Timer Persistence**: Remember last used rest time per exercise
 
 ### Short Term (Foundation)
 
@@ -491,12 +491,7 @@ Status Indicators:
    - Current: Routine cards are decorative
    - Solution: Add routine builder screen, quick-start from template
 
-5. **History Screen Incomplete**: Placeholder only
-
-   - Current: Shows "History Screen" text
-   - Solution: Implement past workout list, replay/re-run features
-
-6. **No Offline Indicator**: App works offline but users don't know
+5. **No Offline Indicator**: App works offline but users don't know
    - Current: No visual indicator
    - Solution: Add subtle indicator that data is local-only
 
@@ -520,6 +515,13 @@ Status Indicators:
 ---
 
 ## 10. Instructions for Claude (How to Work on This Project)
+
+### Session Startup Protocol
+- **On Start:** When the user says 'Hello', 'Hi', or 'Start', you MUST immediately:
+  1. List the `session_logs` directory to find the most recent log.
+  2. Read the content of that latest session log.
+  3. Summarize the previous session's completed work and the "Next Session Priorities".
+  4. Propose the immediate next steps based on those priorities.
 
 ### Before You Code
 
@@ -631,6 +633,6 @@ fun Item(e: Exercise, fn: () -> Unit) {
 
 ---
 
-**Last Updated**: November 20, 2024
-**Current Phase**: Early MVP - Core logging loop complete, exercise selection functional
-**Next Step**: Test on real device, verify database seeding, implement History screen
+**Last Updated**: November 26, 2025
+**Current Phase**: Polished MVP - Core flow complete, navigation optimized
+**Next Step**: Gamification Hero Features (Volume Orb, PR Detection)
