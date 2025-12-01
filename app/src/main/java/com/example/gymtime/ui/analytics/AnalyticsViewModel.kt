@@ -52,7 +52,16 @@ class AnalyticsViewModel @Inject constructor(
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     init {
-        loadAllData()
+        // Load data on initialization
+        // Wrapped in try-catch to prevent crashes during development
+        viewModelScope.launch {
+            try {
+                loadAllData()
+            } catch (e: Exception) {
+                // Log error but don't crash
+                android.util.Log.e("AnalyticsViewModel", "Error loading analytics data", e)
+            }
+        }
     }
 
     fun setTimeRange(range: TimeRange) {

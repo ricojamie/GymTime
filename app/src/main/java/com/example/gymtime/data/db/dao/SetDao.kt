@@ -32,7 +32,7 @@ data class PersonalRecordData(
     val exerciseName: String,
     val weight: Float,
     val reps: Int,
-    val timestamp: Long
+    val timestamp: java.util.Date
 )
 
 // Data class for volume by muscle (analytics)
