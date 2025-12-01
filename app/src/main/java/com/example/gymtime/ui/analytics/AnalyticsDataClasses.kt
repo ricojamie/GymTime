@@ -25,6 +25,22 @@ data class BestE1RMData(
     val sparklineData: List<Float>
 )
 
+enum class AnalyticsMetric(val displayName: String) {
+    VOLUME("Volume"),
+    ESTIMATED_1RM("Est. 1RM")
+}
+
+data class ChartDataPoint(
+    val date: Long,
+    val label: String,
+    val value: Float
+)
+
+data class ChartData(
+    val actuals: List<ChartDataPoint> = emptyList(),
+    val trend: List<ChartDataPoint> = emptyList()
+)
+
 // Volume chart data
 data class VolumePoint(
     val week: String,

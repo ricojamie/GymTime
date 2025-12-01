@@ -434,6 +434,7 @@ Status Indicators:
 
 #### Other Foundation Features
 
+- [ ] **Interactive Chart Marker (Tooltip)** (High Priority) - Scrub/Touch to see values on charts
 - [ ] One Rep Max (1RM) estimation from logged sets
 - [ ] Personal records (PRs) detection and tracking
 - [ ] Volume calculations (total pounds lifted per muscle per week)

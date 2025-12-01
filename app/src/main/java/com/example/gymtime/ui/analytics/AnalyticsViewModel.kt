@@ -3,14 +3,18 @@ package com.example.gymtime.ui.analytics
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.db.dao.ExerciseDao
-import com.example.gymtime.data.db.dao.PersonalRecordData
 import com.example.gymtime.data.db.dao.SetDao
+import com.example.gymtime.data.db.entity.Exercise
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
@@ -19,285 +23,235 @@ class AnalyticsViewModel @Inject constructor(
     private val exerciseDao: ExerciseDao
 ) : ViewModel() {
 
-    // Selected time range
+    // --- State ---
+
     private val _selectedTimeRange = MutableStateFlow(TimeRange.TWELVE_WEEKS)
     val selectedTimeRange: StateFlow<TimeRange> = _selectedTimeRange.asStateFlow()
 
-    // Hero card data
-    private val _frequencyData = MutableStateFlow<FrequencyData?>(null)
-    val frequencyData: StateFlow<FrequencyData?> = _frequencyData.asStateFlow()
+    private val _selectedMetric = MutableStateFlow(AnalyticsMetric.VOLUME)
+    val selectedMetric: StateFlow<AnalyticsMetric> = _selectedMetric.asStateFlow()
 
-    private val _volumeData = MutableStateFlow<VolumeData?>(null)
-    val volumeData: StateFlow<VolumeData?> = _volumeData.asStateFlow()
+    private val _selectedTarget = MutableStateFlow("Total")
+    val selectedTarget: StateFlow<String> = _selectedTarget.asStateFlow()
 
-    private val _bestE1RMData = MutableStateFlow<BestE1RMData?>(null)
-    val bestE1RMData: StateFlow<BestE1RMData?> = _bestE1RMData.asStateFlow()
+    private val _availableTargets = MutableStateFlow<List<String>>(emptyList())
+    val availableTargets: StateFlow<List<String>> = _availableTargets.asStateFlow()
 
-    // Personal records
-    private val _personalRecords = MutableStateFlow<List<PersonalRecordData>>(emptyList())
-    val personalRecords: StateFlow<List<PersonalRecordData>> = _personalRecords.asStateFlow()
+    // Using ChartData wrapper for multi-line support
+    private val _chartData = MutableStateFlow(ChartData())
+    val chartData: StateFlow<ChartData> = _chartData.asStateFlow()
 
-    // Volume by muscle
-    private val _volumeByMuscle = MutableStateFlow<Map<String, List<VolumePoint>>>(emptyMap())
-    val volumeByMuscle: StateFlow<Map<String, List<VolumePoint>>> = _volumeByMuscle.asStateFlow()
+    private val _currentValue = MutableStateFlow("0")
+    val currentValue: StateFlow<String> = _currentValue.asStateFlow()
 
-    // Selected muscles for volume chart
-    private val _selectedMuscles = MutableStateFlow(
-        setOf("Chest", "Back", "Legs", "Shoulder", "Biceps", "Triceps", "Core", "Cardio")
-    )
-    val selectedMuscles: StateFlow<Set<String>> = _selectedMuscles.asStateFlow()
+    private val _maxValue = MutableStateFlow("0")
+    val maxValue: StateFlow<String> = _maxValue.asStateFlow()
 
-    // Loading state
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private var allExercises: List<Exercise> = emptyList()
+    private val muscleGroups = listOf("Total", "Chest", "Back", "Legs", "Shoulders", "Biceps", "Triceps", "Core", "Cardio")
+
     init {
-        // TODO: Data loading disabled for Phase 1 placeholder
-        // Will be enabled in Phase 2 when hero cards are implemented
-        // loadAllData()
+        loadInitialData()
     }
 
-    fun setTimeRange(range: TimeRange) {
-        _selectedTimeRange.value = range
-        loadAllData()
-    }
-
-    fun toggleMuscle(muscle: String) {
-        _selectedMuscles.value = if (_selectedMuscles.value.contains(muscle)) {
-            _selectedMuscles.value - muscle
-        } else {
-            _selectedMuscles.value + muscle
-        }
-    }
-
-    private fun loadAllData() {
+    private fun loadInitialData() {
         viewModelScope.launch {
             _isLoading.value = true
+            
+            try {
+                allExercises = exerciseDao.getAllExercises().first()
+            } catch (e: Exception) {
+                allExercises = emptyList()
+            }
 
-            val (startDate, endDate) = selectedTimeRange.value.getDateRange()
-            val (prevStart, prevEnd) = selectedTimeRange.value.getPreviousPeriod()
-
-            // Launch all data loading in parallel
-            launch { loadTrainingFrequency(startDate, endDate, prevStart, prevEnd) }
-            launch { loadVolumeData(startDate, endDate, prevStart, prevEnd) }
-            launch { loadBestE1RM(startDate, endDate, prevStart, prevEnd) }
-            launch { loadPersonalRecords() }
-            launch { loadVolumeByMuscle(startDate, endDate) }
+            updateAvailableTargets()
+            refreshChart()
 
             _isLoading.value = false
         }
     }
 
-    private suspend fun loadTrainingFrequency(
-        startDate: Long,
-        endDate: Long,
-        prevStart: Long,
-        prevEnd: Long
-    ) {
-        try {
-            val currentDays = setDao.getTrainingDaysCount(startDate, endDate)
-            val previousDays = setDao.getTrainingDaysCount(prevStart, prevEnd)
+    fun setTimeRange(range: TimeRange) {
+        _selectedTimeRange.value = range
+        refreshChart()
+    }
 
-            val weeks = if (selectedTimeRange.value == TimeRange.ALL_TIME) {
-                // For all-time, calculate weeks from first workout to now
-                val daysSpan = ((endDate - startDate) / (24 * 60 * 60 * 1000)).toFloat()
-                (daysSpan / 7).coerceAtLeast(1f)
+    fun setMetric(metric: AnalyticsMetric) {
+        _selectedMetric.value = metric
+        
+        if (metric == AnalyticsMetric.VOLUME) {
+            _selectedTarget.value = "Total"
+        } else {
+            _selectedTarget.value = allExercises.firstOrNull()?.name ?: ""
+        }
+        
+        updateAvailableTargets()
+        refreshChart()
+    }
+
+    fun setTarget(target: String) {
+        _selectedTarget.value = target
+        refreshChart()
+    }
+
+    private fun updateAvailableTargets() {
+        if (_selectedMetric.value == AnalyticsMetric.VOLUME) {
+            _availableTargets.value = muscleGroups
+        } else {
+            _availableTargets.value = allExercises.map { it.name }
+        }
+    }
+
+    private fun refreshChart() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val (startDate, endDate) = selectedTimeRange.value.getDateRange()
+            
+            val actualPoints = if (_selectedMetric.value == AnalyticsMetric.VOLUME) {
+                getVolumeChartData(startDate, endDate)
             } else {
-                selectedTimeRange.value.weeks.toFloat()
+                getE1RMChartData(startDate, endDate)
             }
+            
+            val trendPoints = calculateTrendLine(actualPoints)
 
-            val sessionsPerWeek = if (weeks > 0) currentDays / weeks else 0f
-            val previousSessions = if (weeks > 0) previousDays / weeks else 0f
-            val delta = sessionsPerWeek - previousSessions
+            _chartData.value = ChartData(actuals = actualPoints, trend = trendPoints)
+            calculateStats(actualPoints)
+            
+            _isLoading.value = false
+        }
+    }
 
-            // Calculate sparkline (last 8 weeks)
-            val sparkline = calculateFrequencySparkline(endDate)
+    private suspend fun getVolumeChartData(startDate: Long, endDate: Long): List<ChartDataPoint> {
+        val target = _selectedTarget.value
+        val isTotal = target == "Total"
 
-            _frequencyData.value = FrequencyData(
-                sessionsPerWeek = String.format("%.1f", sessionsPerWeek).toFloat(),
-                delta = String.format("%.1f", delta).toFloat(),
-                sparklineData = sparkline
+        val rawData = try {
+            setDao.getVolumeByMuscleAndWeek(startDate, endDate)
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+        val weekMap = mutableMapOf<String, Float>()
+        
+        rawData.forEach { item ->
+            if (isTotal || item.muscle == target) {
+                val current = weekMap.getOrDefault(item.week, 0f)
+                weekMap[item.week] = current + item.volume
+            }
+        }
+
+        return weekMap.keys.sorted().mapIndexed { index, key ->
+            ChartDataPoint(
+                date = index.toLong(),
+                label = formatWeekLabel(key),
+                value = weekMap[key] ?: 0f
             )
-        } catch (e: Exception) {
-            // Handle error - set to null or default values
-            _frequencyData.value = null
         }
     }
 
-    private suspend fun loadVolumeData(
-        startDate: Long,
-        endDate: Long,
-        prevStart: Long,
-        prevEnd: Long
-    ) {
-        try {
-            val currentVolume = setDao.getTotalVolume(startDate, endDate) ?: 0f
-            val previousVolume = setDao.getTotalVolume(prevStart, prevEnd) ?: 1f
+    private suspend fun getE1RMChartData(startDate: Long, endDate: Long): List<ChartDataPoint> {
+        val targetExerciseName = _selectedTarget.value
+        val exercise = allExercises.find { it.name == targetExerciseName } ?: return emptyList()
 
-            val percentChange = if (previousVolume > 0) {
-                ((currentVolume - previousVolume) / previousVolume) * 100
-            } else {
-                0f
+        val rawSets = try {
+            setDao.getTopSetsForE1RM(startDate, endDate)
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+        val filteredSets = rawSets.filter { it.exerciseId == exercise.id }
+        val weekMap = mutableMapOf<String, Float>()
+        
+        filteredSets.forEach { set ->
+            val weekKey = getWeekKey(set.timestamp)
+            val e1rm = calculateEstimated1RM(set.weight ?: 0f, set.reps ?: 1)
+            
+            val currentMax = weekMap.getOrDefault(weekKey, 0f)
+            if (e1rm > currentMax) {
+                weekMap[weekKey] = e1rm
             }
+        }
 
-            // Calculate sparkline (last 8 weeks)
-            val sparkline = calculateVolumeSparkline(endDate)
-
-            _volumeData.value = VolumeData(
-                totalVolume = currentVolume,
-                percentChange = String.format("%.1f", percentChange).toFloat(),
-                sparklineData = sparkline
+        return weekMap.keys.sorted().mapIndexed { index, key ->
+            ChartDataPoint(
+                date = index.toLong(),
+                label = formatWeekLabel(key),
+                value = weekMap[key] ?: 0f
             )
-        } catch (e: Exception) {
-            _volumeData.value = null
+        }
+    }
+    
+    private fun calculateTrendLine(points: List<ChartDataPoint>): List<ChartDataPoint> {
+        if (points.size < 2) return emptyList()
+        
+        val n = points.size.toFloat()
+        val sumX = points.map { it.date.toFloat() }.sum()
+        val sumY = points.map { it.value }.sum()
+        val sumXY = points.map { it.date.toFloat() * it.value }.sum()
+        val sumXX = points.map { it.date.toFloat() * it.date.toFloat() }.sum()
+        
+        val denominator = n * sumXX - sumX * sumX
+        if (denominator == 0f) return emptyList()
+        
+        val slope = (n * sumXY - sumX * sumY) / denominator
+        val intercept = (sumY - slope * sumX) / n
+        
+        return points.map { point ->
+            val trendValue = slope * point.date.toFloat() + intercept
+            point.copy(value = trendValue.coerceAtLeast(0f))
         }
     }
 
-    private suspend fun loadBestE1RM(
-        startDate: Long,
-        endDate: Long,
-        prevStart: Long,
-        prevEnd: Long
-    ) {
-        try {
-            val currentSets = setDao.getTopSetsForE1RM(startDate, endDate)
-            val previousSets = setDao.getTopSetsForE1RM(prevStart, prevEnd)
-
-            // Find best estimated 1RM in current period
-            val bestCurrent = currentSets.maxByOrNull {
-                calculateEstimated1RM(it.weight ?: 0f, it.reps ?: 1)
-            }
-
-            // Find best estimated 1RM in previous period
-            val bestPrevious = previousSets.maxByOrNull {
-                calculateEstimated1RM(it.weight ?: 0f, it.reps ?: 1)
-            }
-
-            if (bestCurrent != null) {
-                val currentE1RM = calculateEstimated1RM(bestCurrent.weight!!, bestCurrent.reps!!)
-                val previousE1RM = bestPrevious?.let {
-                    calculateEstimated1RM(it.weight!!, it.reps!!)
-                } ?: currentE1RM
-
-                val delta = currentE1RM - previousE1RM
-
-                // Get exercise name
-                val exercise = exerciseDao.getExerciseByIdSync(bestCurrent.exerciseId)
-
-                // Calculate sparkline (best 1RM per week for last 8 weeks)
-                val sparkline = calculateE1RMSparkline(endDate)
-
-                _bestE1RMData.value = BestE1RMData(
-                    exerciseName = exercise?.name ?: "Unknown",
-                    estimatedMax = currentE1RM,
-                    delta = delta,
-                    sparklineData = sparkline
-                )
-            } else {
-                _bestE1RMData.value = null
-            }
-        } catch (e: Exception) {
-            _bestE1RMData.value = null
+    private fun calculateStats(points: List<ChartDataPoint>) {
+        if (points.isEmpty()) {
+            _currentValue.value = "0"
+            _maxValue.value = "0"
+            return
         }
+
+        val values = points.map { it.value }
+        val current = values.last()
+        val max = values.maxOrNull() ?: 0f
+        
+        _currentValue.value = String.format("%,.0f", current)
+        _maxValue.value = String.format("%,.0f", max)
     }
 
-    private suspend fun loadPersonalRecords() {
-        try {
-            _personalRecords.value = setDao.getAllPersonalRecords()
-        } catch (e: Exception) {
-            _personalRecords.value = emptyList()
-        }
-    }
-
-    private suspend fun loadVolumeByMuscle(startDate: Long, endDate: Long) {
-        try {
-            val rawData = setDao.getVolumeByMuscleAndWeek(startDate, endDate)
-
-            // Transform to Map<Muscle, List<VolumePoint>>
-            val grouped = rawData.groupBy { it.muscle }
-                .mapValues { (_, data) ->
-                    data.map { VolumePoint(it.week, it.volume) }
-                }
-
-            _volumeByMuscle.value = grouped
-        } catch (e: Exception) {
-            _volumeByMuscle.value = emptyMap()
-        }
-    }
-
-    /**
-     * Calculate estimated 1RM using Brzycki formula
-     * Formula: 1RM = weight / (1.0278 - 0.0278 × reps)
-     * Valid for reps 1-12
-     */
-    fun calculateEstimated1RM(weight: Float, reps: Int): Float {
+    private fun calculateEstimated1RM(weight: Float, reps: Int): Float {
         if (reps == 1) return weight
-        if (reps > 12) return weight // Formula breaks down above 12 reps
+        if (reps > 12) return weight 
         return weight / (1.0278f - 0.0278f * reps)
     }
-
-    private suspend fun calculateFrequencySparkline(endDate: Long): List<Float> {
-        val sparklineData = mutableListOf<Float>()
-        val oneWeek = 7 * 24 * 60 * 60 * 1000L
-
-        try {
-            for (i in 7 downTo 0) {
-                val weekEnd = endDate - (i * oneWeek)
-                val weekStart = weekEnd - oneWeek
-                val days = setDao.getTrainingDaysCount(weekStart, weekEnd)
-                sparklineData.add(days.toFloat())
-            }
-        } catch (e: Exception) {
-            // Return empty list on error
-            return emptyList()
-        }
-
-        return sparklineData
+    
+    private fun getWeekKey(date: Date): String {
+        val cal = Calendar.getInstance()
+        cal.time = date
+        val year = cal.get(Calendar.YEAR)
+        val week = cal.get(Calendar.WEEK_OF_YEAR)
+        return String.format("%d-%02d", year, week)
     }
 
-    private suspend fun calculateVolumeSparkline(endDate: Long): List<Float> {
-        val sparklineData = mutableListOf<Float>()
-        val oneWeek = 7 * 24 * 60 * 60 * 1000L
-
+    private fun formatWeekLabel(weekKey: String): String {
         try {
-            for (i in 7 downTo 0) {
-                val weekEnd = endDate - (i * oneWeek)
-                val weekStart = weekEnd - oneWeek
-                val volume = setDao.getTotalVolume(weekStart, weekEnd) ?: 0f
-                sparklineData.add(volume)
-            }
+            val parts = weekKey.split("-")
+            if (parts.size != 2) return weekKey
+            val year = parts[0].toInt()
+            val week = parts[1].toInt()
+            
+            val cal = Calendar.getInstance()
+            cal.clear()
+            cal.set(Calendar.YEAR, year)
+            cal.set(Calendar.WEEK_OF_YEAR, week)
+            cal.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+            
+            val formatter = SimpleDateFormat("d MMM", Locale.getDefault())
+            return formatter.format(cal.time)
         } catch (e: Exception) {
-            return emptyList()
+            return weekKey
         }
-
-        return sparklineData
-    }
-
-    private suspend fun calculateE1RMSparkline(endDate: Long): List<Float> {
-        val sparklineData = mutableListOf<Float>()
-        val oneWeek = 7 * 24 * 60 * 60 * 1000L
-
-        try {
-            for (i in 7 downTo 0) {
-                val weekEnd = endDate - (i * oneWeek)
-                val weekStart = weekEnd - oneWeek
-
-                // Get best set for this week and calculate 1RM
-                val sets = setDao.getTopSetsForE1RM(weekStart, weekEnd)
-                val bestSet = sets.maxByOrNull {
-                    calculateEstimated1RM(it.weight ?: 0f, it.reps ?: 1)
-                }
-
-                val e1rm = bestSet?.let {
-                    calculateEstimated1RM(it.weight!!, it.reps!!)
-                } ?: 0f
-
-                sparklineData.add(e1rm)
-            }
-        } catch (e: Exception) {
-            return emptyList()
-        }
-
-        return sparklineData
     }
 }

@@ -1,16 +1,18 @@
 package com.example.gymtime.ui.analytics
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -20,17 +22,19 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.gymtime.ui.theme.GradientEnd
 import com.example.gymtime.ui.theme.GradientStart
 
-/**
- * Analytics Screen (v1.0 MVP - Phase 1 Placeholder)
- *
- * This is a placeholder for Phase 1 implementation.
- * Full UI with hero cards, charts, and PR list will be added in Phase 2-3.
- */
 @Composable
 fun AnalyticsScreen(
     viewModel: AnalyticsViewModel = hiltViewModel()
 ) {
-    Box(
+    val selectedTimeRange by viewModel.selectedTimeRange.collectAsState()
+    val selectedMetric by viewModel.selectedMetric.collectAsState()
+    val selectedTarget by viewModel.selectedTarget.collectAsState()
+    val availableTargets by viewModel.availableTargets.collectAsState()
+    val chartData by viewModel.chartData.collectAsState()
+    val currentValue by viewModel.currentValue.collectAsState()
+    val maxValue by viewModel.maxValue.collectAsState()
+    
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(
@@ -41,32 +45,50 @@ fun AnalyticsScreen(
                     )
                 )
             )
-            .padding(16.dp),
-        contentAlignment = Alignment.Center
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "Analytics",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
+        // Header
+        Text(
+            text = "Analytics",
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
 
-            Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-            Text(
-                text = "Phase 1 Complete ✓",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color(0xFFA3E635) // Lime green
-            )
+        // Metric Selector (Volume / 1RM)
+        MetricSelector(
+            selected = selectedMetric,
+            onSelect = { viewModel.setMetric(it) }
+        )
 
-            Spacer(modifier = Modifier.height(8.dp))
+        // Target Selector (Muscle / Exercise)
+        TargetSelector(
+            selected = selectedTarget,
+            options = availableTargets,
+            onSelect = { viewModel.setTarget(it) }
+        )
 
-            Text(
-                text = "Foundation ready: ViewModel, DAO queries, and navigation",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF9CA3AF) // Gray
-            )
-        }
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Time range selector
+        TimeRangeSelector(
+            selectedRange = selectedTimeRange,
+            onRangeSelected = { viewModel.setTimeRange(it) }
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Main Chart
+        MainLineChart(data = chartData)
+        
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Stats Summary
+        StatsSummaryRow(current = currentValue, max = maxValue)
+
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }
