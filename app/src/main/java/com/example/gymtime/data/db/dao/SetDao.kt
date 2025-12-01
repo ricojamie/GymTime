@@ -204,13 +204,18 @@ interface SetDao {
         SELECT
             e.id as exerciseId,
             e.name as exerciseName,
-            MAX(s.weight) as weight,
+            s.weight as weight,
             s.reps as reps,
             s.timestamp as timestamp
         FROM exercises e
-        INNER JOIN sets s ON e.id = s.exerciseId
-        WHERE s.weight IS NOT NULL
-          AND s.isWarmup = 0
+        INNER JOIN (
+            SELECT exerciseId, MAX(weight) as maxWeight
+            FROM sets
+            WHERE weight IS NOT NULL AND isWarmup = 0
+            GROUP BY exerciseId
+        ) max_sets ON e.id = max_sets.exerciseId
+        INNER JOIN sets s ON s.exerciseId = e.id AND s.weight = max_sets.maxWeight
+        WHERE s.isWarmup = 0
         GROUP BY e.id
         ORDER BY s.timestamp DESC
     """)
