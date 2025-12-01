@@ -43,7 +43,7 @@ class AnalyticsViewModel @Inject constructor(
 
     // Selected muscles for volume chart
     private val _selectedMuscles = MutableStateFlow(
-        setOf("Chest", "Back", "Legs", "Shoulders", "Biceps", "Triceps", "Core", "Cardio")
+        setOf("Chest", "Back", "Legs", "Shoulder", "Biceps", "Triceps", "Core", "Cardio")
     )
     val selectedMuscles: StateFlow<Set<String>> = _selectedMuscles.asStateFlow()
 
@@ -52,16 +52,9 @@ class AnalyticsViewModel @Inject constructor(
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     init {
-        // Load data on initialization
-        // Wrapped in try-catch to prevent crashes during development
-        viewModelScope.launch {
-            try {
-                loadAllData()
-            } catch (e: Exception) {
-                // Log error but don't crash
-                android.util.Log.e("AnalyticsViewModel", "Error loading analytics data", e)
-            }
-        }
+        // TODO: Data loading disabled for Phase 1 placeholder
+        // Will be enabled in Phase 2 when hero cards are implemented
+        // loadAllData()
     }
 
     fun setTimeRange(range: TimeRange) {
