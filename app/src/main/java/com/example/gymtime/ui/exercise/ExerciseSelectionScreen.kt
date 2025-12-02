@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -26,6 +27,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -51,6 +53,7 @@ import com.example.gymtime.ui.theme.GymTimeTheme
 import com.example.gymtime.ui.theme.PrimaryAccent
 import com.example.gymtime.ui.theme.SurfaceCards
 import com.example.gymtime.ui.theme.TextPrimary
+import com.example.gymtime.ui.theme.TextSecondary
 import com.example.gymtime.ui.theme.TextTertiary
 
 private const val TAG = "ExerciseSelectionScreen"
@@ -64,6 +67,8 @@ fun ExerciseSelectionScreen(
     val selectedMuscles by viewModel.selectedMuscles.collectAsState()
     val availableMuscles by viewModel.availableMuscles.collectAsState(initial = emptyList())
     val filteredExercises by viewModel.filteredExercises.collectAsState(initial = emptyList())
+    
+    var exerciseToDelete by remember { mutableStateOf<Exercise?>(null) }
 
     Log.d(TAG, "ExerciseSelectionScreen recomposed: availableMuscles=${availableMuscles.size}, filteredExercises=${filteredExercises.size}")
     Log.d(TAG, "Available muscles: $availableMuscles")
@@ -117,12 +122,46 @@ fun ExerciseSelectionScreen(
                             navController.navigate(Screen.ExerciseLogging.createRoute(exercise.id))
                         },
                         onDelete = {
-                            viewModel.deleteExercise(exercise.id)
+                            exerciseToDelete = exercise
                         }
                     )
                 }
             }
         }
+    }
+
+    // Deletion Confirmation Dialog
+    if (exerciseToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { exerciseToDelete = null },
+            title = {
+                Text(text = "Delete Exercise?", style = MaterialTheme.typography.titleLarge)
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to delete \"${exerciseToDelete?.name}\"?\n\nThis action cannot be undone and will permanently delete all logged history for this exercise.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        exerciseToDelete?.let { viewModel.deleteExercise(it.id) }
+                        exerciseToDelete = null
+                    }
+                ) {
+                    Text(text = "Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { exerciseToDelete = null }) {
+                    Text(text = "Cancel", color = TextPrimary)
+                }
+            },
+            containerColor = SurfaceCards,
+            titleContentColor = TextPrimary,
+            textContentColor = TextSecondary
+        )
     }
 }
 
