@@ -21,11 +21,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
-import com.example.gymtime.R
 import com.example.gymtime.ui.theme.PrimaryAccent
 
 @Composable
@@ -103,7 +101,7 @@ fun BottomNavigationBar(navController: NavController) {
                         .padding(16.dp) // Touch target padding
                 ) {
                     Icon(
-                        painter = painterResource(id = getIconForScreen(screen)),
+                        imageVector = screen.icon,
                         contentDescription = screen.route,
                         tint = color,
                         modifier = Modifier.size(26.dp)
@@ -113,18 +111,5 @@ fun BottomNavigationBar(navController: NavController) {
                 }
             }
         }
-    }
-}
-
-fun getIconForScreen(screen: Screen): Int {
-    return when (screen) {
-        Screen.Home -> R.drawable.ic_home
-        Screen.History -> R.drawable.ic_history
-        Screen.Library -> R.drawable.ic_library
-        Screen.Analytics -> R.drawable.ic_history // TODO: Create ic_analytics icon (trending up)
-        Screen.Workout -> R.drawable.ic_home
-        Screen.ExerciseSelection -> R.drawable.ic_home
-        Screen.WorkoutResume -> R.drawable.ic_home
-        Screen.ExerciseLogging -> R.drawable.ic_home
     }
 }
