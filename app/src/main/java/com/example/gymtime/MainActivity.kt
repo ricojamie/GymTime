@@ -117,7 +117,7 @@ class MainActivity : ComponentActivity() {
                                     route = Screen.ExerciseForm.route,
                                     arguments = listOf(
                                         androidx.navigation.navArgument("exerciseId") {
-                                            type = androidx.navigation.NavType.LongType
+                                            type = androidx.navigation.NavType.StringType
                                             nullable = true
                                             defaultValue = null
                                         }

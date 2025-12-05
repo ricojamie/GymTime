@@ -24,7 +24,7 @@ import com.example.gymtime.data.db.entity.Workout
         RoutineExercise::class,
         MuscleGroup::class
     ],
-    version = 4, // Added rating and ratingNote to workouts table
+    version = 5, // Fixed Shoulder -> Shoulders
     exportSchema = false
 )
 @TypeConverters(Converters::class)

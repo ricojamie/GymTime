@@ -347,6 +347,7 @@ private val LogType.displayName: String
         LogType.REPS_ONLY -> "Reps Only"
         LogType.DURATION -> "Duration"
         LogType.WEIGHT_DISTANCE -> "Weight + Distance"
+        LogType.DISTANCE_TIME -> "Distance + Time"
     }
 
 private val LogType.description: String
@@ -355,4 +356,5 @@ private val LogType.description: String
         LogType.REPS_ONLY -> "Bodyweight exercises"
         LogType.DURATION -> "Planks, cardio time"
         LogType.WEIGHT_DISTANCE -> "Sled push, farmer's carry"
+        LogType.DISTANCE_TIME -> "Running, cycling, rowing"
     }

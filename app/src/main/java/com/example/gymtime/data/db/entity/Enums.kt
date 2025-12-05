@@ -4,5 +4,6 @@ enum class LogType {
     WEIGHT_REPS,
     REPS_ONLY,
     DURATION,
-    WEIGHT_DISTANCE
+    WEIGHT_DISTANCE,
+    DISTANCE_TIME
 }

@@ -310,14 +310,37 @@ private fun FlameRatingSelector(
     selectedRating: Int?,
     onRatingSelected: (Int) -> Unit
 ) {
+    // Pulsing animation for high ratings (4-5)
+    val infiniteTransition = rememberInfiniteTransition(label = "flamePulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
         (1..5).forEach { rating ->
             val isSelected = selectedRating != null && rating <= selectedRating
+
+            // Base scale increases with rating: 1/5 = 1.05, 5/5 = 1.25
+            val baseScale = if (isSelected) {
+                1f + ((selectedRating ?: 0) * 0.05f)
+            } else {
+                1f
+            }
+
+            // Add pulse for high ratings (4-5)
+            val shouldPulse = isSelected && (selectedRating ?: 0) >= 4
+
             val scale by animateFloatAsState(
-                targetValue = if (selectedRating == rating) 1.3f else 1f,
+                targetValue = baseScale,
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioMediumBouncy,
                     stiffness = Spring.StiffnessLow
@@ -325,11 +348,13 @@ private fun FlameRatingSelector(
                 label = "FlameScale"
             )
 
+            val finalScale = if (shouldPulse) scale * pulseScale else scale
+
             Text(
                 text = "\uD83D\uDD25", // Fire emoji
                 fontSize = 32.sp,
                 modifier = Modifier
-                    .scale(scale)
+                    .scale(finalScale)
                     .alpha(if (isSelected) 1f else 0.3f)
                     .clickable { onRatingSelected(rating) }
                     .padding(8.dp)

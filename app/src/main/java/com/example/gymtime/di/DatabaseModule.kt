@@ -56,6 +56,15 @@ object DatabaseModule {
         }
     }
 
+    // Migration from version 4 to 5: Fix Shoulder -> Shoulders
+    private val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            Log.d(TAG, "Running migration 4 -> 5: Fixing Shoulder -> Shoulders")
+            database.execSQL("UPDATE muscle_groups SET name = 'Shoulders' WHERE name = 'Shoulder'")
+            database.execSQL("UPDATE exercises SET targetMuscle = 'Shoulders' WHERE targetMuscle = 'Shoulder'")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): GymTimeDatabase {
@@ -64,7 +73,7 @@ object DatabaseModule {
             GymTimeDatabase::class.java,
             "gym_time_db"
         )
-        .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+        .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
         .fallbackToDestructiveMigration() // For development simplicity
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {

@@ -20,7 +20,7 @@ class ExerciseFormViewModel @Inject constructor(
     private val muscleGroupDao: MuscleGroupDao
 ) : ViewModel() {
 
-    private val exerciseId: Long? = savedStateHandle.get<Long>("exerciseId")
+    private val exerciseId: Long? = savedStateHandle.get<String>("exerciseId")?.toLongOrNull()
 
     private val _exerciseName = MutableStateFlow("")
     val exerciseName: StateFlow<String> = _exerciseName

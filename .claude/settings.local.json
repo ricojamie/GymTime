@@ -13,7 +13,10 @@
       "Bash(git commit -m \"$(cat <<''EOF''\nFeat: Add WorkoutResumeScreen for seamless workout continuation\n\nImplements an intermediate screen that displays all exercises logged in today''s workout session when resuming from home. This prevents the jarring experience of going directly to exercise selection when accidentally navigating back.\n\nChanges:\n- Created WorkoutResumeScreen with ViewModel to display today''s exercises\n- Shows exercise name, muscle group, set count, and best weight\n- Tap exercise card → navigate to logging screen for that exercise\n- FAB button → navigate to exercise selection to add new exercise\n- Empty state card with clear CTA when no exercises logged yet\n- Updated home navigation: ongoing workout → WorkoutResume, new workout → ExerciseSelection\n- Added WorkoutResume route to navigation graph\n- Updated BottomNavigationBar to handle new screen in exhaustive when\n\nUX improvements:\n- Better workout continuity when resuming sessions\n- Quick access to already-logged exercises\n- Clear visual feedback of session progress\n- Maintains \"Logging Loop is God\" philosophy with minimal friction\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(git commit:*)",
       "Bash(git branch:*)",
-      "Bash(adb logcat:*)"
+      "Bash(adb logcat:*)",
+      "Bash(\"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe\" logcat -d *:E)",
+      "Bash(\"/c/Users/ricoj/AppData/Local/Android/Sdk/platform-tools/adb.exe\" logcat -d *:E)",
+      "Bash(\"/c/Users/ricoj/AppData/Local/Android/Sdk/platform-tools/adb.exe\" install -r \"C:/Users/ricoj/desktop/ai_stuff/coding_projects/gym_app/app/build/outputs/apk/debug/app-debug.apk\")"
     ],
     "deny": [],
     "ask": []
