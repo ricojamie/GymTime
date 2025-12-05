@@ -47,6 +47,15 @@ object DatabaseModule {
         }
     }
 
+    // Migration from version 3 to 4: Add rating fields to workouts table
+    private val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            Log.d(TAG, "Running migration 3 -> 4: Adding rating and ratingNote to workouts table")
+            database.execSQL("ALTER TABLE workouts ADD COLUMN rating INTEGER DEFAULT NULL")
+            database.execSQL("ALTER TABLE workouts ADD COLUMN ratingNote TEXT DEFAULT NULL")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): GymTimeDatabase {
@@ -55,7 +64,7 @@ object DatabaseModule {
             GymTimeDatabase::class.java,
             "gym_time_db"
         )
-        .addMigrations(MIGRATION_2_3)
+        .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
         .fallbackToDestructiveMigration() // For development simplicity
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {

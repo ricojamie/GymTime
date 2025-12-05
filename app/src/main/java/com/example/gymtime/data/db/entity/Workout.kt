@@ -10,5 +10,7 @@ data class Workout(
     val startTime: Date,
     val endTime: Date?,
     val name: String?,
-    val note: String?
+    val note: String?,
+    val rating: Int? = null,        // 1-5 flames rating
+    val ratingNote: String? = null  // Optional note about workout
 )
