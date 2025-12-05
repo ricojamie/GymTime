@@ -8,14 +8,8 @@ import java.util.Date
 
 @Entity(
     tableName = "workouts",
-    foreignKeys = [
-        ForeignKey(
-            entity = RoutineDay::class,
-            parentColumns = ["id"],
-            childColumns = ["routineDayId"],
-            onDelete = ForeignKey.SET_NULL
-        )
-    ],
+    // Removed ForeignKey constraint to RoutineDay to avoid complex migration issues.
+    // We handle the "orphan" logic manually or accept that history points to deleted days.
     indices = [Index("routineDayId")]
 )
 data class Workout(
