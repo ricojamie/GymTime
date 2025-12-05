@@ -8,11 +8,14 @@ import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
 import com.example.gymtime.data.db.entity.Workout
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import java.util.Date
 import javax.inject.Inject
 
 @HiltViewModel
@@ -30,6 +33,9 @@ class WorkoutResumeViewModel @Inject constructor(
     init {
         loadTodaysWorkout()
     }
+
+    private val _finishWorkoutEvent = Channel<Long>(Channel.BUFFERED)
+    val finishWorkoutEvent = _finishWorkoutEvent.receiveAsFlow()
 
     private fun loadTodaysWorkout() {
         viewModelScope.launch {
@@ -52,5 +58,13 @@ class WorkoutResumeViewModel @Inject constructor(
         }
     }
 
-
+    fun finishWorkout() {
+        viewModelScope.launch {
+            val workout = _currentWorkout.value ?: return@launch
+            val updatedWorkout = workout.copy(endTime = Date())
+            workoutDao.updateWorkout(updatedWorkout)
+            Log.d("WorkoutResumeVM", "Workout finished: ${workout.id}")
+            _finishWorkoutEvent.send(workout.id)
+        }
+    }
 }

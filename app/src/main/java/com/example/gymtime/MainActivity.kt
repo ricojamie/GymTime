@@ -99,6 +99,12 @@ class MainActivity : ComponentActivity() {
                                         },
                                         onAddExerciseClick = {
                                             navController.navigate(Screen.ExerciseSelection.route)
+                                        },
+                                        onFinishWorkoutClick = { workoutId ->
+                                            // Navigate to home for now (will be updated to PostWorkoutSummary in Branch 5)
+                                            navController.navigate(Screen.Home.route) {
+                                                popUpTo(Screen.Home.route) { inclusive = true }
+                                            }
                                         }
                                     )
                                 }
