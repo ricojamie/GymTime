@@ -19,13 +19,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -74,57 +78,78 @@ fun ExerciseSelectionScreen(
     Log.d(TAG, "Available muscles: $availableMuscles")
     Log.d(TAG, "Filtered exercises count: ${filteredExercises.size}")
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        // Search Box
-        SearchBox(
-            query = searchQuery,
-            onQueryChange = { viewModel.updateSearchQuery(it) }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Filter Pills
-        if (availableMuscles.isNotEmpty()) {
-            FilterPills(
-                muscles = availableMuscles,
-                selectedMuscles = selectedMuscles,
-                onMuscleToggle = { viewModel.toggleMuscleFilter(it) }
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        // Exercise List
-        if (filteredExercises.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
+    Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { navController.navigate(Screen.ExerciseForm.createRoute()) },
+                containerColor = PrimaryAccent,
+                contentColor = Color.Black,
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Text(
-                    text = "No exercises found",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = TextTertiary
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add Exercise"
                 )
             }
-        } else {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(filteredExercises) { exercise ->
-                    ExerciseListItem(
-                        exercise = exercise,
-                        onClick = {
-                            navController.navigate(Screen.ExerciseLogging.createRoute(exercise.id))
-                        },
-                        onDelete = {
-                            exerciseToDelete = exercise
-                        }
+        },
+        containerColor = Color.Transparent
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(16.dp)
+        ) {
+            // Search Box
+            SearchBox(
+                query = searchQuery,
+                onQueryChange = { viewModel.updateSearchQuery(it) }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Filter Pills
+            if (availableMuscles.isNotEmpty()) {
+                FilterPills(
+                    muscles = availableMuscles,
+                    selectedMuscles = selectedMuscles,
+                    onMuscleToggle = { viewModel.toggleMuscleFilter(it) }
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            // Exercise List
+            if (filteredExercises.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No exercises found",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = TextTertiary
                     )
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filteredExercises) { exercise ->
+                        ExerciseListItem(
+                            exercise = exercise,
+                            onClick = {
+                                navController.navigate(Screen.ExerciseLogging.createRoute(exercise.id))
+                            },
+                            onEdit = {
+                                navController.navigate(Screen.ExerciseForm.createRoute(exercise.id))
+                            },
+                            onDelete = {
+                                exerciseToDelete = exercise
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -250,6 +275,7 @@ private fun FilterPills(
 private fun ExerciseListItem(
     exercise: Exercise,
     onClick: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -296,7 +322,7 @@ private fun ExerciseListItem(
                     text = { Text("Edit", color = TextPrimary) },
                     onClick = {
                         showMenu = false
-                        // TODO: Navigate to edit screen
+                        onEdit()
                     }
                 )
                 DropdownMenuItem(

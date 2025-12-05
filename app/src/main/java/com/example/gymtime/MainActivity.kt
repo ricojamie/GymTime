@@ -110,6 +110,18 @@ class MainActivity : ComponentActivity() {
                                 ) {
                                     com.example.gymtime.ui.exercise.ExerciseLoggingScreen(navController = navController)
                                 }
+                                composable(
+                                    route = Screen.ExerciseForm.route,
+                                    arguments = listOf(
+                                        androidx.navigation.navArgument("exerciseId") {
+                                            type = androidx.navigation.NavType.LongType
+                                            nullable = true
+                                            defaultValue = null
+                                        }
+                                    )
+                                ) {
+                                    com.example.gymtime.ui.exercise.ExerciseFormScreen(navController = navController)
+                                }
                             }
                         }
                         

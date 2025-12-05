@@ -18,5 +18,12 @@ sealed class Screen(val route: String, val icon: ImageVector) {
     object ExerciseLogging : Screen("exercise_logging/{exerciseId}", Icons.Filled.Home) { // Placeholder, not in bottom nav
         fun createRoute(exerciseId: Long) = "exercise_logging/$exerciseId"
     }
+    object ExerciseForm : Screen("exercise_form?exerciseId={exerciseId}", Icons.Filled.Home) { // Create/Edit exercise
+        fun createRoute(exerciseId: Long? = null) = if (exerciseId != null) {
+            "exercise_form?exerciseId=$exerciseId"
+        } else {
+            "exercise_form"
+        }
+    }
 }
 
