@@ -101,10 +101,7 @@ class MainActivity : ComponentActivity() {
                                             navController.navigate(Screen.ExerciseSelection.route)
                                         },
                                         onFinishWorkoutClick = { workoutId ->
-                                            // Navigate to home for now (will be updated to PostWorkoutSummary in Branch 5)
-                                            navController.navigate(Screen.Home.route) {
-                                                popUpTo(Screen.Home.route) { inclusive = true }
-                                            }
+                                            navController.navigate(Screen.PostWorkoutSummary.createRoute(workoutId))
                                         }
                                     )
                                 }
@@ -127,6 +124,16 @@ class MainActivity : ComponentActivity() {
                                     )
                                 ) {
                                     com.example.gymtime.ui.exercise.ExerciseFormScreen(navController = navController)
+                                }
+                                composable(
+                                    route = Screen.PostWorkoutSummary.route,
+                                    arguments = listOf(
+                                        androidx.navigation.navArgument("workoutId") {
+                                            type = androidx.navigation.NavType.LongType
+                                        }
+                                    )
+                                ) {
+                                    com.example.gymtime.ui.summary.PostWorkoutSummaryScreen(navController = navController)
                                 }
                             }
                         }

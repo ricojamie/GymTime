@@ -82,12 +82,8 @@ fun ExerciseLoggingScreen(
 
     // Observe navigation events from ViewModel
     LaunchedEffect(Unit) {
-        viewModel.navigationEvents.collect {
-            navController.navigate(Screen.Home.route) {
-                popUpTo(navController.graph.id) {
-                    inclusive = true
-                }
-            }
+        viewModel.navigationEvents.collect { workoutId ->
+            navController.navigate(Screen.PostWorkoutSummary.createRoute(workoutId))
         }
     }
 

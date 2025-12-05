@@ -86,7 +86,7 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _workoutOverview = MutableStateFlow<List<WorkoutExerciseSummary>>(emptyList())
     val workoutOverview: StateFlow<List<WorkoutExerciseSummary>> = _workoutOverview
 
-    private val _navigationEvents = Channel<Unit>(Channel.BUFFERED)
+    private val _navigationEvents = Channel<Long>(Channel.BUFFERED)
     val navigationEvents = _navigationEvents.receiveAsFlow()
 
 
@@ -258,7 +258,7 @@ class ExerciseLoggingViewModel @Inject constructor(
             val workout = _currentWorkout.value ?: return@launch
             val updatedWorkout = workout.copy(endTime = Date())
             workoutDao.updateWorkout(updatedWorkout)
-            _navigationEvents.send(Unit) // Send event to trigger navigation
+            _navigationEvents.send(workout.id) // Send workoutId to navigate to summary
         }
     }
 

@@ -25,5 +25,8 @@ sealed class Screen(val route: String, val icon: ImageVector) {
             "exercise_form"
         }
     }
+    object PostWorkoutSummary : Screen("post_workout_summary/{workoutId}", Icons.Filled.Home) { // Post-workout summary
+        fun createRoute(workoutId: Long) = "post_workout_summary/$workoutId"
+    }
 }
 
