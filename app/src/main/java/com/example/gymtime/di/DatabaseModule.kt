@@ -98,7 +98,7 @@ object DatabaseModule {
             if (existingMuscleGroups.isEmpty()) {
                 Log.d(TAG, "Seeding muscle groups...")
                 val muscleGroups = listOf(
-                    "Back", "Biceps", "Chest", "Core", "Legs", "Shoulder", "Triceps", "Cardio"
+                    "Back", "Biceps", "Chest", "Core", "Legs", "Shoulders", "Triceps", "Cardio"
                 ).map { MuscleGroup(it) }
                 muscleGroupDao.insertAll(muscleGroups)
             }
