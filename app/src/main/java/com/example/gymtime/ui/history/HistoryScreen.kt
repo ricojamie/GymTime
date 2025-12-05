@@ -152,14 +152,38 @@ fun WorkoutCard(
                 fontWeight = FontWeight.Medium
             )
 
-            // Duration if available
-            if (workout.workout.endTime != null) {
-                val durationMinutes = ((workout.workout.endTime!!.time - workout.workout.startTime.time) / 1000 / 60).toInt()
-                Text(
-                    "$durationMinutes min",
-                    color = TextTertiary,
-                    fontSize = 12.sp
-                )
+            // Duration and rating row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Duration if available
+                if (workout.workout.endTime != null) {
+                    val durationMinutes = ((workout.workout.endTime!!.time - workout.workout.startTime.time) / 1000 / 60).toInt()
+                    Text(
+                        "$durationMinutes min",
+                        color = TextTertiary,
+                        fontSize = 12.sp
+                    )
+                } else {
+                    Spacer(modifier = Modifier.width(1.dp))
+                }
+
+                // Flame rating if available
+                workout.workout.rating?.let { rating ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        repeat(rating) {
+                            Text(
+                                text = "\uD83D\uDD25",
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -222,12 +246,33 @@ fun WorkoutDetailsSheet(
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                formatWorkoutDateTime(workout.workout.startTime),
-                color = TextPrimary,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    formatWorkoutDateTime(workout.workout.startTime),
+                    color = TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                // Flame rating if available
+                workout.workout.rating?.let { rating ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        repeat(rating) {
+                            Text(
+                                text = "\uD83D\uDD25",
+                                fontSize = 16.sp
+                            )
+                        }
+                    }
+                }
+            }
 
             if (workout.workout.endTime != null) {
                 val durationMinutes = ((workout.workout.endTime!!.time - workout.workout.startTime.time) / 1000 / 60).toInt()

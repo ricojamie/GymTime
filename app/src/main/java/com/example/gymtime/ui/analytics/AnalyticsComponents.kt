@@ -259,7 +259,7 @@ fun MainLineChart(data: ChartData) {
     GlowCard(
         modifier = Modifier
             .fillMaxWidth()
-            .height(300.dp),
+            .height(400.dp),
         onClick = {}
     ) {
         if (data.actuals.isEmpty()) {
