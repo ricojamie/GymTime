@@ -3,15 +3,15 @@ package com.example.gymtime.data.db.entity
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
+import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "routine_exercises",
-    primaryKeys = ["routineId", "exerciseId"],
     foreignKeys = [
         ForeignKey(
-            entity = Routine::class,
+            entity = RoutineDay::class,
             parentColumns = ["id"],
-            childColumns = ["routineId"],
+            childColumns = ["routineDayId"],
             onDelete = ForeignKey.CASCADE
         ),
         ForeignKey(
@@ -21,10 +21,11 @@ import androidx.room.Index
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("routineId"), Index("exerciseId")]
+    indices = [Index("routineDayId"), Index("exerciseId")]
 )
 data class RoutineExercise(
-    val routineId: Long,
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val routineDayId: Long,
     val exerciseId: Long,
     val orderIndex: Int
 )

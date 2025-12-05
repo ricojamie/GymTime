@@ -22,6 +22,7 @@ class UserPreferencesRepository @Inject constructor(
     private object PreferencesKeys {
         val USER_NAME = stringPreferencesKey("user_name")
         val EXERCISES_SEEDED = booleanPreferencesKey("exercises_seeded")
+        val ACTIVE_ROUTINE_ID = androidx.datastore.preferences.core.longPreferencesKey("active_routine_id")
     }
 
     val userName: Flow<String> = context.dataStore.data
@@ -34,6 +35,11 @@ class UserPreferencesRepository @Inject constructor(
             preferences[PreferencesKeys.EXERCISES_SEEDED] ?: false
         }
 
+    val activeRoutineId: Flow<Long?> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.ACTIVE_ROUTINE_ID]
+        }
+
     suspend fun setUserName(name: String) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.USER_NAME] = name
@@ -43,6 +49,16 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun setExercisesSeeded(seeded: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.EXERCISES_SEEDED] = seeded
+        }
+    }
+
+    suspend fun setActiveRoutineId(routineId: Long?) {
+        context.dataStore.edit { preferences ->
+            if (routineId == null) {
+                preferences.remove(PreferencesKeys.ACTIVE_ROUTINE_ID)
+            } else {
+                preferences[PreferencesKeys.ACTIVE_ROUTINE_ID] = routineId
+            }
         }
     }
 }

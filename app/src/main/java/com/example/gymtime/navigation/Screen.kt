@@ -28,5 +28,32 @@ sealed class Screen(val route: String, val icon: ImageVector) {
     object PostWorkoutSummary : Screen("post_workout_summary/{workoutId}", Icons.Filled.Home) { // Post-workout summary
         fun createRoute(workoutId: Long) = "post_workout_summary/$workoutId"
     }
+
+    // Routine Routes
+    object RoutineList : Screen("routine_list", Icons.Filled.Home)
+
+    object RoutineForm : Screen("routine_form?routineId={routineId}", Icons.Filled.Home) {
+        fun createRoute(routineId: Long? = null) = if (routineId != null) {
+            "routine_form?routineId=$routineId"
+        } else {
+            "routine_form"
+        }
+    }
+
+    object RoutineDayList : Screen("routine_day_list/{routineId}", Icons.Filled.Home) {
+        fun createRoute(routineId: Long) = "routine_day_list/$routineId"
+    }
+
+    object RoutineDayForm : Screen("routine_day_form/{routineId}?dayId={dayId}", Icons.Filled.Home) {
+        fun createRoute(routineId: Long, dayId: Long? = null) = if (dayId != null) {
+            "routine_day_form/$routineId?dayId=$dayId"
+        } else {
+            "routine_day_form/$routineId"
+        }
+    }
+
+    object RoutineDayStart : Screen("routine_day_start/{routineId}", Icons.Filled.Home) {
+        fun createRoute(routineId: Long) = "routine_day_start/$routineId"
+    }
 }
 

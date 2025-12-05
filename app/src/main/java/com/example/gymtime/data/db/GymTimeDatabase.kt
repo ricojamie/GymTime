@@ -11,6 +11,7 @@ import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.MuscleGroup
 import com.example.gymtime.data.db.entity.Routine
+import com.example.gymtime.data.db.entity.RoutineDay
 import com.example.gymtime.data.db.entity.RoutineExercise
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
@@ -22,9 +23,10 @@ import com.example.gymtime.data.db.entity.Workout
         Set::class,
         Routine::class,
         RoutineExercise::class,
+        RoutineDay::class,
         MuscleGroup::class
     ],
-    version = 5, // Fixed Shoulder -> Shoulders
+    version = 6, // Added routine structure changes
     exportSchema = false
 )
 @TypeConverters(Converters::class)

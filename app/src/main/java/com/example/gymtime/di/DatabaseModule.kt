@@ -65,6 +65,46 @@ object DatabaseModule {
         }
     }
 
+    // Migration from version 5 to 6: Adding routines days structure
+    private val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            Log.d(TAG, "Running migration 5 -> 6: Adding routines days structure")
+
+            // Create routine_days table
+            database.execSQL("""
+                CREATE TABLE IF NOT EXISTS routine_days (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    routineId INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    orderIndex INTEGER NOT NULL,
+                    FOREIGN KEY(routineId) REFERENCES routines(id) ON DELETE CASCADE
+                )
+            """)
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_routine_days_routineId ON routine_days(routineId)")
+
+            // Drop old routine_exercises table (breaking change)
+            database.execSQL("DROP TABLE IF EXISTS routine_exercises")
+
+            // Create new routine_exercises table with routineDayId
+            database.execSQL("""
+                CREATE TABLE IF NOT EXISTS routine_exercises (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    routineDayId INTEGER NOT NULL,
+                    exerciseId INTEGER NOT NULL,
+                    orderIndex INTEGER NOT NULL,
+                    FOREIGN KEY(routineDayId) REFERENCES routine_days(id) ON DELETE CASCADE,
+                    FOREIGN KEY(exerciseId) REFERENCES exercises(id) ON DELETE CASCADE
+                )
+            """)
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_routine_exercises_routineDayId ON routine_exercises(routineDayId)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_routine_exercises_exerciseId ON routine_exercises(exerciseId)")
+
+            // Add routineDayId to workouts table
+            database.execSQL("ALTER TABLE workouts ADD COLUMN routineDayId INTEGER DEFAULT NULL")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_workouts_routineDayId ON workouts(routineDayId)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): GymTimeDatabase {
@@ -73,7 +113,7 @@ object DatabaseModule {
             GymTimeDatabase::class.java,
             "gym_time_db"
         )
-        .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+        .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
         .fallbackToDestructiveMigration() // For development simplicity
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {

@@ -1,74 +1,60 @@
 package com.example.gymtime.ui.components
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.gymtime.R
-import com.example.gymtime.ui.theme.PrimaryAccent
+import androidx.compose.ui.unit.sp
 import com.example.gymtime.ui.theme.TextPrimary
+import com.example.gymtime.ui.theme.TextSecondary
 import com.example.gymtime.ui.theme.TextTertiary
 
 @Composable
 fun RoutineCard(
-    modifier: Modifier = Modifier,
     hasActiveRoutine: Boolean,
     routineName: String?,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     GlowCard(
-        modifier = modifier
-            .height(150.dp),
+        modifier = modifier.fillMaxWidth(),
         onClick = onClick
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(
-                modifier = Modifier.align(Alignment.CenterStart)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    painter = painterResource(
-                        id = if (hasActiveRoutine) R.drawable.ic_arrow_forward else R.drawable.ic_add
-                    ),
-                    contentDescription = if (hasActiveRoutine) "Continue Routine" else "Create Routine",
-                    modifier = Modifier.size(32.dp),
-                    tint = PrimaryAccent
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
                 Text(
-                    text = if (hasActiveRoutine) "Continue Routine" else "Create Routine",
-                    style = MaterialTheme.typography.titleLarge,
+                    text = if (hasActiveRoutine) "ACTIVE ROUTINE" else "NO ACTIVE ROUTINE",
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary
+                    letterSpacing = 1.5.sp,
+                    color = TextTertiary
                 )
-
-                if (hasActiveRoutine && routineName != null) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = routineName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextTertiary
-                    )
-                }
             }
+
+            Text(
+                text = routineName ?: "Select a Routine",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+
+            Text(
+                text = if (hasActiveRoutine) "Tap to start workout" else "Tap to view routines",
+                fontSize = 12.sp,
+                color = TextSecondary
+            )
         }
     }
 }
