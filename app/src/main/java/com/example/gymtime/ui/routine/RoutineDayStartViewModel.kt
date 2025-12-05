@@ -20,10 +20,13 @@ class RoutineDayStartViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val routineId: Long = savedStateHandle.get<String>("routineId")?.toLong() ?: 0L
+    // Retrieve routineId as Long (NavType.LongType)
+    private val routineId: Long = savedStateHandle.get<Long>("routineId") ?: 0L
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val routineName: Flow<String> = routineDao.getRoutineById(routineId).map { it?.name ?: "" }
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val daysWithExercises = routineDao.getDaysForRoutine(routineId)
         .flatMapLatest { days ->
             if (days.isEmpty()) {
@@ -58,14 +61,6 @@ class RoutineDayStartViewModel @Inject constructor(
                 )
             )
 
-            // Navigate to first exercise (placeholder - usually we'd go to workout overview or first exercise)
-            // For this app's flow, we probably want to go to the ExerciseLogging screen for the first exercise
-            // But we need to handle the workout session state. 
-            // Assuming the existing app flow handles active workout state via global or shared VM/Repo
-            // Since I can't see the "ActiveWorkoutManager" equivalent, I'll assume passing the exercise ID 
-            // to the logging screen is the entry point, and the logging VM will pick up the active workout.
-            // Wait, the logging screen takes an exerciseId. 
-            
             _startWorkoutEvent.send(exercises.first().id)
         }
     }

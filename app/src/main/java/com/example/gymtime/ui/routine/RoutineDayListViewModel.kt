@@ -16,19 +16,23 @@ class RoutineDayListViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val _routineId = MutableStateFlow(savedStateHandle.get<String>("routineId")?.toLong() ?: 0L)
+    // Retrieve routineId as Long directly, as defined in NavType.LongType
+    private val _routineId = MutableStateFlow(savedStateHandle.get<Long>("routineId") ?: 0L)
     val routineId: StateFlow<Long> = _routineId.asStateFlow()
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val routineName: Flow<String> = _routineId
         .flatMapLatest { id ->
             routineDao.getRoutineById(id).map { it?.name ?: "" }
         }
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val days: Flow<List<RoutineDay>> = _routineId
         .flatMapLatest { id ->
             routineDao.getDaysForRoutine(id)
         }
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val canAddMoreDays: StateFlow<Boolean> = _routineId
         .flatMapLatest { id ->
             routineDao.getDayCountForRoutine(id)

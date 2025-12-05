@@ -21,7 +21,10 @@ class RoutineDayFormViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val routineId: Long = savedStateHandle.get<String>("routineId")?.toLong() ?: 0L
+    // Retrieve routineId as Long (NavType.LongType)
+    private val routineId: Long = savedStateHandle.get<Long>("routineId") ?: 0L
+    
+    // Retrieve dayId as String (NavType.StringType) -> convert to Long
     private val dayId: Long? = savedStateHandle.get<String>("dayId")?.toLongOrNull()
 
     private val _dayName = MutableStateFlow("")
