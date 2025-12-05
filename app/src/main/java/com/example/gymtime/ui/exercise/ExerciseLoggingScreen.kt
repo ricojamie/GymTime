@@ -12,9 +12,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -148,7 +148,7 @@ fun ExerciseLoggingScreen(
                             navController.navigate(Screen.ExerciseSelection.route)
                         }) {
                             Icon(
-                                imageVector = Icons.Default.ArrowBack,
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
                                 tint = TextPrimary
                             )
@@ -184,10 +184,9 @@ fun ExerciseLoggingScreen(
                         }
 
                         // Vertical divider
-                        Divider(
+                        VerticalDivider(
                             modifier = Modifier
                                 .height(24.dp)
-                                .width(1.dp)
                                 .padding(horizontal = 4.dp),
                             color = TextTertiary.copy(alpha = 0.3f)
                         )

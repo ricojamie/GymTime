@@ -245,7 +245,7 @@ fun WorkoutDetailsSheet(
             }
         }
 
-        Divider(
+        HorizontalDivider(
             color = TextTertiary.copy(alpha = 0.2f),
             thickness = 1.dp
         )
