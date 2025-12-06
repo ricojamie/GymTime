@@ -158,6 +158,8 @@ private fun ExerciseSummaryCard(
     exercise: WorkoutExerciseSummary,
     onClick: () -> Unit
 ) {
+    val isUnstarted = exercise.setCount == 0
+
     GlowCard(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth()
@@ -165,16 +167,16 @@ private fun ExerciseSummaryCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
+                .padding(if (isUnstarted) 16.dp else 20.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = exercise.exerciseName,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    fontSize = if (isUnstarted) 16.sp else 18.sp,
+                    fontWeight = if (isUnstarted) FontWeight.Medium else FontWeight.Bold,
+                    color = if (isUnstarted) TextSecondary else Color.White
                 )
                 Text(
                     text = exercise.targetMuscle.uppercase(),
@@ -185,20 +187,29 @@ private fun ExerciseSummaryCard(
                 )
             }
 
-            Column(horizontalAlignment = Alignment.End) {
+            if (isUnstarted) {
                 Text(
-                    text = "${exercise.setCount} sets",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = PrimaryAccent
+                    text = "Not started",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = TextTertiary
                 )
-                exercise.bestWeight?.let { weight ->
+            } else {
+                Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "Best: ${weight.toInt()} lbs",
-                        fontSize = 12.sp,
-                        color = TextSecondary,
-                        modifier = Modifier.padding(top = 2.dp)
+                        text = "${exercise.setCount} sets",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = PrimaryAccent
                     )
+                    exercise.bestWeight?.let { weight ->
+                        Text(
+                            text = "Best: ${weight.toInt()} lbs",
+                            fontSize = 12.sp,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
                 }
             }
         }

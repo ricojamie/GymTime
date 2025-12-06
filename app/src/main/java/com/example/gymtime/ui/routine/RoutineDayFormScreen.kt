@@ -39,6 +39,7 @@ fun RoutineDayFormScreen(
     val dayName by viewModel.dayName.collectAsState()
     val selectedExercises by viewModel.selectedExercises.collectAsState(initial = emptyList())
     val availableExercises by viewModel.availableExercises.collectAsState(initial = emptyList())
+    val selectedExerciseIds by viewModel.selectedExerciseIds.collectAsState()
     val isEditMode by viewModel.isEditMode.collectAsState()
     val isSaveEnabled by viewModel.isSaveEnabled.collectAsState()
 
@@ -166,13 +167,12 @@ fun RoutineDayFormScreen(
     if (showExercisePicker) {
         ExercisePickerDialog(
             availableExercises = availableExercises,
+            selectedExerciseIds = selectedExerciseIds,
             onDismiss = { showExercisePicker = false },
             onExerciseSelected = { exercise ->
                 viewModel.addExercise(exercise.id)
                 // Keep dialog open to allow multiple selections
-                // showExercisePicker = false 
-            },
-            isExerciseSelected = { id -> viewModel.isExerciseSelected(id) }
+            }
         )
     }
 }
@@ -217,17 +217,17 @@ fun ExerciseListItem(
 @Composable
 fun ExercisePickerDialog(
     availableExercises: List<Exercise>,
+    selectedExerciseIds: Set<Long>,
     onDismiss: () -> Unit,
-    onExerciseSelected: (Exercise) -> Unit,
-    isExerciseSelected: (Long) -> Boolean
+    onExerciseSelected: (Exercise) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    
+
     val filteredExercises = remember(searchQuery, availableExercises) {
         if (searchQuery.isBlank()) availableExercises
-        else availableExercises.filter { 
-            it.name.contains(searchQuery, ignoreCase = true) || 
-            it.targetMuscle.contains(searchQuery, ignoreCase = true) 
+        else availableExercises.filter {
+            it.name.contains(searchQuery, ignoreCase = true) ||
+            it.targetMuscle.contains(searchQuery, ignoreCase = true)
         }
     }
 
@@ -239,7 +239,11 @@ fun ExercisePickerDialog(
             modifier = Modifier.fillMaxSize(),
             color = BackgroundCanvas
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .navigationBarsPadding()
+            ) {
                 // Header
                 Row(
                     modifier = Modifier
@@ -296,10 +300,9 @@ fun ExercisePickerDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(filteredExercises) { exercise ->
-                        val isSelected = isExerciseSelected(exercise.id)
                         ExercisePickerItem(
                             exercise = exercise,
-                            isSelected = isSelected,
+                            isSelected = exercise.id in selectedExerciseIds,
                             onClick = { onExerciseSelected(exercise) }
                         )
                     }
@@ -310,8 +313,11 @@ fun ExercisePickerDialog(
                     onClick = onDismiss,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent)
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 8.dp, bottom = 32.dp)
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Text("Done", color = Color.Black, fontWeight = FontWeight.Bold)
                 }

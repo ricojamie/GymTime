@@ -266,7 +266,13 @@ class ExerciseLoggingViewModel @Inject constructor(
     fun loadWorkoutOverview() {
         viewModelScope.launch {
             _currentWorkout.value?.let { workout ->
-                setDao.getWorkoutExerciseSummaries(workout.id).collectLatest { overview ->
+                // If workout is from a routine, include unstarted routine exercises
+                val overviewFlow = if (workout.routineDayId != null) {
+                    setDao.getWorkoutExerciseSummariesWithRoutine(workout.id, workout.routineDayId)
+                } else {
+                    setDao.getWorkoutExerciseSummaries(workout.id)
+                }
+                overviewFlow.collectLatest { overview ->
                     _workoutOverview.value = overview
                     Log.d("ExerciseLoggingVM", "Workout overview loaded: ${overview.size} exercises")
                 }

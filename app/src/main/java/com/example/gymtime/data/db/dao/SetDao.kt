@@ -99,6 +99,40 @@ interface SetDao {
     """)
     fun getWorkoutExerciseSummaries(workoutId: Long): Flow<List<WorkoutExerciseSummary>>
 
+    // Get workout overview including routine exercises (for routine-based workouts)
+    // Shows logged exercises + unstarted routine exercises
+    @Query("""
+        SELECT exerciseId, exerciseName, targetMuscle, setCount, bestWeight, firstSetTimestamp
+        FROM (
+            SELECT
+                e.id as exerciseId,
+                e.name as exerciseName,
+                e.targetMuscle as targetMuscle,
+                COUNT(s.id) as setCount,
+                MAX(s.weight) as bestWeight,
+                MIN(s.timestamp) as firstSetTimestamp
+            FROM exercises e
+            INNER JOIN sets s ON e.id = s.exerciseId AND s.workoutId = :workoutId
+            GROUP BY e.id
+
+            UNION ALL
+
+            SELECT
+                e.id as exerciseId,
+                e.name as exerciseName,
+                e.targetMuscle as targetMuscle,
+                0 as setCount,
+                NULL as bestWeight,
+                9223372036854775807 as firstSetTimestamp
+            FROM routine_exercises re
+            INNER JOIN exercises e ON re.exerciseId = e.id
+            WHERE re.routineDayId = :routineDayId
+              AND e.id NOT IN (SELECT DISTINCT exerciseId FROM sets WHERE workoutId = :workoutId)
+        )
+        ORDER BY firstSetTimestamp ASC
+    """)
+    fun getWorkoutExerciseSummariesWithRoutine(workoutId: Long, routineDayId: Long): Flow<List<WorkoutExerciseSummary>>
+
     // Get all sets for exercise history screen
     @Query("""
         SELECT s.*, e.name as exerciseName, e.targetMuscle as targetMuscle

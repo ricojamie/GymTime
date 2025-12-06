@@ -67,16 +67,29 @@ fun ExerciseSelectionScreen(
     navController: NavController,
     viewModel: ExerciseSelectionViewModel = hiltViewModel()
 ) {
+    ExerciseSelectionContent(
+        navController = navController,
+        viewModel = viewModel
+    )
+}
+
+/**
+ * Reusable content for exercise selection.
+ * Can be used standalone in ExerciseSelectionScreen or embedded in LibraryScreen.
+ */
+@Composable
+fun ExerciseSelectionContent(
+    navController: NavController,
+    viewModel: ExerciseSelectionViewModel = hiltViewModel()
+) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedMuscles by viewModel.selectedMuscles.collectAsState()
     val availableMuscles by viewModel.availableMuscles.collectAsState(initial = emptyList())
     val filteredExercises by viewModel.filteredExercises.collectAsState(initial = emptyList())
-    
+
     var exerciseToDelete by remember { mutableStateOf<Exercise?>(null) }
 
-    Log.d(TAG, "ExerciseSelectionScreen recomposed: availableMuscles=${availableMuscles.size}, filteredExercises=${filteredExercises.size}")
-    Log.d(TAG, "Available muscles: $availableMuscles")
-    Log.d(TAG, "Filtered exercises count: ${filteredExercises.size}")
+    Log.d(TAG, "ExerciseSelectionContent recomposed: availableMuscles=${availableMuscles.size}, filteredExercises=${filteredExercises.size}")
 
     Scaffold(
         floatingActionButton = {
@@ -101,7 +114,7 @@ fun ExerciseSelectionScreen(
                 .padding(16.dp)
         ) {
             // Search Box
-            SearchBox(
+            ExerciseSearchBox(
                 query = searchQuery,
                 onQueryChange = { viewModel.updateSearchQuery(it) }
             )
@@ -110,7 +123,7 @@ fun ExerciseSelectionScreen(
 
             // Filter Pills
             if (availableMuscles.isNotEmpty()) {
-                FilterPills(
+                ExerciseFilterPills(
                     muscles = availableMuscles,
                     selectedMuscles = selectedMuscles,
                     onMuscleToggle = { viewModel.toggleMuscleFilter(it) }
@@ -191,7 +204,7 @@ fun ExerciseSelectionScreen(
 }
 
 @Composable
-private fun SearchBox(
+private fun ExerciseSearchBox(
     query: String,
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -233,7 +246,7 @@ private fun SearchBox(
 }
 
 @Composable
-private fun FilterPills(
+private fun ExerciseFilterPills(
     muscles: List<String>,
     selectedMuscles: Set<String>,
     onMuscleToggle: (String) -> Unit,

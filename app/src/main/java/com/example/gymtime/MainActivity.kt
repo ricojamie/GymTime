@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
                                 composable(Screen.Home.route) { HomeScreen(navController = navController) }
                                 composable(Screen.History.route) { HistoryScreen(navController = navController) }
                                 composable(Screen.Library.route) {
-                                    com.example.gymtime.ui.exercise.ExerciseSelectionScreen(navController = navController)
+                                    com.example.gymtime.ui.library.LibraryScreen(navController = navController)
                                 }
                                 composable(Screen.Analytics.route) {
                                     com.example.gymtime.ui.analytics.AnalyticsScreen()

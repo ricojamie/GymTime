@@ -43,9 +43,15 @@ class WorkoutResumeViewModel @Inject constructor(
             workoutDao.getOngoingWorkout().collectLatest { workout ->
                 _currentWorkout.value = workout
                 if (workout != null) {
-                    Log.d("WorkoutResumeVM", "Ongoing workout found: ${workout.id}")
+                    Log.d("WorkoutResumeVM", "Ongoing workout found: ${workout.id}, routineDayId: ${workout.routineDayId}")
                     // Load all exercises in this workout reactively
-                    setDao.getWorkoutExerciseSummaries(workout.id).collectLatest { exercises ->
+                    // If workout is from a routine, include unstarted routine exercises
+                    val exercisesFlow = if (workout.routineDayId != null) {
+                        setDao.getWorkoutExerciseSummariesWithRoutine(workout.id, workout.routineDayId)
+                    } else {
+                        setDao.getWorkoutExerciseSummaries(workout.id)
+                    }
+                    exercisesFlow.collectLatest { exercises ->
                         _todaysExercises.value = exercises
                         Log.d("WorkoutResumeVM", "Loaded ${exercises.size} exercises for workout")
                     }

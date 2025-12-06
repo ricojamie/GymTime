@@ -31,6 +31,7 @@ class RoutineDayFormViewModel @Inject constructor(
     val dayName: StateFlow<String> = _dayName.asStateFlow()
 
     private val _selectedExerciseIds = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedExerciseIds: StateFlow<Set<Long>> = _selectedExerciseIds.asStateFlow()
 
     // Maintain exercise order
     private val _selectedExerciseOrder = MutableStateFlow<List<Long>>(emptyList())
