@@ -120,8 +120,9 @@ class ExerciseLoggingViewModel @Inject constructor(
         viewModelScope.launch {
             // Load personal bests by rep count for this exercise
             val pbsByReps = setDao.getPersonalBestsByReps(exerciseId)
-            _personalBestsByReps.value = pbsByReps.associate { it.reps to it.maxWeight }
-            Log.d("ExerciseLoggingVM", "Personal bests loaded: ${_personalBestsByReps.value}")
+            val rawPBs = pbsByReps.associate { it.reps to it.maxWeight }
+            _personalBestsByReps.value = filterDominatedPBs(rawPBs)
+            Log.d("ExerciseLoggingVM", "Personal bests loaded (filtered): ${_personalBestsByReps.value}")
         }
 
         viewModelScope.launch {
@@ -182,6 +183,49 @@ class ExerciseLoggingViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Filters out "dominated" personal bests.
+     * A PB (repsA, weightA) is dominated by (repsB, weightB) if:
+     * 1. weightB >= weightA AND repsB >= repsA
+     * 2. AND (weightB > weightA OR repsB > repsA) - strictly better in at least one metric
+     *
+     * Example: 135x11 dominates 135x10. 135x10 is removed.
+     */
+    private fun filterDominatedPBs(rawPBs: Map<Int, Float>): Map<Int, Float> {
+        val result = mutableMapOf<Int, Float>()
+        
+        // Convert to list for easier comparison
+        val candidates = rawPBs.entries.toList()
+        
+        for (candidate in candidates) {
+            val repsA = candidate.key
+            val weightA = candidate.value
+            var isDominated = false
+            
+            for (challenger in candidates) {
+                if (candidate == challenger) continue // Don't compare against self
+                
+                val repsB = challenger.key
+                val weightB = challenger.value
+                
+                // Check dominance condition
+                val strictlyBetter = (weightB > weightA) || (repsB > repsA)
+                val atLeastAsGood = (weightB >= weightA) && (repsB >= repsA)
+                
+                if (atLeastAsGood && strictlyBetter) {
+                    isDominated = true
+                    break
+                }
+            }
+            
+            if (!isDominated) {
+                result[repsA] = weightA
+            }
+        }
+        
+        return result
+    }
+
     fun updateWeight(value: String) {
         _weight.value = value
     }
@@ -234,10 +278,14 @@ class ExerciseLoggingViewModel @Inject constructor(
             // Update personal bests if this is a new record for this rep count
             val newReps = _reps.value.toIntOrNull()
             if (!isWarmup && newWeight != null && newReps != null) {
-                val currentPBForReps = _personalBestsByReps.value[newReps]
-                if (currentPBForReps == null || newWeight > currentPBForReps) {
-                    _personalBestsByReps.value = _personalBestsByReps.value + (newReps to newWeight)
-                    Log.d("ExerciseLoggingVM", "New personal best for $newReps reps: $newWeight lbs!")
+                val currentPBs = _personalBestsByReps.value.toMutableMap()
+                val currentWeightForReps = currentPBs[newReps]
+                
+                // If this is a raw improvement for this specific rep count, update and re-filter
+                if (currentWeightForReps == null || newWeight > currentWeightForReps) {
+                    currentPBs[newReps] = newWeight
+                    _personalBestsByReps.value = filterDominatedPBs(currentPBs)
+                    Log.d("ExerciseLoggingVM", "New PB update! Raw: $newWeight for $newReps reps. Filtered map: ${_personalBestsByReps.value}")
                 }
             }
 
