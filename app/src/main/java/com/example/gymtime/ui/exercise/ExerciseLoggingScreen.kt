@@ -88,10 +88,9 @@ fun ExerciseLoggingScreen(
     val rpe by viewModel.rpe.collectAsState()
     val restTime by viewModel.restTime.collectAsState()
     val isWarmup by viewModel.isWarmup.collectAsState()
-    val setNote by viewModel.setNote.collectAsState()
     val lastWorkoutSets by viewModel.lastWorkoutSets.collectAsState()
     val workoutOverview by viewModel.workoutOverview.collectAsState()
-    val personalBestWeight by viewModel.personalBestWeight.collectAsState()
+    val personalBestsByReps by viewModel.personalBestsByReps.collectAsState()
 
     val isTimerRunning by viewModel.isTimerRunning.collectAsState()
     val editingSet by viewModel.editingSet.collectAsState()
@@ -106,6 +105,10 @@ fun ExerciseLoggingScreen(
 
     // Set deletion
     var selectedSetToDelete by remember { mutableStateOf<com.example.gymtime.data.db.entity.Set?>(null) }
+
+    // Set note editing
+    var setToAddNote by remember { mutableStateOf<com.example.gymtime.data.db.entity.Set?>(null) }
+    var noteText by remember { mutableStateOf("") }
 
     // Observe navigation events from ViewModel
     LaunchedEffect(Unit) {
@@ -358,15 +361,13 @@ fun ExerciseLoggingScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Warmup Toggle and Note Input Row
-            Row(
+            // Warmup Toggle Pill
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                contentAlignment = Alignment.CenterStart
             ) {
-                // Warmup Toggle Pill
                 Surface(
                     onClick = { viewModel.toggleWarmup() },
                     shape = RoundedCornerShape(50), // Pill shape
@@ -387,45 +388,6 @@ fun ExerciseLoggingScreen(
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,
                             color = if (isWarmup) Color.Black else TextTertiary
-                        )
-                    }
-                }
-
-                // Note Input
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = Color.Transparent,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, if (setNote.isNotBlank()) PrimaryAccent else TextTertiary),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(32.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "📝 ",
-                            fontSize = 12.sp
-                        )
-                        BasicTextField(
-                            value = setNote,
-                            onValueChange = { viewModel.updateSetNote(it) },
-                            textStyle = MaterialTheme.typography.bodySmall.copy(
-                                color = TextPrimary
-                            ),
-                            singleLine = true,
-                            modifier = Modifier.weight(1f),
-                            decorationBox = { innerTextField ->
-                                if (setNote.isEmpty()) {
-                                    Text(
-                                        text = "Add note...",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = TextTertiary
-                                    )
-                                }
-                                innerTextField()
-                            }
                         )
                     }
                 }
@@ -522,15 +484,25 @@ fun ExerciseLoggingScreen(
                     items = loggedSets,
                     key = { _, item -> item.id }
                 ) { index, set ->
+                    // Check if this set is a PB for its rep count
+                    val isPB = !set.isWarmup &&
+                        set.weight != null &&
+                        set.reps != null &&
+                        personalBestsByReps[set.reps] == set.weight
+
                     ExerciseSetLogCard(
                         set = set,
                         setNumber = index + 1,
-                        isPersonalBest = !set.isWarmup && set.weight != null && set.weight == personalBestWeight,
+                        isPersonalBest = isPB,
                         onEdit = { selectedSet ->
                             viewModel.startEditingSet(selectedSet)
                         },
                         onDelete = { selectedSet ->
                             selectedSetToDelete = selectedSet
+                        },
+                        onAddNote = { selectedSet ->
+                            noteText = selectedSet.note ?: ""
+                            setToAddNote = selectedSet
                         }
                     )
                 }
@@ -671,6 +643,69 @@ fun ExerciseLoggingScreen(
             },
             dismissButton = {
                 TextButton(onClick = { selectedSetToDelete = null }) {
+                    Text("Cancel", color = TextTertiary)
+                }
+            },
+            containerColor = SurfaceCards
+        )
+    }
+
+    // Add/Edit Note Dialog
+    setToAddNote?.let { set ->
+        AlertDialog(
+            onDismissRequest = {
+                setToAddNote = null
+                noteText = ""
+            },
+            title = {
+                Text(
+                    text = if (set.note.isNullOrBlank()) "Add Note" else "Edit Note",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Set ${loggedSets.indexOf(set) + 1}: ${set.weight?.toInt()} lbs × ${set.reps} reps",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextTertiary,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    androidx.compose.material3.OutlinedTextField(
+                        value = noteText,
+                        onValueChange = { noteText = it },
+                        placeholder = { Text("Enter note...", color = TextTertiary) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = PrimaryAccent,
+                            unfocusedBorderColor = TextTertiary,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            cursorColor = PrimaryAccent
+                        ),
+                        maxLines = 3
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updateSetNote(set, noteText)
+                        setToAddNote = null
+                        noteText = ""
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent)
+                ) {
+                    Text("Save", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    setToAddNote = null
+                    noteText = ""
+                }) {
                     Text("Cancel", color = TextTertiary)
                 }
             },
@@ -892,7 +927,8 @@ private fun ExerciseSetLogCard(
     setNumber: Int,
     isPersonalBest: Boolean = false,
     onEdit: (com.example.gymtime.data.db.entity.Set) -> Unit = {},
-    onDelete: (com.example.gymtime.data.db.entity.Set) -> Unit = {}
+    onDelete: (com.example.gymtime.data.db.entity.Set) -> Unit = {},
+    onAddNote: (com.example.gymtime.data.db.entity.Set) -> Unit = {}
 ) {
     var showContextMenu by remember { mutableStateOf(false) }
 
@@ -1029,6 +1065,13 @@ private fun ExerciseSetLogCard(
                 onClick = {
                     showContextMenu = false
                     onEdit(set)
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(if (set.note.isNullOrBlank()) "Add Note" else "Edit Note") },
+                onClick = {
+                    showContextMenu = false
+                    onAddNote(set)
                 }
             )
             DropdownMenuItem(

@@ -88,9 +88,9 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _lastWorkoutSets = MutableStateFlow<List<Set>>(emptyList())
     val lastWorkoutSets: StateFlow<List<Set>> = _lastWorkoutSets
 
-    // Personal best weight for this exercise (excluding warmups)
-    private val _personalBestWeight = MutableStateFlow<Float?>(null)
-    val personalBestWeight: StateFlow<Float?> = _personalBestWeight
+    // Personal bests by rep count - Map of reps -> max weight at that rep count
+    private val _personalBestsByReps = MutableStateFlow<Map<Int, Float>>(emptyMap())
+    val personalBestsByReps: StateFlow<Map<Int, Float>> = _personalBestsByReps
 
     // Workout overview data
     private val _workoutOverview = MutableStateFlow<List<WorkoutExerciseSummary>>(emptyList())
@@ -118,10 +118,10 @@ class ExerciseLoggingViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            // Load personal best for this exercise
-            val pb = setDao.getPersonalBest(exerciseId)
-            _personalBestWeight.value = pb?.weight
-            Log.d("ExerciseLoggingVM", "Personal best loaded: ${pb?.weight} lbs")
+            // Load personal bests by rep count for this exercise
+            val pbsByReps = setDao.getPersonalBestsByReps(exerciseId)
+            _personalBestsByReps.value = pbsByReps.associate { it.reps to it.maxWeight }
+            Log.d("ExerciseLoggingVM", "Personal bests loaded: ${_personalBestsByReps.value}")
         }
 
         viewModelScope.launch {
@@ -165,13 +165,18 @@ class ExerciseLoggingViewModel @Inject constructor(
                 _lastWorkoutSets.value = previousSets
                 Log.d("ExerciseLoggingVM", "Last workout sets loaded: ${previousSets.size}")
 
-                // Auto-prefill if this is the first set AND we have previous data
-                if (!hasPrefilled && previousSets.isNotEmpty() && _loggedSets.value.isEmpty()) {
+                // Auto-prefill from last workout if we have previous data and inputs are empty
+                // This runs when entering the exercise screen with empty weight/reps
+                if (!hasPrefilled && previousSets.isNotEmpty()) {
                     val lastSet = previousSets.first() // First set from previous workout
-                    lastSet.weight?.let { _weight.value = it.toString() }
-                    lastSet.reps?.let { _reps.value = it.toString() }
+                    if (_weight.value.isBlank()) {
+                        lastSet.weight?.let { _weight.value = it.toString() }
+                    }
+                    if (_reps.value.isBlank()) {
+                        lastSet.reps?.let { _reps.value = it.toString() }
+                    }
                     hasPrefilled = true
-                    Log.d("ExerciseLoggingVM", "Pre-filled: ${lastSet.weight} x ${lastSet.reps}")
+                    Log.d("ExerciseLoggingVM", "Pre-filled from last workout: ${lastSet.weight} x ${lastSet.reps}")
                 }
             }
         }
@@ -226,12 +231,13 @@ class ExerciseLoggingViewModel @Inject constructor(
 
             setDao.insertSet(newSet)
 
-            // Update personal best if this is a new record (non-warmup set with weight)
-            if (!isWarmup && newWeight != null) {
-                val currentPB = _personalBestWeight.value
-                if (currentPB == null || newWeight > currentPB) {
-                    _personalBestWeight.value = newWeight
-                    Log.d("ExerciseLoggingVM", "New personal best: $newWeight lbs!")
+            // Update personal bests if this is a new record for this rep count
+            val newReps = _reps.value.toIntOrNull()
+            if (!isWarmup && newWeight != null && newReps != null) {
+                val currentPBForReps = _personalBestsByReps.value[newReps]
+                if (currentPBForReps == null || newWeight > currentPBForReps) {
+                    _personalBestsByReps.value = _personalBestsByReps.value + (newReps to newWeight)
+                    Log.d("ExerciseLoggingVM", "New personal best for $newReps reps: $newWeight lbs!")
                 }
             }
 
@@ -283,6 +289,14 @@ class ExerciseLoggingViewModel @Inject constructor(
             Log.e("DELETE_DEBUG", "Attempting to delete set: $setId")
             setDao.deleteSetById(setId)
             Log.d("ExerciseLoggingVM", "Set deleted: id=$setId")
+        }
+    }
+
+    fun updateSetNote(set: Set, note: String?) {
+        viewModelScope.launch {
+            val updatedSet = set.copy(note = note?.takeIf { it.isNotBlank() })
+            setDao.updateSet(updatedSet)
+            Log.d("ExerciseLoggingVM", "Set note updated: id=${set.id}, note=$note")
         }
     }
 

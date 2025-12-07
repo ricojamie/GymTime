@@ -6,6 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -111,13 +112,16 @@ fun ExerciseFormScreen(
             ) {
                 BasicTextField(
                     value = exerciseName,
-                    onValueChange = { viewModel.updateExerciseName(it) },
+                    onValueChange = { viewModel.updateExerciseName(it.titleCase()) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
                         color = TextPrimary,
                         fontSize = 18.sp
+                    ),
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Words
                     ),
                     decorationBox = { innerTextField ->
                         if (exerciseName.isEmpty()) {
@@ -358,3 +362,10 @@ private val LogType.description: String
         LogType.WEIGHT_DISTANCE -> "Sled push, farmer's carry"
         LogType.DISTANCE_TIME -> "Running, cycling, rowing"
     }
+
+// Extension to capitalize first letter of each word
+private fun String.titleCase(): String {
+    return this.split(" ").joinToString(" ") { word ->
+        word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+    }
+}

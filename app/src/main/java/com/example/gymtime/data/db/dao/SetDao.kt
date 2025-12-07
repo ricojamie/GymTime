@@ -159,6 +159,17 @@ interface SetDao {
     """)
     suspend fun getPersonalBest(exerciseId: Long): Set?
 
+    // Get personal bests by rep count (best weight for each rep count)
+    @Query("""
+        SELECT reps, MAX(weight) as maxWeight FROM sets
+        WHERE exerciseId = :exerciseId
+          AND weight IS NOT NULL
+          AND reps IS NOT NULL
+          AND isWarmup = 0
+        GROUP BY reps
+    """)
+    suspend fun getPersonalBestsByReps(exerciseId: Long): List<RepMaxRecord>
+
     // Get all working sets for an exercise (for E1RM/E10RM calculation)
     @Query("""
         SELECT * FROM sets
@@ -272,3 +283,9 @@ interface SetDao {
     """)
     suspend fun getVolumeByMuscleAndWeek(startDate: Long, endDate: Long): List<MuscleVolumeData>
 }
+
+// Data class for rep-based personal records
+data class RepMaxRecord(
+    val reps: Int,
+    val maxWeight: Float
+)

@@ -2,6 +2,7 @@ package com.example.gymtime.ui.routine
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -10,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -91,13 +93,16 @@ fun RoutineFormScreen(
             GlowCard(onClick = {}, modifier = Modifier.fillMaxWidth()) {
                 BasicTextField(
                     value = routineName,
-                    onValueChange = { viewModel.updateRoutineName(it) },
+                    onValueChange = { viewModel.updateRoutineName(it.titleCase()) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(20.dp),
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
                         color = TextPrimary,
                         fontSize = 18.sp
+                    ),
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Words
                     ),
                     decorationBox = { innerTextField ->
                         if (routineName.isEmpty()) {
@@ -114,5 +119,12 @@ fun RoutineFormScreen(
                 )
             }
         }
+    }
+}
+
+// Extension to capitalize first letter of each word
+private fun String.titleCase(): String {
+    return this.split(" ").joinToString(" ") { word ->
+        word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
     }
 }
