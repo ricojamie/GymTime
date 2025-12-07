@@ -35,5 +35,6 @@ data class Set(
     val distanceMeters: Float?,
     val isWarmup: Boolean,
     val isComplete: Boolean,
-    val timestamp: Date
+    val timestamp: Date,
+    val note: String? = null
 )

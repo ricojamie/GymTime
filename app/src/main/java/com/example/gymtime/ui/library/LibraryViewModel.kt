@@ -34,4 +34,19 @@ class LibraryViewModel @Inject constructor(
             routineDao.deleteRoutine(routine)
         }
     }
+
+    fun toggleRoutineActive(routine: Routine) {
+        viewModelScope.launch {
+            val newActiveState = !routine.isActive
+            routineDao.setRoutineActive(routine.id, newActiveState)
+
+            // If deactivating, clear active routine selection if this was active
+            if (!newActiveState) {
+                val currentActiveId = userPreferencesRepository.activeRoutineId.first()
+                if (currentActiveId == routine.id) {
+                    userPreferencesRepository.setActiveRoutineId(null)
+                }
+            }
+        }
+    }
 }

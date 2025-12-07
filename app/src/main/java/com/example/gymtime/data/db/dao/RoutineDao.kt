@@ -49,8 +49,14 @@ interface RoutineDao {
     @Query("SELECT * FROM routines")
     fun getAllRoutines(): Flow<List<Routine>>
 
+    @Query("SELECT * FROM routines WHERE isActive = 1")
+    fun getActiveRoutines(): Flow<List<Routine>>
+
     @Query("SELECT * FROM routines WHERE id = :id")
     fun getRoutineById(id: Long): Flow<Routine?>
+
+    @Query("UPDATE routines SET isActive = :isActive WHERE id = :routineId")
+    suspend fun setRoutineActive(routineId: Long, isActive: Boolean)
 
     @Query("SELECT COUNT(*) FROM routines")
     fun getRoutineCount(): Flow<Int>

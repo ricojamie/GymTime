@@ -105,6 +105,19 @@ object DatabaseModule {
         }
     }
 
+    // Migration from version 6 to 7: Adding set notes and routine isActive
+    private val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            Log.d(TAG, "Running migration 6 -> 7: Adding set notes and routine isActive")
+
+            // Add note column to sets table
+            database.execSQL("ALTER TABLE sets ADD COLUMN note TEXT DEFAULT NULL")
+
+            // Add isActive column to routines table (default true)
+            database.execSQL("ALTER TABLE routines ADD COLUMN isActive INTEGER NOT NULL DEFAULT 1")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): GymTimeDatabase {
@@ -113,7 +126,7 @@ object DatabaseModule {
             GymTimeDatabase::class.java,
             "gym_time_db"
         )
-        .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+        .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
         .fallbackToDestructiveMigration() // For development simplicity
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {

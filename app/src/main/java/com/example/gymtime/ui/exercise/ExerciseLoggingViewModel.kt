@@ -65,11 +65,17 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _rpe = MutableStateFlow("")
     val rpe: StateFlow<String> = _rpe
 
-    private val _restTime = MutableStateFlow(90) // Default rest in seconds
+    private val _restTime = MutableStateFlow(90) // Will be updated from exercise default
     val restTime: StateFlow<Int> = _restTime
+
+    // Store the exercise's default rest time
+    private var exerciseDefaultRestSeconds: Int = 90
 
     private val _isWarmup = MutableStateFlow(false)
     val isWarmup: StateFlow<Boolean> = _isWarmup
+
+    private val _setNote = MutableStateFlow("")
+    val setNote: StateFlow<String> = _setNote
 
     private val _isTimerRunning = MutableStateFlow(false)
     val isTimerRunning: StateFlow<Boolean> = _isTimerRunning
@@ -81,6 +87,10 @@ class ExerciseLoggingViewModel @Inject constructor(
     // Last workout data
     private val _lastWorkoutSets = MutableStateFlow<List<Set>>(emptyList())
     val lastWorkoutSets: StateFlow<List<Set>> = _lastWorkoutSets
+
+    // Personal best weight for this exercise (excluding warmups)
+    private val _personalBestWeight = MutableStateFlow<Float?>(null)
+    val personalBestWeight: StateFlow<Float?> = _personalBestWeight
 
     // Workout overview data
     private val _workoutOverview = MutableStateFlow<List<WorkoutExerciseSummary>>(emptyList())
@@ -98,8 +108,20 @@ class ExerciseLoggingViewModel @Inject constructor(
             // Load exercise
             exerciseDao.getExerciseById(exerciseId).collectLatest { exercise ->
                 _exercise.value = exercise
-                Log.d("ExerciseLoggingVM", "Exercise loaded: ${exercise?.name}")
+                // Set timer to exercise's default rest time
+                exercise?.let {
+                    exerciseDefaultRestSeconds = it.defaultRestSeconds
+                    _restTime.value = it.defaultRestSeconds
+                }
+                Log.d("ExerciseLoggingVM", "Exercise loaded: ${exercise?.name}, defaultRest: ${exercise?.defaultRestSeconds}s")
             }
+        }
+
+        viewModelScope.launch {
+            // Load personal best for this exercise
+            val pb = setDao.getPersonalBest(exerciseId)
+            _personalBestWeight.value = pb?.weight
+            Log.d("ExerciseLoggingVM", "Personal best loaded: ${pb?.weight} lbs")
         }
 
         viewModelScope.launch {
@@ -175,28 +197,47 @@ class ExerciseLoggingViewModel @Inject constructor(
         _isWarmup.value = !_isWarmup.value
     }
 
+    fun updateSetNote(note: String) {
+        _setNote.value = note
+    }
+
     fun logSet() {
         viewModelScope.launch {
             val workout = _currentWorkout.value ?: return@launch
             val exercise = _exercise.value ?: return@launch
 
+            val newWeight = _weight.value.toFloatOrNull()
+            val isWarmup = _isWarmup.value
+            val note = _setNote.value.takeIf { it.isNotBlank() }
+
             val newSet = Set(
                 workoutId = workout.id,
                 exerciseId = exercise.id,
-                weight = _weight.value.toFloatOrNull(),
+                weight = newWeight,
                 reps = _reps.value.toIntOrNull(),
                 rpe = _rpe.value.toFloatOrNull(),
                 durationSeconds = null,
                 distanceMeters = null,
-                isWarmup = _isWarmup.value,
+                isWarmup = isWarmup,
                 isComplete = true,
-                timestamp = Date()
+                timestamp = Date(),
+                note = note
             )
 
             setDao.insertSet(newSet)
 
-            // Clear RPE only (weight/reps persist for next set)
+            // Update personal best if this is a new record (non-warmup set with weight)
+            if (!isWarmup && newWeight != null) {
+                val currentPB = _personalBestWeight.value
+                if (currentPB == null || newWeight > currentPB) {
+                    _personalBestWeight.value = newWeight
+                    Log.d("ExerciseLoggingVM", "New personal best: $newWeight lbs!")
+                }
+            }
+
+            // Clear RPE and note (weight/reps persist for next set)
             _rpe.value = ""
+            _setNote.value = ""
             _isWarmup.value = false
         }
     }
@@ -252,6 +293,12 @@ class ExerciseLoggingViewModel @Inject constructor(
     fun stopTimer() {
         _isTimerRunning.value = false
     }
+
+    fun resetTimerToDefault() {
+        _restTime.value = exerciseDefaultRestSeconds
+    }
+
+    fun getDefaultRestSeconds(): Int = exerciseDefaultRestSeconds
 
     fun finishWorkout() {
         viewModelScope.launch {

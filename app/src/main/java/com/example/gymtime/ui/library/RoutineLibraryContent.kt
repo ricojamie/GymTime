@@ -85,8 +85,9 @@ fun RoutineLibraryContent(
                     items(routines) { routine ->
                         RoutineLibraryItem(
                             routine = routine,
-                            isActive = routine.id == activeRoutineId,
+                            isSelectedActive = routine.id == activeRoutineId,
                             onTap = { navController.navigate(Screen.RoutineDayList.createRoute(routine.id)) },
+                            onToggleActive = { viewModel.toggleRoutineActive(routine) },
                             onDelete = { routineToDelete = routine }
                         )
                     }
@@ -140,16 +141,22 @@ fun RoutineLibraryContent(
 @Composable
 private fun RoutineLibraryItem(
     routine: Routine,
-    isActive: Boolean,
+    isSelectedActive: Boolean,
     onTap: () -> Unit,
+    onToggleActive: () -> Unit,
     onDelete: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    val isRoutineActive = routine.isActive
 
     GlowCard(
         onClick = onTap,
         onLongClick = { showMenu = true },
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (!isRoutineActive) Modifier else Modifier
+            )
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             Column(
@@ -164,41 +171,76 @@ private fun RoutineLibraryItem(
                 ) {
                     Text(
                         text = routine.name,
-                        color = TextPrimary,
+                        color = if (isRoutineActive) TextPrimary else TextTertiary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
                     )
 
-                    if (isActive) {
-                        Surface(
-                            color = PrimaryAccent.copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Text(
-                                text = "ACTIVE",
-                                color = PrimaryAccent,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.sp,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                            )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Inactive badge
+                        if (!isRoutineActive) {
+                            Surface(
+                                color = TextTertiary.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = "INACTIVE",
+                                    color = TextTertiary,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+
+                        // Active badge (currently selected routine)
+                        if (isSelectedActive && isRoutineActive) {
+                            Surface(
+                                color = PrimaryAccent.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = "ACTIVE",
+                                    color = PrimaryAccent,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                )
+                            }
                         }
                     }
                 }
 
                 Text(
-                    text = "Tap to view and edit",
+                    text = if (isRoutineActive) "Tap to view and edit" else "Tap to view (inactive)",
                     color = TextTertiary,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
 
-            // Context menu (delete only)
+            // Context menu
             DropdownMenu(
                 expanded = showMenu,
                 onDismissRequest = { showMenu = false }
             ) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = if (isRoutineActive) "Deactivate" else "Activate",
+                            color = TextPrimary
+                        )
+                    },
+                    onClick = {
+                        showMenu = false
+                        onToggleActive()
+                    }
+                )
                 DropdownMenuItem(
                     text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
                     onClick = {

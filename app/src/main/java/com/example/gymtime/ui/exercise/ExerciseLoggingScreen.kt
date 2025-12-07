@@ -1,7 +1,12 @@
 package com.example.gymtime.ui.exercise
 
 import android.view.HapticFeedbackConstants
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -16,7 +21,27 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,8 +88,10 @@ fun ExerciseLoggingScreen(
     val rpe by viewModel.rpe.collectAsState()
     val restTime by viewModel.restTime.collectAsState()
     val isWarmup by viewModel.isWarmup.collectAsState()
+    val setNote by viewModel.setNote.collectAsState()
     val lastWorkoutSets by viewModel.lastWorkoutSets.collectAsState()
     val workoutOverview by viewModel.workoutOverview.collectAsState()
+    val personalBestWeight by viewModel.personalBestWeight.collectAsState()
 
     val isTimerRunning by viewModel.isTimerRunning.collectAsState()
     val editingSet by viewModel.editingSet.collectAsState()
@@ -109,6 +136,9 @@ fun ExerciseLoggingScreen(
     val lastWeight = lastWorkoutSets.firstOrNull()?.weight?.toString()
     val lastReps = lastWorkoutSets.firstOrNull()?.reps?.toString()
 
+    // Track if timer just finished for animation
+    var timerJustFinished by remember { mutableStateOf(false) }
+
     // Timer countdown
     LaunchedEffect(isTimerRunning) {
         if (isTimerRunning) {
@@ -116,6 +146,17 @@ fun ExerciseLoggingScreen(
                 delay(1000)
                 if (restTime > 0) {
                     viewModel.updateRestTime(restTime - 1)
+                    // Check if timer just hit 0
+                    if (restTime - 1 == 0) {
+                        // Vibrate when timer ends
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        timerJustFinished = true
+                        viewModel.stopTimer()
+                        // Reset animation flag after a short delay
+                        delay(2000)
+                        timerJustFinished = false
+                    }
                 }
             }
         }
@@ -155,13 +196,32 @@ fun ExerciseLoggingScreen(
                         }
                     },
                     actions = {
+                        // Timer finished animation
+                        val timerPulseScale by animateFloatAsState(
+                            targetValue = if (timerJustFinished) 1.15f else 1f,
+                            animationSpec = if (timerJustFinished) {
+                                infiniteRepeatable(
+                                    animation = tween(300),
+                                    repeatMode = RepeatMode.Reverse
+                                )
+                            } else {
+                                tween(300)
+                            },
+                            label = "timer_pulse"
+                        )
+
                         // Timer Pill Action
                         Surface(
                             onClick = { showTimerDialog = true },
                             shape = androidx.compose.foundation.shape.CircleShape,
-                            color = SurfaceCards,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryAccent.copy(alpha = 0.5f)),
-                            modifier = Modifier.padding(end = 8.dp)
+                            color = if (timerJustFinished) PrimaryAccent else SurfaceCards,
+                            border = androidx.compose.foundation.BorderStroke(
+                                width = if (timerJustFinished) 2.dp else 1.dp,
+                                color = PrimaryAccent.copy(alpha = if (timerJustFinished) 1f else 0.5f)
+                            ),
+                            modifier = Modifier
+                                .padding(end = 8.dp)
+                                .scale(timerPulseScale)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -171,14 +231,14 @@ fun ExerciseLoggingScreen(
                                 Icon(
                                     painter = androidx.compose.ui.res.painterResource(id = com.example.gymtime.R.drawable.ic_timer),
                                     contentDescription = "Timer",
-                                    tint = PrimaryAccent,
+                                    tint = if (timerJustFinished) Color.Black else PrimaryAccent,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Text(
-                                    text = String.format("%d:%02d", restTime / 60, restTime % 60),
+                                    text = if (timerJustFinished) "GO!" else String.format("%d:%02d", restTime / 60, restTime % 60),
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = PrimaryAccent
+                                    color = if (timerJustFinished) Color.Black else PrimaryAccent
                                 )
                             }
                         }
@@ -229,7 +289,32 @@ fun ExerciseLoggingScreen(
                 .padding(16.dp)
         ) {
             exercise?.let { ex ->
-                Spacer(modifier = Modifier.height(8.dp))
+                // Show exercise notes if available
+                ex.notes?.takeIf { it.isNotBlank() }?.let { notes ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = PrimaryAccent.copy(alpha = 0.1f)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "📝",
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                text = notes,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextPrimary,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
 
             // Removed dedicated Timer Row (Moved to TopAppBar)
 
@@ -273,13 +358,15 @@ fun ExerciseLoggingScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Warmup Toggle Pill
-            Box(
+            // Warmup Toggle and Note Input Row
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp),
-                contentAlignment = Alignment.CenterStart
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // Warmup Toggle Pill
                 Surface(
                     onClick = { viewModel.toggleWarmup() },
                     shape = RoundedCornerShape(50), // Pill shape
@@ -300,6 +387,45 @@ fun ExerciseLoggingScreen(
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,
                             color = if (isWarmup) Color.Black else TextTertiary
+                        )
+                    }
+                }
+
+                // Note Input
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = Color.Transparent,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (setNote.isNotBlank()) PrimaryAccent else TextTertiary),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(32.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "📝 ",
+                            fontSize = 12.sp
+                        )
+                        BasicTextField(
+                            value = setNote,
+                            onValueChange = { viewModel.updateSetNote(it) },
+                            textStyle = MaterialTheme.typography.bodySmall.copy(
+                                color = TextPrimary
+                            ),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                            decorationBox = { innerTextField ->
+                                if (setNote.isEmpty()) {
+                                    Text(
+                                        text = "Add note...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextTertiary
+                                    )
+                                }
+                                innerTextField()
+                            }
                         )
                     }
                 }
@@ -356,7 +482,7 @@ fun ExerciseLoggingScreen(
                             view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                             viewModel.logSet()
                             viewModel.startTimer() // Auto-start timer
-                            viewModel.updateRestTime(90) // Reset timer
+                            viewModel.resetTimerToDefault() // Reset timer to exercise's default
                         }
                     },
                     enabled = weight.isNotBlank() && reps.isNotBlank()
@@ -399,6 +525,7 @@ fun ExerciseLoggingScreen(
                     ExerciseSetLogCard(
                         set = set,
                         setNumber = index + 1,
+                        isPersonalBest = !set.isWarmup && set.weight != null && set.weight == personalBestWeight,
                         onEdit = { selectedSet ->
                             viewModel.startEditingSet(selectedSet)
                         },
@@ -763,6 +890,7 @@ private fun LogSetButton(
 private fun ExerciseSetLogCard(
     set: com.example.gymtime.data.db.entity.Set,
     setNumber: Int,
+    isPersonalBest: Boolean = false,
     onEdit: (com.example.gymtime.data.db.entity.Set) -> Unit = {},
     onDelete: (com.example.gymtime.data.db.entity.Set) -> Unit = {}
 ) {
@@ -775,8 +903,11 @@ private fun ExerciseSetLogCard(
                 onClick = {},
                 onLongClick = { showContextMenu = true }
             ),
-        colors = CardDefaults.cardColors(containerColor = SurfaceCards),
-        shape = RoundedCornerShape(12.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = if (isPersonalBest) Color(0xFF2D4A1C) else SurfaceCards
+        ),
+        shape = RoundedCornerShape(12.dp),
+        border = if (isPersonalBest) androidx.compose.foundation.BorderStroke(1.dp, PrimaryAccent) else null
     ) {
         Row(
             modifier = Modifier
@@ -790,18 +921,26 @@ private fun ExerciseSetLogCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "$setNumber",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = TextTertiary,
-                    fontWeight = FontWeight.Bold
-                )
+                // Show trophy for personal best
+                if (isPersonalBest) {
+                    Text(
+                        text = "🏆",
+                        fontSize = 18.sp
+                    )
+                } else {
+                    Text(
+                        text = "$setNumber",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = TextTertiary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
 
                 set.weight?.let {
                     Text(
                         text = "$it LBS",
                         style = MaterialTheme.typography.titleMedium,
-                        color = TextPrimary,
+                        color = if (isPersonalBest) PrimaryAccent else TextPrimary,
                         fontWeight = FontWeight.Bold
                     )
 
@@ -816,7 +955,7 @@ private fun ExerciseSetLogCard(
                     Text(
                         text = "$it REPS",
                         style = MaterialTheme.typography.titleMedium,
-                        color = TextPrimary,
+                        color = if (isPersonalBest) PrimaryAccent else TextPrimary,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -835,6 +974,30 @@ private fun ExerciseSetLogCard(
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
+
+                // PB Badge
+                if (isPersonalBest) {
+                    Text(
+                        text = "PB",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Black,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier
+                            .background(
+                                PrimaryAccent,
+                                RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+
+                // Note indicator
+                set.note?.takeIf { it.isNotBlank() }?.let {
+                    Text(
+                        text = "📝",
+                        fontSize = 14.sp
+                    )
+                }
             }
 
             // Three-dot menu icon (affordance hint)
@@ -843,6 +1006,16 @@ private fun ExerciseSetLogCard(
                 contentDescription = "More options",
                 tint = TextTertiary.copy(alpha = 0.4f),
                 modifier = Modifier.size(16.dp)
+            )
+        }
+
+        // Show note text if present
+        set.note?.takeIf { it.isNotBlank() }?.let { noteText ->
+            Text(
+                text = noteText,
+                style = MaterialTheme.typography.bodySmall,
+                color = TextTertiary,
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp)
             )
         }
 

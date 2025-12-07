@@ -26,7 +26,7 @@ import com.example.gymtime.data.db.entity.Workout
         RoutineDay::class,
         MuscleGroup::class
     ],
-    version = 6, // Added routine structure changes
+    version = 7, // Added set notes and routine isActive
     exportSchema = false
 )
 @TypeConverters(Converters::class)

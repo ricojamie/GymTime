@@ -35,7 +35,7 @@ class ExerciseSelectionViewModel @Inject constructor(
         (dbMuscles + defaultMuscles).distinct().sorted()
     }
 
-    // Filtered exercises based on search query and selected muscles
+    // Filtered exercises based on search query and selected muscles, sorted alphabetically
     val filteredExercises: Flow<List<Exercise>> = combine(
         allExercises,
         _searchQuery,
@@ -45,7 +45,7 @@ class ExerciseSelectionViewModel @Inject constructor(
             val matchesSearch = exercise.name.contains(query, ignoreCase = true)
             val matchesMuscle = selectedMuscles.isEmpty() || exercise.targetMuscle in selectedMuscles
             matchesSearch && matchesMuscle
-        }
+        }.sortedBy { it.name.lowercase() }
     }
 
     fun updateSearchQuery(query: String) {
