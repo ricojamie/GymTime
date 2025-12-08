@@ -170,6 +170,29 @@ interface SetDao {
     """)
     suspend fun getPersonalBestsByReps(exerciseId: Long): List<RepMaxRecord>
 
+    // Get personal bests by rep count with first achievement timestamp
+    @Query("""
+        SELECT
+            s1.reps as reps,
+            s1.weight as maxWeight,
+            s1.timestamp as firstAchievedAt
+        FROM sets s1
+        INNER JOIN (
+            SELECT reps, MAX(weight) as maxWeight
+            FROM sets
+            WHERE exerciseId = :exerciseId
+              AND weight IS NOT NULL
+              AND reps IS NOT NULL
+              AND isWarmup = 0
+            GROUP BY reps
+        ) s2 ON s1.reps = s2.reps AND s1.weight = s2.maxWeight
+        WHERE s1.exerciseId = :exerciseId
+          AND s1.isWarmup = 0
+        GROUP BY s1.reps, s1.weight
+        HAVING s1.timestamp = MIN(s1.timestamp)
+    """)
+    suspend fun getPersonalBestsWithTimestamps(exerciseId: Long): List<PBWithTimestamp>
+
     // Get all working sets for an exercise (for E1RM/E10RM calculation)
     @Query("""
         SELECT * FROM sets
@@ -288,4 +311,11 @@ interface SetDao {
 data class RepMaxRecord(
     val reps: Int,
     val maxWeight: Float
+)
+
+// Data class for rep-based personal records with timestamp
+data class PBWithTimestamp(
+    val reps: Int,
+    val maxWeight: Float,
+    val firstAchievedAt: Long // Timestamp of first occurrence
 )

@@ -88,9 +88,9 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _lastWorkoutSets = MutableStateFlow<List<Set>>(emptyList())
     val lastWorkoutSets: StateFlow<List<Set>> = _lastWorkoutSets
 
-    // Personal bests by rep count - Map of reps -> max weight at that rep count
-    private val _personalBestsByReps = MutableStateFlow<Map<Int, Float>>(emptyMap())
-    val personalBestsByReps: StateFlow<Map<Int, Float>> = _personalBestsByReps
+    // Personal bests by rep count - Map of reps -> PB with timestamp
+    private val _personalBestsByReps = MutableStateFlow<Map<Int, com.example.gymtime.data.db.dao.PBWithTimestamp>>(emptyMap())
+    val personalBestsByReps: StateFlow<Map<Int, com.example.gymtime.data.db.dao.PBWithTimestamp>> = _personalBestsByReps
 
     // Workout overview data
     private val _workoutOverview = MutableStateFlow<List<WorkoutExerciseSummary>>(emptyList())
@@ -98,10 +98,6 @@ class ExerciseLoggingViewModel @Inject constructor(
 
     private val _navigationEvents = Channel<Long>(Channel.BUFFERED)
     val navigationEvents = _navigationEvents.receiveAsFlow()
-
-
-    // Flag to track if pre-fill has happened
-    private var hasPrefilled = false
 
     init {
         viewModelScope.launch {
@@ -118,11 +114,11 @@ class ExerciseLoggingViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            // Load personal bests by rep count for this exercise
-            val pbsByReps = setDao.getPersonalBestsByReps(exerciseId)
-            val rawPBs = pbsByReps.associate { it.reps to it.maxWeight }
-            _personalBestsByReps.value = filterDominatedPBs(rawPBs)
-            Log.d("ExerciseLoggingVM", "Personal bests loaded (filtered): ${_personalBestsByReps.value}")
+            // Load personal bests by rep count for this exercise with timestamps
+            val pbsWithTimestamps = setDao.getPersonalBestsWithTimestamps(exerciseId)
+            val pbMap = pbsWithTimestamps.associateBy { it.reps }
+            _personalBestsByReps.value = filterDominatedPBs(pbMap)
+            Log.d("ExerciseLoggingVM", "Personal bests loaded with timestamps: ${_personalBestsByReps.value}")
         }
 
         viewModelScope.launch {
@@ -166,9 +162,9 @@ class ExerciseLoggingViewModel @Inject constructor(
                 _lastWorkoutSets.value = previousSets
                 Log.d("ExerciseLoggingVM", "Last workout sets loaded: ${previousSets.size}")
 
-                // Auto-prefill from last workout if we have previous data and inputs are empty
+                // Auto-prefill from last workout ONLY if this is the first set (no logged sets yet)
                 // This runs when entering the exercise screen with empty weight/reps
-                if (!hasPrefilled && previousSets.isNotEmpty()) {
+                if (_loggedSets.value.isEmpty() && previousSets.isNotEmpty()) {
                     val lastSet = previousSets.first() // First set from previous workout
                     if (_weight.value.isBlank()) {
                         lastSet.weight?.let { _weight.value = it.toString() }
@@ -176,7 +172,6 @@ class ExerciseLoggingViewModel @Inject constructor(
                     if (_reps.value.isBlank()) {
                         lastSet.reps?.let { _reps.value = it.toString() }
                     }
-                    hasPrefilled = true
                     Log.d("ExerciseLoggingVM", "Pre-filled from last workout: ${lastSet.weight} x ${lastSet.reps}")
                 }
             }
@@ -191,38 +186,38 @@ class ExerciseLoggingViewModel @Inject constructor(
      *
      * Example: 135x11 dominates 135x10. 135x10 is removed.
      */
-    private fun filterDominatedPBs(rawPBs: Map<Int, Float>): Map<Int, Float> {
-        val result = mutableMapOf<Int, Float>()
-        
+    private fun filterDominatedPBs(rawPBs: Map<Int, com.example.gymtime.data.db.dao.PBWithTimestamp>): Map<Int, com.example.gymtime.data.db.dao.PBWithTimestamp> {
+        val result = mutableMapOf<Int, com.example.gymtime.data.db.dao.PBWithTimestamp>()
+
         // Convert to list for easier comparison
         val candidates = rawPBs.entries.toList()
-        
+
         for (candidate in candidates) {
             val repsA = candidate.key
-            val weightA = candidate.value
+            val pbA = candidate.value
             var isDominated = false
-            
+
             for (challenger in candidates) {
                 if (candidate == challenger) continue // Don't compare against self
-                
+
                 val repsB = challenger.key
-                val weightB = challenger.value
-                
-                // Check dominance condition
-                val strictlyBetter = (weightB > weightA) || (repsB > repsA)
-                val atLeastAsGood = (weightB >= weightA) && (repsB >= repsA)
-                
+                val pbB = challenger.value
+
+                // Check dominance condition using weight values
+                val strictlyBetter = (pbB.maxWeight > pbA.maxWeight) || (repsB > repsA)
+                val atLeastAsGood = (pbB.maxWeight >= pbA.maxWeight) && (repsB >= repsA)
+
                 if (atLeastAsGood && strictlyBetter) {
                     isDominated = true
                     break
                 }
             }
-            
+
             if (!isDominated) {
-                result[repsA] = weightA
+                result[repsA] = pbA
             }
         }
-        
+
         return result
     }
 
@@ -279,13 +274,14 @@ class ExerciseLoggingViewModel @Inject constructor(
             val newReps = _reps.value.toIntOrNull()
             if (!isWarmup && newWeight != null && newReps != null) {
                 val currentPBs = _personalBestsByReps.value.toMutableMap()
-                val currentWeightForReps = currentPBs[newReps]
-                
+                val currentPBForReps = currentPBs[newReps]
+
                 // If this is a raw improvement for this specific rep count, update and re-filter
-                if (currentWeightForReps == null || newWeight > currentWeightForReps) {
-                    currentPBs[newReps] = newWeight
+                if (currentPBForReps == null || newWeight > currentPBForReps.maxWeight) {
+                    val timestamp = Date().time
+                    currentPBs[newReps] = com.example.gymtime.data.db.dao.PBWithTimestamp(newReps, newWeight, timestamp)
                     _personalBestsByReps.value = filterDominatedPBs(currentPBs)
-                    Log.d("ExerciseLoggingVM", "New PB update! Raw: $newWeight for $newReps reps. Filtered map: ${_personalBestsByReps.value}")
+                    Log.d("ExerciseLoggingVM", "New PB! $newWeight x $newReps (first achieved at $timestamp)")
                 }
             }
 

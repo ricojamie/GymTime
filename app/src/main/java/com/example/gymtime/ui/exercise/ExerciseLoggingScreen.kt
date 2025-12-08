@@ -484,11 +484,13 @@ fun ExerciseLoggingScreen(
                     items = loggedSets,
                     key = { _, item -> item.id }
                 ) { index, set ->
-                    // Check if this set is a PB for its rep count
+                    // Check if this set is a PB for its rep count (must be first occurrence)
                     val isPB = !set.isWarmup &&
                         set.weight != null &&
                         set.reps != null &&
-                        personalBestsByReps[set.reps] == set.weight
+                        personalBestsByReps[set.reps]?.let { pb ->
+                            pb.maxWeight == set.weight && pb.firstAchievedAt == set.timestamp.time
+                        } == true
 
                     ExerciseSetLogCard(
                         set = set,
