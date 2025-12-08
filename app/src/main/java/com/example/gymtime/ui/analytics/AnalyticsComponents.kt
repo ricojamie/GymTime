@@ -51,7 +51,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gymtime.ui.components.GlowCard
-import com.example.gymtime.ui.theme.PrimaryAccent
 import com.patrykandpatrick.vico.compose.axis.horizontal.rememberBottomAxis
 import com.patrykandpatrick.vico.compose.axis.vertical.rememberStartAxis
 import com.patrykandpatrick.vico.compose.chart.Chart
@@ -78,6 +77,7 @@ fun MetricSelector(
     selected: AnalyticsMetric,
     onSelect: (AnalyticsMetric) -> Unit
 ) {
+    val accentColor = MaterialTheme.colorScheme.primary
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -91,7 +91,7 @@ fun MetricSelector(
                     .weight(1f)
                     .height(40.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(if (isSelected) PrimaryAccent else Color(0xFF0D0D0D))
+                    .background(if (isSelected) accentColor else Color(0xFF0D0D0D))
                     .clickable { onSelect(metric) },
                 contentAlignment = Alignment.Center
             ) {
@@ -113,6 +113,7 @@ fun TargetSelector(
     options: List<String>,
     onSelect: (String) -> Unit
 ) {
+    val accentColor = MaterialTheme.colorScheme.primary
     var showSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
@@ -137,7 +138,7 @@ fun TargetSelector(
             Icon(
                 imageVector = Icons.Default.ArrowDropDown,
                 contentDescription = null,
-                tint = PrimaryAccent
+                tint = accentColor
             )
         }
     }
@@ -172,6 +173,7 @@ fun TargetSelectionContent(
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val accentColor = MaterialTheme.colorScheme.primary
     var searchQuery by remember { mutableStateOf("") }
     val filteredOptions = remember(searchQuery, options) {
         if (searchQuery.isEmpty()) options
@@ -212,7 +214,7 @@ fun TargetSelectionContent(
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent,
-                focusedIndicatorColor = PrimaryAccent,
+                focusedIndicatorColor = accentColor,
                 unfocusedIndicatorColor = Color.Gray,
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White
@@ -252,6 +254,7 @@ fun TargetSelectionContent(
 
 @Composable
 fun MainLineChart(data: ChartData) {
+    val accentColor = MaterialTheme.colorScheme.primary
     val markerLabelMap = remember(data) {
         data.actuals.associate { it.date.toFloat() to it.label }
     }
@@ -287,7 +290,7 @@ fun MainLineChart(data: ChartData) {
 
             // Define lines
             val actualLine = LineChart.LineSpec(
-                lineColor = PrimaryAccent.toArgb(),
+                lineColor = accentColor.toArgb(),
                 lineThicknessDp = 3f
             )
             
@@ -321,6 +324,7 @@ fun MainLineChart(data: ChartData) {
 
 @Composable
 internal fun rememberMarker(labelMap: Map<Float, String>): Marker {
+    val accentColor = MaterialTheme.colorScheme.primary
     val labelBackgroundColor = Color(0xFF1E1E1E)
     val labelBackground = shapeComponent(
         shape = Shapes.pillShape,
@@ -335,7 +339,7 @@ internal fun rememberMarker(labelMap: Map<Float, String>): Marker {
     )
     val indicatorInner = shapeComponent(
         shape = Shapes.pillShape,
-        color = PrimaryAccent
+        color = accentColor
     )
     val indicatorCenter = shapeComponent(
         shape = Shapes.pillShape,
@@ -409,6 +413,7 @@ fun TimeRangeSelector(
     selectedRange: TimeRange,
     onRangeSelected: (TimeRange) -> Unit
 ) {
+    val accentColor = MaterialTheme.colorScheme.primary
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -426,14 +431,14 @@ fun TimeRangeSelector(
                     )
                 },
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = PrimaryAccent,
+                    selectedContainerColor = accentColor,
                     selectedLabelColor = Color.Black,
                     containerColor = Color(0xFF0D0D0D),
-                    labelColor = PrimaryAccent
+                    labelColor = accentColor
                 ),
                 border = FilterChipDefaults.filterChipBorder(
-                    borderColor = PrimaryAccent,
-                    selectedBorderColor = PrimaryAccent,
+                    borderColor = accentColor,
+                    selectedBorderColor = accentColor,
                     enabled = true,
                     selected = selectedRange == range
                 )

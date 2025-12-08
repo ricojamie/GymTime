@@ -61,7 +61,6 @@ import androidx.navigation.NavController
 import com.example.gymtime.ui.theme.GradientStart
 import com.example.gymtime.ui.theme.GradientEnd
 import com.example.gymtime.ui.theme.GymTimeTheme
-import com.example.gymtime.ui.theme.PrimaryAccent
 import com.example.gymtime.ui.theme.SurfaceCards
 import com.example.gymtime.ui.theme.TextPrimary
 import com.example.gymtime.ui.theme.TextTertiary
@@ -94,6 +93,7 @@ fun ExerciseLoggingScreen(
 
     val isTimerRunning by viewModel.isTimerRunning.collectAsState()
     val editingSet by viewModel.editingSet.collectAsState()
+    val timerAutoStart by viewModel.timerAutoStart.collectAsState(initial = true)
 
     var showFinishDialog by remember { mutableStateOf(false) }
     var showTimerDialog by remember { mutableStateOf(false) }
@@ -182,7 +182,7 @@ fun ExerciseLoggingScreen(
                             Text(
                                 text = ex.targetMuscle,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = PrimaryAccent,
+                                color = MaterialTheme.colorScheme.primary,
                                 fontSize = 12.sp
                             )
                         }
@@ -217,10 +217,10 @@ fun ExerciseLoggingScreen(
                         Surface(
                             onClick = { showTimerDialog = true },
                             shape = androidx.compose.foundation.shape.CircleShape,
-                            color = if (timerJustFinished) PrimaryAccent else SurfaceCards,
+                            color = if (timerJustFinished) MaterialTheme.colorScheme.primary else SurfaceCards,
                             border = androidx.compose.foundation.BorderStroke(
                                 width = if (timerJustFinished) 2.dp else 1.dp,
-                                color = PrimaryAccent.copy(alpha = if (timerJustFinished) 1f else 0.5f)
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = if (timerJustFinished) 1f else 0.5f)
                             ),
                             modifier = Modifier
                                 .padding(end = 8.dp)
@@ -234,14 +234,14 @@ fun ExerciseLoggingScreen(
                                 Icon(
                                     painter = androidx.compose.ui.res.painterResource(id = com.example.gymtime.R.drawable.ic_timer),
                                     contentDescription = "Timer",
-                                    tint = if (timerJustFinished) Color.Black else PrimaryAccent,
+                                    tint = if (timerJustFinished) Color.Black else MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Text(
                                     text = if (timerJustFinished) "GO!" else String.format("%d:%02d", restTime / 60, restTime % 60),
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (timerJustFinished) Color.Black else PrimaryAccent
+                                    color = if (timerJustFinished) Color.Black else MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -259,7 +259,7 @@ fun ExerciseLoggingScreen(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.List,
                                 contentDescription = "Workout Overview",
-                                tint = PrimaryAccent
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         }
 
@@ -268,7 +268,7 @@ fun ExerciseLoggingScreen(
                             Icon(
                                 imageVector = Icons.Default.Info,
                                 contentDescription = "Exercise History",
-                                tint = PrimaryAccent
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         }
                     },
@@ -296,7 +296,7 @@ fun ExerciseLoggingScreen(
                 ex.notes?.takeIf { it.isNotBlank() }?.let { notes ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = PrimaryAccent.copy(alpha = 0.1f)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Row(
@@ -327,7 +327,7 @@ fun ExerciseLoggingScreen(
             Text(
                 text = "CURRENT SET: ${loggedSets.size + 1}",
                 style = MaterialTheme.typography.labelLarge,
-                color = PrimaryAccent,
+                color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.5.sp,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -371,7 +371,7 @@ fun ExerciseLoggingScreen(
                 Surface(
                     onClick = { viewModel.toggleWarmup() },
                     shape = RoundedCornerShape(50), // Pill shape
-                    color = if (isWarmup) PrimaryAccent else Color.Transparent,
+                    color = if (isWarmup) MaterialTheme.colorScheme.primary else Color.Transparent,
                     border = if (isWarmup) null else androidx.compose.foundation.BorderStroke(1.dp, TextTertiary),
                     modifier = Modifier.height(32.dp)
                 ) {
@@ -421,8 +421,8 @@ fun ExerciseLoggingScreen(
                             .height(56.dp),
                         enabled = weight.isNotBlank() && reps.isNotBlank(),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = PrimaryAccent,
-                            disabledContainerColor = PrimaryAccent.copy(alpha = 0.3f)
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                         ),
                         shape = RoundedCornerShape(16.dp)
                     ) {
@@ -443,7 +443,9 @@ fun ExerciseLoggingScreen(
                         if (weight.isNotBlank() && reps.isNotBlank()) {
                             view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                             viewModel.logSet()
-                            viewModel.startTimer() // Auto-start timer
+                            if (timerAutoStart) {
+                                viewModel.startTimer() // Auto-start timer only if enabled
+                            }
                             viewModel.resetTimerToDefault() // Reset timer to exercise's default
                         }
                     },
@@ -469,7 +471,7 @@ fun ExerciseLoggingScreen(
                 Text(
                     text = "${loggedSets.size} sets done",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = PrimaryAccent
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
 
@@ -521,7 +523,7 @@ fun ExerciseLoggingScreen(
                     onClick = { navController.navigate(Screen.ExerciseSelection.route) },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = PrimaryAccent
+                        contentColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
                     Text("Add Exercise", fontWeight = FontWeight.Bold)
@@ -531,8 +533,8 @@ fun ExerciseLoggingScreen(
                     onClick = { showFinishDialog = true },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = PrimaryAccent.copy(alpha = 0.2f),
-                        contentColor = PrimaryAccent
+                        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                        contentColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
                     Text("Finish Workout", fontWeight = FontWeight.Bold)
@@ -543,7 +545,7 @@ fun ExerciseLoggingScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = PrimaryAccent)
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
@@ -570,7 +572,7 @@ fun ExerciseLoggingScreen(
                         text = String.format("%d:%02d", restTime / 60, restTime % 60),
                         style = MaterialTheme.typography.displayLarge,
                         fontWeight = FontWeight.Bold,
-                        color = PrimaryAccent
+                        color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(
@@ -597,7 +599,7 @@ fun ExerciseLoggingScreen(
                         viewModel.startTimer()
                         showTimerDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Text("Start Timer", color = Color.Black, fontWeight = FontWeight.Bold)
                 }
@@ -681,11 +683,11 @@ fun ExerciseLoggingScreen(
                         placeholder = { Text("Enter note...", color = TextTertiary) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PrimaryAccent,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
                             unfocusedBorderColor = TextTertiary,
                             focusedTextColor = TextPrimary,
                             unfocusedTextColor = TextPrimary,
-                            cursorColor = PrimaryAccent
+                            cursorColor = MaterialTheme.colorScheme.primary
                         ),
                         maxLines = 3
                     )
@@ -698,7 +700,7 @@ fun ExerciseLoggingScreen(
                         setToAddNote = null
                         noteText = ""
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Text("Save", color = Color.Black, fontWeight = FontWeight.Bold)
                 }
@@ -740,7 +742,7 @@ fun ExerciseLoggingScreen(
                         viewModel.finishWorkout()
                         showFinishDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Text("Finish", color = Color.Black, fontWeight = FontWeight.Bold)
                 }
@@ -863,7 +865,7 @@ private fun InputCard(
                         color = TextPrimary
                     ),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    cursorBrush = SolidColor(PrimaryAccent),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -907,8 +909,8 @@ private fun LogSetButton(
             .height(56.dp)
             .scale(scale),
         colors = ButtonDefaults.buttonColors(
-            containerColor = PrimaryAccent,
-            disabledContainerColor = PrimaryAccent.copy(alpha = 0.3f)
+            containerColor = MaterialTheme.colorScheme.primary,
+            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
         ),
         shape = RoundedCornerShape(16.dp)
     ) {
@@ -945,7 +947,7 @@ private fun ExerciseSetLogCard(
             containerColor = if (isPersonalBest) Color(0xFF2D4A1C) else SurfaceCards
         ),
         shape = RoundedCornerShape(12.dp),
-        border = if (isPersonalBest) androidx.compose.foundation.BorderStroke(1.dp, PrimaryAccent) else null
+        border = if (isPersonalBest) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
     ) {
         Row(
             modifier = Modifier
@@ -978,7 +980,7 @@ private fun ExerciseSetLogCard(
                     Text(
                         text = "$it LBS",
                         style = MaterialTheme.typography.titleMedium,
-                        color = if (isPersonalBest) PrimaryAccent else TextPrimary,
+                        color = if (isPersonalBest) MaterialTheme.colorScheme.primary else TextPrimary,
                         fontWeight = FontWeight.Bold
                     )
 
@@ -993,7 +995,7 @@ private fun ExerciseSetLogCard(
                     Text(
                         text = "$it REPS",
                         style = MaterialTheme.typography.titleMedium,
-                        color = if (isPersonalBest) PrimaryAccent else TextPrimary,
+                        color = if (isPersonalBest) MaterialTheme.colorScheme.primary else TextPrimary,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -1002,11 +1004,11 @@ private fun ExerciseSetLogCard(
                     Text(
                         text = "WU",
                         style = MaterialTheme.typography.labelMedium,
-                        color = PrimaryAccent,
+                        color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.ExtraBold,
                         modifier = Modifier
                             .background(
-                                PrimaryAccent.copy(alpha = 0.2f),
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
                                 RoundedCornerShape(4.dp)
                             )
                             .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -1022,7 +1024,7 @@ private fun ExerciseSetLogCard(
                         fontWeight = FontWeight.ExtraBold,
                         modifier = Modifier
                             .background(
-                                PrimaryAccent,
+                                MaterialTheme.colorScheme.primary,
                                 RoundedCornerShape(4.dp)
                             )
                             .padding(horizontal = 6.dp, vertical = 2.dp)
@@ -1142,7 +1144,7 @@ private fun WorkoutOverviewContent(
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isActive) PrimaryAccent.copy(alpha = 0.1f) else Color(0xFF0D0D0D)
+                    containerColor = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color(0xFF0D0D0D)
                 ),
                 shape = RoundedCornerShape(12.dp),
                 onClick = { onExerciseClick(summary.exerciseId) }
@@ -1162,7 +1164,7 @@ private fun WorkoutOverviewContent(
                         Text(
                             text = if (isActive) "→" else "✓",
                             style = MaterialTheme.typography.titleLarge,
-                            color = if (isActive) PrimaryAccent else TextPrimary,
+                            color = if (isActive) MaterialTheme.colorScheme.primary else TextPrimary,
                             fontWeight = FontWeight.Bold
                         )
 
@@ -1171,7 +1173,7 @@ private fun WorkoutOverviewContent(
                                 text = summary.exerciseName,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isActive) PrimaryAccent else TextPrimary
+                                color = if (isActive) MaterialTheme.colorScheme.primary else TextPrimary
                             )
                             Text(
                                 text = summary.targetMuscle,
@@ -1210,7 +1212,7 @@ private fun WorkoutOverviewContent(
             onClick = onAddExercise,
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = PrimaryAccent
+                contentColor = MaterialTheme.colorScheme.primary
             )
         ) {
             Text("+ Add Another Exercise", fontWeight = FontWeight.Bold)
@@ -1328,7 +1330,7 @@ private fun PRBadge(
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
-            containerColor = PrimaryAccent.copy(alpha = 0.1f)
+            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
         ),
         shape = RoundedCornerShape(12.dp)
     ) {
@@ -1354,7 +1356,7 @@ private fun PRBadge(
                 text = value,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = PrimaryAccent
+                color = MaterialTheme.colorScheme.primary
             )
             Text(
                 text = subtitle,

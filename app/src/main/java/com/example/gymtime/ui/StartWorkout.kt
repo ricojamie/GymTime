@@ -26,12 +26,12 @@ import androidx.compose.ui.unit.sp
 import com.example.gymtime.R
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.GymTimeTheme
-import com.example.gymtime.ui.theme.PrimaryAccent
 import com.example.gymtime.ui.theme.TextPrimary
 import com.example.gymtime.ui.theme.TextTertiary
 
 @Composable
 fun QuickStartCard(isOngoing: Boolean, onClick: () -> Unit) {
+    val accentColor = MaterialTheme.colorScheme.primary
     GlowCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -48,7 +48,7 @@ fun QuickStartCard(isOngoing: Boolean, onClick: () -> Unit) {
                 text = if (isOngoing) "IN PROGRESS" else "EMPTY SESSION",
                 modifier = Modifier.align(Alignment.TopEnd),
                 style = MaterialTheme.typography.labelSmall,
-                color = PrimaryAccent,
+                color = accentColor,
                 letterSpacing = 1.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -62,7 +62,7 @@ fun QuickStartCard(isOngoing: Boolean, onClick: () -> Unit) {
                     painter = painterResource(id = R.drawable.ic_play_arrow),
                     contentDescription = "Quick Start",
                     modifier = Modifier.size(48.dp),
-                    tint = PrimaryAccent
+                    tint = accentColor
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -71,7 +71,7 @@ fun QuickStartCard(isOngoing: Boolean, onClick: () -> Unit) {
                     text = if (isOngoing) "Resume Workout" else "Start Workout",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
-                    color = PrimaryAccent
+                    color = accentColor
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))

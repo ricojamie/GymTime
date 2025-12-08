@@ -21,13 +21,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
-import com.example.gymtime.ui.theme.PrimaryAccent
 
 @Composable
 fun BottomNavigationBar(navController: NavController) {
+    val accentColor = MaterialTheme.colorScheme.primary
     val items = listOf(
         Screen.Home,
         Screen.History,
@@ -53,7 +54,7 @@ fun BottomNavigationBar(navController: NavController) {
                     brush = Brush.horizontalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            PrimaryAccent,
+                            accentColor,
                             Color.Transparent
                         )
                     )
@@ -70,7 +71,7 @@ fun BottomNavigationBar(navController: NavController) {
         ) {
             items.forEach { screen ->
                 val isSelected = currentRoute == screen.route
-                val color = if (isSelected) PrimaryAccent else Color.Gray
+                val color = if (isSelected) accentColor else Color.Gray
 
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,

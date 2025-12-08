@@ -13,12 +13,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.gymtime.ui.theme.PrimaryAccent
 import com.example.gymtime.ui.theme.TextPrimary
 import com.example.gymtime.ui.theme.TextTertiary
 
 @Composable
 fun HomeHeader(userName: String, modifier: Modifier = Modifier) {
+    val accentColor = MaterialTheme.colorScheme.primary
+
     Column(modifier = modifier) {
         // "WELCOME BACK" in muted gray
         Text(
@@ -46,7 +47,7 @@ fun HomeHeader(userName: String, modifier: Modifier = Modifier) {
                 withStyle(style = SpanStyle(color = TextPrimary)) {
                     append("Iron")
                 }
-                withStyle(style = SpanStyle(color = PrimaryAccent)) {
+                withStyle(style = SpanStyle(color = accentColor)) {
                     append("Log")
                 }
             },

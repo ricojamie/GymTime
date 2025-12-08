@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.gymtime.ui.theme.PrimaryAccent
 import com.example.gymtime.ui.theme.TextPrimary
 import com.example.gymtime.ui.theme.TextTertiary
 
@@ -30,6 +29,7 @@ fun WeeklyVolumeCard(
     weeklyVolume: Int,
     onClick: () -> Unit
 ) {
+    val accentColor = MaterialTheme.colorScheme.primary
     GlowCard(
         modifier = modifier
             .height(150.dp),
@@ -78,7 +78,7 @@ fun WeeklyVolumeCard(
 
                     drawPath(
                         path = path,
-                        color = PrimaryAccent.copy(alpha = 0.8f),
+                        color = accentColor.copy(alpha = 0.8f),
                         style = Stroke(width = 4f, cap = StrokeCap.Round)
                     )
                 }

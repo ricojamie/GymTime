@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,7 +28,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.GymTimeTheme
-import com.example.gymtime.ui.theme.PrimaryAccent
 import com.example.gymtime.ui.theme.SurfaceCards
 import com.example.gymtime.ui.theme.TextPrimary
 import com.example.gymtime.ui.theme.TextTertiary
@@ -59,7 +59,7 @@ fun WorkoutScreen() {
         TabRow(
             selectedTabIndex = selectedTab,
             containerColor = Color.Transparent,
-            contentColor = PrimaryAccent
+            contentColor = MaterialTheme.colorScheme.primary
         ) {
             tabs.forEachIndexed { index, title ->
                 Tab(
@@ -132,7 +132,7 @@ fun LogTab() {
                 Text(
                     text = "Last: 185 lbs x 6, 6, 5",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = PrimaryAccent
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
 
@@ -141,7 +141,7 @@ fun LogTab() {
                 onClick = { showTimerDialog = true },
                 shape = androidx.compose.foundation.shape.CircleShape,
                 color = SurfaceCards,
-                border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryAccent.copy(alpha = 0.5f)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
                 modifier = Modifier.padding(start = 8.dp)
             ) {
                 Row(
@@ -152,14 +152,14 @@ fun LogTab() {
                     Icon(
                         painter = androidx.compose.ui.res.painterResource(id = com.example.gymtime.R.drawable.ic_timer),
                         contentDescription = "Timer",
-                        tint = PrimaryAccent,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
                         text = String.format("%d:%02d", restTime / 60, restTime % 60),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
-                        color = PrimaryAccent
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             }
@@ -171,7 +171,7 @@ fun LogTab() {
         Text(
             text = "CURRENT SET: $currentSetNumber",
             style = MaterialTheme.typography.labelLarge,
-            color = PrimaryAccent,
+            color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.5.sp,
             modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -241,7 +241,7 @@ fun LogTab() {
             Text(
                 text = "${loggedSets.size} sets done",
                 style = MaterialTheme.typography.bodyMedium,
-                color = PrimaryAccent
+                color = MaterialTheme.colorScheme.primary
             )
         }
 
@@ -268,7 +268,7 @@ fun LogTab() {
                 onClick = { /* TODO: Navigate to exercise list */ },
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = PrimaryAccent
+                    contentColor = MaterialTheme.colorScheme.primary
                 )
             ) {
                 Text("Add Exercise", fontWeight = FontWeight.Bold)
@@ -278,8 +278,8 @@ fun LogTab() {
                 onClick = { showFinishDialog = true },
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = PrimaryAccent.copy(alpha = 0.2f),
-                    contentColor = PrimaryAccent
+                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                    contentColor = MaterialTheme.colorScheme.primary
                 )
             ) {
                 Text("Finish Workout", fontWeight = FontWeight.Bold)
@@ -308,7 +308,7 @@ fun LogTab() {
                         text = String.format("%d:%02d", restTime / 60, restTime % 60),
                         style = MaterialTheme.typography.displayLarge,
                         fontWeight = FontWeight.Bold,
-                        color = PrimaryAccent
+                        color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(
@@ -335,7 +335,7 @@ fun LogTab() {
                         isTimerRunning = true
                         showTimerDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Text("Start Timer", color = Color.Black, fontWeight = FontWeight.Bold)
                 }
@@ -362,7 +362,7 @@ fun LogTab() {
                         // TODO: Navigate back and save workout
                     }
                 ) {
-                    Text("Finish", color = PrimaryAccent, fontWeight = FontWeight.Bold)
+                    Text("Finish", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -474,8 +474,8 @@ fun LogSetButton(
             .height(56.dp)
             .scale(scale * prScale),
         colors = ButtonDefaults.buttonColors(
-            containerColor = PrimaryAccent,
-            disabledContainerColor = PrimaryAccent.copy(alpha = 0.3f)
+            containerColor = MaterialTheme.colorScheme.primary,
+            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
         ),
         shape = RoundedCornerShape(16.dp)
     ) {
@@ -538,11 +538,11 @@ fun SetLogCard(set: LoggedSet) {
                     Text(
                         text = "PR!",
                         style = MaterialTheme.typography.labelMedium,
-                        color = PrimaryAccent,
+                        color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.ExtraBold,
                         modifier = Modifier
                             .background(
-                                PrimaryAccent.copy(alpha = 0.2f),
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
                                 RoundedCornerShape(4.dp)
                             )
                             .padding(horizontal = 8.dp, vertical = 4.dp)

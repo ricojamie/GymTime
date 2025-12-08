@@ -54,7 +54,6 @@ import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.GymTimeTheme
-import com.example.gymtime.ui.theme.PrimaryAccent
 import com.example.gymtime.ui.theme.SurfaceCards
 import com.example.gymtime.ui.theme.TextPrimary
 import com.example.gymtime.ui.theme.TextSecondary
@@ -82,6 +81,7 @@ fun ExerciseSelectionContent(
     navController: NavController,
     viewModel: ExerciseSelectionViewModel = hiltViewModel()
 ) {
+    val accentColor = MaterialTheme.colorScheme.primary
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedMuscles by viewModel.selectedMuscles.collectAsState()
     val availableMuscles by viewModel.availableMuscles.collectAsState(initial = emptyList())
@@ -95,7 +95,7 @@ fun ExerciseSelectionContent(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { navController.navigate(Screen.ExerciseForm.createRoute()) },
-                containerColor = PrimaryAccent,
+                containerColor = accentColor,
                 contentColor = Color.Black,
                 shape = RoundedCornerShape(16.dp)
             ) {
@@ -252,6 +252,7 @@ private fun ExerciseFilterPills(
     onMuscleToggle: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val accentColor = MaterialTheme.colorScheme.primary
     LazyRow(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -268,7 +269,7 @@ private fun ExerciseFilterPills(
                     )
                 },
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = PrimaryAccent,
+                    selectedContainerColor = accentColor,
                     selectedLabelColor = Color.Black,
                     containerColor = SurfaceCards,
                     labelColor = TextPrimary
@@ -276,8 +277,8 @@ private fun ExerciseFilterPills(
                 border = FilterChipDefaults.filterChipBorder(
                     enabled = true,
                     selected = muscle in selectedMuscles,
-                    borderColor = if (muscle in selectedMuscles) PrimaryAccent else TextTertiary,
-                    selectedBorderColor = PrimaryAccent
+                    borderColor = if (muscle in selectedMuscles) accentColor else TextTertiary,
+                    selectedBorderColor = accentColor
                 )
             )
         }

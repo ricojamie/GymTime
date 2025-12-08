@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
@@ -41,7 +42,8 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val exerciseDao: ExerciseDao,
     private val workoutDao: WorkoutDao,
-    private val setDao: SetDao
+    private val setDao: SetDao,
+    private val userPreferencesRepository: UserPreferencesRepository
 ) : ViewModel() {
 
     private val exerciseId: Long = checkNotNull(savedStateHandle["exerciseId"])
@@ -95,6 +97,9 @@ class ExerciseLoggingViewModel @Inject constructor(
     // Workout overview data
     private val _workoutOverview = MutableStateFlow<List<WorkoutExerciseSummary>>(emptyList())
     val workoutOverview: StateFlow<List<WorkoutExerciseSummary>> = _workoutOverview
+
+    // Timer auto-start setting
+    val timerAutoStart = userPreferencesRepository.timerAutoStart
 
     private val _navigationEvents = Channel<Long>(Channel.BUFFERED)
     val navigationEvents = _navigationEvents.receiveAsFlow()
@@ -254,6 +259,7 @@ class ExerciseLoggingViewModel @Inject constructor(
             val isWarmup = _isWarmup.value
             val note = _setNote.value.takeIf { it.isNotBlank() }
 
+            val setTimestamp = Date()
             val newSet = Set(
                 workoutId = workout.id,
                 exerciseId = exercise.id,
@@ -264,7 +270,7 @@ class ExerciseLoggingViewModel @Inject constructor(
                 distanceMeters = null,
                 isWarmup = isWarmup,
                 isComplete = true,
-                timestamp = Date(),
+                timestamp = setTimestamp,
                 note = note
             )
 
@@ -278,10 +284,10 @@ class ExerciseLoggingViewModel @Inject constructor(
 
                 // If this is a raw improvement for this specific rep count, update and re-filter
                 if (currentPBForReps == null || newWeight > currentPBForReps.maxWeight) {
-                    val timestamp = Date().time
-                    currentPBs[newReps] = com.example.gymtime.data.db.dao.PBWithTimestamp(newReps, newWeight, timestamp)
+                    // Use the same timestamp as the set
+                    currentPBs[newReps] = com.example.gymtime.data.db.dao.PBWithTimestamp(newReps, newWeight, setTimestamp.time)
                     _personalBestsByReps.value = filterDominatedPBs(currentPBs)
-                    Log.d("ExerciseLoggingVM", "New PB! $newWeight x $newReps (first achieved at $timestamp)")
+                    Log.d("ExerciseLoggingVM", "New PB! $newWeight x $newReps (first achieved at ${setTimestamp.time})")
                 }
             }
 

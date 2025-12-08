@@ -34,15 +34,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.gymtime.ui.theme.PrimaryAccent
-import com.example.gymtime.ui.theme.PrimaryAccentDark
 import kotlinx.coroutines.delay
 
 @Composable
 fun StatsRow(streak: Int, poundsLifted: Int, pbs: Int) {
+    val accentColor = MaterialTheme.colorScheme.primary
     var currentIndex by remember { mutableStateOf(0) }
     val stats = listOf(
         StatItem("$streak day streak! 🔥", "Keep it going!"),
@@ -70,8 +70,8 @@ fun StatsRow(streak: Int, poundsLifted: Int, pbs: Int) {
                 .background(
                     brush = Brush.horizontalGradient(
                         colors = listOf(
-                            PrimaryAccent,
-                            PrimaryAccentDark
+                            accentColor,
+                            accentColor.copy(alpha = 0.8f)
                         )
                     )
                 )
