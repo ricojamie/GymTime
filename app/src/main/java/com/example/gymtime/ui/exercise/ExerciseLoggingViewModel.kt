@@ -20,6 +20,8 @@ import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.service.RestTimerService
 import com.example.gymtime.util.OneRepMaxCalculator
+import com.example.gymtime.util.PlateCalculator
+import com.example.gymtime.util.PlateLoadout
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.Channel
@@ -142,6 +144,11 @@ class ExerciseLoggingViewModel @Inject constructor(
 
     // Timer auto-start setting
     val timerAutoStart = userPreferencesRepository.timerAutoStart
+
+    // Plate calculator settings
+    val barWeight = userPreferencesRepository.barWeight
+    val loadingSides = userPreferencesRepository.loadingSides
+    val availablePlates = userPreferencesRepository.availablePlates
 
     private val _navigationEvents = Channel<Long>(Channel.BUFFERED)
     val navigationEvents = _navigationEvents.receiveAsFlow()
@@ -513,6 +520,20 @@ class ExerciseLoggingViewModel @Inject constructor(
             totalVolume = totalVolume,
             exerciseCount = overview.size,
             duration = duration
+        )
+    }
+
+    // Calculate plates for a given target weight
+    suspend fun calculatePlates(targetWeight: Float): PlateLoadout {
+        val plates = availablePlates.first()
+        val bar = barWeight.first()
+        val sides = loadingSides.first()
+
+        return PlateCalculator.calculatePlates(
+            targetWeight = targetWeight,
+            availablePlates = plates,
+            barWeight = bar,
+            loadingSides = sides
         )
     }
 

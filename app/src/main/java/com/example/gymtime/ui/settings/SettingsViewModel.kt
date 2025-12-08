@@ -16,6 +16,10 @@ class SettingsViewModel @Inject constructor(
     val themeColor = userPreferencesRepository.themeColor
     val timerAutoStart = userPreferencesRepository.timerAutoStart
 
+    // Plate calculator settings
+    val barWeight = userPreferencesRepository.barWeight
+    val loadingSides = userPreferencesRepository.loadingSides
+
     fun setUserName(name: String) {
         viewModelScope.launch {
             userPreferencesRepository.setUserName(name)
@@ -31,6 +35,18 @@ class SettingsViewModel @Inject constructor(
     fun setTimerAutoStart(enabled: Boolean) {
         viewModelScope.launch {
             userPreferencesRepository.setTimerAutoStart(enabled)
+        }
+    }
+
+    fun setBarWeight(weight: Float) {
+        viewModelScope.launch {
+            userPreferencesRepository.setBarWeight(weight)
+        }
+    }
+
+    fun setLoadingSides(sides: Int) {
+        viewModelScope.launch {
+            userPreferencesRepository.setLoadingSides(sides)
         }
     }
 }

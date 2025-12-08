@@ -32,6 +32,8 @@ fun SettingsScreen(
     val userName by viewModel.userName.collectAsState(initial = "Athlete")
     val themeColor by viewModel.themeColor.collectAsState(initial = "lime")
     val timerAutoStart by viewModel.timerAutoStart.collectAsState(initial = true)
+    val barWeight by viewModel.barWeight.collectAsState(initial = 45f)
+    val loadingSides by viewModel.loadingSides.collectAsState(initial = 2)
 
     var nameInput by remember { mutableStateOf(userName) }
 
@@ -167,6 +169,46 @@ fun SettingsScreen(
             }
 
             item {
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Plate Calculator Section
+                SectionHeader("Plate Calculator")
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceCards),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        // Bar Weight
+                        Text("Bar Weight", fontSize = 14.sp, color = TextTertiary)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            BarWeightOption(45f, barWeight, viewModel)
+                            BarWeightOption(35f, barWeight, viewModel)
+                            BarWeightOption(25f, barWeight, viewModel)
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Loading Sides
+                        Text("Loading Sides", fontSize = 14.sp, color = TextTertiary)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            LoadingSidesOption(1, loadingSides, viewModel)
+                            LoadingSidesOption(2, loadingSides, viewModel)
+                        }
+                    }
+                }
+            }
+
+            item {
                 Spacer(modifier = Modifier.height(32.dp))
             }
         }
@@ -216,6 +258,74 @@ fun ColorOption(
             selected = selectedColor == colorKey,
             onClick = { viewModel.setThemeColor(colorKey) },
             colors = RadioButtonDefaults.colors(selectedColor = color)
+        )
+    }
+}
+
+@Composable
+fun BarWeightOption(
+    weight: Float,
+    selectedWeight: Float,
+    viewModel: SettingsViewModel
+) {
+    val isSelected = selectedWeight == weight
+    Button(
+        onClick = { viewModel.setBarWeight(weight) },
+        modifier = Modifier
+            .weight(1f)
+            .height(48.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (isSelected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                Color(0xFF1A1A1A)
+            },
+            contentColor = if (isSelected) {
+                Color.Black
+            } else {
+                Color(0xFF9CA3AF)
+            }
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Text(
+            text = "${weight.toInt()} lbs",
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            fontSize = 14.sp
+        )
+    }
+}
+
+@Composable
+fun LoadingSidesOption(
+    sides: Int,
+    selectedSides: Int,
+    viewModel: SettingsViewModel
+) {
+    val isSelected = selectedSides == sides
+    Button(
+        onClick = { viewModel.setLoadingSides(sides) },
+        modifier = Modifier
+            .weight(1f)
+            .height(48.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (isSelected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                Color(0xFF1A1A1A)
+            },
+            contentColor = if (isSelected) {
+                Color.Black
+            } else {
+                Color(0xFF9CA3AF)
+            }
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Text(
+            text = "$sides side${if (sides > 1) "s" else ""}",
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            fontSize = 14.sp
         )
     }
 }
