@@ -142,28 +142,8 @@ fun ExerciseLoggingScreen(
     // Track if timer just finished for animation
     var timerJustFinished by remember { mutableStateOf(false) }
 
-    // Timer countdown
-    LaunchedEffect(isTimerRunning) {
-        if (isTimerRunning) {
-            while (true) {
-                delay(1000)
-                if (restTime > 0) {
-                    viewModel.updateRestTime(restTime - 1)
-                    // Check if timer just hit 0
-                    if (restTime - 1 == 0) {
-                        // Vibrate when timer ends
-                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        timerJustFinished = true
-                        viewModel.stopTimer()
-                        // Reset animation flag after a short delay
-                        delay(2000)
-                        timerJustFinished = false
-                    }
-                }
-            }
-        }
-    }
+    // Timer countdown is now handled by RestTimerService (persistent notification)
+    // No need for LaunchedEffect - service manages countdown and vibration
 
     Scaffold(
         topBar = {

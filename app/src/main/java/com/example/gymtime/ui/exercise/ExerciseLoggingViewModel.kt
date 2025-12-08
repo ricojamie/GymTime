@@ -1,5 +1,11 @@
 package com.example.gymtime.ui.exercise
 
+import android.app.Application
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
+import android.os.IBinder
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -12,8 +18,10 @@ import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
+import com.example.gymtime.service.RestTimerService
 import com.example.gymtime.util.OneRepMaxCalculator
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +47,7 @@ data class PersonalRecords(
 
 @HiltViewModel
 class ExerciseLoggingViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val savedStateHandle: SavedStateHandle,
     private val exerciseDao: ExerciseDao,
     private val workoutDao: WorkoutDao,
@@ -47,6 +56,39 @@ class ExerciseLoggingViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val exerciseId: Long = checkNotNull(savedStateHandle["exerciseId"])
+
+    // Service binding
+    private var timerService: RestTimerService? = null
+    private var serviceBound = false
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            val serviceBinder = binder as? RestTimerService.TimerBinder
+            timerService = serviceBinder?.getService()
+            serviceBound = true
+            Log.d("ExerciseLoggingVM", "Service connected")
+
+            // Sync timer state from service
+            timerService?.let { service ->
+                viewModelScope.launch {
+                    service.remainingSeconds.collectLatest { seconds ->
+                        _restTime.value = seconds
+                    }
+                }
+                viewModelScope.launch {
+                    service.isRunning.collectLatest { running ->
+                        _isTimerRunning.value = running
+                    }
+                }
+            }
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            timerService = null
+            serviceBound = false
+            Log.d("ExerciseLoggingVM", "Service disconnected")
+        }
+    }
 
     private val _exercise = MutableStateFlow<Exercise?>(null)
     val exercise: StateFlow<Exercise?> = _exercise
@@ -105,6 +147,11 @@ class ExerciseLoggingViewModel @Inject constructor(
     val navigationEvents = _navigationEvents.receiveAsFlow()
 
     init {
+        // Bind to timer service
+        val serviceIntent = Intent(context, RestTimerService::class.java)
+        context.bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+        Log.d("ExerciseLoggingVM", "Binding to RestTimerService")
+
         viewModelScope.launch {
             // Load exercise
             exerciseDao.getExerciseById(exerciseId).collectLatest { exercise ->
@@ -351,11 +398,23 @@ class ExerciseLoggingViewModel @Inject constructor(
     }
 
     fun startTimer() {
-        _isTimerRunning.value = true
+        val seconds = _restTime.value
+        Log.d("ExerciseLoggingVM", "Starting timer: $seconds seconds")
+
+        val serviceIntent = Intent(context, RestTimerService::class.java).apply {
+            action = RestTimerService.ACTION_START_TIMER
+            putExtra(RestTimerService.EXTRA_SECONDS, seconds)
+        }
+        context.startService(serviceIntent)
     }
 
     fun stopTimer() {
-        _isTimerRunning.value = false
+        Log.d("ExerciseLoggingVM", "Stopping timer")
+
+        val serviceIntent = Intent(context, RestTimerService::class.java).apply {
+            action = RestTimerService.ACTION_STOP_TIMER
+        }
+        context.startService(serviceIntent)
     }
 
     fun resetTimerToDefault() {
@@ -455,5 +514,15 @@ class ExerciseLoggingViewModel @Inject constructor(
             exerciseCount = overview.size,
             duration = duration
         )
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Unbind service
+        if (serviceBound) {
+            context.unbindService(serviceConnection)
+            serviceBound = false
+            Log.d("ExerciseLoggingVM", "Service unbound")
+        }
     }
 }
