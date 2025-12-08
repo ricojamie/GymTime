@@ -28,12 +28,24 @@ private val DarkColorScheme = darkColorScheme(
 @Composable
 fun GymTimeTheme(
     darkTheme: Boolean = true, // Always dark theme
+    appColorScheme: AppColorScheme = ThemeColors.LimeGreen, // Dynamic color scheme
     content: @Composable () -> Unit
 ) {
-    val colorScheme = DarkColorScheme
+    val dynamicColorScheme = darkColorScheme(
+        primary = appColorScheme.primaryAccent,
+        secondary = appColorScheme.primaryAccent,
+        tertiary = appColorScheme.primaryAccent,
+        background = BackgroundCanvas,
+        surface = SurfaceCards,
+        onPrimary = TextPrimary,
+        onSecondary = TextPrimary,
+        onTertiary = TextPrimary,
+        onBackground = TextPrimary,
+        onSurface = TextPrimary,
+    )
 
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = dynamicColorScheme,
         typography = Typography,
         content = content
     )

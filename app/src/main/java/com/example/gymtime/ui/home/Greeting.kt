@@ -18,8 +18,8 @@ import com.example.gymtime.ui.theme.TextPrimary
 import com.example.gymtime.ui.theme.TextTertiary
 
 @Composable
-fun HomeHeader(userName: String) {
-    Column {
+fun HomeHeader(userName: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
         // "WELCOME BACK" in muted gray
         Text(
             text = "WELCOME BACK",

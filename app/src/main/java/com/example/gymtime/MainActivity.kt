@@ -11,32 +11,43 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.navigation.BottomNavigationBar
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.history.HistoryScreen
 import com.example.gymtime.ui.home.HomeScreen
 import com.example.gymtime.ui.theme.GymTimeTheme
+import com.example.gymtime.ui.theme.ThemeColors
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val mainViewModel: MainViewModel by viewModels()
 
+    @Inject
+    lateinit var userPreferencesRepository: UserPreferencesRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         // Check for stale sessions on app launch
         mainViewModel.checkActiveSession()
 
         enableEdgeToEdge()
         setContent {
-            GymTimeTheme {
+            val themeColorName by userPreferencesRepository.themeColor.collectAsState(initial = "lime")
+            val colorScheme = ThemeColors.getScheme(themeColorName)
+
+            GymTimeTheme(appColorScheme = colorScheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize()
                 ) {
@@ -116,6 +127,9 @@ class MainActivity : ComponentActivity() {
                                     )
                                 ) {
                                     com.example.gymtime.ui.summary.PostWorkoutSummaryScreen(navController = navController)
+                                }
+                                composable(Screen.Settings.route) {
+                                    com.example.gymtime.ui.settings.SettingsScreen(navController = navController)
                                 }
 
                                 // Routine Routes

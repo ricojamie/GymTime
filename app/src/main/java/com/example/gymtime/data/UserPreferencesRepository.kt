@@ -23,6 +23,15 @@ class UserPreferencesRepository @Inject constructor(
         val USER_NAME = stringPreferencesKey("user_name")
         val EXERCISES_SEEDED = booleanPreferencesKey("exercises_seeded")
         val ACTIVE_ROUTINE_ID = androidx.datastore.preferences.core.longPreferencesKey("active_routine_id")
+
+        // Theme and UI preferences
+        val THEME_COLOR = stringPreferencesKey("theme_color")
+        val TIMER_AUTO_START = booleanPreferencesKey("timer_auto_start")
+
+        // Plate calculator preferences
+        val AVAILABLE_PLATES = stringPreferencesKey("available_plates")
+        val BAR_WEIGHT = androidx.datastore.preferences.core.floatPreferencesKey("bar_weight")
+        val LOADING_SIDES = androidx.datastore.preferences.core.intPreferencesKey("loading_sides")
     }
 
     val userName: Flow<String> = context.dataStore.data
@@ -38,6 +47,36 @@ class UserPreferencesRepository @Inject constructor(
     val activeRoutineId: Flow<Long?> = context.dataStore.data
         .map { preferences ->
             preferences[PreferencesKeys.ACTIVE_ROUTINE_ID]
+        }
+
+    val themeColor: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.THEME_COLOR] ?: "lime"
+        }
+
+    val timerAutoStart: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.TIMER_AUTO_START] ?: true
+        }
+
+    val availablePlates: Flow<List<Float>> = context.dataStore.data
+        .map { preferences ->
+            val json = preferences[PreferencesKeys.AVAILABLE_PLATES]
+                ?: "[45.0, 35.0, 25.0, 10.0, 5.0, 2.5]"
+            // Parse JSON to List<Float>
+            json.removeSurrounding("[", "]")
+                .split(",")
+                .mapNotNull { it.trim().toFloatOrNull() }
+        }
+
+    val barWeight: Flow<Float> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.BAR_WEIGHT] ?: 45f
+        }
+
+    val loadingSides: Flow<Int> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.LOADING_SIDES] ?: 2
         }
 
     suspend fun setUserName(name: String) {
@@ -59,6 +98,37 @@ class UserPreferencesRepository @Inject constructor(
             } else {
                 preferences[PreferencesKeys.ACTIVE_ROUTINE_ID] = routineId
             }
+        }
+    }
+
+    suspend fun setThemeColor(color: String) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.THEME_COLOR] = color
+        }
+    }
+
+    suspend fun setTimerAutoStart(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.TIMER_AUTO_START] = enabled
+        }
+    }
+
+    suspend fun setAvailablePlates(plates: List<Float>) {
+        context.dataStore.edit { preferences ->
+            val json = plates.joinToString(",", "[", "]")
+            preferences[PreferencesKeys.AVAILABLE_PLATES] = json
+        }
+    }
+
+    suspend fun setBarWeight(weight: Float) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.BAR_WEIGHT] = weight
+        }
+    }
+
+    suspend fun setLoadingSides(sides: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.LOADING_SIDES] = sides
         }
     }
 }
