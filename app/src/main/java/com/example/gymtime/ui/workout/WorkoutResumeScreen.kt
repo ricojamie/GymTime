@@ -33,6 +33,7 @@ fun WorkoutResumeScreen(
 ) {
     val todaysExercises by viewModel.todaysExercises.collectAsState()
     val currentWorkout by viewModel.currentWorkout.collectAsState()
+    val accentColor = MaterialTheme.colorScheme.primary
 
     // Observe finish workout event
     LaunchedEffect(Unit) {
@@ -63,10 +64,10 @@ fun WorkoutResumeScreen(
                                 .height(56.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = SurfaceCards,
-                                contentColor = PrimaryAccent
+                                contentColor = accentColor
                             ),
                             shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, PrimaryAccent)
+                            border = BorderStroke(1.dp, accentColor)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Add,
@@ -88,7 +89,7 @@ fun WorkoutResumeScreen(
                                 .weight(1f)
                                 .height(56.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = PrimaryAccent,
+                                containerColor = accentColor,
                                 contentColor = Color.Black
                             ),
                             shape = RoundedCornerShape(12.dp)
@@ -159,6 +160,7 @@ private fun ExerciseSummaryCard(
     onClick: () -> Unit
 ) {
     val isUnstarted = exercise.setCount == 0
+    val accentColor = MaterialTheme.colorScheme.primary
 
     GlowCard(
         onClick = onClick,
@@ -200,7 +202,7 @@ private fun ExerciseSummaryCard(
                         text = "${exercise.setCount} sets",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium,
-                        color = PrimaryAccent
+                        color = accentColor
                     )
                     exercise.bestWeight?.let { weight ->
                         Text(
@@ -218,6 +220,7 @@ private fun ExerciseSummaryCard(
 
 @Composable
 private fun EmptyStateCard(onAddExerciseClick: () -> Unit) {
+    val accentColor = MaterialTheme.colorScheme.primary
     GlowCard(
         onClick = onAddExerciseClick,
         modifier = Modifier
@@ -233,7 +236,7 @@ private fun EmptyStateCard(onAddExerciseClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Default.Add,
                 contentDescription = null,
-                tint = PrimaryAccent,
+                tint = accentColor,
                 modifier = Modifier.size(48.dp)
             )
             Spacer(modifier = Modifier.height(16.dp))

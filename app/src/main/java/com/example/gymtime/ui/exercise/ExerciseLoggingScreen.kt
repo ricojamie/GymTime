@@ -63,6 +63,7 @@ import com.example.gymtime.ui.theme.GymTimeTheme
 import com.example.gymtime.ui.theme.SurfaceCards
 import com.example.gymtime.ui.theme.TextPrimary
 import com.example.gymtime.ui.theme.TextTertiary
+import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.PlateCalculatorSheet
 import com.example.gymtime.util.PlateLoadout
@@ -86,6 +87,8 @@ fun ExerciseLoggingScreen(
     val weight by viewModel.weight.collectAsState()
     val reps by viewModel.reps.collectAsState()
     val rpe by viewModel.rpe.collectAsState()
+    val duration by viewModel.duration.collectAsState()
+    val distance by viewModel.distance.collectAsState()
     val restTime by viewModel.restTime.collectAsState()
     val isWarmup by viewModel.isWarmup.collectAsState()
     val lastWorkoutSets by viewModel.lastWorkoutSets.collectAsState()
@@ -321,89 +324,184 @@ fun ExerciseLoggingScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Input Fields
+            // Input Fields - Dynamic based on exercise LogType
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Weight Input
-                InputCard(
-                    label = "WEIGHT",
-                    value = weight,
-                    onValueChange = { viewModel.updateWeight(it) },
-                    modifier = Modifier.weight(1f),
-                    lastValue = lastWeight?.let { "$it lbs" }
-                )
-
-                // Reps Input
-                InputCard(
-                    label = "REPS",
-                    value = reps,
-                    onValueChange = { viewModel.updateReps(it) },
-                    modifier = Modifier.weight(1f),
-                    lastValue = lastReps?.let { "$it reps" }
-                )
+                when (exercise?.logType) {
+                    LogType.WEIGHT_REPS -> {
+                        // Weight Input
+                        InputCard(
+                            label = "WEIGHT",
+                            value = weight,
+                            onValueChange = { viewModel.updateWeight(it) },
+                            modifier = Modifier.weight(1f),
+                            lastValue = lastWeight?.let { "$it lbs" }
+                        )
+                        // Reps Input
+                        InputCard(
+                            label = "REPS",
+                            value = reps,
+                            onValueChange = { viewModel.updateReps(it) },
+                            modifier = Modifier.weight(1f),
+                            lastValue = lastReps?.let { "$it reps" }
+                        )
+                    }
+                    LogType.REPS_ONLY -> {
+                        // Just Reps Input (centered, wider)
+                        InputCard(
+                            label = "REPS",
+                            value = reps,
+                            onValueChange = { viewModel.updateReps(it) },
+                            modifier = Modifier.weight(1f),
+                            lastValue = lastReps?.let { "$it reps" }
+                        )
+                    }
+                    LogType.DURATION -> {
+                        // Duration Input (in seconds)
+                        InputCard(
+                            label = "DURATION (SEC)",
+                            value = duration,
+                            onValueChange = { viewModel.updateDuration(it) },
+                            modifier = Modifier.weight(1f),
+                            lastValue = null
+                        )
+                    }
+                    LogType.WEIGHT_DISTANCE -> {
+                        // Weight Input
+                        InputCard(
+                            label = "WEIGHT",
+                            value = weight,
+                            onValueChange = { viewModel.updateWeight(it) },
+                            modifier = Modifier.weight(1f),
+                            lastValue = lastWeight?.let { "$it lbs" }
+                        )
+                        // Distance Input
+                        InputCard(
+                            label = "DISTANCE (M)",
+                            value = distance,
+                            onValueChange = { viewModel.updateDistance(it) },
+                            modifier = Modifier.weight(1f),
+                            lastValue = null
+                        )
+                    }
+                    LogType.DISTANCE_TIME -> {
+                        // Distance Input
+                        InputCard(
+                            label = "DISTANCE (M)",
+                            value = distance,
+                            onValueChange = { viewModel.updateDistance(it) },
+                            modifier = Modifier.weight(1f),
+                            lastValue = null
+                        )
+                        // Time Input
+                        InputCard(
+                            label = "TIME (SEC)",
+                            value = duration,
+                            onValueChange = { viewModel.updateDuration(it) },
+                            modifier = Modifier.weight(1f),
+                            lastValue = null
+                        )
+                    }
+                    null -> {
+                        // Default fallback - Weight + Reps
+                        InputCard(
+                            label = "WEIGHT",
+                            value = weight,
+                            onValueChange = { viewModel.updateWeight(it) },
+                            modifier = Modifier.weight(1f),
+                            lastValue = lastWeight?.let { "$it lbs" }
+                        )
+                        InputCard(
+                            label = "REPS",
+                            value = reps,
+                            onValueChange = { viewModel.updateReps(it) },
+                            modifier = Modifier.weight(1f),
+                            lastValue = lastReps?.let { "$it reps" }
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Warmup Toggle and Plate Calculator Row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Warmup Toggle Pill
-                Surface(
-                    onClick = { viewModel.toggleWarmup() },
-                    shape = RoundedCornerShape(50),
-                    color = if (isWarmup) MaterialTheme.colorScheme.primary else Color.Transparent,
-                    border = if (isWarmup) null else androidx.compose.foundation.BorderStroke(1.dp, TextTertiary),
-                    modifier = Modifier.height(32.dp)
+            // Warmup Toggle and Plate Calculator Row - show based on LogType
+            val showWarmupToggle = exercise?.logType in listOf(LogType.WEIGHT_REPS, LogType.REPS_ONLY, LogType.WEIGHT_DISTANCE, null)
+            val showPlateCalculatorButton = exercise?.logType in listOf(LogType.WEIGHT_REPS, LogType.WEIGHT_DISTANCE, null)
+
+            if (showWarmupToggle || showPlateCalculatorButton) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        if (isWarmup) {
-                            Text(text = "🔥 ", fontSize = 14.sp)
+                    // Warmup Toggle Pill
+                    if (showWarmupToggle) {
+                        Surface(
+                            onClick = { viewModel.toggleWarmup() },
+                            shape = RoundedCornerShape(50),
+                            color = if (isWarmup) MaterialTheme.colorScheme.primary else Color.Transparent,
+                            border = if (isWarmup) null else androidx.compose.foundation.BorderStroke(1.dp, TextTertiary),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                if (isWarmup) {
+                                    Text(text = "🔥 ", fontSize = 14.sp)
+                                }
+                                Text(
+                                    text = "Warmup",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isWarmup) Color.Black else TextTertiary
+                                )
+                            }
                         }
-                        Text(
-                            text = "Warmup",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isWarmup) Color.Black else TextTertiary
-                        )
                     }
-                }
 
-                // Plate Calculator Button
-                Surface(
-                    onClick = { showPlateCalculator = true },
-                    shape = RoundedCornerShape(50),
-                    color = Color.Transparent,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.height(32.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text(text = "🏋️ ", fontSize = 14.sp)
-                        Text(
-                            text = "Plates",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                    // Plate Calculator Button - only for weight-based exercises
+                    if (showPlateCalculatorButton) {
+                        Surface(
+                            onClick = { showPlateCalculator = true },
+                            shape = RoundedCornerShape(50),
+                            color = Color.Transparent,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Text(text = "🏋️ ", fontSize = 14.sp)
+                                Text(
+                                    text = "Plates",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
+
+            // Determine if Log Set button should be enabled based on LogType
+            val isLogSetEnabled = when (exercise?.logType) {
+                LogType.WEIGHT_REPS -> weight.isNotBlank() && reps.isNotBlank()
+                LogType.REPS_ONLY -> reps.isNotBlank()
+                LogType.DURATION -> duration.isNotBlank()
+                LogType.WEIGHT_DISTANCE -> weight.isNotBlank() && distance.isNotBlank()
+                LogType.DISTANCE_TIME -> distance.isNotBlank() && duration.isNotBlank()
+                null -> weight.isNotBlank() && reps.isNotBlank()
+            }
 
             // Log Set Button (or Save Edit if editing)
             if (editingSet != null) {
@@ -429,7 +527,7 @@ fun ExerciseLoggingScreen(
                         modifier = Modifier
                             .weight(1f)
                             .height(56.dp),
-                        enabled = weight.isNotBlank() && reps.isNotBlank(),
+                        enabled = isLogSetEnabled,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
@@ -450,7 +548,7 @@ fun ExerciseLoggingScreen(
                 // Normal mode - show LOG SET button
                 LogSetButton(
                     onClick = {
-                        if (weight.isNotBlank() && reps.isNotBlank()) {
+                        if (isLogSetEnabled) {
                             view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                             viewModel.logSet()
                             if (timerAutoStart) {
@@ -459,7 +557,7 @@ fun ExerciseLoggingScreen(
                             viewModel.resetTimerToDefault() // Reset timer to exercise's default
                         }
                     },
-                    enabled = weight.isNotBlank() && reps.isNotBlank()
+                    enabled = isLogSetEnabled
                 )
             }
 
@@ -963,11 +1061,12 @@ private fun ExerciseSetLogCard(
     onAddNote: (com.example.gymtime.data.db.entity.Set) -> Unit = {}
 ) {
     var showContextMenu by remember { mutableStateOf(false) }
+    val accentColor = MaterialTheme.colorScheme.primary
 
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (isPersonalBest) Color(0xFF2D4A1C) else SurfaceCards
+            containerColor = if (isPersonalBest) accentColor.copy(alpha = 0.15f) else SurfaceCards
         ),
         shape = RoundedCornerShape(12.dp),
         border = if (isPersonalBest) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,

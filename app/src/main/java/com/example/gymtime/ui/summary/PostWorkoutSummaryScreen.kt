@@ -34,6 +34,7 @@ fun PostWorkoutSummaryScreen(
     val selectedRating by viewModel.selectedRating.collectAsState()
     val ratingNote by viewModel.ratingNote.collectAsState()
     val isSaving by viewModel.isSaving.collectAsState()
+    val accentColor = MaterialTheme.colorScheme.primary
 
     // Observe navigation event
     LaunchedEffect(Unit) {
@@ -61,7 +62,7 @@ fun PostWorkoutSummaryScreen(
                 text = "Workout Complete!",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = PrimaryAccent,
+                color = accentColor,
                 textAlign = TextAlign.Center
             )
 
@@ -212,7 +213,7 @@ fun PostWorkoutSummaryScreen(
                     .fillMaxWidth()
                     .height(56.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = PrimaryAccent,
+                    containerColor = accentColor,
                     contentColor = Color.Black
                 ),
                 shape = RoundedCornerShape(12.dp),
@@ -256,6 +257,7 @@ private fun StatRow(
     value: String,
     emphasize: Boolean = false
 ) {
+    val accentColor = MaterialTheme.colorScheme.primary
     Column(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -273,7 +275,7 @@ private fun StatRow(
             text = value,
             fontSize = if (emphasize) 48.sp else 32.sp,
             fontWeight = FontWeight.ExtraBold,
-            color = if (emphasize) PrimaryAccent else TextPrimary
+            color = if (emphasize) accentColor else TextPrimary
         )
     }
 }

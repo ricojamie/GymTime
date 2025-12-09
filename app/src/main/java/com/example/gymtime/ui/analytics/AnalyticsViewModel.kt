@@ -57,6 +57,13 @@ class AnalyticsViewModel @Inject constructor(
         loadInitialData()
     }
 
+    /**
+     * Call this to refresh data when navigating back to the analytics screen
+     */
+    fun refreshData() {
+        loadInitialData()
+    }
+
     private fun loadInitialData() {
         viewModelScope.launch {
             _isLoading.value = true

@@ -34,6 +34,7 @@ fun RoutineListScreen(
 
     var showMaxRoutinesDialog by remember { mutableStateOf(false) }
     var routineToDelete by remember { mutableStateOf<Routine?>(null) }
+    val accentColor = MaterialTheme.colorScheme.primary
 
     Scaffold(
         topBar = {
@@ -63,7 +64,7 @@ fun RoutineListScreen(
                         showMaxRoutinesDialog = true
                     }
                 },
-                containerColor = if (canCreateMore) PrimaryAccent else TextTertiary,
+                containerColor = if (canCreateMore) accentColor else TextTertiary,
                 contentColor = Color.Black,
                 shape = RoundedCornerShape(16.dp)
             ) {
@@ -162,6 +163,7 @@ fun RoutineListItem(
     onDelete: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    val accentColor = MaterialTheme.colorScheme.primary
 
     GlowCard(
         onClick = onTap,
@@ -188,12 +190,12 @@ fun RoutineListItem(
 
                     if (isActive) {
                         Surface(
-                            color = PrimaryAccent.copy(alpha = 0.2f),
+                            color = accentColor.copy(alpha = 0.2f),
                             shape = RoundedCornerShape(4.dp)
                         ) {
                             Text(
                                 text = "ACTIVE",
-                                color = PrimaryAccent,
+                                color = accentColor,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 1.sp,

@@ -16,6 +16,7 @@ import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.Exercise
+import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.service.RestTimerService
@@ -110,6 +111,12 @@ class ExerciseLoggingViewModel @Inject constructor(
 
     private val _rpe = MutableStateFlow("")
     val rpe: StateFlow<String> = _rpe
+
+    private val _duration = MutableStateFlow("") // For DURATION and DISTANCE_TIME exercises
+    val duration: StateFlow<String> = _duration
+
+    private val _distance = MutableStateFlow("") // For WEIGHT_DISTANCE and DISTANCE_TIME exercises
+    val distance: StateFlow<String> = _distance
 
     private val _restTime = MutableStateFlow(90) // Will be updated from exercise default
     val restTime: StateFlow<Int> = _restTime
@@ -292,6 +299,14 @@ class ExerciseLoggingViewModel @Inject constructor(
         _rpe.value = value
     }
 
+    fun updateDuration(value: String) {
+        _duration.value = value
+    }
+
+    fun updateDistance(value: String) {
+        _distance.value = value
+    }
+
     fun updateRestTime(seconds: Int) {
         _restTime.value = seconds
     }
@@ -309,43 +324,100 @@ class ExerciseLoggingViewModel @Inject constructor(
             val workout = _currentWorkout.value ?: return@launch
             val exercise = _exercise.value ?: return@launch
 
-            val newWeight = _weight.value.toFloatOrNull()
             val isWarmup = _isWarmup.value
             val note = _setNote.value.takeIf { it.isNotBlank() }
-
             val setTimestamp = Date()
-            val newSet = Set(
-                workoutId = workout.id,
-                exerciseId = exercise.id,
-                weight = newWeight,
-                reps = _reps.value.toIntOrNull(),
-                rpe = _rpe.value.toFloatOrNull(),
-                durationSeconds = null,
-                distanceMeters = null,
-                isWarmup = isWarmup,
-                isComplete = true,
-                timestamp = setTimestamp,
-                note = note
-            )
+
+            // Build set based on exercise LogType
+            val newSet = when (exercise.logType) {
+                LogType.WEIGHT_REPS -> Set(
+                    workoutId = workout.id,
+                    exerciseId = exercise.id,
+                    weight = _weight.value.toFloatOrNull(),
+                    reps = _reps.value.toIntOrNull(),
+                    rpe = _rpe.value.toFloatOrNull(),
+                    durationSeconds = null,
+                    distanceMeters = null,
+                    isWarmup = isWarmup,
+                    isComplete = true,
+                    timestamp = setTimestamp,
+                    note = note
+                )
+                LogType.REPS_ONLY -> Set(
+                    workoutId = workout.id,
+                    exerciseId = exercise.id,
+                    weight = null,
+                    reps = _reps.value.toIntOrNull(),
+                    rpe = _rpe.value.toFloatOrNull(),
+                    durationSeconds = null,
+                    distanceMeters = null,
+                    isWarmup = isWarmup,
+                    isComplete = true,
+                    timestamp = setTimestamp,
+                    note = note
+                )
+                LogType.DURATION -> Set(
+                    workoutId = workout.id,
+                    exerciseId = exercise.id,
+                    weight = null,
+                    reps = null,
+                    rpe = _rpe.value.toFloatOrNull(),
+                    durationSeconds = _duration.value.toIntOrNull(),
+                    distanceMeters = null,
+                    isWarmup = isWarmup,
+                    isComplete = true,
+                    timestamp = setTimestamp,
+                    note = note
+                )
+                LogType.WEIGHT_DISTANCE -> Set(
+                    workoutId = workout.id,
+                    exerciseId = exercise.id,
+                    weight = _weight.value.toFloatOrNull(),
+                    reps = null,
+                    rpe = _rpe.value.toFloatOrNull(),
+                    durationSeconds = null,
+                    distanceMeters = _distance.value.toFloatOrNull(),
+                    isWarmup = isWarmup,
+                    isComplete = true,
+                    timestamp = setTimestamp,
+                    note = note
+                )
+                LogType.DISTANCE_TIME -> Set(
+                    workoutId = workout.id,
+                    exerciseId = exercise.id,
+                    weight = null,
+                    reps = null,
+                    rpe = _rpe.value.toFloatOrNull(),
+                    durationSeconds = _duration.value.toIntOrNull(),
+                    distanceMeters = _distance.value.toFloatOrNull(),
+                    isWarmup = isWarmup,
+                    isComplete = true,
+                    timestamp = setTimestamp,
+                    note = note
+                )
+            }
 
             setDao.insertSet(newSet)
 
-            // Update personal bests if this is a new record for this rep count
-            val newReps = _reps.value.toIntOrNull()
-            if (!isWarmup && newWeight != null && newReps != null) {
-                val currentPBs = _personalBestsByReps.value.toMutableMap()
-                val currentPBForReps = currentPBs[newReps]
+            // Update personal bests if this is a new record for this rep count (only for WEIGHT_REPS)
+            if (exercise.logType == LogType.WEIGHT_REPS) {
+                val newWeight = _weight.value.toFloatOrNull()
+                val newReps = _reps.value.toIntOrNull()
+                if (!isWarmup && newWeight != null && newReps != null) {
+                    val currentPBs = _personalBestsByReps.value.toMutableMap()
+                    val currentPBForReps = currentPBs[newReps]
 
-                // If this is a raw improvement for this specific rep count, update and re-filter
-                if (currentPBForReps == null || newWeight > currentPBForReps.maxWeight) {
-                    // Use the same timestamp as the set
-                    currentPBs[newReps] = com.example.gymtime.data.db.dao.PBWithTimestamp(newReps, newWeight, setTimestamp.time)
-                    _personalBestsByReps.value = filterDominatedPBs(currentPBs)
-                    Log.d("ExerciseLoggingVM", "New PB! $newWeight x $newReps (first achieved at ${setTimestamp.time})")
+                    // If this is a raw improvement for this specific rep count, update and re-filter
+                    if (currentPBForReps == null || newWeight > currentPBForReps.maxWeight) {
+                        // Use the same timestamp as the set
+                        currentPBs[newReps] = com.example.gymtime.data.db.dao.PBWithTimestamp(newReps, newWeight, setTimestamp.time)
+                        _personalBestsByReps.value = filterDominatedPBs(currentPBs)
+                        Log.d("ExerciseLoggingVM", "New PB! $newWeight x $newReps (first achieved at ${setTimestamp.time})")
+                    }
                 }
             }
 
-            // Clear RPE and note (weight/reps persist for next set)
+            // Clear RPE and note (primary inputs persist for next set)
             _rpe.value = ""
             _setNote.value = ""
             _isWarmup.value = false

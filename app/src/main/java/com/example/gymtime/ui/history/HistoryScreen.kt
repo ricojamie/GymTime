@@ -37,6 +37,7 @@ fun HistoryScreen(
     val selectedWorkout by viewModel.selectedWorkout.collectAsState()
     val selectedWorkoutDetails by viewModel.selectedWorkoutDetails.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val accentColor = MaterialTheme.colorScheme.primary
 
     Scaffold(
         topBar = {
@@ -66,7 +67,7 @@ fun HistoryScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = PrimaryAccent)
+                    CircularProgressIndicator(color = accentColor)
                 }
             } else if (workouts.isEmpty()) {
                 EmptyHistoryState(navController)
@@ -406,6 +407,7 @@ fun DeleteWorkoutDialog(
 
 @Composable
 fun EmptyHistoryState(navController: NavController) {
+    val accentColor = MaterialTheme.colorScheme.primary
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -434,7 +436,7 @@ fun EmptyHistoryState(navController: NavController) {
             Button(
                 onClick = { navController.navigate("exercise_selection") },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = PrimaryAccent
+                    containerColor = accentColor
                 ),
                 modifier = Modifier
                     .fillMaxWidth()

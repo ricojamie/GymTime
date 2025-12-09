@@ -20,13 +20,14 @@ import com.example.gymtime.ui.theme.*
 fun LibraryScreen(navController: NavController) {
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Exercises", "Routines")
+    val accentColor = MaterialTheme.colorScheme.primary
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Tab Row
         TabRow(
             selectedTabIndex = selectedTabIndex,
             containerColor = Color.Transparent,
-            contentColor = PrimaryAccent,
+            contentColor = accentColor,
             divider = {
                 HorizontalDivider(color = TextTertiary.copy(alpha = 0.3f))
             }
@@ -40,7 +41,7 @@ fun LibraryScreen(navController: NavController) {
                             text = title,
                             fontSize = 14.sp,
                             fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Medium,
-                            color = if (selectedTabIndex == index) PrimaryAccent else TextSecondary
+                            color = if (selectedTabIndex == index) accentColor else TextSecondary
                         )
                     }
                 )

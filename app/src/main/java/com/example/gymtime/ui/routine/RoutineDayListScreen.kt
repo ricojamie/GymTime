@@ -35,6 +35,7 @@ fun RoutineDayListScreen(
 
     var showMaxDaysDialog by remember { mutableStateOf(false) }
     var dayToDelete by remember { mutableStateOf<RoutineDay?>(null) }
+    val accentColor = MaterialTheme.colorScheme.primary
 
     Scaffold(
         topBar = {
@@ -71,7 +72,7 @@ fun RoutineDayListScreen(
                         showMaxDaysDialog = true
                     }
                 },
-                containerColor = if (canAddMoreDays) PrimaryAccent else TextTertiary,
+                containerColor = if (canAddMoreDays) accentColor else TextTertiary,
                 contentColor = Color.Black,
                 shape = RoundedCornerShape(16.dp)
             ) {

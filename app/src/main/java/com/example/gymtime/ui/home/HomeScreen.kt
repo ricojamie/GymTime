@@ -7,6 +7,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -33,6 +34,13 @@ fun HomeScreen(
     val hasActiveRoutine by viewModel.hasActiveRoutine.collectAsState()
     val activeRoutineName by viewModel.activeRoutineName.collectAsState()
     val activeRoutineId by viewModel.activeRoutineId.collectAsState(initial = null)
+    val weeklyVolume by viewModel.weeklyVolume.collectAsState()
+    val weeklyVolumeTrend by viewModel.weeklyVolumeTrend.collectAsState()
+
+    // Refresh data when screen becomes visible
+    LaunchedEffect(Unit) {
+        viewModel.refreshData()
+    }
 
     Column(
         modifier = modifier
@@ -92,7 +100,8 @@ fun HomeScreen(
 
             WeeklyVolumeCard(
                 modifier = Modifier.weight(1f),
-                weeklyVolume = viewModel.poundsLifted,
+                weeklyVolume = weeklyVolume,
+                volumeTrend = weeklyVolumeTrend,
                 onClick = { navController.navigate(Screen.Analytics.route) }
             )
         }

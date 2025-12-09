@@ -44,6 +44,7 @@ fun ExerciseFormScreen(
 
     var showMuscleDropdown by remember { mutableStateOf(false) }
     var showLogTypeDropdown by remember { mutableStateOf(false) }
+    val accentColor = MaterialTheme.colorScheme.primary
 
     // Observe save success event
     LaunchedEffect(Unit) {
@@ -78,7 +79,7 @@ fun ExerciseFormScreen(
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = "Save",
-                            tint = if (isSaveEnabled) PrimaryAccent else TextTertiary
+                            tint = if (isSaveEnabled) accentColor else TextTertiary
                         )
                     }
                 },

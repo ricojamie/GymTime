@@ -44,6 +44,7 @@ fun RoutineDayFormScreen(
     val isSaveEnabled by viewModel.isSaveEnabled.collectAsState()
 
     var showExercisePicker by remember { mutableStateOf(false) }
+    val accentColor = MaterialTheme.colorScheme.primary
 
     LaunchedEffect(Unit) {
         viewModel.saveSuccessEvent.collect {
@@ -75,7 +76,7 @@ fun RoutineDayFormScreen(
                         Icon(
                             Icons.Default.Check,
                             contentDescription = "Save",
-                            tint = if (isSaveEnabled) PrimaryAccent else TextTertiary
+                            tint = if (isSaveEnabled) accentColor else TextTertiary
                         )
                     }
                 },
@@ -85,7 +86,7 @@ fun RoutineDayFormScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showExercisePicker = true },
-                containerColor = PrimaryAccent,
+                containerColor = accentColor,
                 contentColor = Color.Black,
                 shape = RoundedCornerShape(16.dp)
             ) {
@@ -222,6 +223,7 @@ fun ExercisePickerDialog(
     onExerciseSelected: (Exercise) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
+    val accentColor = MaterialTheme.colorScheme.primary
 
     val filteredExercises = remember(searchQuery, availableExercises) {
         if (searchQuery.isBlank()) availableExercises
@@ -316,7 +318,7 @@ fun ExercisePickerDialog(
                         .padding(horizontal = 16.dp)
                         .padding(top = 8.dp, bottom = 32.dp)
                         .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent),
+                    colors = ButtonDefaults.buttonColors(containerColor = accentColor),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text("Done", color = Color.Black, fontWeight = FontWeight.Bold)
@@ -332,10 +334,11 @@ fun ExercisePickerItem(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
+    val accentColor = MaterialTheme.colorScheme.primary
     Surface(
-        color = if (isSelected) PrimaryAccent.copy(alpha = 0.1f) else SurfaceCards,
+        color = if (isSelected) accentColor.copy(alpha = 0.1f) else SurfaceCards,
         shape = RoundedCornerShape(12.dp),
-        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, PrimaryAccent) else null,
+        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, accentColor) else null,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -357,7 +360,7 @@ fun ExercisePickerItem(
                 )
             }
             if (isSelected) {
-                Icon(Icons.Default.Check, contentDescription = "Selected", tint = PrimaryAccent)
+                Icon(Icons.Default.Check, contentDescription = "Selected", tint = accentColor)
             } else {
                 Icon(Icons.Default.Add, contentDescription = "Add", tint = TextTertiary)
             }

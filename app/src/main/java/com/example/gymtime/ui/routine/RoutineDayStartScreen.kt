@@ -121,6 +121,7 @@ fun RoutineDayStartItem(
     dayWithExercises: RoutineDayWithExercises,
     onTap: () -> Unit
 ) {
+    val accentColor = MaterialTheme.colorScheme.primary
     GlowCard(
         onClick = onTap,
         modifier = Modifier.fillMaxWidth()
@@ -160,7 +161,7 @@ fun RoutineDayStartItem(
 
             Surface(
                 shape = RoundedCornerShape(50),
-                color = PrimaryAccent,
+                color = accentColor,
                 modifier = Modifier.size(40.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {

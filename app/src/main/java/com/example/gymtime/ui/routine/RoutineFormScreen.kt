@@ -29,6 +29,7 @@ fun RoutineFormScreen(
     val routineName by viewModel.routineName.collectAsState()
     val isEditMode by viewModel.isEditMode.collectAsState()
     val isSaveEnabled by viewModel.isSaveEnabled.collectAsState()
+    val accentColor = MaterialTheme.colorScheme.primary
 
     LaunchedEffect(Unit) {
         viewModel.saveSuccessEvent.collect { routineId ->
@@ -66,7 +67,7 @@ fun RoutineFormScreen(
                         Icon(
                             Icons.Default.Check,
                             contentDescription = "Save",
-                            tint = if (isSaveEnabled) PrimaryAccent else TextTertiary
+                            tint = if (isSaveEnabled) accentColor else TextTertiary
                         )
                     }
                 },

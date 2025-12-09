@@ -26,7 +26,8 @@ import com.example.gymtime.ui.theme.TextTertiary
 @Composable
 fun WeeklyVolumeCard(
     modifier: Modifier = Modifier,
-    weeklyVolume: Int,
+    weeklyVolume: Float,
+    volumeTrend: List<Float> = emptyList(),
     onClick: () -> Unit
 ) {
     val accentColor = MaterialTheme.colorScheme.primary
@@ -53,21 +54,33 @@ fun WeeklyVolumeCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Simple line graph
+                // Simple line graph - use real data if available, else show placeholder
                 Canvas(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
                 ) {
-                    val points = listOf(0.6f, 0.4f, 0.7f, 0.3f, 0.5f, 0.8f, 0.6f)
+                    // Normalize the trend data to 0-1 range for the chart
+                    val points = if (volumeTrend.isNotEmpty() && volumeTrend.any { it > 0 }) {
+                        val maxVolume = volumeTrend.maxOrNull() ?: 1f
+                        if (maxVolume > 0) {
+                            volumeTrend.map { it / maxVolume }
+                        } else {
+                            listOf(0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f)
+                        }
+                    } else {
+                        // Show placeholder flat line if no data
+                        listOf(0.3f, 0.3f, 0.3f, 0.3f, 0.3f, 0.3f, 0.3f)
+                    }
+
                     val path = Path()
                     val width = size.width
                     val height = size.height
-                    val xSpacing = width / (points.size - 1)
+                    val xSpacing = width / (points.size - 1).coerceAtLeast(1)
 
                     points.forEachIndexed { index, point ->
                         val x = index * xSpacing
-                        val y = height - (point * height)
+                        val y = height - (point * height * 0.8f + height * 0.1f) // Add padding
 
                         if (index == 0) {
                             path.moveTo(x, y)
@@ -85,8 +98,15 @@ fun WeeklyVolumeCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // Format volume nicely (e.g., 22,000 or 22K if large)
+                val volumeDisplay = when {
+                    weeklyVolume >= 1000000 -> String.format("%.1fM lbs", weeklyVolume / 1000000f)
+                    weeklyVolume >= 1000 -> String.format("%,.0f lbs", weeklyVolume)
+                    else -> String.format("%.0f lbs", weeklyVolume)
+                }
+
                 Text(
-                    text = "${weeklyVolume} lbs",
+                    text = volumeDisplay,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary

@@ -34,6 +34,7 @@ fun RoutineLibraryContent(
     val routines by viewModel.routines.collectAsState(initial = emptyList())
     val activeRoutineId by viewModel.activeRoutineId.collectAsState(initial = null)
     val canCreateMore by viewModel.canCreateMoreRoutines.collectAsState()
+    val accentColor = MaterialTheme.colorScheme.primary
 
     var showMaxRoutinesDialog by remember { mutableStateOf(false) }
     var routineToDelete by remember { mutableStateOf<Routine?>(null) }
@@ -48,7 +49,7 @@ fun RoutineLibraryContent(
                         showMaxRoutinesDialog = true
                     }
                 },
-                containerColor = if (canCreateMore) PrimaryAccent else TextTertiary,
+                containerColor = if (canCreateMore) accentColor else TextTertiary,
                 contentColor = Color.Black,
                 shape = RoundedCornerShape(16.dp)
             ) {
@@ -104,7 +105,7 @@ fun RoutineLibraryContent(
             text = { Text("You can only create up to 3 routines. Delete an existing routine to create a new one.", color = TextSecondary) },
             confirmButton = {
                 TextButton(onClick = { showMaxRoutinesDialog = false }) {
-                    Text("OK", color = PrimaryAccent)
+                    Text("OK", color = accentColor)
                 }
             },
             containerColor = SurfaceCards
@@ -148,6 +149,7 @@ private fun RoutineLibraryItem(
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val isRoutineActive = routine.isActive
+    val accentColor = MaterialTheme.colorScheme.primary
 
     GlowCard(
         onClick = onTap,
@@ -200,12 +202,12 @@ private fun RoutineLibraryItem(
                         // Active badge (currently selected routine)
                         if (isSelectedActive && isRoutineActive) {
                             Surface(
-                                color = PrimaryAccent.copy(alpha = 0.2f),
+                                color = accentColor.copy(alpha = 0.2f),
                                 shape = RoundedCornerShape(4.dp)
                             ) {
                                 Text(
                                     text = "ACTIVE",
-                                    color = PrimaryAccent,
+                                    color = accentColor,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 1.sp,
