@@ -19,6 +19,7 @@ class SettingsViewModel @Inject constructor(
     // Plate calculator settings
     val barWeight = userPreferencesRepository.barWeight
     val loadingSides = userPreferencesRepository.loadingSides
+    val availablePlates = userPreferencesRepository.availablePlates
 
     fun setUserName(name: String) {
         viewModelScope.launch {
@@ -47,6 +48,12 @@ class SettingsViewModel @Inject constructor(
     fun setLoadingSides(sides: Int) {
         viewModelScope.launch {
             userPreferencesRepository.setLoadingSides(sides)
+        }
+    }
+
+    fun togglePlate(plate: Float, currentPlates: List<Float>) {
+        viewModelScope.launch {
+            userPreferencesRepository.togglePlate(plate, currentPlates)
         }
     }
 }

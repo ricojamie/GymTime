@@ -62,7 +62,7 @@ class UserPreferencesRepository @Inject constructor(
     val availablePlates: Flow<List<Float>> = context.dataStore.data
         .map { preferences ->
             val json = preferences[PreferencesKeys.AVAILABLE_PLATES]
-                ?: "[45.0, 35.0, 25.0, 10.0, 5.0, 2.5]"
+                ?: "[45.0, 35.0, 25.0, 15.0, 10.0, 5.0, 2.5]"
             // Parse JSON to List<Float>
             json.removeSurrounding("[", "]")
                 .split(",")
@@ -130,5 +130,14 @@ class UserPreferencesRepository @Inject constructor(
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.LOADING_SIDES] = sides
         }
+    }
+
+    suspend fun togglePlate(plate: Float, currentPlates: List<Float>) {
+        val newPlates = if (currentPlates.contains(plate)) {
+            currentPlates - plate
+        } else {
+            (currentPlates + plate).sorted().reversed()
+        }
+        setAvailablePlates(newPlates)
     }
 }

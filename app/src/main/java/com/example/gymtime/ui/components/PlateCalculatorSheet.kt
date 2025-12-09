@@ -2,17 +2,22 @@ package com.example.gymtime.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -22,13 +27,30 @@ import com.example.gymtime.util.PlateLoadout
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlateCalculatorSheet(
-    targetWeight: Float,
-    loadout: PlateLoadout,
+    initialWeight: Float,
     barWeight: Float,
+    availablePlates: List<Float>,
+    loadingSides: Int,
     onDismiss: () -> Unit,
     onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var weightInput by remember { mutableStateOf(if (initialWeight > 0) initialWeight.toString() else "") }
+
+    val loadout = remember(weightInput, barWeight, availablePlates, loadingSides) {
+        val targetWeight = weightInput.toFloatOrNull()
+        if (targetWeight != null && targetWeight > 0) {
+            PlateCalculator.calculatePlates(
+                targetWeight = targetWeight,
+                availablePlates = availablePlates,
+                barWeight = barWeight,
+                loadingSides = loadingSides
+            )
+        } else {
+            PlateLoadout(emptyList(), barWeight, true)
+        }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         modifier = modifier,
@@ -42,7 +64,7 @@ fun PlateCalculatorSheet(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header with target weight and settings icon
+            // Header with settings icon
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -64,59 +86,27 @@ fun PlateCalculatorSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Target weight display
-            Text(
-                text = "Target: ${formatWeight(targetWeight)} lbs",
-                style = MaterialTheme.typography.titleLarge,
-                color = Color(0xFFE0E0E0)
+            // Weight Input
+            OutlinedTextField(
+                value = weightInput,
+                onValueChange = { weightInput = it },
+                label = { Text("Target Weight (lbs)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                    cursorColor = MaterialTheme.colorScheme.primary
+                )
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Barbell visual representation
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Left plates
-                Row(
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    loadout.platesPerSide.reversed().forEach { plate ->
-                        PlateRectangle(plate)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Bar
-                Box(
-                    modifier = Modifier
-                        .width(300.dp)
-                        .height(12.dp)
-                        .background(Color(0xFF95A5A6), RoundedCornerShape(6.dp))
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Right plates
-                Row(
-                    horizontalArrangement = Arrangement.Start,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    loadout.platesPerSide.forEach { plate ->
-                        PlateRectangle(plate)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Plate breakdown text
             if (loadout.platesPerSide.isNotEmpty()) {
+                // Per Side Breakdown
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -124,77 +114,151 @@ fun PlateCalculatorSheet(
                     )
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp)
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "Per Side:",
+                            text = "Per Side",
                             style = MaterialTheme.typography.labelLarge,
                             color = Color(0xFF9CA3AF),
                             fontWeight = FontWeight.Bold
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Plate breakdown as colored circles with text
+                        @OptIn(ExperimentalLayoutApi::class)
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            maxItemsInEachRow = 6
+                        ) {
+                            loadout.platesPerSide.forEach { plate ->
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.padding(horizontal = 6.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(PlateCalculator.getPlateColor(plate))),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = if (plate % 1.0f == 0f) {
+                                                plate.toInt().toString()
+                                            } else {
+                                                plate.toString()
+                                            },
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Text(
+                                        text = "lbs",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF9CA3AF)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Text breakdown
                         Text(
                             text = PlateCalculator.formatPlateLoadout(loadout),
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
-            } else {
-                Text(
-                    text = "Bar only (${formatWeight(barWeight)} lbs)",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color(0xFF9CA3AF)
-                )
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-            // Total weight achieved
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Total Weight:",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFF9CA3AF)
-                )
-                Text(
-                    text = "${formatWeight(loadout.totalWeight)} lbs",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = if (loadout.isExact) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        Color(0xFFF39C12) // Orange for approximation
-                    }
-                )
-            }
-
-            // Warning if not exact match
-            if (!loadout.isExact) {
-                Spacer(modifier = Modifier.height(8.dp))
+                // Total weight display
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFFF39C12).copy(alpha = 0.1f)
+                        containerColor = if (loadout.isExact) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        } else {
+                            Color(0xFFF39C12).copy(alpha = 0.1f)
+                        }
                     )
                 ) {
                     Row(
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "⚠️",
-                            fontSize = 20.sp,
-                            modifier = Modifier.padding(end = 8.dp)
+                            text = "Total Weight:",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color(0xFF9CA3AF)
                         )
                         Text(
-                            text = "Closest approximation with available plates",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFFF39C12)
+                            text = "${formatWeight(loadout.totalWeight)} lbs",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = if (loadout.isExact) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                Color(0xFFF39C12)
+                            }
+                        )
+                    }
+                }
+
+                // Warning if not exact
+                if (!loadout.isExact) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFFF39C12).copy(alpha = 0.1f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "⚠️",
+                                fontSize = 20.sp,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            Text(
+                                text = "Closest approximation with available plates",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color(0xFFF39C12)
+                            )
+                        }
+                    }
+                }
+            } else {
+                // No plates needed
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF1A1A1A)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = if (barWeight == 0f) "Bodyweight only (0 lbs)" else "Bar only (${formatWeight(barWeight)} lbs)",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color(0xFF9CA3AF),
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
@@ -219,44 +283,6 @@ fun PlateCalculatorSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
         }
-    }
-}
-
-@Composable
-private fun PlateRectangle(weight: Float) {
-    val height = when {
-        weight >= 45f -> 80.dp
-        weight >= 35f -> 70.dp
-        weight >= 25f -> 60.dp
-        weight >= 10f -> 50.dp
-        else -> 40.dp
-    }
-
-    val width = 16.dp
-
-    Box(
-        modifier = Modifier
-            .width(width)
-            .height(height)
-            .padding(horizontal = 2.dp)
-            .background(
-                Color(PlateCalculator.getPlateColor(weight)),
-                RoundedCornerShape(4.dp)
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = if (weight % 1.0f == 0f) {
-                weight.toInt().toString()
-            } else {
-                weight.toString()
-            },
-            color = Color.White,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(2.dp)
-        )
     }
 }
 

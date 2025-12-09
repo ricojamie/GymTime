@@ -96,11 +96,15 @@ fun ExerciseLoggingScreen(
     val isTimerRunning by viewModel.isTimerRunning.collectAsState()
     val editingSet by viewModel.editingSet.collectAsState()
     val timerAutoStart by viewModel.timerAutoStart.collectAsState(initial = true)
+    val barWeight by viewModel.barWeight.collectAsState(initial = 45f)
+    val availablePlates by viewModel.availablePlates.collectAsState(initial = listOf(45f, 35f, 25f, 10f, 5f, 2.5f))
+    val loadingSides by viewModel.loadingSides.collectAsState(initial = 2)
 
     var showFinishDialog by remember { mutableStateOf(false) }
     var showTimerDialog by remember { mutableStateOf(false) }
     var showWorkoutOverview by remember { mutableStateOf(false) }
     var showExerciseHistory by remember { mutableStateOf(false) }
+    var showPlateCalculator by remember { mutableStateOf(false) }
 
     var personalRecords by remember { mutableStateOf<PersonalRecords?>(null) }
     var exerciseHistory by remember { mutableStateOf<Map<Long, List<com.example.gymtime.data.db.entity.Set>>>(emptyMap()) }
@@ -343,16 +347,17 @@ fun ExerciseLoggingScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Warmup Toggle Pill
-            Box(
+            // Warmup Toggle and Plate Calculator Row
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp),
-                contentAlignment = Alignment.CenterStart
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // Warmup Toggle Pill
                 Surface(
                     onClick = { viewModel.toggleWarmup() },
-                    shape = RoundedCornerShape(50), // Pill shape
+                    shape = RoundedCornerShape(50),
                     color = if (isWarmup) MaterialTheme.colorScheme.primary else Color.Transparent,
                     border = if (isWarmup) null else androidx.compose.foundation.BorderStroke(1.dp, TextTertiary),
                     modifier = Modifier.height(32.dp)
@@ -370,6 +375,29 @@ fun ExerciseLoggingScreen(
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,
                             color = if (isWarmup) Color.Black else TextTertiary
+                        )
+                    }
+                }
+
+                // Plate Calculator Button
+                Surface(
+                    onClick = { showPlateCalculator = true },
+                    shape = RoundedCornerShape(50),
+                    color = Color.Transparent,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(text = "🏋️ ", fontSize = 14.sp)
+                        Text(
+                            text = "Plates",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -735,6 +763,21 @@ fun ExerciseLoggingScreen(
                 }
             },
             containerColor = SurfaceCards
+        )
+    }
+
+    // Plate Calculator Sheet
+    if (showPlateCalculator) {
+        PlateCalculatorSheet(
+            initialWeight = weight.toFloatOrNull() ?: 0f,
+            barWeight = barWeight,
+            availablePlates = availablePlates,
+            loadingSides = loadingSides,
+            onDismiss = { showPlateCalculator = false },
+            onNavigateToSettings = {
+                showPlateCalculator = false
+                navController.navigate(Screen.Settings.route)
+            }
         )
     }
 
