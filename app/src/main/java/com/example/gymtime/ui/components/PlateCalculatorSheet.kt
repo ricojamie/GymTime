@@ -33,6 +33,7 @@ fun PlateCalculatorSheet(
     loadingSides: Int,
     onDismiss: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onUseWeight: ((Float) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var weightInput by remember { mutableStateOf(if (initialWeight > 0) initialWeight.toString() else "") }
@@ -266,19 +267,46 @@ fun PlateCalculatorSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Close button
-            Button(
-                onClick = onDismiss,
+            // Buttons
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = "Close",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
+                // Close button
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text(
+                        text = "Close",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Use This Weight button (only show if callback provided and weight is valid)
+                if (onUseWeight != null && loadout.totalWeight > 0) {
+                    Button(
+                        onClick = {
+                            onUseWeight(loadout.totalWeight)
+                            onDismiss()
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Text(
+                            text = "Use This Weight",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))

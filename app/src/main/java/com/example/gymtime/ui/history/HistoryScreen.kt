@@ -202,13 +202,15 @@ fun WorkoutCard(
 
 @Composable
 fun MuscleGroupTag(muscleGroup: String) {
+    val themeColor = MaterialTheme.colorScheme.primary
+
     Surface(
         modifier = Modifier
             .height(24.dp)
             .padding(vertical = 2.dp),
         shape = RoundedCornerShape(4.dp),
-        color = PrimaryAccent.copy(alpha = 0.15f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryAccent)
+        color = themeColor.copy(alpha = 0.15f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, themeColor)
     ) {
         Box(
             modifier = Modifier
@@ -217,7 +219,7 @@ fun MuscleGroupTag(muscleGroup: String) {
         ) {
             Text(
                 muscleGroup.uppercase(),
-                color = PrimaryAccent,
+                color = themeColor,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 0.5.sp

@@ -9,8 +9,15 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+
+// Composition local for gradient colors
+val LocalGradientColors = staticCompositionLocalOf<Pair<Color, Color>> {
+    error("No gradient colors provided")
+}
 
 private val DarkColorScheme = darkColorScheme(
     primary = PrimaryAccent,
@@ -44,9 +51,13 @@ fun GymTimeTheme(
         onSurface = TextPrimary,
     )
 
-    MaterialTheme(
-        colorScheme = dynamicColorScheme,
-        typography = Typography,
-        content = content
-    )
+    CompositionLocalProvider(
+        LocalGradientColors provides Pair(appColorScheme.gradientStart, appColorScheme.gradientEnd)
+    ) {
+        MaterialTheme(
+            colorScheme = dynamicColorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }

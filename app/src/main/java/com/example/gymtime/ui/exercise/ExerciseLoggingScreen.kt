@@ -8,7 +8,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -125,6 +124,7 @@ fun ExerciseLoggingScreen(
 
     val view = LocalView.current
     val scope = rememberCoroutineScope()
+    val gradientColors = com.example.gymtime.ui.theme.LocalGradientColors.current
 
     // Load workout overview when bottom sheet opens
     LaunchedEffect(showWorkoutOverview) {
@@ -271,7 +271,7 @@ fun ExerciseLoggingScreen(
                 .fillMaxSize()
                 .background(
                     brush = Brush.verticalGradient(
-                        colors = listOf(GradientStart, GradientEnd)
+                        colors = listOf(gradientColors.first, gradientColors.second)
                     )
                 )
                 .padding(paddingValues)
@@ -777,6 +777,10 @@ fun ExerciseLoggingScreen(
             onNavigateToSettings = {
                 showPlateCalculator = false
                 navController.navigate(Screen.Settings.route)
+            },
+            onUseWeight = { newWeight ->
+                viewModel.updateWeight(newWeight.toString())
+                showPlateCalculator = false
             }
         )
     }
@@ -949,7 +953,6 @@ private fun LogSetButton(
     }
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun ExerciseSetLogCard(
     set: com.example.gymtime.data.db.entity.Set,
@@ -962,17 +965,13 @@ private fun ExerciseSetLogCard(
     var showContextMenu by remember { mutableStateOf(false) }
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = {},
-                onLongClick = { showContextMenu = true }
-            ),
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = if (isPersonalBest) Color(0xFF2D4A1C) else SurfaceCards
         ),
         shape = RoundedCornerShape(12.dp),
-        border = if (isPersonalBest) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
+        border = if (isPersonalBest) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+        onClick = { showContextMenu = true }
     ) {
         Row(
             modifier = Modifier

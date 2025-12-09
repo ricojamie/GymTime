@@ -45,13 +45,14 @@ data class LoggedSet(
 fun WorkoutScreen() {
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Log", "Stats")
+    val gradientColors = com.example.gymtime.ui.theme.LocalGradientColors.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 brush = Brush.verticalGradient(
-                    colors = listOf(GradientStart, GradientEnd)
+                    colors = listOf(gradientColors.first, gradientColors.second)
                 )
             )
     ) {

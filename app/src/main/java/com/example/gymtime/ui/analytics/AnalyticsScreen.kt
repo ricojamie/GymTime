@@ -33,15 +33,17 @@ fun AnalyticsScreen(
     val chartData by viewModel.chartData.collectAsState()
     val currentValue by viewModel.currentValue.collectAsState()
     val maxValue by viewModel.maxValue.collectAsState()
-    
+
+    val gradientColors = com.example.gymtime.ui.theme.LocalGradientColors.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        GradientStart,
-                        GradientEnd
+                        gradientColors.first,
+                        gradientColors.second
                     )
                 )
             )

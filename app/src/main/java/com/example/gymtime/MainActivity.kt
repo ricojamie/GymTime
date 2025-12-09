@@ -48,6 +48,8 @@ class MainActivity : ComponentActivity() {
             val colorScheme = ThemeColors.getScheme(themeColorName)
 
             GymTimeTheme(appColorScheme = colorScheme) {
+                val gradientColors = com.example.gymtime.ui.theme.LocalGradientColors.current
+
                 Surface(
                     modifier = Modifier.fillMaxSize()
                 ) {
@@ -57,8 +59,8 @@ class MainActivity : ComponentActivity() {
                             .background(
                                 brush = Brush.verticalGradient(
                                     colors = listOf(
-                                        com.example.gymtime.ui.theme.GradientStart,
-                                        com.example.gymtime.ui.theme.GradientEnd
+                                        gradientColors.first,
+                                        gradientColors.second
                                     )
                                 )
                             )
