@@ -13,8 +13,7 @@ sealed class Screen(val route: String, val icon: ImageVector) {
     object History : Screen("history", Icons.Filled.History)
     object Library : Screen("library", Icons.AutoMirrored.Filled.MenuBook)
     object Analytics : Screen("analytics", Icons.AutoMirrored.Filled.ShowChart)
-    object Workout : Screen("workout", Icons.Filled.Home) // Placeholder, not in bottom nav
-    object ExerciseSelection : Screen("exercise_selection?workoutMode={workoutMode}", Icons.Filled.Home) { // Placeholder, not in bottom nav
+    object ExerciseSelection : Screen("exercise_selection?workoutMode={workoutMode}", Icons.Filled.Home) {
         fun createRoute(workoutMode: Boolean = false) = if (workoutMode) {
             "exercise_selection?workoutMode=true"
         } else {

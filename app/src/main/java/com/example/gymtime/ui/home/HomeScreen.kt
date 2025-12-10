@@ -2,11 +2,18 @@ package com.example.gymtime.ui.home
 
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
@@ -36,8 +43,6 @@ import com.example.gymtime.ui.components.OrbSize
 import com.example.gymtime.ui.components.RoutineCard
 import com.example.gymtime.ui.components.VolumeOrb
 import com.example.gymtime.ui.components.WeeklyVolumeCard
-import com.example.gymtime.ui.home.HomeViewModel
-import com.example.gymtime.ui.home.HomeHeader
 import com.example.gymtime.ui.theme.PrimaryAccent
 import com.example.gymtime.ui.theme.SurfaceCards
 import com.example.gymtime.ui.theme.TextPrimary

@@ -1,6 +1,5 @@
 package com.example.gymtime.ui.exercise
 
-import android.app.Application
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -15,8 +14,8 @@ import com.example.gymtime.data.VolumeOrbRepository
 import com.example.gymtime.data.VolumeOrbState
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.SetDao
-import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
 import com.example.gymtime.data.db.dao.WorkoutDao
+import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
@@ -28,11 +27,11 @@ import com.example.gymtime.util.PlateLoadout
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import java.util.Date
 import javax.inject.Inject

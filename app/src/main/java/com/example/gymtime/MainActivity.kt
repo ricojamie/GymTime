@@ -85,7 +85,6 @@ class MainActivity : ComponentActivity() {
                                 composable(Screen.Analytics.route) {
                                     com.example.gymtime.ui.analytics.AnalyticsScreen()
                                 }
-                                composable(Screen.Workout.route) { com.example.gymtime.ui.workout.WorkoutScreen() }
                                 composable(
                                     route = Screen.ExerciseSelection.route,
                                     arguments = listOf(

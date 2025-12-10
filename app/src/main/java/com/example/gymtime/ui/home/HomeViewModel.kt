@@ -8,7 +8,6 @@ import com.example.gymtime.data.VolumeOrbState
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.Workout
-import com.example.gymtime.data.db.entity.WorkoutWithMuscles
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,8 +37,6 @@ class HomeViewModel @Inject constructor(
         initialValue = null
     )
 
-    val workouts: Flow<List<WorkoutWithMuscles>> = workoutDao.getWorkoutsWithMuscles()
-
     val activeRoutineId: Flow<Long?> = userPreferencesRepository.activeRoutineId
 
     val hasActiveRoutine: StateFlow<Boolean> = activeRoutineId
@@ -61,11 +58,6 @@ class HomeViewModel @Inject constructor(
     // Weekly volume trend data (last 7 days, day by day)
     private val _weeklyVolumeTrend = MutableStateFlow<List<Float>>(emptyList())
     val weeklyVolumeTrend: StateFlow<List<Float>> = _weeklyVolumeTrend.asStateFlow()
-
-    // TODO: Replace with real data
-    val nextWorkoutName = "Legs"
-    val streak = 3
-    val pbs = 3
 
     // Volume Orb state
     val volumeOrbState: StateFlow<VolumeOrbState> = volumeOrbRepository.orbState
