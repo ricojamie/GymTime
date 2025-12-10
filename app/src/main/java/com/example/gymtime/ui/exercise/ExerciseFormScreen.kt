@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.gymtime.data.db.entity.LogType
+import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.*
 
@@ -41,15 +42,24 @@ fun ExerciseFormScreen(
     val availableMuscles by viewModel.availableMuscles.collectAsState(initial = emptyList())
     val isEditMode by viewModel.isEditMode.collectAsState()
     val isSaveEnabled by viewModel.isSaveEnabled.collectAsState()
+    val isFromWorkout by viewModel.isFromWorkout.collectAsState()
 
     var showMuscleDropdown by remember { mutableStateOf(false) }
     var showLogTypeDropdown by remember { mutableStateOf(false) }
     val accentColor = MaterialTheme.colorScheme.primary
 
-    // Observe save success event
+    // Observe save success event and navigate accordingly
     LaunchedEffect(Unit) {
-        viewModel.saveSuccessEvent.collect {
-            navController.popBackStack()
+        viewModel.saveSuccessEvent.collect { newExerciseId ->
+            if (newExerciseId != null && isFromWorkout) {
+                // New exercise created during workout - go to logging screen
+                navController.navigate(Screen.ExerciseLogging.createRoute(newExerciseId)) {
+                    popUpTo(Screen.ExerciseSelection.route) { inclusive = false }
+                }
+            } else {
+                // Edit mode or not from workout - go back
+                navController.popBackStack()
+            }
         }
     }
 

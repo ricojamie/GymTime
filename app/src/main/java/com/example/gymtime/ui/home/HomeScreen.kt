@@ -116,7 +116,7 @@ fun HomeScreen(
                 if (ongoingWorkout != null) {
                     navController.navigate(Screen.WorkoutResume.route)
                 } else {
-                    navController.navigate(Screen.ExerciseSelection.route)
+                    navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
                 }
             }
         )

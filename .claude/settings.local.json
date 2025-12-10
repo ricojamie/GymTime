@@ -16,7 +16,21 @@
       "Bash(adb logcat:*)",
       "Bash(\"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe\" logcat -d *:E)",
       "Bash(\"/c/Users/ricoj/AppData/Local/Android/Sdk/platform-tools/adb.exe\" logcat -d *:E)",
-      "Bash(\"/c/Users/ricoj/AppData/Local/Android/Sdk/platform-tools/adb.exe\" install -r \"C:/Users/ricoj/desktop/ai_stuff/coding_projects/gym_app/app/build/outputs/apk/debug/app-debug.apk\")"
+      "Bash(\"/c/Users/ricoj/AppData/Local/Android/Sdk/platform-tools/adb.exe\" install -r \"C:/Users/ricoj/desktop/ai_stuff/coding_projects/gym_app/app/build/outputs/apk/debug/app-debug.apk\")",
+      "Bash(\"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe\" logcat -d)",
+      "Bash(\"/c/Users/ricoj/AppData/Local/Android/Sdk/platform-tools/adb.exe\" logcat -d)",
+      "Bash(\"/c/Users/ricoj/AppData/Local/Android/Sdk/platform-tools/adb.exe\" logcat -c)",
+      "Bash(\"/c/Users/ricoj/AppData/Local/Android/Sdk/platform-tools/adb.exe\" logcat)",
+      "Bash(app/src/main/java/com/example/gymtime/data/VolumeOrbRepository.kt )",
+      "Bash(app/src/main/java/com/example/gymtime/ui/components/VolumeOrb.kt )",
+      "Bash(app/src/main/java/com/example/gymtime/util/WeekUtils.kt )",
+      "Bash(app/src/main/java/com/example/gymtime/data/db/dao/SetDao.kt )",
+      "Bash(app/src/main/java/com/example/gymtime/ui/exercise/ExerciseLoggingScreen.kt )",
+      "Bash(app/src/main/java/com/example/gymtime/ui/exercise/ExerciseLoggingViewModel.kt )",
+      "Bash(app/src/main/java/com/example/gymtime/ui/home/HomeScreen.kt )",
+      "Bash(app/src/main/java/com/example/gymtime/ui/home/HomeViewModel.kt )",
+      "Bash(app/src/main/java/com/example/gymtime/ui/summary/PostWorkoutSummaryScreen.kt )",
+      "Bash(app/src/main/java/com/example/gymtime/ui/summary/PostWorkoutSummaryViewModel.kt)"
     ],
     "deny": [],
     "ask": []

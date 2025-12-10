@@ -14,16 +14,24 @@ sealed class Screen(val route: String, val icon: ImageVector) {
     object Library : Screen("library", Icons.AutoMirrored.Filled.MenuBook)
     object Analytics : Screen("analytics", Icons.AutoMirrored.Filled.ShowChart)
     object Workout : Screen("workout", Icons.Filled.Home) // Placeholder, not in bottom nav
-    object ExerciseSelection : Screen("exercise_selection", Icons.Filled.Home) // Placeholder, not in bottom nav
+    object ExerciseSelection : Screen("exercise_selection?workoutMode={workoutMode}", Icons.Filled.Home) { // Placeholder, not in bottom nav
+        fun createRoute(workoutMode: Boolean = false) = if (workoutMode) {
+            "exercise_selection?workoutMode=true"
+        } else {
+            "exercise_selection"
+        }
+    }
     object WorkoutResume : Screen("workout_resume", Icons.Filled.Home) // Placeholder, not in bottom nav
     object ExerciseLogging : Screen("exercise_logging/{exerciseId}", Icons.Filled.Home) { // Placeholder, not in bottom nav
         fun createRoute(exerciseId: Long) = "exercise_logging/$exerciseId"
     }
-    object ExerciseForm : Screen("exercise_form?exerciseId={exerciseId}", Icons.Filled.Home) { // Create/Edit exercise
-        fun createRoute(exerciseId: Long? = null) = if (exerciseId != null) {
-            "exercise_form?exerciseId=$exerciseId"
-        } else {
-            "exercise_form"
+    object ExerciseForm : Screen("exercise_form?exerciseId={exerciseId}&fromWorkout={fromWorkout}", Icons.Filled.Home) { // Create/Edit exercise
+        fun createRoute(exerciseId: Long? = null, fromWorkout: Boolean = false) = buildString {
+            append("exercise_form")
+            val params = mutableListOf<String>()
+            exerciseId?.let { params.add("exerciseId=$it") }
+            if (fromWorkout) params.add("fromWorkout=true")
+            if (params.isNotEmpty()) append("?${params.joinToString("&")}")
         }
     }
     object PostWorkoutSummary : Screen("post_workout_summary/{workoutId}", Icons.Filled.Home) { // Post-workout summary

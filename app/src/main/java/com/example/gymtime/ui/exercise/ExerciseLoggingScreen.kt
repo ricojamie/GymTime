@@ -206,7 +206,7 @@ fun ExerciseLoggingScreen(
                     },
                     navigationIcon = {
                         IconButton(onClick = {
-                            navController.navigate(Screen.ExerciseSelection.route)
+                            navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
                         }) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -686,7 +686,7 @@ fun ExerciseLoggingScreen(
                             // Exit superset mode before navigating to add exercise
                             viewModel.exitSupersetMode()
                         }
-                        navController.navigate(Screen.ExerciseSelection.route)
+                        navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
                     },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.outlinedButtonColors(
@@ -1006,7 +1006,7 @@ fun ExerciseLoggingScreen(
                 },
                 onAddExercise = {
                     showWorkoutOverview = false
-                    navController.navigate(Screen.ExerciseSelection.route)
+                    navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
                 }
             )
         }

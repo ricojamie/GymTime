@@ -102,6 +102,9 @@ fun ExerciseSelectionContent(
     val selectedForSuperset by viewModel.selectedForSuperset.collectAsState()
     val canStartSuperset = selectedForSuperset.size == viewModel.maxSupersetExercises
 
+    // Workout mode state (for navigation after creating exercise)
+    val isWorkoutMode by viewModel.isWorkoutMode.collectAsState()
+
     var exerciseToDelete by remember { mutableStateOf<Exercise?>(null) }
 
     Log.d(TAG, "ExerciseSelectionContent recomposed: availableMuscles=${availableMuscles.size}, filteredExercises=${filteredExercises.size}, isSupersetMode=$isSupersetMode, selectedCount=${selectedForSuperset.size}")
@@ -134,7 +137,9 @@ fun ExerciseSelectionContent(
             } else if (!isSupersetMode) {
                 // Normal "Add Exercise" FAB
                 FloatingActionButton(
-                    onClick = { navController.navigate(Screen.ExerciseForm.createRoute()) },
+                    onClick = {
+                        navController.navigate(Screen.ExerciseForm.createRoute(fromWorkout = isWorkoutMode))
+                    },
                     containerColor = accentColor,
                     contentColor = Color.Black,
                     shape = RoundedCornerShape(16.dp)

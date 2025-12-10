@@ -86,7 +86,15 @@ class MainActivity : ComponentActivity() {
                                     com.example.gymtime.ui.analytics.AnalyticsScreen()
                                 }
                                 composable(Screen.Workout.route) { com.example.gymtime.ui.workout.WorkoutScreen() }
-                                composable(Screen.ExerciseSelection.route) {
+                                composable(
+                                    route = Screen.ExerciseSelection.route,
+                                    arguments = listOf(
+                                        androidx.navigation.navArgument("workoutMode") {
+                                            type = androidx.navigation.NavType.BoolType
+                                            defaultValue = false
+                                        }
+                                    )
+                                ) {
                                     com.example.gymtime.ui.exercise.ExerciseSelectionScreen(navController = navController)
                                 }
                                 composable(Screen.WorkoutResume.route) {
@@ -95,7 +103,7 @@ class MainActivity : ComponentActivity() {
                                             navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId))
                                         },
                                         onAddExerciseClick = {
-                                            navController.navigate(Screen.ExerciseSelection.route)
+                                            navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
                                         },
                                         onFinishWorkoutClick = { workoutId ->
                                             navController.navigate(Screen.PostWorkoutSummary.createRoute(workoutId))
@@ -119,6 +127,10 @@ class MainActivity : ComponentActivity() {
                                             type = androidx.navigation.NavType.StringType
                                             nullable = true
                                             defaultValue = null
+                                        },
+                                        androidx.navigation.navArgument("fromWorkout") {
+                                            type = androidx.navigation.NavType.BoolType
+                                            defaultValue = false
                                         }
                                     )
                                 ) {

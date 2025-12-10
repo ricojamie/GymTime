@@ -1,5 +1,6 @@
 package com.example.gymtime.ui.exercise
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.db.dao.ExerciseDao
@@ -16,10 +17,16 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ExerciseSelectionViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
     private val exerciseDao: ExerciseDao,
     private val muscleGroupDao: MuscleGroupDao,
     private val supersetManager: SupersetManager
 ) : ViewModel() {
+
+    // Track if we're in workout mode (passed from navigation, not DB query)
+    val isWorkoutMode: StateFlow<Boolean> = MutableStateFlow(
+        savedStateHandle.get<Boolean>("workoutMode") ?: false
+    )
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery

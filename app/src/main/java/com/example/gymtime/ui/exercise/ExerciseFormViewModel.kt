@@ -21,6 +21,9 @@ class ExerciseFormViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val exerciseId: Long? = savedStateHandle.get<String>("exerciseId")?.toLongOrNull()
+    private val fromWorkout: Boolean = savedStateHandle.get<Boolean>("fromWorkout") ?: false
+
+    val isFromWorkout: StateFlow<Boolean> = MutableStateFlow(fromWorkout)
 
     private val _exerciseName = MutableStateFlow("")
     val exerciseName: StateFlow<String> = _exerciseName
@@ -53,7 +56,8 @@ class ExerciseFormViewModel @Inject constructor(
         name.isNotBlank() && muscle.isNotBlank() && rest.toIntOrNull() != null && (rest.toIntOrNull() ?: 0) > 0
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    private val _saveSuccessEvent = Channel<Unit>(Channel.BUFFERED)
+    // Returns new exercise ID for create, null for edit
+    private val _saveSuccessEvent = Channel<Long?>(Channel.BUFFERED)
     val saveSuccessEvent = _saveSuccessEvent.receiveAsFlow()
 
     init {
@@ -103,15 +107,16 @@ class ExerciseFormViewModel @Inject constructor(
                 defaultRestSeconds = _defaultRestSeconds.value.toIntOrNull() ?: 90
             )
 
-            if (exerciseId == null) {
-                // Create new
+            val resultId = if (exerciseId == null) {
+                // Create new - return ID for navigation
                 exerciseDao.insertExercise(exercise)
             } else {
-                // Update existing
+                // Update existing - return null (no navigation needed)
                 exerciseDao.updateExercise(exercise)
+                null
             }
 
-            _saveSuccessEvent.send(Unit)
+            _saveSuccessEvent.send(resultId)
         }
     }
 }
