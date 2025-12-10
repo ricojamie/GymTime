@@ -66,6 +66,8 @@ import com.example.gymtime.ui.theme.TextTertiary
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.PlateCalculatorSheet
+import com.example.gymtime.ui.components.VolumeOrb
+import com.example.gymtime.ui.components.OrbSize
 import com.example.gymtime.util.PlateLoadout
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -94,6 +96,7 @@ fun ExerciseLoggingScreen(
     val lastWorkoutSets by viewModel.lastWorkoutSets.collectAsState()
     val workoutOverview by viewModel.workoutOverview.collectAsState()
     val personalBestsByReps by viewModel.personalBestsByReps.collectAsState()
+    val volumeOrbState by viewModel.volumeOrbState.collectAsState()
 
     val isTimerRunning by viewModel.isTimerRunning.collectAsState()
     val editingSet by viewModel.editingSet.collectAsState()
@@ -309,6 +312,19 @@ fun ExerciseLoggingScreen(
                 }
 
             // Removed dedicated Timer Row (Moved to TopAppBar)
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Small Volume Orb - shows weekly progress
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                VolumeOrb(
+                    state = volumeOrbState,
+                    size = OrbSize.SMALL
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 

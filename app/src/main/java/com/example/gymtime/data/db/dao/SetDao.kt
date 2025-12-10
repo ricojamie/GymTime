@@ -305,6 +305,32 @@ interface SetDao {
         ORDER BY week ASC
     """)
     suspend fun getVolumeByMuscleAndWeek(startDate: Long, endDate: Long): List<MuscleVolumeData>
+
+    // ===== VOLUME ORB QUERIES =====
+
+    // Get total volume in a date range (for Volume Orb feature)
+    // Returns 0 if no sets found (non-nullable for easier state management)
+    @Query("""
+        SELECT COALESCE(SUM(s.weight * s.reps), 0)
+        FROM sets s
+        WHERE s.weight IS NOT NULL
+          AND s.reps IS NOT NULL
+          AND s.isWarmup = 0
+          AND s.timestamp >= :startMs
+          AND s.timestamp < :endMs
+    """)
+    suspend fun getVolumeInRange(startMs: Long, endMs: Long): Float
+
+    // Get volume contribution for a specific workout
+    @Query("""
+        SELECT COALESCE(SUM(s.weight * s.reps), 0)
+        FROM sets s
+        WHERE s.workoutId = :workoutId
+          AND s.weight IS NOT NULL
+          AND s.reps IS NOT NULL
+          AND s.isWarmup = 0
+    """)
+    suspend fun getWorkoutVolume(workoutId: Long): Float
 }
 
 // Data class for rep-based personal records

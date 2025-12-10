@@ -11,6 +11,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.UserPreferencesRepository
+import com.example.gymtime.data.VolumeOrbRepository
+import com.example.gymtime.data.VolumeOrbState
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
@@ -55,7 +57,8 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val exerciseDao: ExerciseDao,
     private val workoutDao: WorkoutDao,
     private val setDao: SetDao,
-    private val userPreferencesRepository: UserPreferencesRepository
+    private val userPreferencesRepository: UserPreferencesRepository,
+    private val volumeOrbRepository: VolumeOrbRepository
 ) : ViewModel() {
 
     private val exerciseId: Long = checkNotNull(savedStateHandle["exerciseId"])
@@ -156,6 +159,9 @@ class ExerciseLoggingViewModel @Inject constructor(
     val barWeight = userPreferencesRepository.barWeight
     val loadingSides = userPreferencesRepository.loadingSides
     val availablePlates = userPreferencesRepository.availablePlates
+
+    // Volume Orb state
+    val volumeOrbState: StateFlow<VolumeOrbState> = volumeOrbRepository.orbState
 
     private val _navigationEvents = Channel<Long>(Channel.BUFFERED)
     val navigationEvents = _navigationEvents.receiveAsFlow()
@@ -421,6 +427,9 @@ class ExerciseLoggingViewModel @Inject constructor(
             _rpe.value = ""
             _setNote.value = ""
             _isWarmup.value = false
+
+            // Refresh volume orb after logging set
+            volumeOrbRepository.onSetLogged()
         }
     }
 

@@ -23,7 +23,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.GlowCard
+import com.example.gymtime.ui.components.VolumeOrb
+import com.example.gymtime.ui.components.OrbSize
 import com.example.gymtime.ui.theme.*
+import java.text.NumberFormat
+import java.util.Locale
 
 @Composable
 fun PostWorkoutSummaryScreen(
@@ -34,7 +38,10 @@ fun PostWorkoutSummaryScreen(
     val selectedRating by viewModel.selectedRating.collectAsState()
     val ratingNote by viewModel.ratingNote.collectAsState()
     val isSaving by viewModel.isSaving.collectAsState()
+    val volumeOrbState by viewModel.volumeOrbState.collectAsState()
+    val sessionContribution by viewModel.sessionContribution.collectAsState()
     val accentColor = MaterialTheme.colorScheme.primary
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.US) }
 
     // Observe navigation event
     LaunchedEffect(Unit) {
@@ -146,6 +153,60 @@ fun PostWorkoutSummaryScreen(
                         color = TextPrimary,
                         textAlign = TextAlign.Center
                     )
+
+                    HorizontalDivider(
+                        color = TextTertiary.copy(alpha = 0.2f),
+                        modifier = Modifier.padding(vertical = 20.dp)
+                    )
+
+                    // Weekly Volume Progress Section
+                    Text(
+                        text = "WEEKLY PROGRESS",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp,
+                        color = TextTertiary
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Medium Volume Orb
+                    VolumeOrb(
+                        state = volumeOrbState,
+                        size = OrbSize.MEDIUM,
+                        onOverflowAnimationComplete = { viewModel.clearOrbOverflowAnimation() }
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Session contribution text
+                    if (sessionContribution > 0) {
+                        Text(
+                            text = "+${numberFormat.format(sessionContribution.toLong())} lbs this session",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = accentColor
+                        )
+                    }
+
+                    // Progress percentage
+                    if (!volumeOrbState.isFirstWeek) {
+                        Text(
+                            text = if (volumeOrbState.hasOverflowed) {
+                                "Goal crushed! ${(volumeOrbState.progressPercent * 100).toInt()}% of last week"
+                            } else {
+                                "${(volumeOrbState.progressPercent * 100).toInt()}% of last week's volume"
+                            },
+                            fontSize = 12.sp,
+                            color = if (volumeOrbState.hasOverflowed) accentColor else TextTertiary
+                        )
+                    } else {
+                        Text(
+                            text = "Building your baseline...",
+                            fontSize = 12.sp,
+                            color = TextTertiary
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(32.dp))
 

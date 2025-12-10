@@ -3,6 +3,8 @@ package com.example.gymtime.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.UserPreferencesRepository
+import com.example.gymtime.data.VolumeOrbRepository
+import com.example.gymtime.data.VolumeOrbState
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.Workout
@@ -26,7 +28,8 @@ class HomeViewModel @Inject constructor(
     private val userPreferencesRepository: UserPreferencesRepository,
     private val workoutDao: WorkoutDao,
     private val routineDao: com.example.gymtime.data.db.dao.RoutineDao,
-    private val setDao: SetDao
+    private val setDao: SetDao,
+    private val volumeOrbRepository: VolumeOrbRepository
 ) : ViewModel() {
     val userName: Flow<String> = userPreferencesRepository.userName
     val ongoingWorkout: StateFlow<Workout?> = workoutDao.getOngoingWorkout().stateIn(
@@ -64,8 +67,22 @@ class HomeViewModel @Inject constructor(
     val streak = 3
     val pbs = 3
 
+    // Volume Orb state
+    val volumeOrbState: StateFlow<VolumeOrbState> = volumeOrbRepository.orbState
+
     init {
         loadWeeklyVolume()
+        refreshVolumeOrb()
+    }
+
+    private fun refreshVolumeOrb() {
+        viewModelScope.launch {
+            volumeOrbRepository.refresh()
+        }
+    }
+
+    fun clearOrbOverflowAnimation() {
+        volumeOrbRepository.clearOverflowAnimation()
     }
 
     private fun loadWeeklyVolume() {
@@ -112,5 +129,6 @@ class HomeViewModel @Inject constructor(
 
     fun refreshData() {
         loadWeeklyVolume()
+        refreshVolumeOrb()
     }
 }
