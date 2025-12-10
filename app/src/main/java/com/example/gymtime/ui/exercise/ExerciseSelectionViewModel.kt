@@ -17,7 +17,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ExerciseSelectionViewModel @Inject constructor(
     private val exerciseDao: ExerciseDao,
-    private val muscleGroupDao: MuscleGroupDao
+    private val muscleGroupDao: MuscleGroupDao,
+    private val supersetManager: SupersetManager
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
@@ -25,6 +26,16 @@ class ExerciseSelectionViewModel @Inject constructor(
 
     private val _selectedMuscles = MutableStateFlow<Set<String>>(emptySet())
     val selectedMuscles: StateFlow<Set<String>> = _selectedMuscles
+
+    // Superset selection mode state
+    private val _isSupersetModeEnabled = MutableStateFlow(false)
+    val isSupersetModeEnabled: StateFlow<Boolean> = _isSupersetModeEnabled
+
+    private val _selectedForSuperset = MutableStateFlow<List<Exercise>>(emptyList())
+    val selectedForSuperset: StateFlow<List<Exercise>> = _selectedForSuperset
+
+    // Maximum exercises allowed in a superset (2 for free, 3 for premium later)
+    val maxSupersetExercises = 2
 
     private val allExercises: Flow<List<Exercise>> = exerciseDao.getAllExercises()
 
@@ -70,5 +81,85 @@ class ExerciseSelectionViewModel @Inject constructor(
         viewModelScope.launch {
             exerciseDao.deleteExerciseById(exerciseId)
         }
+    }
+
+    // Superset mode functions
+
+    /**
+     * Toggle superset selection mode on/off.
+     * Clears selection when turning off.
+     */
+    fun toggleSupersetMode() {
+        _isSupersetModeEnabled.value = !_isSupersetModeEnabled.value
+        if (!_isSupersetModeEnabled.value) {
+            clearSupersetSelection()
+        }
+    }
+
+    /**
+     * Toggle selection of an exercise for superset.
+     * If already selected, removes it. If not, adds it (up to max).
+     */
+    fun toggleExerciseSelection(exercise: Exercise) {
+        val current = _selectedForSuperset.value.toMutableList()
+        val existingIndex = current.indexOfFirst { it.id == exercise.id }
+
+        if (existingIndex >= 0) {
+            // Already selected, remove it
+            current.removeAt(existingIndex)
+        } else if (current.size < maxSupersetExercises) {
+            // Not selected and under limit, add it
+            current.add(exercise)
+        }
+        // If at max, ignore the tap (don't add)
+
+        _selectedForSuperset.value = current
+    }
+
+    /**
+     * Check if an exercise is selected for superset.
+     */
+    fun isExerciseSelected(exerciseId: Long): Boolean {
+        return _selectedForSuperset.value.any { it.id == exerciseId }
+    }
+
+    /**
+     * Get the selection order number (1-based) for an exercise.
+     * Returns null if not selected.
+     */
+    fun getSelectionOrder(exerciseId: Long): Int? {
+        val index = _selectedForSuperset.value.indexOfFirst { it.id == exerciseId }
+        return if (index >= 0) index + 1 else null
+    }
+
+    /**
+     * Check if we have enough exercises selected to start a superset.
+     */
+    fun canStartSuperset(): Boolean {
+        return _selectedForSuperset.value.size == maxSupersetExercises
+    }
+
+    /**
+     * Start the superset with selected exercises.
+     * This initializes the SupersetManager and returns the first exercise ID.
+     */
+    fun startSuperset(): Long {
+        val exercises = _selectedForSuperset.value
+        require(exercises.size >= 2) { "Need at least 2 exercises for superset" }
+
+        supersetManager.startSuperset(exercises)
+
+        // Clear local selection state (superset is now active in manager)
+        _isSupersetModeEnabled.value = false
+        _selectedForSuperset.value = emptyList()
+
+        return exercises.first().id
+    }
+
+    /**
+     * Clear superset selection without starting.
+     */
+    fun clearSupersetSelection() {
+        _selectedForSuperset.value = emptyList()
     }
 }

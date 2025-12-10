@@ -331,6 +331,41 @@ interface SetDao {
           AND s.isWarmup = 0
     """)
     suspend fun getWorkoutVolume(workoutId: Long): Float
+
+    // ===== SUPERSET QUERIES =====
+
+    // Get all sets in a superset group (for viewing superset history)
+    @Query("SELECT * FROM sets WHERE supersetGroupId = :groupId ORDER BY timestamp")
+    suspend fun getSetsInSuperset(groupId: String): List<Set>
+
+    // Get volume excluding supersets (for analytics filtering)
+    @Query("""
+        SELECT COALESCE(SUM(weight * reps), 0) FROM sets
+        WHERE supersetGroupId IS NULL
+          AND isWarmup = 0
+          AND timestamp >= :startMs
+          AND timestamp < :endMs
+    """)
+    suspend fun getVolumeExcludingSupersets(startMs: Long, endMs: Long): Float
+
+    // Get volume from supersets only (for analytics filtering)
+    @Query("""
+        SELECT COALESCE(SUM(weight * reps), 0) FROM sets
+        WHERE supersetGroupId IS NOT NULL
+          AND isWarmup = 0
+          AND timestamp >= :startMs
+          AND timestamp < :endMs
+    """)
+    suspend fun getVolumeFromSupersets(startMs: Long, endMs: Long): Float
+
+    // Get distinct superset groups in a date range (for analytics)
+    @Query("""
+        SELECT DISTINCT supersetGroupId FROM sets
+        WHERE supersetGroupId IS NOT NULL
+          AND timestamp >= :startMs
+          AND timestamp < :endMs
+    """)
+    suspend fun getSupersetGroupsInRange(startMs: Long, endMs: Long): List<String>
 }
 
 // Data class for rep-based personal records

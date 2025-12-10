@@ -1,6 +1,7 @@
 package com.example.gymtime.ui.exercise
 
 import android.view.HapticFeedbackConstants
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -104,11 +105,17 @@ fun ExerciseLoggingScreen(
     val availablePlates by viewModel.availablePlates.collectAsState(initial = listOf(45f, 35f, 25f, 10f, 5f, 2.5f))
     val loadingSides by viewModel.loadingSides.collectAsState(initial = 2)
 
+    // Superset state
+    val isInSupersetMode by viewModel.isInSupersetMode.collectAsState()
+    val supersetExercises by viewModel.supersetExercises.collectAsState()
+    val currentSupersetIndex by viewModel.currentSupersetIndex.collectAsState()
+
     var showFinishDialog by remember { mutableStateOf(false) }
     var showTimerDialog by remember { mutableStateOf(false) }
     var showWorkoutOverview by remember { mutableStateOf(false) }
     var showExerciseHistory by remember { mutableStateOf(false) }
     var showPlateCalculator by remember { mutableStateOf(false) }
+    var showExitSupersetDialog by remember { mutableStateOf(false) }
 
     var personalRecords by remember { mutableStateOf<PersonalRecords?>(null) }
     var exerciseHistory by remember { mutableStateOf<Map<Long, List<com.example.gymtime.data.db.entity.Set>>>(emptyMap()) }
@@ -120,6 +127,8 @@ fun ExerciseLoggingScreen(
     var setToAddNote by remember { mutableStateOf<com.example.gymtime.data.db.entity.Set?>(null) }
     var noteText by remember { mutableStateOf("") }
 
+    val view = LocalView.current
+    
     // Observe navigation events from ViewModel
     LaunchedEffect(Unit) {
         viewModel.navigationEvents.collect { workoutId ->
@@ -127,7 +136,25 @@ fun ExerciseLoggingScreen(
         }
     }
 
-    val view = LocalView.current
+    // Observe auto-switch events for superset mode
+    LaunchedEffect(Unit) {
+        viewModel.autoSwitchEvent.collect { nextExerciseId ->
+            navController.navigate(Screen.ExerciseLogging.createRoute(nextExerciseId)) {
+                // Pop the current logging screen off so we don't stack A -> B -> A -> B
+                popUpTo(navController.currentBackStackEntry?.destination?.route ?: return@navigate) {
+                    inclusive = true
+                }
+                launchSingleTop = true
+            }
+            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+        }
+    }
+
+    // Handle back button in superset mode - show confirmation
+    BackHandler(enabled = isInSupersetMode) {
+        showExitSupersetDialog = true
+    }
+
     val scope = rememberCoroutineScope()
     val gradientColors = com.example.gymtime.ui.theme.LocalGradientColors.current
 
@@ -321,6 +348,23 @@ fun ExerciseLoggingScreen(
             )
 
             Spacer(modifier = Modifier.height(12.dp))
+
+            // Superset Indicator Pills (only shown when in superset mode)
+            if (isInSupersetMode && supersetExercises.isNotEmpty()) {
+                SupersetIndicatorPills(
+                    exercises = supersetExercises,
+                    currentExerciseIndex = currentSupersetIndex,
+                    currentExerciseId = exercise?.id,
+                    onExerciseClick = { exerciseId ->
+                        if (exerciseId != exercise?.id) {
+                            navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId)) {
+                                launchSingleTop = true
+                            }
+                        }
+                    }
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
 
             // Current Set Label
             Text(
@@ -638,13 +682,22 @@ fun ExerciseLoggingScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedButton(
-                    onClick = { navController.navigate(Screen.ExerciseSelection.route) },
+                    onClick = {
+                        if (isInSupersetMode) {
+                            // Exit superset mode before navigating to add exercise
+                            viewModel.exitSupersetMode()
+                        }
+                        navController.navigate(Screen.ExerciseSelection.route)
+                    },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
-                    Text("Add Exercise", fontWeight = FontWeight.Bold)
+                    Text(
+                        text = if (isInSupersetMode) "Exit Superset" else "Add Exercise",
+                        fontWeight = FontWeight.Bold
+                    )
                 }
 
                 Button(
@@ -874,6 +927,46 @@ fun ExerciseLoggingScreen(
         )
     }
 
+    // Exit Superset Confirmation Dialog
+    if (showExitSupersetDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitSupersetDialog = false },
+            title = {
+                Text(
+                    text = "Exit Superset?",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to exit superset mode? You can continue logging exercises individually.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextTertiary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.exitSupersetMode()
+                        showExitSupersetDialog = false
+                        navController.navigateUp()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Text("Exit Superset", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitSupersetDialog = false }) {
+                    Text("Continue Superset", color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            containerColor = SurfaceCards
+        )
+    }
+
     // Plate Calculator Sheet
     if (showPlateCalculator) {
         PlateCalculatorSheet(
@@ -1012,6 +1105,81 @@ private fun InputCard(
 }
 
 @Composable
+private fun SupersetIndicatorPills(
+    exercises: List<com.example.gymtime.data.db.entity.Exercise>,
+    currentExerciseIndex: Int,
+    currentExerciseId: Long?,
+    onExerciseClick: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val accentColor = MaterialTheme.colorScheme.primary
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Superset label
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = accentColor.copy(alpha = 0.15f)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    painter = androidx.compose.ui.res.painterResource(id = com.example.gymtime.R.drawable.ic_sync),
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(12.dp)
+                )
+                Text(
+                    text = "SUPERSET",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accentColor,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+            }
+        }
+
+        // Exercise pills
+        exercises.forEachIndexed { index, exercise ->
+            val isActive = exercise.id == currentExerciseId
+
+            Surface(
+                onClick = { onExerciseClick(exercise.id) },
+                shape = RoundedCornerShape(50),
+                color = if (isActive) accentColor else Color.Transparent,
+                border = if (!isActive) androidx.compose.foundation.BorderStroke(1.dp, accentColor) else null
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${index + 1}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isActive) Color.Black else accentColor
+                    )
+                    Text(
+                        text = exercise.name.take(12) + if (exercise.name.length > 12) "..." else "",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = if (isActive) Color.Black else TextPrimary,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun LogSetButton(
     onClick: () -> Unit,
     enabled: Boolean,
@@ -1136,6 +1304,22 @@ private fun ExerciseSetLogCard(
                 if (set.isWarmup) {
                     Text(
                         text = "WU",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                                RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+
+                // Superset Indicator
+                if (set.supersetGroupId != null) {
+                    Text(
+                        text = "SS",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.ExtraBold,

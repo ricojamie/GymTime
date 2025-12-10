@@ -22,7 +22,7 @@ import java.util.Date
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("workoutId"), Index("exerciseId"), Index("timestamp")]
+    indices = [Index("workoutId"), Index("exerciseId"), Index("timestamp"), Index("supersetGroupId")]
 )
 data class Set(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -36,5 +36,7 @@ data class Set(
     val isWarmup: Boolean,
     val isComplete: Boolean,
     val timestamp: Date,
-    val note: String? = null
+    val note: String? = null,
+    val supersetGroupId: String? = null,  // UUID linking all sets in a superset (null = not in superset)
+    val supersetOrderIndex: Int = 0       // Position in rotation (0 = first exercise, 1 = second)
 )

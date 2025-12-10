@@ -24,6 +24,7 @@ fun GlowCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
+    backgroundColor: Color = SurfaceCards,
     content: @Composable () -> Unit
 ) {
     val accentColor = MaterialTheme.colorScheme.primary
@@ -45,8 +46,8 @@ fun GlowCard(
                     brush = Brush.radialGradient(
                         colors = listOf(
                             accentColor.copy(alpha = 0.12f), // Very subtle glow
-                            SurfaceCards,
-                            SurfaceCards
+                            backgroundColor,
+                            backgroundColor
                         ),
                         center = androidx.compose.ui.geometry.Offset(
                             x = 0.15f, // Top-left corner glow position (0.0 = left, 1.0 = right)

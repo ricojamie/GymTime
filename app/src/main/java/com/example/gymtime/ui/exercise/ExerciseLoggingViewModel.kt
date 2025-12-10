@@ -58,10 +58,20 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val setDao: SetDao,
     private val userPreferencesRepository: UserPreferencesRepository,
-    private val volumeOrbRepository: VolumeOrbRepository
+    private val volumeOrbRepository: VolumeOrbRepository,
+    private val supersetManager: SupersetManager
 ) : ViewModel() {
 
     private val exerciseId: Long = checkNotNull(savedStateHandle["exerciseId"])
+
+    // Expose superset state for the UI
+    val isInSupersetMode = supersetManager.isInSupersetMode
+    val supersetExercises = supersetManager.supersetExercises
+    val currentSupersetIndex = supersetManager.currentExerciseIndex
+
+    // Auto-switch event for superset navigation
+    private val _autoSwitchEvent = Channel<Long>(Channel.BUFFERED)
+    val autoSwitchEvent = _autoSwitchEvent.receiveAsFlow()
 
     // Service binding
     private var timerService: RestTimerService? = null
@@ -180,6 +190,14 @@ class ExerciseLoggingViewModel @Inject constructor(
                 exercise?.let {
                     exerciseDefaultRestSeconds = it.defaultRestSeconds
                     _restTime.value = it.defaultRestSeconds
+                    
+                    // Sync SupersetManager if in superset mode
+                    if (supersetManager.isInSupersetMode.value) {
+                         val index = supersetManager.getOrderIndex(exerciseId)
+                         if (index != -1) {
+                             supersetManager.setCurrentExerciseIndex(index)
+                         }
+                    }
                 }
                 Log.d("ExerciseLoggingVM", "Exercise loaded: ${exercise?.name}, defaultRest: ${exercise?.defaultRestSeconds}s")
             }
@@ -334,6 +352,14 @@ class ExerciseLoggingViewModel @Inject constructor(
             val note = _setNote.value.takeIf { it.isNotBlank() }
             val setTimestamp = Date()
 
+            // Get superset data if in superset mode
+            val supersetGroupId = if (supersetManager.isInSupersetMode.value) {
+                supersetManager.supersetGroupId.value
+            } else null
+            val supersetOrderIndex = if (supersetGroupId != null) {
+                supersetManager.getOrderIndex(exercise.id)
+            } else 0
+
             // Build set based on exercise LogType
             val newSet = when (exercise.logType) {
                 LogType.WEIGHT_REPS -> Set(
@@ -347,7 +373,9 @@ class ExerciseLoggingViewModel @Inject constructor(
                     isWarmup = isWarmup,
                     isComplete = true,
                     timestamp = setTimestamp,
-                    note = note
+                    note = note,
+                    supersetGroupId = supersetGroupId,
+                    supersetOrderIndex = supersetOrderIndex
                 )
                 LogType.REPS_ONLY -> Set(
                     workoutId = workout.id,
@@ -360,7 +388,9 @@ class ExerciseLoggingViewModel @Inject constructor(
                     isWarmup = isWarmup,
                     isComplete = true,
                     timestamp = setTimestamp,
-                    note = note
+                    note = note,
+                    supersetGroupId = supersetGroupId,
+                    supersetOrderIndex = supersetOrderIndex
                 )
                 LogType.DURATION -> Set(
                     workoutId = workout.id,
@@ -373,7 +403,9 @@ class ExerciseLoggingViewModel @Inject constructor(
                     isWarmup = isWarmup,
                     isComplete = true,
                     timestamp = setTimestamp,
-                    note = note
+                    note = note,
+                    supersetGroupId = supersetGroupId,
+                    supersetOrderIndex = supersetOrderIndex
                 )
                 LogType.WEIGHT_DISTANCE -> Set(
                     workoutId = workout.id,
@@ -386,7 +418,9 @@ class ExerciseLoggingViewModel @Inject constructor(
                     isWarmup = isWarmup,
                     isComplete = true,
                     timestamp = setTimestamp,
-                    note = note
+                    note = note,
+                    supersetGroupId = supersetGroupId,
+                    supersetOrderIndex = supersetOrderIndex
                 )
                 LogType.DISTANCE_TIME -> Set(
                     workoutId = workout.id,
@@ -399,7 +433,9 @@ class ExerciseLoggingViewModel @Inject constructor(
                     isWarmup = isWarmup,
                     isComplete = true,
                     timestamp = setTimestamp,
-                    note = note
+                    note = note,
+                    supersetGroupId = supersetGroupId,
+                    supersetOrderIndex = supersetOrderIndex
                 )
             }
 
@@ -430,6 +466,15 @@ class ExerciseLoggingViewModel @Inject constructor(
 
             // Refresh volume orb after logging set
             volumeOrbRepository.onSetLogged()
+
+            // Auto-switch to next exercise if in superset mode
+            if (supersetManager.isInSupersetMode.value) {
+                val nextExerciseId = supersetManager.switchToNextExercise()
+                if (nextExerciseId > 0) {
+                    Log.d("ExerciseLoggingVM", "Superset auto-switching to exercise: $nextExerciseId")
+                    _autoSwitchEvent.send(nextExerciseId)
+                }
+            }
         }
     }
 
@@ -516,8 +561,20 @@ class ExerciseLoggingViewModel @Inject constructor(
             val workout = _currentWorkout.value ?: return@launch
             val updatedWorkout = workout.copy(endTime = Date())
             workoutDao.updateWorkout(updatedWorkout)
+
+            // Exit superset mode when finishing workout
+            supersetManager.exitSupersetMode()
+
             _navigationEvents.send(workout.id) // Send workoutId to navigate to summary
         }
+    }
+
+    /**
+     * Exit superset mode. Called when user taps "Exit Superset" or navigates away.
+     */
+    fun exitSupersetMode() {
+        supersetManager.exitSupersetMode()
+        Log.d("ExerciseLoggingVM", "Exited superset mode")
     }
 
     // Load workout overview data
