@@ -1,6 +1,7 @@
 package com.example.gymtime.ui.workout
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -134,14 +135,71 @@ fun WorkoutResumeScreen(
                 EmptyStateCard(onAddExerciseClick = onAddExerciseClick)
             } else {
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(0.dp), // Removed spacing to make connector continuous
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    items(todaysExercises) { exercise ->
-                        ExerciseSummaryCard(
-                            exercise = exercise,
-                            onClick = { onExerciseClick(exercise.exerciseId) }
-                        )
+                    items(todaysExercises.size) { index ->
+                        val exercise = todaysExercises[index]
+                        val isSuperset = exercise.supersetGroupId != null
+                        
+                        val prevExercise = todaysExercises.getOrNull(index - 1)
+                        val nextExercise = todaysExercises.getOrNull(index + 1)
+                        
+                        val isConnectedTop = isSuperset && prevExercise?.supersetGroupId == exercise.supersetGroupId
+                        val isConnectedBottom = isSuperset && nextExercise?.supersetGroupId == exercise.supersetGroupId
+
+                        Box(modifier = Modifier.padding(bottom = 12.dp)) {
+                            Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+                                // Connector Column
+                                if (isSuperset) {
+                                    Column(
+                                        modifier = Modifier
+                                            .width(24.dp)
+                                            .fillMaxHeight(),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        // Top Line
+                                        if (isConnectedTop) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(4.dp)
+                                                    .weight(1f)
+                                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                                            )
+                                        } else {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                        
+                                        // Icon
+                                        Icon(
+                                            painter = androidx.compose.ui.res.painterResource(id = com.example.gymtime.R.drawable.ic_sync),
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        
+                                        // Bottom Line
+                                        if (isConnectedBottom) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(4.dp)
+                                                    .weight(1f)
+                                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                                            )
+                                        } else {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                    }
+                                } else {
+                                    Spacer(modifier = Modifier.width(24.dp))
+                                }
+
+                                ExerciseSummaryCard(
+                                    exercise = exercise,
+                                    onClick = { onExerciseClick(exercise.exerciseId) }
+                                )
+                            }
+                        }
                     }
 
                     // Bottom spacing for bottom bar
@@ -280,7 +338,8 @@ private fun WorkoutResumeScreenPreview() {
                         targetMuscle = "Chest",
                         setCount = 4,
                         bestWeight = 225f,
-                        firstSetTimestamp = System.currentTimeMillis()
+                        firstSetTimestamp = System.currentTimeMillis(),
+                        supersetGroupId = null
                     ),
                     onClick = {}
                 )

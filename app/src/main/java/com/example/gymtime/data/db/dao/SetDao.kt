@@ -16,7 +16,8 @@ data class WorkoutExerciseSummary(
     val targetMuscle: String,
     val setCount: Int,
     val bestWeight: Float?,
-    val firstSetTimestamp: Long
+    val firstSetTimestamp: Long,
+    val supersetGroupId: String?
 )
 
 // Data class for set with exercise info (for history)
@@ -88,7 +89,8 @@ interface SetDao {
             e.targetMuscle as targetMuscle,
             COUNT(s.id) as setCount,
             MAX(s.weight) as bestWeight,
-            MIN(s.timestamp) as firstSetTimestamp
+            MIN(s.timestamp) as firstSetTimestamp,
+            MAX(s.supersetGroupId) as supersetGroupId
         FROM exercises e
         LEFT JOIN sets s ON e.id = s.exerciseId AND s.workoutId = :workoutId
         WHERE e.id IN (
@@ -102,7 +104,7 @@ interface SetDao {
     // Get workout overview including routine exercises (for routine-based workouts)
     // Shows logged exercises + unstarted routine exercises
     @Query("""
-        SELECT exerciseId, exerciseName, targetMuscle, setCount, bestWeight, firstSetTimestamp
+        SELECT exerciseId, exerciseName, targetMuscle, setCount, bestWeight, firstSetTimestamp, supersetGroupId
         FROM (
             SELECT
                 e.id as exerciseId,
@@ -110,7 +112,8 @@ interface SetDao {
                 e.targetMuscle as targetMuscle,
                 COUNT(s.id) as setCount,
                 MAX(s.weight) as bestWeight,
-                MIN(s.timestamp) as firstSetTimestamp
+                MIN(s.timestamp) as firstSetTimestamp,
+                MAX(s.supersetGroupId) as supersetGroupId
             FROM exercises e
             INNER JOIN sets s ON e.id = s.exerciseId AND s.workoutId = :workoutId
             GROUP BY e.id
@@ -123,7 +126,8 @@ interface SetDao {
                 e.targetMuscle as targetMuscle,
                 0 as setCount,
                 NULL as bestWeight,
-                9223372036854775807 as firstSetTimestamp
+                9223372036854775807 as firstSetTimestamp,
+                NULL as supersetGroupId
             FROM routine_exercises re
             INNER JOIN exercises e ON re.exerciseId = e.id
             WHERE re.routineDayId = :routineDayId

@@ -75,7 +75,6 @@ import java.util.Date
 
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1453,69 +1452,123 @@ private fun WorkoutOverviewContent(
         Spacer(modifier = Modifier.height(24.dp))
 
         // Exercise list
-        exercises.forEach { summary ->
+        exercises.forEachIndexed { index, summary ->
             val isActive = summary.exerciseId == currentExerciseId
+            val isSuperset = summary.supersetGroupId != null
+            
+            // Determine connector visibility
+            val prevSummary = exercises.getOrNull(index - 1)
+            val nextSummary = exercises.getOrNull(index + 1)
+            
+            val isConnectedTop = isSuperset && prevSummary?.supersetGroupId == summary.supersetGroupId
+            val isConnectedBottom = isSuperset && nextSummary?.supersetGroupId == summary.supersetGroupId
 
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color(0xFF0D0D0D)
-                ),
-                shape = RoundedCornerShape(12.dp),
-                onClick = { onExerciseClick(summary.exerciseId) }
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+                // Visual Superset Connector
+                if (isSuperset) {
+                    Column(
+                        modifier = Modifier
+                            .width(16.dp)
+                            .fillMaxHeight(),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Status indicator
-                        Text(
-                            text = if (isActive) "→" else "✓",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = if (isActive) MaterialTheme.colorScheme.primary else TextPrimary,
-                            fontWeight = FontWeight.Bold
+                        // Top Line
+                        if (isConnectedTop) {
+                            Box(
+                                modifier = Modifier
+                                    .width(4.dp)
+                                    .weight(1f)
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                        
+                        // Icon/Dot
+                        Icon(
+                            painter = androidx.compose.ui.res.painterResource(id = com.example.gymtime.R.drawable.ic_sync),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(12.dp)
                         )
-
-                        Column {
-                            Text(
-                                text = summary.exerciseName,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isActive) MaterialTheme.colorScheme.primary else TextPrimary
+                        
+                        // Bottom Line
+                        if (isConnectedBottom) {
+                            Box(
+                                modifier = Modifier
+                                    .width(4.dp)
+                                    .weight(1f)
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
                             )
-                            Text(
-                                text = summary.targetMuscle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextTertiary,
-                                fontSize = 12.sp
-                            )
+                        } else {
+                            Spacer(modifier = Modifier.weight(1f))
                         }
                     }
+                } else {
+                    Spacer(modifier = Modifier.width(16.dp))
+                }
 
-                    Column(
-                        horizontalAlignment = Alignment.End
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color(0xFF0D0D0D)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    onClick = { onExerciseClick(summary.exerciseId) }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "${summary.setCount} sets",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextTertiary
-                        )
-                        summary.bestWeight?.let { weight ->
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Status indicator
                             Text(
-                                text = "${weight.toInt()} lbs",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextTertiary.copy(alpha = 0.7f),
-                                fontSize = 11.sp
+                                text = if (isActive) "→" else "✓",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = if (isActive) MaterialTheme.colorScheme.primary else TextPrimary,
+                                fontWeight = FontWeight.Bold
                             )
+
+                            Column {
+                                Text(
+                                    text = summary.exerciseName,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isActive) MaterialTheme.colorScheme.primary else TextPrimary
+                                )
+                                Text(
+                                    text = summary.targetMuscle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextTertiary,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+
+                        Column(
+                            horizontalAlignment = Alignment.End
+                        ) {
+                            Text(
+                                text = "${summary.setCount} sets",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextTertiary
+                            )
+                            summary.bestWeight?.let { weight ->
+                                Text(
+                                    text = "${weight.toInt()} lbs",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextTertiary.copy(alpha = 0.7f),
+                                    fontSize = 11.sp
+                                )
+                            }
                         }
                     }
                 }
