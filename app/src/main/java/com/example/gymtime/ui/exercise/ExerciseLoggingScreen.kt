@@ -66,8 +66,7 @@ import com.example.gymtime.ui.theme.TextTertiary
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.PlateCalculatorSheet
-import com.example.gymtime.ui.components.VolumeOrb
-import com.example.gymtime.ui.components.OrbSize
+import com.example.gymtime.ui.components.VolumeProgressBar
 import com.example.gymtime.util.PlateLoadout
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -315,18 +314,13 @@ fun ExerciseLoggingScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Small Volume Orb - shows weekly progress
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                VolumeOrb(
-                    state = volumeOrbState,
-                    size = OrbSize.SMALL
-                )
-            }
+            // Volume Progress Bar - shows weekly progress (compact horizontal bar)
+            VolumeProgressBar(
+                state = volumeOrbState,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Current Set Label
             Text(
