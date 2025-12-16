@@ -78,10 +78,11 @@ MainActivity (Single Activity, No Fragments)
 
 ### Home Dashboard
 - Welcome header with user name + split-color "IronLog" branding
-- Quick Start card (full-width hero card) → starts workout or resumes
-- Routine selector card with active routine display
-- Weekly volume progress with Volume Orb visualization
-- Animated stats display
+- Quick Start card (responsive hero card) → starts workout or resumes
+- Routine card with icon and routine name display
+- Iron Streak card with current streak, best streak, and YTD workouts
+- Weekly Volume Orb at bottom with tap-to-show details
+- Fully responsive layout that adapts to device height (S24 Ultra to smaller phones)
 
 ### Exercise Selection Flow
 - Search box with real-time filtering
@@ -114,6 +115,17 @@ MainActivity (Single Activity, No Fragments)
 - Weekly volume trends
 - Volume Orb per muscle group
 - Historical workout data
+
+### Iron Streak System
+- Sustainable consistency tracking (2 rest days per 7-day rolling window)
+- Three states: Active (fire emoji), Resting (snowflake), Broken (skull)
+- Best streak persistence (all-time record)
+- Year-to-date workout count
+- Algorithm in StreakCalculator.kt utility class
+
+### History Enhancements
+- Workout cards show total volume and working set count
+- Excludes warmup sets from metrics
 
 ### Settings
 - Theme color selection (5 color schemes)
@@ -349,6 +361,6 @@ fun ExerciseListItem(
 
 ---
 
-**Last Updated**: December 10, 2025
+**Last Updated**: December 16, 2025
 **Current Phase**: MVP+ Complete - In active use
 **Codebase Status**: Cleaned and optimized (refactor completed Dec 10, 2025)
