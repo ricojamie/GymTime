@@ -153,6 +153,33 @@ fun WorkoutCard(
                 fontWeight = FontWeight.Medium
             )
 
+            // Volume and Sets row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Volume
+                val volume = workout.totalVolume?.toInt() ?: 0
+                if (volume > 0) {
+                    Text(
+                        text = "${formatVolume(volume)} lbs",
+                        color = TextSecondary,
+                        fontSize = 12.sp
+                    )
+                }
+
+                // Working sets
+                val setCount = workout.workingSetCount ?: 0
+                if (setCount > 0) {
+                    Text(
+                        text = "$setCount sets",
+                        color = TextSecondary,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
             // Duration and rating row
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -456,4 +483,8 @@ fun formatWorkoutDateTime(date: Date): String {
     val dateFormat = SimpleDateFormat("EEEE, MMM d", Locale.getDefault())
     val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
     return "${dateFormat.format(date)} • ${timeFormat.format(date)}"
+}
+
+fun formatVolume(volume: Int): String {
+    return java.text.NumberFormat.getNumberInstance(Locale.US).format(volume)
 }

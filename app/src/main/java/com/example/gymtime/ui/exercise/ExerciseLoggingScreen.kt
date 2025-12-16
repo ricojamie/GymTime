@@ -371,6 +371,7 @@ fun ExerciseLoggingScreen(
                     onExerciseClick = { exerciseId ->
                         if (exerciseId != exercise?.id) {
                             navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId)) {
+                                popUpTo("exercise_logging/{exerciseId}") { inclusive = true }
                                 launchSingleTop = true
                             }
                         }
@@ -1014,6 +1015,7 @@ fun ExerciseLoggingScreen(
                     showWorkoutOverview = false
                     if (exerciseId != exercise?.id) {
                         navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId)) {
+                            popUpTo("exercise_logging/{exerciseId}") { inclusive = true }
                             launchSingleTop = true
                         }
                     }

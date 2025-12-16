@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -32,6 +33,9 @@ class UserPreferencesRepository @Inject constructor(
         val AVAILABLE_PLATES = stringPreferencesKey("available_plates")
         val BAR_WEIGHT = androidx.datastore.preferences.core.floatPreferencesKey("bar_weight")
         val LOADING_SIDES = androidx.datastore.preferences.core.intPreferencesKey("loading_sides")
+
+        // Streak tracking
+        val BEST_STREAK = intPreferencesKey("best_streak")
     }
 
     val userName: Flow<String> = context.dataStore.data
@@ -77,6 +81,11 @@ class UserPreferencesRepository @Inject constructor(
     val loadingSides: Flow<Int> = context.dataStore.data
         .map { preferences ->
             preferences[PreferencesKeys.LOADING_SIDES] ?: 2
+        }
+
+    val bestStreak: Flow<Int> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.BEST_STREAK] ?: 0
         }
 
     suspend fun setUserName(name: String) {
@@ -139,5 +148,14 @@ class UserPreferencesRepository @Inject constructor(
             (currentPlates + plate).sorted().reversed()
         }
         setAvailablePlates(newPlates)
+    }
+
+    suspend fun updateBestStreakIfNeeded(currentStreak: Int) {
+        context.dataStore.edit { preferences ->
+            val currentBest = preferences[PreferencesKeys.BEST_STREAK] ?: 0
+            if (currentStreak > currentBest) {
+                preferences[PreferencesKeys.BEST_STREAK] = currentStreak
+            }
+        }
     }
 }
