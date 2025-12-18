@@ -17,10 +17,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -30,9 +34,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,12 +50,16 @@ import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.components.OrbSize
 import com.example.gymtime.ui.components.RoutineCard
 import com.example.gymtime.ui.components.VolumeOrb
+import com.example.gymtime.ui.theme.SurfaceCards
 import com.example.gymtime.ui.theme.TextPrimary
 import com.example.gymtime.ui.theme.TextSecondary
 import com.example.gymtime.ui.theme.TextTertiary
 import com.example.gymtime.util.StreakCalculator
 import kotlinx.coroutines.delay
+import java.text.NumberFormat
+import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
@@ -64,6 +75,10 @@ fun HomeScreen(
     val streakResult by viewModel.streakResult.collectAsState()
     val bestStreak by viewModel.bestStreak.collectAsState()
     val ytdWorkouts by viewModel.ytdWorkouts.collectAsState()
+    val ytdVolume by viewModel.ytdVolume.collectAsState()
+
+    var showStreakDetail by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState()
 
     val view = LocalView.current
 
@@ -168,8 +183,8 @@ fun HomeScreen(
                 StreakCardCompact(
                     streakResult = streakResult,
                     bestStreak = bestStreak,
-                    ytdWorkouts = ytdWorkouts,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    onClick = { showStreakDetail = true }
                 )
             }
 
@@ -183,6 +198,24 @@ fun HomeScreen(
             )
 
             Spacer(modifier = Modifier.height(spacerS))
+        }
+
+        // Streak Detail Modal
+        if (showStreakDetail) {
+            ModalBottomSheet(
+                onDismissRequest = { showStreakDetail = false },
+                sheetState = sheetState,
+                containerColor = SurfaceCards,
+                scrimColor = Color.Black.copy(alpha = 0.6f)
+            ) {
+                StreakDetailContent(
+                    streakResult = streakResult,
+                    bestStreak = bestStreak,
+                    ytdWorkouts = ytdWorkouts,
+                    ytdVolume = ytdVolume,
+                    onClose = { showStreakDetail = false }
+                )
+            }
         }
     }
 }
@@ -248,13 +281,13 @@ private fun QuickStartCard(
 }
 
 /**
- * Compact Streak Card for side-by-side layout
+ * Compact Streak Card with larger icons and skip indicators
  */
 @Composable
 private fun StreakCardCompact(
     streakResult: StreakCalculator.StreakResult,
     bestStreak: Int,
-    ytdWorkouts: Int,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val accentColor = MaterialTheme.colorScheme.primary
@@ -268,55 +301,235 @@ private fun StreakCardCompact(
 
     GlowCard(
         modifier = modifier.fillMaxSize(),
-        onClick = { }
+        onClick = onClick
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Icon and streak count
-            Text(text = stateIcon, fontSize = 24.sp)
+            // Label
+            Text(
+                text = "IRON STREAK",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextTertiary,
+                letterSpacing = 1.sp,
+                fontWeight = FontWeight.Bold
+            )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            // Icon (Larger)
+            Text(
+                text = stateIcon,
+                fontSize = 38.sp,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
 
-            Row(
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
+            // Streak count
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = "${streakResult.streakDays}",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = stateColor
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = stateColor,
+                    lineHeight = 28.sp
                 )
                 Text(
-                    text = "day streak",
+                    text = "DAYS",
                     style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary
+                    color = TextTertiary,
+                    letterSpacing = 1.sp
                 )
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // Best + YTD in a row
+            // Skip Indicators (Blue circles)
             Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                repeat(2) { index ->
+                    val isLit = index < streakResult.skipsRemaining
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(
+                                color = if (isLit) Color(0xFF64B5F6) else Color.DarkGray,
+                                shape = androidx.compose.foundation.shape.CircleShape
+                            )
+                            .alpha(if (isLit) 1f else 0.3f)
+                            .then(
+                                if (isLit) Modifier.background(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(Color(0xFF64B5F6), Color.Transparent)
+                                    ),
+                                    shape = androidx.compose.foundation.shape.CircleShape
+                                ) else Modifier
+                            )
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StreakDetailContent(
+    streakResult: StreakCalculator.StreakResult,
+    bestStreak: Int,
+    ytdWorkouts: Int,
+    ytdVolume: Float,
+    onClose: () -> Unit
+) {
+    val accentColor = MaterialTheme.colorScheme.primary
+    val numberFormat = NumberFormat.getNumberInstance(Locale.US)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Iron Streak Overview",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary
+        )
+        
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Large Streak Circle
+        Box(
+            modifier = Modifier
+                .size(120.dp)
+                .background(
+                    color = accentColor.copy(alpha = 0.1f),
+                    shape = androidx.compose.foundation.shape.CircleShape
+                )
+                .padding(4.dp)
+                .background(
+                    color = Color.Black.copy(alpha = 0.3f),
+                    shape = androidx.compose.foundation.shape.CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "Best: $bestStreak",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextTertiary
+                    text = when (streakResult.state) {
+                        StreakCalculator.StreakState.ACTIVE -> "\uD83D\uDD25"
+                        StreakCalculator.StreakState.RESTING -> "\u2744\uFE0F"
+                        StreakCalculator.StreakState.BROKEN -> "\uD83D\uDC80"
+                    },
+                    fontSize = 32.sp
                 )
                 Text(
-                    text = "YTD: $ytdWorkouts",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextTertiary
+                    text = "${streakResult.streakDays}",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = accentColor
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Skips remaining section
+        Text(
+            text = "SKIPS REMAINING THIS WEEK",
+            style = MaterialTheme.typography.labelMedium,
+            color = TextTertiary,
+            letterSpacing = 1.5.sp
+        )
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            repeat(2) { index ->
+                val isLit = index < streakResult.skipsRemaining
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .background(
+                                color = if (isLit) Color(0xFF64B5F6) else Color(0xFF1A1A1A),
+                                shape = androidx.compose.foundation.shape.CircleShape
+                            )
+                            .then(
+                                if (isLit) Modifier.padding(4.dp).background(Color.White.copy(alpha = 0.3f), androidx.compose.foundation.shape.CircleShape) else Modifier
+                            )
+                    )
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Text(
+            text = if (streakResult.skipsRemaining > 0) 
+                "You have ${streakResult.skipsRemaining} free skips left until Sunday." 
+                else "No skips left! Workout next to keep the streak alive.",
+            style = MaterialTheme.typography.bodySmall,
+            color = if (streakResult.skipsRemaining > 0) TextSecondary else Color(0xFFEF5350),
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Stats Grid
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            StatItem(
+                label = "ALL-TIME BEST",
+                value = "$bestStreak Days",
+                modifier = Modifier.weight(1f)
+            )
+            StatItem(
+                label = "2025 WORKOUTS",
+                value = "$ytdWorkouts",
+                modifier = Modifier.weight(1f)
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        StatItem(
+            label = "2025 TOTAL WEIGHT LIFTED",
+            value = "${numberFormat.format(ytdVolume.toLong())} lbs",
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(40.dp))
+    }
+}
+
+@Composable
+private fun StatItem(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .background(Color(0xFF0D0D0D), RoundedCornerShape(12.dp))
+            .padding(16.dp),
+        horizontalAlignment = Alignment.Start
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = TextTertiary,
+            letterSpacing = 1.sp
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary
+        )
     }
 }
 

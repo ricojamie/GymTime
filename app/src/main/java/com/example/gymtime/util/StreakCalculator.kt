@@ -4,173 +4,161 @@ import java.util.Calendar
 import java.util.Date
 
 /**
- * Calculates the user's "Iron Streak" - a sustainable consistency tracker.
+ * Calculates the user's "Sustainable Streak" - a consistency tracker.
  *
- * Rule: A streak is maintained as long as the user doesn't miss more than 2 days
- * in any rolling 7-day window. This encourages sustainable habits without the
- * toxic pressure of daily streaks.
+ * Rules:
+ * 1. The week starts on Sunday and ends on Saturday.
+ * 2. Every user gets 2 "free skips" per calendar week.
+ * 3. On Sunday morning, the skip count resets to 2.
+ * 4. A streak is maintained as long as the user doesn't use more than 2 skips in a week.
+ * 5. If a user misses a 3rd workout in a week (after using 2 skips), the streak ends.
+ * 6. Skips don't increment the streak count, but they don't break it.
+ * 7. For new users, the "clock" starts on the day of their first workout.
  */
 object StreakCalculator {
 
-    /**
-     * The state of the user's streak
-     */
     enum class StreakState {
-        ACTIVE,   // User worked out today - streak is growing
-        RESTING,  // User hasn't worked out today but is within safe limits
-        BROKEN    // User has exceeded the miss limit - streak is reset
+        ACTIVE,   // Worked out today
+        RESTING,  // Using a skip today, but streak is alive
+        BROKEN    // Used too many skips this week, streak reset
     }
 
-    /**
-     * Result of streak calculation
-     */
     data class StreakResult(
         val state: StreakState,
         val streakDays: Int,
-        val restDaysRemaining: Int  // How many more days they can miss this week
+        val skipsRemaining: Int,    // 0, 1, or 2
+        val nextResetDate: Date     // Next Sunday
     )
 
-    /**
-     * Calculate the current streak state and count.
-     *
-     * @param workoutDates List of dates when workouts with at least 1 working set occurred.
-     *                     Should be sorted descending (most recent first).
-     * @return StreakResult containing state, streak count, and remaining rest days
-     */
     fun calculateStreak(workoutDates: List<Date>): StreakResult {
         if (workoutDates.isEmpty()) {
-            // First workout starts a streak with 2 banked rest days
             return StreakResult(
                 state = StreakState.RESTING,
                 streakDays = 0,
-                restDaysRemaining = 2
+                skipsRemaining = 2,
+                nextResetDate = getNextSunday()
             )
         }
 
         val today = normalizeToMidnight(Date())
         val workoutDaysNormalized = workoutDates.map { normalizeToMidnight(it) }.toSet()
+        val earliestWorkout = workoutDaysNormalized.minOrNull() ?: today
 
-        // Check if worked out today
+        // 1. Calculate how many skips have been used THIS calendar week (Sun-Sat)
+        val currentWeekStart = getStartOfCurrentWeek()
+        val usedSkipsThisWeek = countUsedSkipsInWeek(currentWeekStart, today, workoutDaysNormalized)
+        val skipsRemaining = (2 - usedSkipsThisWeek).coerceAtLeast(0)
+
+        // 2. Determine current state
         val workedOutToday = workoutDaysNormalized.contains(today)
-
-        // Calculate missed days in the last 7 days (including today)
-        val missedDaysInWindow = countMissedDaysInWindow(today, workoutDaysNormalized)
-
-        // Determine state based on today's workout and missed days
         val state = when {
-            missedDaysInWindow > 2 -> StreakState.BROKEN
+            usedSkipsThisWeek > 2 -> StreakState.BROKEN
             workedOutToday -> StreakState.ACTIVE
             else -> StreakState.RESTING
         }
 
-        // Calculate streak length
-        val streakDays = if (state == StreakState.BROKEN) {
-            0
-        } else {
-            calculateStreakLength(today, workoutDaysNormalized)
-        }
-
-        // Rest days remaining (max 2 - missed in current window, but not below 0)
-        val restDaysRemaining = if (state == StreakState.BROKEN) {
-            0
-        } else {
-            (2 - missedDaysInWindow).coerceAtLeast(0)
+        // 3. Calculate streak length
+        // We walk back week by week. A week is "safe" if it has 2 or fewer misses.
+        // We count total workout days in consecutive safe weeks.
+        var totalStreakDays = 0
+        if (state != StreakState.BROKEN) {
+            totalStreakDays = calculateTotalStreakDays(today, workoutDaysNormalized, earliestWorkout)
         }
 
         return StreakResult(
             state = state,
-            streakDays = streakDays,
-            restDaysRemaining = restDaysRemaining
+            streakDays = totalStreakDays,
+            skipsRemaining = skipsRemaining,
+            nextResetDate = getNextSunday()
         )
     }
 
-    /**
-     * Count how many days in the last 7 days (including today) had no workout.
-     */
-    private fun countMissedDaysInWindow(today: Date, workoutDays: Set<Date>): Int {
-        var missedCount = 0
-        val calendar = Calendar.getInstance()
-
-        for (i in 0..6) {
-            calendar.time = today
-            calendar.add(Calendar.DAY_OF_YEAR, -i)
-            val day = normalizeToMidnight(calendar.time)
-
-            if (!workoutDays.contains(day)) {
-                missedCount++
+    private fun countUsedSkipsInWeek(weekStart: Date, today: Date, workoutDays: Set<Date>): Int {
+        var misses = 0
+        val cal = Calendar.getInstance()
+        cal.time = weekStart
+        
+        // Count days from week start to today (inclusive)
+        while (!cal.time.after(today)) {
+            if (!workoutDays.contains(cal.time)) {
+                misses++
             }
+            cal.add(Calendar.DAY_OF_YEAR, 1)
         }
-
-        return missedCount
+        return misses
     }
 
-    /**
-     * Calculate streak length by walking backwards through time.
-     * Streak continues as long as each 7-day window has no more than 2 misses.
-     */
-    private fun calculateStreakLength(today: Date, workoutDays: Set<Date>): Int {
-        if (workoutDays.isEmpty()) return 0
+    private fun calculateTotalStreakDays(today: Date, workoutDays: Set<Date>, earliestWorkout: Date): Int {
+        var totalDays = 0
+        var currentWeekEnd = today
+        val cal = Calendar.getInstance()
 
-        // Find the earliest workout date to avoid infinite loops
-        val earliestWorkout = workoutDays.minOrNull() ?: return 0
-
-        var streakDays = 0
-        val calendar = Calendar.getInstance()
-        var currentDay = today
-
-        // Walk backwards day by day
         while (true) {
-            // Check the 7-day window ending on currentDay
-            val missedInWindow = countMissedDaysInWindowFrom(currentDay, workoutDays)
+            val weekStart = getStartOfWeek(currentWeekEnd)
+            
+            // For the first week (the one containing 'earliestWorkout'), we only count misses 
+            // from the day of the first workout onwards.
+            val effectiveWeekStart = if (weekStart.before(earliestWorkout)) earliestWorkout else weekStart
+            
+            var missesInWeek = 0
+            var workoutDaysInWeek = 0
+            
+            val walkCal = Calendar.getInstance()
+            walkCal.time = effectiveWeekStart
+            
+            // For the current week, we only walk up to today. 
+            // For past weeks, we walk the full Sun-Sat range (or earliestWorkout-Sat).
+            val walkEnd = if (currentWeekEnd.after(today)) today else currentWeekEnd
+            
+            while (!walkCal.time.after(walkEnd)) {
+                if (workoutDays.contains(walkCal.time)) {
+                    workoutDaysInWeek++
+                } else {
+                    missesInWeek++
+                }
+                walkCal.add(Calendar.DAY_OF_YEAR, 1)
+            }
 
-            if (missedInWindow > 2) {
-                // This is where the streak broke
+            if (missesInWeek > 2) {
+                // Streak broke in this week
                 break
             }
 
-            // Count this day toward the streak if it's a workout day
-            if (workoutDays.contains(currentDay)) {
-                streakDays++
-            }
+            totalDays += workoutDaysInWeek
 
-            // Move to previous day
-            calendar.time = currentDay
-            calendar.add(Calendar.DAY_OF_YEAR, -1)
-            currentDay = normalizeToMidnight(calendar.time)
+            // Move to previous week (the Saturday before this week's Sunday)
+            cal.time = weekStart
+            cal.add(Calendar.DAY_OF_YEAR, -1)
+            currentWeekEnd = cal.time
 
-            // Stop if we've gone before all workouts (no point continuing)
-            if (currentDay.before(earliestWorkout)) {
-                // Check remaining days from earliest workout to current check point
-                break
-            }
+            if (currentWeekEnd.before(earliestWorkout)) break
         }
 
-        return streakDays
+        return totalDays
     }
 
-    /**
-     * Count missed days in a 7-day window ending on the given date.
-     */
-    private fun countMissedDaysInWindowFrom(endDate: Date, workoutDays: Set<Date>): Int {
-        var missedCount = 0
-        val calendar = Calendar.getInstance()
+    private fun getStartOfCurrentWeek(): Date {
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY)
+        return normalizeToMidnight(cal.time)
+    }
 
-        for (i in 0..6) {
-            calendar.time = endDate
-            calendar.add(Calendar.DAY_OF_YEAR, -i)
-            val day = normalizeToMidnight(calendar.time)
+    private fun getStartOfWeek(date: Date): Date {
+        val cal = Calendar.getInstance()
+        cal.time = date
+        cal.set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY)
+        return normalizeToMidnight(cal.time)
+    }
 
-            if (!workoutDays.contains(day)) {
-                missedCount++
-            }
+    private fun getNextSunday(): Date {
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.DAY_OF_YEAR, 1) // Start from tomorrow
+        while (cal.get(Calendar.DAY_OF_WEEK) != Calendar.SUNDAY) {
+            cal.add(Calendar.DAY_OF_YEAR, 1)
         }
-
-        return missedCount
+        return normalizeToMidnight(cal.time)
     }
 
-    /**
-     * Normalize a date to midnight for consistent comparison.
-     */
     private fun normalizeToMidnight(date: Date): Date {
         val calendar = Calendar.getInstance()
         calendar.time = date

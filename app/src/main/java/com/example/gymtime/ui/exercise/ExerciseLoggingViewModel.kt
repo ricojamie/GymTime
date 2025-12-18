@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import com.example.gymtime.util.TimeUtils
 import java.util.Date
 import javax.inject.Inject
 
@@ -397,7 +398,7 @@ class ExerciseLoggingViewModel @Inject constructor(
                     weight = null,
                     reps = null,
                     rpe = _rpe.value.toFloatOrNull(),
-                    durationSeconds = _duration.value.toIntOrNull(),
+                    durationSeconds = TimeUtils.parseHMSToSeconds(_duration.value),
                     distanceMeters = null,
                     isWarmup = isWarmup,
                     isComplete = true,
@@ -413,7 +414,7 @@ class ExerciseLoggingViewModel @Inject constructor(
                     reps = null,
                     rpe = _rpe.value.toFloatOrNull(),
                     durationSeconds = null,
-                    distanceMeters = _distance.value.toFloatOrNull(),
+                    distanceMeters = _distance.value.toFloatOrNull()?.let { TimeUtils.milesToMeters(it) },
                     isWarmup = isWarmup,
                     isComplete = true,
                     timestamp = setTimestamp,
@@ -427,8 +428,8 @@ class ExerciseLoggingViewModel @Inject constructor(
                     weight = null,
                     reps = null,
                     rpe = _rpe.value.toFloatOrNull(),
-                    durationSeconds = _duration.value.toIntOrNull(),
-                    distanceMeters = _distance.value.toFloatOrNull(),
+                    durationSeconds = TimeUtils.parseHMSToSeconds(_duration.value),
+                    distanceMeters = _distance.value.toFloatOrNull()?.let { TimeUtils.milesToMeters(it) },
                     isWarmup = isWarmup,
                     isComplete = true,
                     timestamp = setTimestamp,
@@ -481,6 +482,8 @@ class ExerciseLoggingViewModel @Inject constructor(
         _editingSet.value = set
         _weight.value = set.weight?.toString() ?: ""
         _reps.value = set.reps?.toString() ?: ""
+        _duration.value = set.durationSeconds?.let { TimeUtils.formatSecondsToHMS(it) } ?: ""
+        _distance.value = set.distanceMeters?.let { TimeUtils.formatMiles(TimeUtils.metersToMiles(it)) } ?: ""
         _isWarmup.value = set.isWarmup
     }
 
@@ -490,6 +493,8 @@ class ExerciseLoggingViewModel @Inject constructor(
                 val updatedSet = set.copy(
                     weight = _weight.value.toFloatOrNull(),
                     reps = _reps.value.toIntOrNull(),
+                    durationSeconds = TimeUtils.parseHMSToSeconds(_duration.value),
+                    distanceMeters = _distance.value.toFloatOrNull()?.let { TimeUtils.milesToMeters(it) },
                     isWarmup = _isWarmup.value
                 )
                 setDao.updateSet(updatedSet)
@@ -500,6 +505,8 @@ class ExerciseLoggingViewModel @Inject constructor(
                 _weight.value = ""
                 _reps.value = ""
                 _rpe.value = ""
+                _duration.value = ""
+                _distance.value = ""
                 _isWarmup.value = false
             }
         }
@@ -510,6 +517,8 @@ class ExerciseLoggingViewModel @Inject constructor(
         _weight.value = ""
         _reps.value = ""
         _rpe.value = ""
+        _duration.value = ""
+        _distance.value = ""
         _isWarmup.value = false
     }
 

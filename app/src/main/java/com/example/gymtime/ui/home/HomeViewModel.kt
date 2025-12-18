@@ -70,7 +70,8 @@ class HomeViewModel @Inject constructor(
     private val _streakResult = MutableStateFlow(StreakCalculator.StreakResult(
         state = StreakCalculator.StreakState.RESTING,
         streakDays = 0,
-        restDaysRemaining = 2
+        skipsRemaining = 2,
+        nextResetDate = java.util.Date()
     ))
     val streakResult: StateFlow<StreakCalculator.StreakResult> = _streakResult.asStateFlow()
 
@@ -82,11 +83,16 @@ class HomeViewModel @Inject constructor(
     private val _ytdWorkouts = MutableStateFlow(0)
     val ytdWorkouts: StateFlow<Int> = _ytdWorkouts.asStateFlow()
 
+    // Year-to-date total weight
+    private val _ytdVolume = MutableStateFlow(0f)
+    val ytdVolume: StateFlow<Float> = _ytdVolume.asStateFlow()
+
     init {
         loadWeeklyVolume()
         refreshVolumeOrb()
         loadStreakData()
         loadYtdWorkouts()
+        loadYtdVolume()
     }
 
     private fun refreshVolumeOrb() {
@@ -97,6 +103,21 @@ class HomeViewModel @Inject constructor(
 
     fun clearOrbOverflowAnimation() {
         volumeOrbRepository.clearOverflowAnimation()
+    }
+
+    private fun loadYtdVolume() {
+        viewModelScope.launch {
+            val cal = Calendar.getInstance()
+            cal.set(Calendar.DAY_OF_YEAR, 1)
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            val startOfYear = cal.timeInMillis
+            val endOfToday = System.currentTimeMillis()
+            
+            _ytdVolume.value = setDao.getTotalVolume(startOfYear, endOfToday) ?: 0f
+        }
     }
 
     private fun loadWeeklyVolume() {
@@ -171,5 +192,6 @@ class HomeViewModel @Inject constructor(
         refreshVolumeOrb()
         loadStreakData()
         loadYtdWorkouts()
+        loadYtdVolume()
     }
 }
