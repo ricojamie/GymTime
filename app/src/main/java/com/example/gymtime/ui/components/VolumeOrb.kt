@@ -43,12 +43,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.SideEffect
 import com.example.gymtime.data.VolumeOrbState
-import com.example.gymtime.ui.theme.PrimaryAccent
-import com.example.gymtime.ui.theme.PrimaryAccentDark
-import com.example.gymtime.ui.theme.PrimaryAccentLight
 import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.random.Random
 
 /**
  * Size variants for the Volume Orb.
@@ -60,15 +61,23 @@ enum class OrbSize(val dp: Dp) {
 }
 
 // Colors for the orb
-private val OrbLiquidColor = PrimaryAccent
-private val OrbLiquidColorDark = PrimaryAccentDark
-private val OrbLiquidColorLight = PrimaryAccentLight
 private val OrbGoldColor = Color(0xFFFFD700)
 private val OrbGoldColorDark = Color(0xFFDAA520)
-private val OrbGlassHighlight = Color.White.copy(alpha = 0.3f)
-private val OrbGlassShadow = Color.Black.copy(alpha = 0.4f)
-private val OrbGlowColor = PrimaryAccent.copy(alpha = 0.4f)
-private val OrbGoldGlowColor = OrbGoldColor.copy(alpha = 0.5f)
+private val OrbGlassHighlight = Color.White.copy(alpha = 0.25f)
+private val OrbRimLight = Color.White.copy(alpha = 0.15f)
+
+/**
+ * Simple particle class for the orb's engagement effect.
+ */
+private data class OrbParticle(
+    var x: Float,
+    var y: Float,
+    var vx: Float,
+    var vy: Float,
+    var alpha: Float,
+    var size: Float,
+    var life: Float // 0.0 to 1.0
+)
 
 /**
  * Animated Volume Orb that displays weekly volume progress.
@@ -126,6 +135,55 @@ fun VolumeOrb(
         label = "wave_phase"
     )
 
+    // Particle system state
+    var particles by remember { mutableStateOf(listOf<OrbParticle>()) }
+    var lastVolume by remember { mutableStateOf(state.currentWeekVolume) }
+
+    // Spawn particles when volume increases
+    SideEffect {
+        if (state.currentWeekVolume > lastVolume) {
+            val newParticles = List(10) {
+                OrbParticle(
+                    x = 0.5f + (Random.nextFloat() - 0.5f) * 0.4f,
+                    y = 0.8f, // Spawn near bottom
+                    vx = (Random.nextFloat() - 0.5f) * 0.02f,
+                    vy = -0.01f - Random.nextFloat() * 0.03f,
+                    alpha = 1.0f,
+                    size = 2f + Random.nextFloat() * 4f,
+                    life = 1.0f
+                )
+            }
+            particles = (particles + newParticles).take(50)
+            lastVolume = state.currentWeekVolume
+        }
+    }
+
+    // Update particles
+    val particleTick by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(16, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "particle_tick"
+    )
+
+    LaunchedEffect(particleTick) {
+        if (particles.isNotEmpty()) {
+            particles = particles.mapNotNull { p ->
+                p.life -= 0.02f
+                if (p.life <= 0) null
+                else {
+                    p.x += p.vx
+                    p.y += p.vy
+                    p.alpha = p.life
+                    p
+                }
+            }
+        }
+    }
+
     // Overflow ring animation
     var showOverflowRing by remember { mutableStateOf(false) }
     val overflowRingScale by animateFloatAsState(
@@ -152,11 +210,14 @@ fun VolumeOrb(
         }
     }
 
-    // Determine colors based on overflow state
+    // Determine colors based on overflow state and theme
     val isOverflowed = state.hasOverflowed
-    val liquidColor = if (isOverflowed) OrbGoldColor else OrbLiquidColor
-    val liquidColorDark = if (isOverflowed) OrbGoldColorDark else OrbLiquidColorDark
-    val glowColor = if (isOverflowed) OrbGoldGlowColor else OrbGlowColor
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val primaryColorDark = primaryColor.copy(alpha = 0.8f)
+
+    val liquidColor = if (isOverflowed) OrbGoldColor else primaryColor
+    val liquidColorDark = if (isOverflowed) OrbGoldColorDark else primaryColorDark
+    val glowColor = if (isOverflowed) OrbGoldColor.copy(alpha = 0.5f) else primaryColor.copy(alpha = 0.4f)
 
     Box(
         modifier = modifier
@@ -174,39 +235,38 @@ fun VolumeOrb(
     ) {
         Canvas(modifier = Modifier.size(size.dp)) {
             val center = Offset(sizePx / 2, sizePx / 2)
-            val radius = sizePx / 2 - sizePx * 0.08f // Leave space for glow
+            val radius = sizePx / 2 - sizePx * 0.08f
 
-            // 1. Draw outer glow
+            // 1. Outer Glow (Pulsing)
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        glowColor.copy(alpha = glowPulse * 0.5f),
-                        glowColor.copy(alpha = glowPulse * 0.2f),
+                        glowColor.copy(alpha = glowPulse * 0.4f),
+                        glowColor.copy(alpha = glowPulse * 0.1f),
                         Color.Transparent
                     ),
                     center = center,
-                    radius = radius * 1.3f
+                    radius = radius * 1.4f
                 ),
-                radius = radius * 1.3f,
+                radius = radius * 1.4f,
                 center = center
             )
 
-            // 2. Draw glass sphere background (dark gradient for 3D effect)
+            // 2. Spherical Background (Inner Shadow)
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        Color(0xFF1a1a1a),
-                        Color(0xFF0a0a0a),
+                        Color(0xFF1A1A1A),
                         Color(0xFF050505)
                     ),
-                    center = Offset(center.x - radius * 0.3f, center.y - radius * 0.3f),
+                    center = Offset(center.x + radius * 0.2f, center.y + radius * 0.2f),
                     radius = radius * 1.2f
                 ),
                 radius = radius,
                 center = center
             )
 
-            // 3. Draw liquid fill with wave
+            // 3. Liquid Fill with Wave
             if (animatedFill > 0) {
                 drawLiquidFill(
                     center = center,
@@ -219,35 +279,48 @@ fun VolumeOrb(
                 )
             }
 
-            // 4. Draw glass reflection highlight (top-left)
+            // 4. Bubbles/Sparks (Procedural)
+            particles.forEach { p ->
+                val px = center.x - radius + (p.x * radius * 2)
+                val py = center.y - radius + (p.y * radius * 2)
+
+                val dx = px - center.x
+                val dy = py - center.y
+                if (dx*dx + dy*dy < radius*radius) {
+                    drawCircle(
+                        color = Color.White.copy(alpha = p.alpha * 0.4f),
+                        radius = p.size,
+                        center = Offset(px, py)
+                    )
+                }
+            }
+
+            // 5. Glass Gloss (Top Highlight)
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(
-                        OrbGlassHighlight,
-                        Color.Transparent
-                    ),
+                    colors = listOf(OrbGlassHighlight, Color.Transparent),
                     center = Offset(center.x - radius * 0.35f, center.y - radius * 0.35f),
-                    radius = radius * 0.5f
+                    radius = radius * 0.6f
                 ),
-                radius = radius * 0.4f,
-                center = Offset(center.x - radius * 0.3f, center.y - radius * 0.3f)
+                radius = radius * 0.6f,
+                center = Offset(center.x - radius * 0.35f, center.y - radius * 0.35f)
             )
 
-            // 5. Draw glass edge highlight (subtle rim)
+            // 6. Rim Light (Edge Polish)
             drawCircle(
-                color = Color.White.copy(alpha = 0.1f),
+                color = OrbRimLight,
                 radius = radius,
                 center = center,
-                style = Stroke(width = sizePx * 0.02f)
+                style = Stroke(width = sizePx * 0.015f)
             )
 
-            // 6. Draw overflow ring pulse (if animating)
+            // 7. Overflow Ring
             if (showOverflowRing || overflowRingScale > 1f) {
                 drawCircle(
                     color = OrbGoldColor.copy(alpha = overflowRingAlpha * 0.6f),
-                    radius = radius * overflowRingScale,
+                    radius = radius * 1.1f * overflowRingScale,
                     center = center,
-                    style = Stroke(width = sizePx * 0.03f, cap = StrokeCap.Round)
+                    style = Stroke(width = sizePx * 0.02f, cap = StrokeCap.Round)
                 )
             }
         }
@@ -480,11 +553,14 @@ fun VolumeProgressBar(
         label = "shimmer"
     )
 
-    // Determine colors based on overflow state
+    // Determine colors based on overflow state and theme
     val isOverflowed = state.hasOverflowed
-    val fillColor = if (isOverflowed) OrbGoldColor else OrbLiquidColor
-    val fillColorDark = if (isOverflowed) OrbGoldColorDark else OrbLiquidColorDark
-    val glowColor = if (isOverflowed) OrbGoldGlowColor else OrbGlowColor
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val primaryColorDark = primaryColor.copy(alpha = 0.8f)
+    
+    val fillColor = if (isOverflowed) OrbGoldColor else primaryColor
+    val fillColorDark = if (isOverflowed) OrbGoldColorDark else primaryColorDark
+    val glowColor = if (isOverflowed) OrbGoldColor.copy(alpha = 0.5f) else primaryColor.copy(alpha = 0.4f)
 
     val barHeight = 12.dp
     val cornerRadius = 6.dp
@@ -517,7 +593,7 @@ fun VolumeProgressBar(
                     text = if (state.isFirstWeek) "—"
                            else "${(state.progressPercent * 100).toInt()}%",
                     style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-                    color = if (isOverflowed) OrbGoldColor else OrbLiquidColor,
+                    color = if (isOverflowed) OrbGoldColor else primaryColor,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                 )
             }
