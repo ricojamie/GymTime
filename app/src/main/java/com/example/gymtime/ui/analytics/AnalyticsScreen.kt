@@ -1,6 +1,7 @@
 package com.example.gymtime.ui.analytics
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,12 +9,21 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.SecondaryIndicator
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -27,13 +37,15 @@ import com.example.gymtime.ui.theme.GradientStart
 fun AnalyticsScreen(
     viewModel: AnalyticsViewModel = hiltViewModel()
 ) {
-    val selectedTimeRange by viewModel.selectedTimeRange.collectAsState()
-    val selectedMetric by viewModel.selectedMetric.collectAsState()
-    val selectedTarget by viewModel.selectedTarget.collectAsState()
-    val availableTargets by viewModel.availableTargets.collectAsState()
-    val chartData by viewModel.chartData.collectAsState()
-    val currentValue by viewModel.currentValue.collectAsState()
-    val maxValue by viewModel.maxValue.collectAsState()
+    // State
+    val heatMapData by viewModel.heatMapData.collectAsState()
+    val muscleDistribution by viewModel.muscleDistribution.collectAsState()
+    val muscleFreshness by viewModel.muscleFreshness.collectAsState()
+    val consistencyStats by viewModel.consistencyStats.collectAsState()
+    
+    // Tab State
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    val tabs = listOf("Consistency", "Balance", "Trends")
 
     val gradientColors = com.example.gymtime.ui.theme.LocalGradientColors.current
 
@@ -53,7 +65,6 @@ fun AnalyticsScreen(
                     )
                 )
             )
-            .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
         // Header
@@ -65,38 +76,48 @@ fun AnalyticsScreen(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-
-        // Metric Selector (Volume / 1RM)
-        MetricSelector(
-            selected = selectedMetric,
-            onSelect = { viewModel.setMetric(it) }
-        )
-
-        // Target Selector (Muscle / Exercise)
-        TargetSelector(
-            selected = selectedTarget,
-            options = availableTargets,
-            onSelect = { viewModel.setTarget(it) }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
         
-        // Time range selector
-        TimeRangeSelector(
-            selectedRange = selectedTimeRange,
-            onRangeSelected = { viewModel.setTimeRange(it) }
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Main Chart
-        MainLineChart(data = chartData)
+        // Tabs
+        TabRow(
+            selectedTabIndex = selectedTabIndex,
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.primary,
+            indicator = { tabPositions ->
+                SecondaryIndicator(
+                    Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            },
+            divider = { HorizontalDivider(color = Color.DarkGray) }
+        ) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTabIndex == index,
+                    onClick = { selectedTabIndex = index },
+                    text = { 
+                        Text(
+                            text = title, 
+                            color = if (selectedTabIndex == index) MaterialTheme.colorScheme.primary else Color.Gray,
+                            fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal
+                        ) 
+                    }
+                )
+            }
+        }
         
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Stats Summary
-        StatsSummaryRow(current = currentValue, max = maxValue)
-
-        Spacer(modifier = Modifier.height(32.dp))
+        // Content
+        Box(
+             modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+        ) {
+             when (selectedTabIndex) {
+                0 -> ConsistencyTabContent(heatMapData, consistencyStats)
+                1 -> BalanceTabContent(muscleDistribution, muscleFreshness)
+                2 -> TrendsTabContent()
+            }
+            
+            Spacer(modifier = Modifier.height(32.dp))
+        }
     }
 }

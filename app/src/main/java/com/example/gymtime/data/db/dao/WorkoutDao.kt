@@ -6,6 +6,9 @@ import androidx.room.Query
 import androidx.room.Update
 import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.db.entity.WorkoutWithMuscles
+import com.example.gymtime.data.db.entity.DailyVolume
+import com.example.gymtime.data.db.entity.MuscleDistribution
+import com.example.gymtime.data.db.entity.MuscleFreshness
 import kotlinx.coroutines.flow.Flow
 
 import androidx.room.Delete
@@ -63,4 +66,46 @@ interface WorkoutDao {
           AND strftime('%Y', w.startTime / 1000, 'unixepoch') = strftime('%Y', 'now')
     """)
     suspend fun getYearToDateWorkoutCount(): Int
+
+    // Get daily volume for the heat map (last 365 days)
+    @Query("""
+        SELECT 
+            SUM(s.weight * s.reps) as dailyVol,
+            w.startTime as date
+        FROM workouts w
+        INNER JOIN sets s ON w.id = s.workoutId
+        WHERE s.isWarmup = 0
+          AND s.weight IS NOT NULL
+          AND s.reps IS NOT NULL
+          AND w.startTime > (strftime('%s', 'now', '-1 year') * 1000)
+        GROUP BY date(w.startTime / 1000, 'unixepoch')
+        ORDER BY w.startTime ASC
+    """)
+    suspend fun getDailyVolumeForHeatMap(): List<DailyVolume>
+
+    // Muscle Distribution (Last 30 days)
+    @Query("""
+        SELECT 
+            e.targetMuscle as muscle, 
+            COUNT(s.id) as setVolume
+        FROM sets s
+        INNER JOIN exercises e ON s.exerciseId = e.id
+        WHERE s.isWarmup = 0
+          AND s.timestamp > (strftime('%s', 'now', '-30 days') * 1000)
+        GROUP BY e.targetMuscle
+        ORDER BY setVolume DESC
+    """)
+    suspend fun getMuscleSetCountsLast30Days(): List<MuscleDistribution>
+
+    // Muscle Freshness (Last trained date for each muscle)
+    @Query("""
+        SELECT 
+            e.targetMuscle as muscle,
+            MAX(s.timestamp) as lastTrained
+        FROM sets s
+        INNER JOIN exercises e ON s.exerciseId = e.id
+        WHERE s.isWarmup = 0
+        GROUP BY e.targetMuscle
+    """)
+    suspend fun getMuscleLastTrainedDates(): List<MuscleFreshness>
 }
