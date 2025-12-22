@@ -310,6 +310,22 @@ interface SetDao {
     """)
     suspend fun getVolumeByMuscleAndWeek(startDate: Long, endDate: Long): List<MuscleVolumeData>
 
+    @Query("""
+        SELECT s.*, e.name as exerciseName, e.targetMuscle as targetMuscle
+        FROM sets s
+        INNER JOIN exercises e ON s.exerciseId = e.id
+        WHERE s.timestamp BETWEEN :startDate AND :endDate
+          AND (:muscleGroup IS NULL OR e.targetMuscle = :muscleGroup)
+          AND (:exerciseId IS NULL OR e.id = :exerciseId)
+        ORDER BY s.timestamp ASC
+    """)
+    suspend fun getSetsWithExerciseInRange(
+        startDate: Long,
+        endDate: Long,
+        muscleGroup: String? = null,
+        exerciseId: Long? = null
+    ): List<SetWithExerciseInfo>
+
     // ===== VOLUME ORB QUERIES =====
 
     // Get total volume in a date range (for Volume Orb feature)

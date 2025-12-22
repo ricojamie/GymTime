@@ -6,8 +6,10 @@ import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.SetDao
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -16,7 +18,8 @@ class AnalyticsViewModel @Inject constructor(
     private val setDao: SetDao,
     private val exerciseDao: ExerciseDao,
     private val consistencyUseCase: com.example.gymtime.domain.analytics.ConsistencyUseCase,
-    private val balanceUseCase: com.example.gymtime.domain.analytics.BalanceUseCase
+    private val balanceUseCase: com.example.gymtime.domain.analytics.BalanceUseCase,
+    private val trendUseCase: com.example.gymtime.domain.analytics.TrendUseCase
 ) : ViewModel() {
 
     // --- State ---
@@ -36,6 +39,32 @@ class AnalyticsViewModel @Inject constructor(
     private val _muscleFreshness = MutableStateFlow<List<com.example.gymtime.domain.analytics.MuscleFreshnessStatus>>(emptyList())
     val muscleFreshness: StateFlow<List<com.example.gymtime.domain.analytics.MuscleFreshnessStatus>> = _muscleFreshness.asStateFlow()
 
+    // --- Trend State ---
+    
+    private val _selectedMetric = MutableStateFlow(com.example.gymtime.domain.analytics.TrendMetric.VOLUME)
+    val selectedMetric = _selectedMetric.asStateFlow()
+
+    private val _selectedPeriod = MutableStateFlow(com.example.gymtime.domain.analytics.TimePeriod.THREE_MONTHS)
+    val selectedPeriod = _selectedPeriod.asStateFlow()
+
+    private val _selectedInterval = MutableStateFlow(com.example.gymtime.domain.analytics.AggregateInterval.WEEKLY)
+    val selectedInterval = _selectedInterval.asStateFlow()
+
+    private val _selectedMuscleFilter = MutableStateFlow<String?>("All")
+    val selectedMuscleFilter = _selectedMuscleFilter.asStateFlow()
+
+    private val _selectedExerciseFilterId = MutableStateFlow<Long?>(null)
+    val selectedExerciseFilterId = _selectedExerciseFilterId.asStateFlow()
+
+    private val _trendData = MutableStateFlow<List<com.example.gymtime.domain.analytics.TrendPoint>>(emptyList())
+    val trendData = _trendData.asStateFlow()
+
+    private val _trophyCasePRs = MutableStateFlow<List<com.example.gymtime.domain.analytics.TrophyPR>>(emptyList())
+    val trophyCasePRs = _trophyCasePRs.asStateFlow()
+
+    val allExercises = exerciseDao.getAllExercises()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     init {
         refreshData()
     }
@@ -49,9 +78,40 @@ class AnalyticsViewModel @Inject constructor(
             
             refreshHeatMap()
             refreshBalanceData()
+            refreshTrendData()
+            refreshTrophyCase()
 
             _isLoading.value = false
         }
+    }
+
+    fun updateMetric(metric: com.example.gymtime.domain.analytics.TrendMetric) {
+        _selectedMetric.value = metric
+        refreshTrendData()
+    }
+
+    fun updatePeriod(period: com.example.gymtime.domain.analytics.TimePeriod) {
+        _selectedPeriod.value = period
+        refreshTrendData()
+    }
+
+    fun updateInterval(interval: com.example.gymtime.domain.analytics.AggregateInterval) {
+        _selectedInterval.value = interval
+        refreshTrendData()
+    }
+
+    fun updateMuscleFilter(muscle: String?) {
+        _selectedMuscleFilter.value = muscle
+        _selectedExerciseFilterId.value = null // Clear exercise if muscle changes
+        refreshTrendData()
+    }
+
+    fun updateExerciseFilter(exerciseId: Long?) {
+        _selectedExerciseFilterId.value = exerciseId
+        if (exerciseId != null) {
+            _selectedMuscleFilter.value = null
+        }
+        refreshTrendData()
     }
 
     private fun refreshHeatMap() {
@@ -73,6 +133,32 @@ class AnalyticsViewModel @Inject constructor(
                 _muscleFreshness.value = balanceUseCase.getMuscleFreshness()
             } catch (e: Exception) {
                  // Ignore for now
+            }
+        }
+    }
+
+    private fun refreshTrendData() {
+        viewModelScope.launch {
+            try {
+                _trendData.value = trendUseCase.getTrendData(
+                    metric = _selectedMetric.value,
+                    period = _selectedPeriod.value,
+                    interval = _selectedInterval.value,
+                    muscleGroup = _selectedMuscleFilter.value,
+                    exerciseId = _selectedExerciseFilterId.value
+                )
+            } catch (e: Exception) {
+                _trendData.value = emptyList()
+            }
+        }
+    }
+
+    private fun refreshTrophyCase() {
+        viewModelScope.launch {
+            try {
+                _trophyCasePRs.value = trendUseCase.getTrophyCasePRs()
+            } catch (e: Exception) {
+                _trophyCasePRs.value = emptyList()
             }
         }
     }

@@ -30,4 +30,10 @@ interface ExerciseDao {
 
     @Query("SELECT * FROM exercises WHERE id = :id")
     suspend fun getExerciseByIdSync(id: Long): Exercise?
+
+    @Query("UPDATE exercises SET isStarred = :isStarred WHERE id = :id")
+    suspend fun updateStarredStatus(id: Long, isStarred: Boolean)
+
+    @Query("SELECT * FROM exercises WHERE isStarred = 1 LIMIT 3")
+    fun getStarredExercises(): Flow<List<Exercise>>
 }

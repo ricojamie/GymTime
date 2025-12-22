@@ -11,5 +11,6 @@ data class Exercise(
     val logType: LogType,
     val isCustom: Boolean,
     val notes: String?,
-    val defaultRestSeconds: Int
+    val defaultRestSeconds: Int,
+    val isStarred: Boolean = false
 )

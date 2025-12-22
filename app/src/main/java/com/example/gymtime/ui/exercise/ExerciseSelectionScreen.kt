@@ -24,6 +24,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
@@ -224,6 +226,9 @@ fun ExerciseSelectionContent(
                             },
                             onDelete = {
                                 exerciseToDelete = exercise
+                            },
+                            onStarToggle = {
+                                viewModel.toggleExerciseStarred(exercise)
                             }
                         )
                     }
@@ -408,6 +413,7 @@ private fun ExerciseListItem(
     onClick: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onStarToggle: () -> Unit,
     modifier: Modifier = Modifier,
     isSupersetMode: Boolean = false,
     isSelected: Boolean = false,
@@ -462,6 +468,20 @@ private fun ExerciseListItem(
                         style = MaterialTheme.typography.bodySmall,
                         color = TextTertiary
                     )
+                }
+
+                // Star Button for Trophy Case
+                if (!isSupersetMode) {
+                    androidx.compose.material3.IconButton(
+                        onClick = { onStarToggle() }
+                    ) {
+                        Icon(
+                            imageVector = if (exercise.isStarred) androidx.compose.material.icons.Icons.Default.Star else androidx.compose.material.icons.Icons.Default.StarBorder,
+                            contentDescription = "Star Exercise",
+                            tint = if (exercise.isStarred) Color(0xFFFFD700) else TextTertiary, // Gold or Gray
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
 
                 // Selection order number badge in superset mode

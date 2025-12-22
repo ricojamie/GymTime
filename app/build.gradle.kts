@@ -63,9 +63,9 @@ dependencies {
     kapt(libs.hilt.compiler)
 
     // Vico charting library for Analytics
-    implementation("com.patrykandpatrick.vico:compose:1.13.1")
-    implementation("com.patrykandpatrick.vico:compose-m3:1.13.1")
-    implementation("com.patrykandpatrick.vico:core:1.13.1")
+    implementation("com.patrykandpatrick.vico:compose:2.0.0-beta.1")
+    implementation("com.patrykandpatrick.vico:compose-m3:2.0.0-beta.1")
+    implementation("com.patrykandpatrick.vico:core:2.0.0-beta.1")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

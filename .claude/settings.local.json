@@ -30,7 +30,13 @@
       "Bash(app/src/main/java/com/example/gymtime/ui/home/HomeScreen.kt )",
       "Bash(app/src/main/java/com/example/gymtime/ui/home/HomeViewModel.kt )",
       "Bash(app/src/main/java/com/example/gymtime/ui/summary/PostWorkoutSummaryScreen.kt )",
-      "Bash(app/src/main/java/com/example/gymtime/ui/summary/PostWorkoutSummaryViewModel.kt)"
+      "Bash(app/src/main/java/com/example/gymtime/ui/summary/PostWorkoutSummaryViewModel.kt)",
+      "WebFetch(domain:guide.vico.patrykandpatrick.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:archive.patrykandpatrick.com)",
+      "WebSearch",
+      "WebFetch(domain:www.patrykandpatrick.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": [],
     "ask": []

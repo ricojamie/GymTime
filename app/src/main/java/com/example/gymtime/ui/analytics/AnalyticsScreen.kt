@@ -42,6 +42,7 @@ fun AnalyticsScreen(
     val muscleDistribution by viewModel.muscleDistribution.collectAsState()
     val muscleFreshness by viewModel.muscleFreshness.collectAsState()
     val consistencyStats by viewModel.consistencyStats.collectAsState()
+    val trophyCasePRs by viewModel.trophyCasePRs.collectAsState()
     
     // Tab State
     var selectedTabIndex by remember { mutableIntStateOf(0) }
@@ -112,9 +113,9 @@ fun AnalyticsScreen(
                 .verticalScroll(rememberScrollState())
         ) {
              when (selectedTabIndex) {
-                0 -> ConsistencyTabContent(heatMapData, consistencyStats)
+                0 -> ConsistencyTabContent(heatMapData, consistencyStats, trophyCasePRs)
                 1 -> BalanceTabContent(muscleDistribution, muscleFreshness)
-                2 -> TrendsTabContent()
+                2 -> TrendsTabContent(viewModel)
             }
             
             Spacer(modifier = Modifier.height(32.dp))

@@ -112,7 +112,7 @@ object DatabaseModule {
         }
     }
 
-    // Migration from version 7 to 8: Adding superset support
+    // Migration from version 7 to 8: Adding superset support to sets table
     private val MIGRATION_7_8 = object : Migration(7, 8) {
         override fun migrate(database: SupportSQLiteDatabase) {
             Log.d(TAG, "Running migration 7 -> 8: Adding superset support to sets table")
@@ -128,6 +128,14 @@ object DatabaseModule {
         }
     }
 
+    // Migration from version 8 to 9: Adding exercise starring support
+    private val MIGRATION_8_9 = object : Migration(8, 9) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            Log.d(TAG, "Running migration 8 -> 9: Adding isStarred column to exercises table")
+            database.execSQL("ALTER TABLE exercises ADD COLUMN isStarred INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): GymTimeDatabase {
@@ -136,7 +144,7 @@ object DatabaseModule {
             GymTimeDatabase::class.java,
             "gym_time_db"
         )
-        .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+        .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
         .fallbackToDestructiveMigration() // For development simplicity
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {

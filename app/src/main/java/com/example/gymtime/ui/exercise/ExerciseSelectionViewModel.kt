@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -168,5 +169,23 @@ class ExerciseSelectionViewModel @Inject constructor(
      */
     fun clearSupersetSelection() {
         _selectedForSuperset.value = emptyList()
+    }
+
+    /**
+     * Toggle the starred status of an exercise.
+     * Maximum of 3 exercises can be starred.
+     */
+    fun toggleExerciseStarred(exercise: Exercise) {
+        viewModelScope.launch {
+            if (!exercise.isStarred) {
+                // Check if we already have 3 starred
+                val currentStarredCount = exerciseDao.getStarredExercises().first().size
+                if (currentStarredCount >= 3) {
+                    // Maximum reached - UI should ideally show a message
+                    return@launch
+                }
+            }
+            exerciseDao.updateStarredStatus(exercise.id, !exercise.isStarred)
+        }
     }
 }
