@@ -3,7 +3,7 @@ package com.example.gymtime.ui.routine
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gymtime.data.db.dao.RoutineDao
+import com.example.gymtime.data.RoutineRepository
 import com.example.gymtime.data.db.entity.RoutineDay
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -12,7 +12,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class RoutineDayListViewModel @Inject constructor(
-    private val routineDao: RoutineDao,
+    private val routineRepository: RoutineRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -23,26 +23,26 @@ class RoutineDayListViewModel @Inject constructor(
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val routineName: Flow<String> = _routineId
         .flatMapLatest { id ->
-            routineDao.getRoutineById(id).map { it?.name ?: "" }
+            routineRepository.getRoutineById(id).map { it?.name ?: "" }
         }
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val days: Flow<List<RoutineDay>> = _routineId
         .flatMapLatest { id ->
-            routineDao.getDaysForRoutine(id)
+            routineRepository.getDaysForRoutine(id)
         }
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val canAddMoreDays: StateFlow<Boolean> = _routineId
         .flatMapLatest { id ->
-            routineDao.getDayCountForRoutine(id)
+            routineRepository.getDaysForRoutine(id).map { it.size }
         }
         .map { count -> count < 7 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     fun deleteDay(day: RoutineDay) {
         viewModelScope.launch {
-            routineDao.deleteRoutineDay(day)
+            routineRepository.deleteRoutineDay(day)
         }
     }
 }

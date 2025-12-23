@@ -3,7 +3,7 @@ package com.example.gymtime.ui.routine
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gymtime.data.db.dao.RoutineDao
+import com.example.gymtime.data.RoutineRepository
 import com.example.gymtime.data.db.entity.Routine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -13,7 +13,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class RoutineFormViewModel @Inject constructor(
-    private val routineDao: RoutineDao,
+    private val routineRepository: RoutineRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -34,7 +34,7 @@ class RoutineFormViewModel @Inject constructor(
     init {
         if (routineId != null) {
             viewModelScope.launch {
-                routineDao.getRoutineById(routineId).firstOrNull()?.let { routine ->
+                routineRepository.getRoutineById(routineId).firstOrNull()?.let { routine ->
                     _routineName.value = routine.name
                 }
             }
@@ -52,11 +52,11 @@ class RoutineFormViewModel @Inject constructor(
 
             if (routineId != null) {
                 // Edit mode
-                routineDao.updateRoutine(Routine(id = routineId, name = name))
+                routineRepository.updateRoutine(Routine(id = routineId, name = name))
                 _saveSuccessEvent.send(routineId)
             } else {
                 // Create mode
-                val newId = routineDao.insertRoutine(Routine(name = name))
+                val newId = routineRepository.insertRoutine(Routine(name = name))
                 _saveSuccessEvent.send(newId)
             }
         }

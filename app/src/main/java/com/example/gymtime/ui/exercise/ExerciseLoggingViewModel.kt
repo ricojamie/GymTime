@@ -9,6 +9,7 @@ import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.gymtime.data.RoutineRepository
 import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.VolumeOrbRepository
 import com.example.gymtime.data.VolumeOrbState
@@ -30,9 +31,14 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import com.example.gymtime.data.db.dao.RoutineDayWithExercises
+import com.example.gymtime.data.db.entity.RoutineExercise
 import com.example.gymtime.util.TimeUtils
 import java.util.Date
 import javax.inject.Inject
@@ -59,7 +65,8 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val setDao: SetDao,
     private val userPreferencesRepository: UserPreferencesRepository,
     private val volumeOrbRepository: VolumeOrbRepository,
-    private val supersetManager: SupersetManager
+    private val supersetManager: SupersetManager,
+    private val routineRepository: RoutineRepository
 ) : ViewModel() {
 
     private val exerciseId: Long = checkNotNull(savedStateHandle["exerciseId"])
@@ -179,6 +186,10 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _navigationEvents = Channel<Long>(Channel.BUFFERED)
     val navigationEvents = _navigationEvents.receiveAsFlow()
 
+    // Next exercise in routine
+    private val _nextExerciseId = MutableStateFlow<Long?>(null)
+    val nextExerciseId: StateFlow<Long?> = _nextExerciseId
+
     init {
         // Bind to timer service
         val serviceIntent = Intent(context, RestTimerService::class.java)
@@ -187,31 +198,30 @@ class ExerciseLoggingViewModel @Inject constructor(
 
         viewModelScope.launch {
             // Load exercise
-            exerciseDao.getExerciseById(exerciseId).collectLatest { exercise ->
-                _exercise.value = exercise
+            exerciseDao.getExerciseById(exerciseId).collectLatest { ex ->
+                _exercise.value = ex
                 // Set timer to exercise's default rest time
-                exercise?.let {
+                ex?.let {
                     exerciseDefaultRestSeconds = it.defaultRestSeconds
                     _restTime.value = it.defaultRestSeconds
                     
-                    // Sync SupersetManager if in superset mode
+                    // Initial sync with SupersetManager if already in a superset (e.g. from blank workout)
                     if (supersetManager.isInSupersetMode.value) {
-                         val index = supersetManager.getOrderIndex(exerciseId)
-                         if (index != -1) {
-                             supersetManager.setCurrentExerciseIndex(index)
+                         val orderIndex = supersetManager.getOrderIndex(exerciseId)
+                         if (orderIndex != -1) {
+                             supersetManager.setCurrentExerciseIndex(orderIndex)
                          }
                     }
                 }
-                Log.d("ExerciseLoggingVM", "Exercise loaded: ${exercise?.name}, defaultRest: ${exercise?.defaultRestSeconds}s")
+                Log.d("ExerciseLoggingVM", "Exercise loaded: ${ex?.name}")
             }
         }
 
         viewModelScope.launch {
-            // Load personal bests by rep count for this exercise with timestamps
+            // Load personal bests by rep count
             val pbsWithTimestamps = setDao.getPersonalBestsWithTimestamps(exerciseId)
             val pbMap = pbsWithTimestamps.associateBy { it.reps }
             _personalBestsByReps.value = filterDominatedPBs(pbMap)
-            Log.d("ExerciseLoggingVM", "Personal bests loaded with timestamps: ${_personalBestsByReps.value}")
         }
 
         viewModelScope.launch {
@@ -219,98 +229,117 @@ class ExerciseLoggingViewModel @Inject constructor(
             val ongoing = workoutDao.getOngoingWorkout().first()
             if (ongoing != null) {
                 _currentWorkout.value = ongoing
-                Log.d("ExerciseLoggingVM", "Ongoing workout found: ${ongoing.id}")
             } else {
-                // Create new workout
-                val newWorkout = Workout(
-                    startTime = Date(),
-                    endTime = null,
-                    name = null,
-                    note = null
+                val newWorkoutId = workoutDao.insertWorkout(
+                    Workout(startTime = Date(), endTime = null, name = null, note = null)
                 )
-                val workoutId = workoutDao.insertWorkout(newWorkout)
-                val createdWorkout = workoutDao.getWorkoutById(workoutId).first()
-                _currentWorkout.value = createdWorkout
-                Log.d("ExerciseLoggingVM", "New workout created: ${createdWorkout.id}")
+                _currentWorkout.value = workoutDao.getWorkoutById(newWorkoutId).first()
             }
+        }
 
-            // Load logged sets for this exercise in current workout
-            _currentWorkout.value?.let { workout ->
-                setDao.getSetsForWorkout(workout.id).collectLatest { sets ->
-                    _loggedSets.value = sets
-                        .filter { it.exerciseId == exerciseId }
-                        .sortedBy { it.timestamp }
-                    Log.d("ExerciseLoggingVM", "Logged sets updated: ${_loggedSets.value.size}")
+        // Initialize routine data reactively once workout is loaded
+        viewModelScope.launch {
+            _currentWorkout.filterNotNull().flatMapLatest { workout ->
+                if (workout.routineDayId != null) {
+                    routineRepository.getRoutineDayWithExercises(workout.routineDayId)
+                } else {
+                    flowOf(null)
+                }
+            }.collectLatest { dayWithExercises ->
+                val routineExercises = dayWithExercises?.exercises?.sortedBy { it.routineExercise.orderIndex }
+                val currentRoutineExercise = routineExercises?.find { it.routineExercise.exerciseId == exerciseId }
+                
+                // 1. Determine next exercise for navigation
+                val currentIndex = routineExercises?.indexOfFirst { it.routineExercise.exerciseId == exerciseId } ?: -1
+                val currentGroupId = currentRoutineExercise?.routineExercise?.supersetGroupId
+                
+                if (currentGroupId != null) {
+                    val group = routineExercises!!
+                        .filter { it.routineExercise.supersetGroupId == currentGroupId }
+                        .sortedBy { it.routineExercise.supersetOrderIndex }
+                    
+                    val indexInGroup = group.indexOfFirst { it.exercise.id == exerciseId }
+                    if (indexInGroup != -1) {
+                        val nextInRotation = (indexInGroup + 1) % group.size
+                        _nextExerciseId.value = group[nextInRotation].exercise.id
+                    }
+                } else if (currentIndex != -1 && currentIndex < (routineExercises?.size ?: 0) - 1) {
+                    _nextExerciseId.value = routineExercises!![currentIndex + 1].routineExercise.exerciseId
+                } else {
+                    _nextExerciseId.value = null
+                }
+                
+                // 2. Initialize SupersetManager if part of a routine superset
+                currentGroupId?.let { groupId ->
+                    val groupExercises = routineExercises!!
+                        .filter { it.routineExercise.supersetGroupId == groupId }
+                        .sortedBy { it.routineExercise.supersetOrderIndex }
+                        .map { it.exercise }
+                    
+                    if (groupExercises.size >= 2) {
+                        if (!supersetManager.isInSupersetMode.value || supersetManager.supersetGroupId.value != groupId) {
+                            supersetManager.startSuperset(groupExercises, groupId)
+                        }
+                        
+                        // Sync current index
+                        val orderIndex = groupExercises.indexOfFirst { it.id == exerciseId }
+                        if (orderIndex != -1) {
+                            supersetManager.setCurrentExerciseIndex(orderIndex)
+                        }
+                    }
+                } ?: run {
+                    if (supersetManager.isInSupersetMode.value) {
+                        supersetManager.exitSupersetMode()
+                    }
                 }
             }
         }
 
         viewModelScope.launch {
-            // Load last workout data for pre-fill
-            _currentWorkout.value?.let { workout ->
-                val previousSets = setDao.getLastWorkoutSetsForExercise(
-                    exerciseId = exerciseId,
-                    currentWorkoutId = workout.id
-                )
-                _lastWorkoutSets.value = previousSets
-                Log.d("ExerciseLoggingVM", "Last workout sets loaded: ${previousSets.size}")
+            // Load and observe sets for current workout
+            _currentWorkout.filterNotNull().collectLatest { workout ->
+                setDao.getSetsForWorkout(workout.id).collectLatest { sets ->
+                    _loggedSets.value = sets.filter { it.exerciseId == exerciseId }.sortedBy { it.timestamp }
+                }
+            }
+        }
 
-                // Auto-prefill from last workout ONLY if this is the first set (no logged sets yet)
-                // This runs when entering the exercise screen with empty weight/reps
+        viewModelScope.launch {
+            // Load last workout sets for this exercise
+            _currentWorkout.filterNotNull().collectLatest { workout ->
+                val previousSets = setDao.getLastWorkoutSetsForExercise(exerciseId, workout.id)
+                _lastWorkoutSets.value = previousSets
+                
+                // Prefill if first set
                 if (_loggedSets.value.isEmpty() && previousSets.isNotEmpty()) {
-                    val lastSet = previousSets.first() // First set from previous workout
-                    if (_weight.value.isBlank()) {
-                        lastSet.weight?.let { _weight.value = it.toString() }
-                    }
-                    if (_reps.value.isBlank()) {
-                        lastSet.reps?.let { _reps.value = it.toString() }
-                    }
-                    Log.d("ExerciseLoggingVM", "Pre-filled from last workout: ${lastSet.weight} x ${lastSet.reps}")
+                    val lastSet = previousSets.first()
+                    if (_weight.value.isBlank()) lastSet.weight?.let { _weight.value = it.toString() }
+                    if (_reps.value.isBlank()) lastSet.reps?.let { _reps.value = it.toString() }
                 }
             }
         }
     }
 
-    /**
-     * Filters out "dominated" personal bests.
-     * A PB (repsA, weightA) is dominated by (repsB, weightB) if:
-     * 1. weightB >= weightA AND repsB >= repsA
-     * 2. AND (weightB > weightA OR repsB > repsA) - strictly better in at least one metric
-     *
-     * Example: 135x11 dominates 135x10. 135x10 is removed.
-     */
     private fun filterDominatedPBs(rawPBs: Map<Int, com.example.gymtime.data.db.dao.PBWithTimestamp>): Map<Int, com.example.gymtime.data.db.dao.PBWithTimestamp> {
         val result = mutableMapOf<Int, com.example.gymtime.data.db.dao.PBWithTimestamp>()
-
-        // Convert to list for easier comparison
         val candidates = rawPBs.entries.toList()
-
         for (candidate in candidates) {
             val repsA = candidate.key
             val pbA = candidate.value
             var isDominated = false
-
             for (challenger in candidates) {
-                if (candidate == challenger) continue // Don't compare against self
-
+                if (candidate == challenger) continue
                 val repsB = challenger.key
                 val pbB = challenger.value
-
-                // Check dominance condition using weight values
                 val strictlyBetter = (pbB.maxWeight > pbA.maxWeight) || (repsB > repsA)
                 val atLeastAsGood = (pbB.maxWeight >= pbA.maxWeight) && (repsB >= repsA)
-
                 if (atLeastAsGood && strictlyBetter) {
                     isDominated = true
                     break
                 }
             }
-
-            if (!isDominated) {
-                result[repsA] = pbA
-            }
+            if (!isDominated) result[repsA] = pbA
         }
-
         return result
     }
 

@@ -2,7 +2,7 @@ package com.example.gymtime.ui.routine
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gymtime.data.db.dao.RoutineDao
+import com.example.gymtime.data.RoutineRepository
 import com.example.gymtime.data.db.entity.Routine
 import com.example.gymtime.data.UserPreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -12,16 +12,16 @@ import javax.inject.Inject
 
 @HiltViewModel
 class RoutineListViewModel @Inject constructor(
-    private val routineDao: RoutineDao,
+    private val routineRepository: RoutineRepository,
     private val userPreferencesRepository: UserPreferencesRepository
 ) : ViewModel() {
 
-    val routines: Flow<List<Routine>> = routineDao.getAllRoutines()
+    val routines: Flow<List<Routine>> = routineRepository.getAllRoutines()
 
     val activeRoutineId: Flow<Long?> = userPreferencesRepository.activeRoutineId
 
-    val canCreateMoreRoutines: StateFlow<Boolean> = routineDao.getRoutineCount()
-        .map { count -> count < 3 }
+    val canCreateMoreRoutines: StateFlow<Boolean> = routineRepository.getAllRoutines()
+        .map { it.size < 3 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     fun setActiveRoutine(routineId: Long?) {
@@ -37,7 +37,7 @@ class RoutineListViewModel @Inject constructor(
             if (currentActiveId == routine.id) {
                 userPreferencesRepository.setActiveRoutineId(null)
             }
-            routineDao.deleteRoutine(routine)
+            routineRepository.deleteRoutine(routine)
         }
     }
 }

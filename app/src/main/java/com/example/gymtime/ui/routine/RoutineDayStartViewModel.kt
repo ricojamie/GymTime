@@ -3,7 +3,7 @@ package com.example.gymtime.ui.routine
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gymtime.data.db.dao.RoutineDao
+import com.example.gymtime.data.RoutineRepository
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.Workout
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,7 +15,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class RoutineDayStartViewModel @Inject constructor(
-    private val routineDao: RoutineDao,
+    private val routineRepository: RoutineRepository,
     private val workoutDao: WorkoutDao,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -24,16 +24,16 @@ class RoutineDayStartViewModel @Inject constructor(
     private val routineId: Long = savedStateHandle.get<Long>("routineId") ?: 0L
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val routineName: Flow<String> = routineDao.getRoutineById(routineId).map { it?.name ?: "" }
+    val routineName: Flow<String> = routineRepository.getRoutineById(routineId).map { it?.name ?: "" }
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val daysWithExercises = routineDao.getDaysForRoutine(routineId)
+    val daysWithExercises = routineRepository.getDaysForRoutine(routineId)
         .flatMapLatest { days ->
             if (days.isEmpty()) {
                 flowOf(emptyList())
             } else {
                 combine(days.map { day ->
-                    routineDao.getRoutineDayWithExercises(day.id)
+                    routineRepository.getRoutineDayWithExercises(day.id)
                 }) { array ->
                     array.filterNotNull().toList()
                 }
@@ -46,7 +46,7 @@ class RoutineDayStartViewModel @Inject constructor(
     fun startWorkoutFromDay(dayId: Long) {
         viewModelScope.launch {
             // Get exercises for this day
-            val exercises = routineDao.getExerciseListForDay(dayId).first()
+            val exercises = routineRepository.getExerciseListForDay(dayId).first()
 
             if (exercises.isEmpty()) return@launch
 

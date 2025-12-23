@@ -1,5 +1,6 @@
 package com.example.gymtime.ui.routine
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -37,6 +38,8 @@ fun RoutineDayListScreen(
     var dayToDelete by remember { mutableStateOf<RoutineDay?>(null) }
     val accentColor = MaterialTheme.colorScheme.primary
 
+    val gradientColors = LocalGradientColors.current
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -45,13 +48,14 @@ fun RoutineDayListScreen(
                         Text(
                             routineName,
                             color = TextPrimary,
-                            fontSize = 20.sp,
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             "Days",
-                            color = TextSecondary,
-                            fontSize = 14.sp
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 },
@@ -74,44 +78,69 @@ fun RoutineDayListScreen(
                 },
                 containerColor = if (canAddMoreDays) accentColor else TextTertiary,
                 contentColor = Color.Black,
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp)
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Day", modifier = Modifier.size(32.dp))
             }
         },
         containerColor = Color.Transparent
-    ) {
-        Column(
+    ) { padding ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(it)
-                .padding(horizontal = 16.dp)
-        ) {
-            if (days.isEmpty()) {
-                // Empty state
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No days in this routine yet.\nTap + to add a workout day!",
-                        color = TextTertiary,
-                        fontSize = 16.sp,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                .background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(gradientColors.first, gradientColors.second)
                     )
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(days) {
-                        RoutineDayItem(
-                            day = it,
-                            onTap = { navController.navigate(Screen.RoutineDayForm.createRoute(routineId, it.id)) },
-                            onDelete = { dayToDelete = it }
-                        )
+                )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 16.dp)
+            ) {
+                if (days.isEmpty()) {
+                    // Empty state
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "📅",
+                                fontSize = 48.sp,
+                                modifier = Modifier.padding(bottom = 16.dp)
+                            )
+                            Text(
+                                text = "No days yet.",
+                                color = TextPrimary,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Tap + to add a workout day!",
+                                color = TextTertiary,
+                                fontSize = 14.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(top = 12.dp, bottom = 80.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(days) {
+                            RoutineDayItem(
+                                day = it,
+                                onTap = { navController.navigate(Screen.RoutineDayForm.createRoute(routineId, it.id)) },
+                                onDelete = { dayToDelete = it }
+                            )
+                        }
                     }
                 }
             }

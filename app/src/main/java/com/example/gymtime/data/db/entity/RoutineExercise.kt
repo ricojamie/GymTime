@@ -27,5 +27,7 @@ data class RoutineExercise(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val routineDayId: Long,
     val exerciseId: Long,
-    val orderIndex: Int
+    val orderIndex: Int,
+    val supersetGroupId: String? = null,  // UUID linking all exercises in a routine superset
+    val supersetOrderIndex: Int = 0       // Position in rotation (0, 1, etc.)
 )

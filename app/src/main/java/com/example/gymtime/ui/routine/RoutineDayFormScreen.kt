@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -12,6 +13,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -41,6 +44,7 @@ fun RoutineDayFormScreen(
     val selectedExerciseIds by viewModel.selectedExerciseIds.collectAsState()
     val isEditMode by viewModel.isEditMode.collectAsState()
     val isSaveEnabled by viewModel.isSaveEnabled.collectAsState()
+    val supersetLinks by viewModel.supersetLinks.collectAsState()
 
     var showExercisePicker by remember { mutableStateOf(false) }
     val accentColor = MaterialTheme.colorScheme.primary
@@ -150,13 +154,21 @@ fun RoutineDayFormScreen(
                 }
             } else {
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(bottom = 80.dp)
+                    verticalArrangement = Arrangement.spacedBy(0.dp), // Controlled by ExerciseListItem
+                    contentPadding = PaddingValues(bottom = 80.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    items(selectedExercises) { exercise ->
+                    itemsIndexed(selectedExercises) { index, exercise ->
+                        val isLinkedToNext = supersetLinks.contains(index)
+                        val isLinkedToPrev = index > 0 && supersetLinks.contains(index - 1)
+                        
                         ExerciseListItem(
                             exercise = exercise,
-                            onRemove = { viewModel.removeExercise(exercise.id) }
+                            onRemove = { viewModel.removeExercise(exercise.id) },
+                            isLinkedToNext = isLinkedToNext,
+                            isLinkedToPrev = isLinkedToPrev,
+                            onToggleLink = { viewModel.toggleSupersetLink(index) },
+                            showLinkButton = index < selectedExercises.size - 1
                         )
                     }
                 }
@@ -170,7 +182,7 @@ fun RoutineDayFormScreen(
             selectedExerciseIds = selectedExerciseIds,
             onDismiss = { showExercisePicker = false },
             onExerciseSelected = { exercise ->
-                viewModel.addExercise(exercise.id)
+                viewModel.toggleExercise(exercise.id)
                 // Keep dialog open to allow multiple selections
             }
         )
@@ -180,36 +192,112 @@ fun RoutineDayFormScreen(
 @Composable
 fun ExerciseListItem(
     exercise: Exercise,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    isLinkedToNext: Boolean = false,
+    isLinkedToPrev: Boolean = false,
+    onToggleLink: () -> Unit = {},
+    showLinkButton: Boolean = false
 ) {
-    Surface(
-        color = SurfaceCards,
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    val accentColor = MaterialTheme.colorScheme.primary
+    
+    Column(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = exercise.name,
-                    color = TextPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
-                Text(
-                    text = exercise.targetMuscle,
-                    color = TextSecondary,
-                    fontSize = 12.sp
-                )
+            // Superset Bar indicator
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(80.dp)
+                    .padding(vertical = if (isLinkedToPrev && isLinkedToNext) 0.dp else if (isLinkedToPrev) 0.dp else if (isLinkedToNext) 16.dp else 0.dp)
+                    .background(
+                        color = if (isLinkedToNext || isLinkedToPrev) accentColor else Color.Transparent,
+                        shape = when {
+                            isLinkedToNext && isLinkedToPrev -> RoundedCornerShape(0.dp)
+                            isLinkedToNext -> RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
+                            isLinkedToPrev -> RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp)
+                            else -> RoundedCornerShape(0.dp)
+                        }
+                    )
+            )
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            Surface(
+                color = SurfaceCards,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = exercise.name,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                        Text(
+                            text = exercise.targetMuscle,
+                            color = TextSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+                    IconButton(onClick = onRemove) {
+                        Icon(Icons.Default.Close, contentDescription = "Remove", tint = TextTertiary)
+                    }
+                }
             }
-            IconButton(onClick = onRemove) {
-                Icon(Icons.Default.Close, contentDescription = "Remove", tint = TextTertiary)
+        }
+        
+        // Link toggle button between items
+        if (showLinkButton) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(32.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                // Connecting line for the bar
+                if (isLinkedToNext) {
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 0.dp) // Aligned with the indicator bar
+                            .width(4.dp)
+                            .fillMaxHeight()
+                            .background(accentColor)
+                    )
+                }
+                
+                Row(
+                    modifier = Modifier
+                        .padding(start = 24.dp)
+                        .clickable(onClick = onToggleLink),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (isLinkedToNext) Icons.Default.LinkOff else Icons.Default.Link,
+                        contentDescription = "Toggle Superset",
+                        tint = if (isLinkedToNext) Color(0xFFEF5350) else accentColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isLinkedToNext) "Unlink Superset" else "Link as Superset",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isLinkedToNext) Color(0xFFEF5350) else accentColor,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
+        } else {
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.example.gymtime.ui.routine
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -36,6 +37,8 @@ fun RoutineListScreen(
     var routineToDelete by remember { mutableStateOf<Routine?>(null) }
     val accentColor = MaterialTheme.colorScheme.primary
 
+    val gradientColors = LocalGradientColors.current
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -43,8 +46,8 @@ fun RoutineListScreen(
                     Text(
                         "My Routines",
                         color = TextPrimary,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.ExtraBold
                     )
                 },
                 navigationIcon = {
@@ -66,47 +69,72 @@ fun RoutineListScreen(
                 },
                 containerColor = if (canCreateMore) accentColor else TextTertiary,
                 contentColor = Color.Black,
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp)
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Create Routine", modifier = Modifier.size(32.dp))
             }
         },
         containerColor = Color.Transparent
-    ) {
-        Column(
+    ) { padding ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(it)
-                .padding(horizontal = 16.dp)
-        ) {
-            if (routines.isEmpty()) {
-                // Empty state
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No routines yet.\nTap + to create your first routine!",
-                        color = TextTertiary,
-                        fontSize = 16.sp,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                .background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(gradientColors.first, gradientColors.second)
                     )
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(routines) { routine ->
-                        RoutineListItem(
-                            routine = routine,
-                            isActive = routine.id == activeRoutineId,
-                            onTap = { navController.navigate(Screen.RoutineDayList.createRoute(routine.id)) },
-                            onSetActive = { viewModel.setActiveRoutine(routine.id) },
-                            onEdit = { navController.navigate(Screen.RoutineForm.createRoute(routine.id)) },
-                            onDelete = { routineToDelete = routine }
-                        )
+                )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 16.dp)
+            ) {
+                if (routines.isEmpty()) {
+                    // Empty state
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "🗃️",
+                                fontSize = 48.sp,
+                                modifier = Modifier.padding(bottom = 16.dp)
+                            )
+                            Text(
+                                text = "No routines yet.",
+                                color = TextPrimary,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Tap + to create your first routine!",
+                                color = TextTertiary,
+                                fontSize = 14.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(top = 12.dp, bottom = 80.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(routines) { routine ->
+                            RoutineListItem(
+                                routine = routine,
+                                isActive = routine.id == activeRoutineId,
+                                onTap = { navController.navigate(Screen.RoutineDayList.createRoute(routine.id)) },
+                                onSetActive = { viewModel.setActiveRoutine(routine.id) },
+                                onEdit = { navController.navigate(Screen.RoutineForm.createRoute(routine.id)) },
+                                onDelete = { routineToDelete = routine }
+                            )
+                        }
                     }
                 }
             }

@@ -33,11 +33,12 @@ class SupersetManager @Inject constructor() {
     /**
      * Start a new superset with the given exercises.
      * @param exercises List of exercises (must have at least 2)
+     * @param explicitGroupId Optional specific group ID to use (e.g. from a routine)
      */
-    fun startSuperset(exercises: List<Exercise>) {
+    fun startSuperset(exercises: List<Exercise>, explicitGroupId: String? = null) {
         require(exercises.size >= 2) { "Superset requires at least 2 exercises" }
         _supersetExercises.value = exercises
-        _supersetGroupId.value = UUID.randomUUID().toString()
+        _supersetGroupId.value = explicitGroupId ?: UUID.randomUUID().toString()
         _currentExerciseIndex.value = 0
         _isInSupersetMode.value = true
     }

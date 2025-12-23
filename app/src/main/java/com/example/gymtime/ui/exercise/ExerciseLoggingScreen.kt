@@ -130,6 +130,8 @@ fun ExerciseLoggingScreen(
     val supersetExercises by viewModel.supersetExercises.collectAsState()
     val currentSupersetIndex by viewModel.currentSupersetIndex.collectAsState()
 
+    val nextExerciseId by viewModel.nextExerciseId.collectAsState()
+
     var showFinishDialog by remember { mutableStateOf(false) }
     var showTimerDialog by remember { mutableStateOf(false) }
     var showWorkoutOverview by remember { mutableStateOf(false) }
@@ -726,14 +728,27 @@ fun ExerciseLoggingScreen(
                 }
 
                 Button(
-                    onClick = { showFinishDialog = true },
+                    onClick = { 
+                        if (nextExerciseId != null) {
+                            navController.navigate(Screen.ExerciseLogging.createRoute(nextExerciseId!!)) {
+                                popUpTo("exercise_logging/{exerciseId}") { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        } else {
+                            showFinishDialog = true 
+                        }
+                    },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                        contentColor = MaterialTheme.colorScheme.primary
-                    )
+                        containerColor = if (nextExerciseId != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                        contentColor = if (nextExerciseId != null) Color.Black else MaterialTheme.colorScheme.primary
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Finish Workout", fontWeight = FontWeight.Bold)
+                    Text(
+                        text = if (nextExerciseId != null) "Next Exercise →" else "Finish Workout",
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
             } ?: run {

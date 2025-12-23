@@ -127,7 +127,7 @@ interface SetDao {
                 0 as setCount,
                 NULL as bestWeight,
                 9223372036854775807 as firstSetTimestamp,
-                NULL as supersetGroupId
+                re.supersetGroupId as supersetGroupId
             FROM routine_exercises re
             INNER JOIN exercises e ON re.exerciseId = e.id
             WHERE re.routineDayId = :routineDayId
