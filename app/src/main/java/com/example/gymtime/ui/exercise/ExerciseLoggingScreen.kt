@@ -111,6 +111,7 @@ fun ExerciseLoggingScreen(
     val duration by viewModel.duration.collectAsState()
     val distance by viewModel.distance.collectAsState()
     val restTime by viewModel.restTime.collectAsState()
+    val countdownTimer by viewModel.countdownTimer.collectAsState()
     val isWarmup by viewModel.isWarmup.collectAsState()
     val lastWorkoutSets by viewModel.lastWorkoutSets.collectAsState()
     val workoutOverview by viewModel.workoutOverview.collectAsState()
@@ -275,7 +276,11 @@ fun ExerciseLoggingScreen(
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Text(
-                                    text = if (timerJustFinished) "GO!" else String.format("%d:%02d", restTime / 60, restTime % 60),
+                                    text = if (timerJustFinished) "GO!" else if (isTimerRunning) {
+                                        String.format("%d:%02d", countdownTimer / 60, countdownTimer % 60)
+                                    } else {
+                                        String.format("%d:%02d", restTime / 60, restTime % 60)
+                                    },
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = if (timerJustFinished) Color.Black else MaterialTheme.colorScheme.primary
@@ -760,7 +765,11 @@ fun ExerciseLoggingScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = String.format("%d:%02d", restTime / 60, restTime % 60),
+                        text = if (isTimerRunning) {
+                            String.format("%d:%02d", countdownTimer / 60, countdownTimer % 60)
+                        } else {
+                            String.format("%d:%02d", restTime / 60, restTime % 60)
+                        },
                         style = MaterialTheme.typography.displayLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary

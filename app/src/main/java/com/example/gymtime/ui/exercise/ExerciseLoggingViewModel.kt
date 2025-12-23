@@ -88,7 +88,7 @@ class ExerciseLoggingViewModel @Inject constructor(
             timerService?.let { service ->
                 viewModelScope.launch {
                     service.remainingSeconds.collectLatest { seconds ->
-                        _restTime.value = seconds
+                        _countdownTimer.value = seconds
                     }
                 }
                 viewModelScope.launch {
@@ -131,8 +131,11 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _distance = MutableStateFlow("") // For WEIGHT_DISTANCE and DISTANCE_TIME exercises
     val distance: StateFlow<String> = _distance
 
-    private val _restTime = MutableStateFlow(90) // Will be updated from exercise default
+    private val _restTime = MutableStateFlow(90) // Represents the timer SETTING
     val restTime: StateFlow<Int> = _restTime
+
+    private val _countdownTimer = MutableStateFlow(0) // Represents the active COUNTDOWN
+    val countdownTimer: StateFlow<Int> = _countdownTimer
 
     // Store the exercise's default rest time
     private var exerciseDefaultRestSeconds: Int = 90
@@ -463,6 +466,8 @@ class ExerciseLoggingViewModel @Inject constructor(
             _rpe.value = ""
             _setNote.value = ""
             _isWarmup.value = false
+
+            // Weight and reps persist to make next set logging easier
 
             // Refresh volume orb after logging set
             volumeOrbRepository.onSetLogged()
