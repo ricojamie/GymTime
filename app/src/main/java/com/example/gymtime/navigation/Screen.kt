@@ -13,11 +13,14 @@ sealed class Screen(val route: String, val icon: ImageVector) {
     object History : Screen("history", Icons.Filled.History)
     object Library : Screen("library", Icons.AutoMirrored.Filled.MenuBook)
     object Analytics : Screen("analytics", Icons.AutoMirrored.Filled.ShowChart)
-    object ExerciseSelection : Screen("exercise_selection?workoutMode={workoutMode}", Icons.Filled.Home) {
-        fun createRoute(workoutMode: Boolean = false) = if (workoutMode) {
-            "exercise_selection?workoutMode=true"
-        } else {
-            "exercise_selection"
+    object ExerciseSelection : Screen("exercise_selection?workoutMode={workoutMode}&supersetMode={supersetMode}&adHocParentId={adHocParentId}", Icons.Filled.Home) {
+        fun createRoute(workoutMode: Boolean = false, supersetMode: Boolean = false, adHocParentId: Long? = null) = buildString {
+            append("exercise_selection")
+            val params = mutableListOf<String>()
+            if (workoutMode) params.add("workoutMode=true")
+            if (supersetMode) params.add("supersetMode=true")
+            adHocParentId?.let { params.add("adHocParentId=$it") }
+            if (params.isNotEmpty()) append("?${params.joinToString("&")}")
         }
     }
     object WorkoutResume : Screen("workout_resume", Icons.Filled.Home) // Placeholder, not in bottom nav

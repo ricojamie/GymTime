@@ -156,6 +156,9 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _isTimerRunning = MutableStateFlow(false)
     val isTimerRunning: StateFlow<Boolean> = _isTimerRunning
 
+    val timerAudioEnabled = userPreferencesRepository.timerAudioEnabled
+    val timerVibrateEnabled = userPreferencesRepository.timerVibrateEnabled
+
     // Set editing state
     private val _editingSet = MutableStateFlow<Set?>(null)
     val editingSet: StateFlow<Set?> = _editingSet
@@ -167,6 +170,12 @@ class ExerciseLoggingViewModel @Inject constructor(
     // Personal bests by rep count - Map of reps -> PB with timestamp
     private val _personalBestsByReps = MutableStateFlow<Map<Int, com.example.gymtime.data.db.dao.PBWithTimestamp>>(emptyMap())
     val personalBestsByReps: StateFlow<Map<Int, com.example.gymtime.data.db.dao.PBWithTimestamp>> = _personalBestsByReps
+
+    private val _bestWeight = MutableStateFlow<String?>(null)
+    val bestWeight: StateFlow<String?> = _bestWeight
+
+    private val _bestReps = MutableStateFlow<String?>(null)
+    val bestReps: StateFlow<String?> = _bestReps
 
     // Workout overview data
     private val _workoutOverview = MutableStateFlow<List<WorkoutExerciseSummary>>(emptyList())
@@ -222,6 +231,13 @@ class ExerciseLoggingViewModel @Inject constructor(
             val pbsWithTimestamps = setDao.getPersonalBestsWithTimestamps(exerciseId)
             val pbMap = pbsWithTimestamps.associateBy { it.reps }
             _personalBestsByReps.value = filterDominatedPBs(pbMap)
+
+            // Also find the overall heaviest set for the "Best set" hint
+            val heaviest = setDao.getPersonalBest(exerciseId)
+            heaviest?.let {
+                _bestWeight.value = it.weight?.toString()
+                _bestReps.value = it.reps?.toString()
+            }
         }
 
         viewModelScope.launch {
@@ -288,9 +304,9 @@ class ExerciseLoggingViewModel @Inject constructor(
                         }
                     }
                 } ?: run {
-                    if (supersetManager.isInSupersetMode.value) {
-                        supersetManager.exitSupersetMode()
-                    }
+                    // Logic removed: Do NOT exit superset mode here.
+                    // Ad-hoc supersets (created manually) do not have a routineGroupId,
+                    // so exiting here would destroy them immediately upon loading.
                 }
             }
         }
@@ -724,6 +740,18 @@ class ExerciseLoggingViewModel @Inject constructor(
             context.unbindService(serviceConnection)
             serviceBound = false
             Log.d("ExerciseLoggingVM", "Service unbound")
+        }
+    }
+
+    fun toggleTimerVibrate(enabled: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setTimerVibrateEnabled(enabled)
+        }
+    }
+
+    fun toggleTimerAudio(enabled: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setTimerAudioEnabled(enabled)
         }
     }
 }

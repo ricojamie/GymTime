@@ -33,6 +33,8 @@ fun SettingsScreen(
     val userName by viewModel.userName.collectAsState(initial = "Athlete")
     val themeColor by viewModel.themeColor.collectAsState(initial = "lime")
     val timerAutoStart by viewModel.timerAutoStart.collectAsState(initial = true)
+    val timerAudioEnabled by viewModel.timerAudioEnabled.collectAsState(initial = true)
+    val timerVibrateEnabled by viewModel.timerVibrateEnabled.collectAsState(initial = true)
     val barWeight by viewModel.barWeight.collectAsState(initial = 45f)
     val loadingSides by viewModel.loadingSides.collectAsState(initial = 2)
     val availablePlates by viewModel.availablePlates.collectAsState(initial = listOf(45f, 35f, 25f, 15f, 10f, 5f, 2.5f))
@@ -136,6 +138,62 @@ fun SettingsScreen(
                         Switch(
                             checked = timerAutoStart,
                             onCheckedChange = { viewModel.setTimerAutoStart(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                            )
+                        )
+                    }
+
+                    HorizontalDivider(color = TextTertiary.copy(alpha = 0.1f), modifier = Modifier.padding(horizontal = 16.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Timer Audio", fontSize = 16.sp, color = TextPrimary)
+                            Text(
+                                "Play a tone when timer expires",
+                                fontSize = 12.sp,
+                                color = TextTertiary
+                            )
+                        }
+
+                        Switch(
+                            checked = timerAudioEnabled,
+                            onCheckedChange = { viewModel.setTimerAudioEnabled(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                            )
+                        )
+                    }
+
+                    HorizontalDivider(color = TextTertiary.copy(alpha = 0.1f), modifier = Modifier.padding(horizontal = 16.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Timer Vibration", fontSize = 16.sp, color = TextPrimary)
+                            Text(
+                                "Vibrate when timer expires",
+                                fontSize = 12.sp,
+                                color = TextTertiary
+                            )
+                        }
+
+                        Switch(
+                            checked = timerVibrateEnabled,
+                            onCheckedChange = { viewModel.setTimerVibrateEnabled(it) },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = MaterialTheme.colorScheme.primary,
                                 checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)

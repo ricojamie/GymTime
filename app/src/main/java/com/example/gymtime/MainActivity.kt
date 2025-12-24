@@ -91,6 +91,14 @@ class MainActivity : ComponentActivity() {
                                         androidx.navigation.navArgument("workoutMode") {
                                             type = androidx.navigation.NavType.BoolType
                                             defaultValue = false
+                                        },
+                                        androidx.navigation.navArgument("supersetMode") {
+                                            type = androidx.navigation.NavType.BoolType
+                                            defaultValue = false
+                                        },
+                                        androidx.navigation.navArgument("adHocParentId") {
+                                            type = androidx.navigation.NavType.LongType
+                                            defaultValue = -1L // Use -1 to indicate null
                                         }
                                     )
                                 ) {

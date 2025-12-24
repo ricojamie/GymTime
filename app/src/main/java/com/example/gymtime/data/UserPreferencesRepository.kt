@@ -28,6 +28,8 @@ class UserPreferencesRepository @Inject constructor(
         // Theme and UI preferences
         val THEME_COLOR = stringPreferencesKey("theme_color")
         val TIMER_AUTO_START = booleanPreferencesKey("timer_auto_start")
+        val TIMER_AUDIO_ENABLED = booleanPreferencesKey("timer_audio_enabled")
+        val TIMER_VIBRATE_ENABLED = booleanPreferencesKey("timer_vibrate_enabled")
 
         // Plate calculator preferences
         val AVAILABLE_PLATES = stringPreferencesKey("available_plates")
@@ -61,6 +63,16 @@ class UserPreferencesRepository @Inject constructor(
     val timerAutoStart: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[PreferencesKeys.TIMER_AUTO_START] ?: true
+        }
+
+    val timerAudioEnabled: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.TIMER_AUDIO_ENABLED] ?: true
+        }
+
+    val timerVibrateEnabled: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.TIMER_VIBRATE_ENABLED] ?: true
         }
 
     val availablePlates: Flow<List<Float>> = context.dataStore.data
@@ -119,6 +131,18 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun setTimerAutoStart(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.TIMER_AUTO_START] = enabled
+        }
+    }
+
+    suspend fun setTimerAudioEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.TIMER_AUDIO_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setTimerVibrateEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.TIMER_VIBRATE_ENABLED] = enabled
         }
     }
 

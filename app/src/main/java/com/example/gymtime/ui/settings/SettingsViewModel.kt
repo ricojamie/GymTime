@@ -15,6 +15,8 @@ class SettingsViewModel @Inject constructor(
     val userName = userPreferencesRepository.userName
     val themeColor = userPreferencesRepository.themeColor
     val timerAutoStart = userPreferencesRepository.timerAutoStart
+    val timerAudioEnabled = userPreferencesRepository.timerAudioEnabled
+    val timerVibrateEnabled = userPreferencesRepository.timerVibrateEnabled
 
     // Plate calculator settings
     val barWeight = userPreferencesRepository.barWeight
@@ -36,6 +38,18 @@ class SettingsViewModel @Inject constructor(
     fun setTimerAutoStart(enabled: Boolean) {
         viewModelScope.launch {
             userPreferencesRepository.setTimerAutoStart(enabled)
+        }
+    }
+
+    fun setTimerAudioEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setTimerAudioEnabled(enabled)
+        }
+    }
+
+    fun setTimerVibrateEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setTimerVibrateEnabled(enabled)
         }
     }
 

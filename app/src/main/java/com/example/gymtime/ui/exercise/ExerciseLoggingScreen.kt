@@ -33,6 +33,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -42,6 +44,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,11 +52,14 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
+import com.example.gymtime.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -113,12 +119,15 @@ fun ExerciseLoggingScreen(
     val restTime by viewModel.restTime.collectAsState()
     val countdownTimer by viewModel.countdownTimer.collectAsState()
     val isWarmup by viewModel.isWarmup.collectAsState()
+    val isTimerRunning by viewModel.isTimerRunning.collectAsState()
+    val timerAudioEnabled by viewModel.timerAudioEnabled.collectAsState(initial = true)
+    val timerVibrateEnabled by viewModel.timerVibrateEnabled.collectAsState(initial = true)
     val lastWorkoutSets by viewModel.lastWorkoutSets.collectAsState()
     val workoutOverview by viewModel.workoutOverview.collectAsState()
     val personalBestsByReps by viewModel.personalBestsByReps.collectAsState()
     val volumeOrbState by viewModel.volumeOrbState.collectAsState()
 
-    val isTimerRunning by viewModel.isTimerRunning.collectAsState()
+
     val editingSet by viewModel.editingSet.collectAsState()
     val timerAutoStart by viewModel.timerAutoStart.collectAsState(initial = true)
     val barWeight by viewModel.barWeight.collectAsState(initial = 45f)
@@ -195,9 +204,9 @@ fun ExerciseLoggingScreen(
         }
     }
 
-    // Get last workout data for inline "Last:" display
-    val lastWeight = lastWorkoutSets.firstOrNull()?.weight?.toString()
-    val lastReps = lastWorkoutSets.firstOrNull()?.reps?.toString()
+    // Get best set data for inline "Best:" display
+    val bestWeight by viewModel.bestWeight.collectAsState()
+    val bestReps by viewModel.bestReps.collectAsState()
 
     // Track if timer just finished for animation
     var timerJustFinished by remember { mutableStateOf(false) }
@@ -418,7 +427,8 @@ fun ExerciseLoggingScreen(
                             value = weight,
                             onValueChange = { viewModel.updateWeight(it) },
                             modifier = Modifier.weight(1f),
-                            lastValue = lastWeight?.let { "$it lbs" }
+                            lastValue = bestWeight?.let { "$it lbs" },
+                            lastLabel = "BEST"
                         )
                         // Reps Input
                         InputCard(
@@ -426,7 +436,8 @@ fun ExerciseLoggingScreen(
                             value = reps,
                             onValueChange = { viewModel.updateReps(it) },
                             modifier = Modifier.weight(1f),
-                            lastValue = lastReps?.let { "$it reps" }
+                            lastValue = bestReps?.let { "$it reps" },
+                            lastLabel = "BEST"
                         )
                     }
                     LogType.REPS_ONLY -> {
@@ -436,7 +447,8 @@ fun ExerciseLoggingScreen(
                             value = reps,
                             onValueChange = { viewModel.updateReps(it) },
                             modifier = Modifier.weight(1f),
-                            lastValue = lastReps?.let { "$it reps" }
+                            lastValue = bestReps?.let { "$it reps" },
+                            lastLabel = "BEST"
                         )
                     }
                     LogType.DURATION -> {
@@ -456,7 +468,8 @@ fun ExerciseLoggingScreen(
                             value = weight,
                             onValueChange = { viewModel.updateWeight(it) },
                             modifier = Modifier.weight(1f),
-                            lastValue = lastWeight?.let { "$it lbs" }
+                            lastValue = bestWeight?.let { "$it lbs" },
+                            lastLabel = "BEST"
                         )
                         // Distance Input
                         InputCard(
@@ -492,14 +505,16 @@ fun ExerciseLoggingScreen(
                             value = weight,
                             onValueChange = { viewModel.updateWeight(it) },
                             modifier = Modifier.weight(1f),
-                            lastValue = lastWeight?.let { "$it lbs" }
+                            lastValue = bestWeight?.let { "$it lbs" },
+                            lastLabel = "BEST"
                         )
                         InputCard(
                             label = "REPS",
                             value = reps,
                             onValueChange = { viewModel.updateReps(it) },
                             modifier = Modifier.weight(1f),
-                            lastValue = lastReps?.let { "$it reps" }
+                            lastValue = bestReps?.let { "$it reps" },
+                            lastLabel = "BEST"
                         )
                     }
                 }
@@ -562,6 +577,42 @@ fun ExerciseLoggingScreen(
                                 Text(text = "🏋️ ", fontSize = 14.sp)
                                 Text(
                                     text = "Plates",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+
+                    // Superset Toggle Pill
+                    val isInSupersetMode by viewModel.isInSupersetMode.collectAsState()
+                    if (!isInSupersetMode) {
+                        Surface(
+                            onClick = { 
+                                exercise?.id?.let { id ->
+                                    navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true, supersetMode = true, adHocParentId = id))
+                                }
+                            },
+                            shape = RoundedCornerShape(50),
+                            color = Color.Transparent,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    painter = androidx.compose.ui.res.painterResource(id = com.example.gymtime.R.drawable.ic_sync),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Superset",
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
@@ -805,6 +856,58 @@ fun ExerciseLoggingScreen(
                         ) {
                             Text("+15s")
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    HorizontalDivider(color = TextTertiary.copy(alpha = 0.1f))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.VolumeUp,
+                                contentDescription = null,
+                                tint = if (timerAudioEnabled) MaterialTheme.colorScheme.primary else TextTertiary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Audio", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                        }
+                        Switch(
+                            checked = timerAudioEnabled,
+                            onCheckedChange = { viewModel.toggleTimerAudio(it) },
+                            colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.Vibration,
+                                contentDescription = null,
+                                tint = if (timerVibrateEnabled) MaterialTheme.colorScheme.primary else TextTertiary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Vibration", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                        }
+                        Switch(
+                            checked = timerVibrateEnabled,
+                            onCheckedChange = { viewModel.toggleTimerVibrate(it) },
+                            colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
+                        )
                     }
                 }
             },
@@ -1083,7 +1186,8 @@ private fun TimeInputCard(
     value: String, // Expected format "HH:MM:SS" or empty
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    lastValue: String? = null
+    lastValue: String? = null,
+    lastLabel: String = "LAST"
 ) {
     val segments = value.split(":").toMutableList()
     if (segments.size < 3) {
@@ -1240,7 +1344,8 @@ private fun InputCard(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    lastValue: String? = null
+    lastValue: String? = null,
+    lastLabel: String = "LAST"
 ) {
     Card(
         modifier = modifier.height(100.dp),

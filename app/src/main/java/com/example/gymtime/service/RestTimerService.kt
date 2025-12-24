@@ -10,26 +10,40 @@ import android.content.Intent
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
+import android.media.AudioAttributes
+import android.media.MediaPlayer
+import android.media.RingtoneManager
+import android.net.Uri
 import androidx.core.app.NotificationCompat
 import com.example.gymtime.MainActivity
 import com.example.gymtime.R
+import com.example.gymtime.data.UserPreferencesRepository
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class RestTimerService : Service() {
+    
+    @Inject
+    lateinit var userPreferencesRepository: UserPreferencesRepository
 
     private val binder = TimerBinder()
     private var timerJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.Default)
+    private var wakeLock: PowerManager.WakeLock? = null
 
     private val _remainingSeconds = MutableStateFlow(0)
     val remainingSeconds: StateFlow<Int> = _remainingSeconds
@@ -42,6 +56,12 @@ class RestTimerService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
+
+    override fun onCreate() {
+        super.onCreate()
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "GymTime:RestTimerWakeLock")
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -61,6 +81,13 @@ class RestTimerService : Service() {
         _remainingSeconds.value = seconds
         _isRunning.value = true
 
+        // Acquire WakeLock to keep CPU running
+        wakeLock?.let {
+            if (!it.isHeld) {
+                it.acquire(seconds * 1000L + 5000L) // Acquire for duration + buffer
+            }
+        }
+
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification(seconds))
 
@@ -74,15 +101,41 @@ class RestTimerService : Service() {
 
             // Timer finished
             _isRunning.value = false
-            vibrateDevice()
+            
+            // Trigger feedback based on preferences
+            viewModelScope_launch_feedback()
+
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
+        }
+    }
+
+    private fun viewModelScope_launch_feedback() {
+        serviceScope.launch {
+            val audioEnabled = userPreferencesRepository.timerAudioEnabled.first()
+            val vibrateEnabled = userPreferencesRepository.timerVibrateEnabled.first()
+            
+            if (audioEnabled) {
+                playNotificationTone()
+            }
+            if (vibrateEnabled) {
+                vibrateDevice()
+            }
         }
     }
 
     fun stopTimer() {
         Log.d(TAG, "Stopping timer")
         timerJob?.cancel()
+        
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing wakelock", e)
+        }
+
         _isRunning.value = false
         _remainingSeconds.value = 0
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -151,6 +204,28 @@ class RestTimerService : Service() {
             String.format("%d:%02d", mins, secs)
         } else {
             String.format("0:%02d", secs)
+        }
+    }
+
+    private fun playNotificationTone() {
+        try {
+            val validNotificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val mediaPlayer = MediaPlayer().apply {
+                setDataSource(applicationContext, validNotificationUri)
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                prepare()
+                start()
+                setOnCompletionListener { 
+                    it.release() 
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error playing notification tone", e)
         }
     }
 

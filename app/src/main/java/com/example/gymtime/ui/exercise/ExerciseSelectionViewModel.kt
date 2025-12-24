@@ -8,8 +8,10 @@ import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.entity.Exercise
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -18,16 +20,18 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ExerciseSelectionViewModel @Inject constructor(
-    savedStateHandle: SavedStateHandle,
     private val exerciseDao: ExerciseDao,
     private val muscleGroupDao: MuscleGroupDao,
-    private val supersetManager: SupersetManager
+    private val supersetManager: SupersetManager,
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
+    private val workoutMode: Boolean = savedStateHandle["workoutMode"] ?: false
+    private val supersetMode: Boolean = savedStateHandle["supersetMode"] ?: false
+    private val adHocParentId: Long? = savedStateHandle["adHocParentId"]
+
     // Track if we're in workout mode (passed from navigation, not DB query)
-    val isWorkoutMode: StateFlow<Boolean> = MutableStateFlow(
-        savedStateHandle.get<Boolean>("workoutMode") ?: false
-    )
+    val isWorkoutMode: StateFlow<Boolean> = MutableStateFlow(workoutMode)
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
@@ -36,11 +40,14 @@ class ExerciseSelectionViewModel @Inject constructor(
     val selectedMuscles: StateFlow<Set<String>> = _selectedMuscles
 
     // Superset selection mode state
-    private val _isSupersetModeEnabled = MutableStateFlow(false)
+    private val _isSupersetModeEnabled = MutableStateFlow(supersetMode)
     val isSupersetModeEnabled: StateFlow<Boolean> = _isSupersetModeEnabled
 
     private val _selectedForSuperset = MutableStateFlow<List<Exercise>>(emptyList())
     val selectedForSuperset: StateFlow<List<Exercise>> = _selectedForSuperset
+
+    private val _supersetStarted = kotlinx.coroutines.flow.MutableSharedFlow<Long>()
+    val supersetStarted = _supersetStarted.asSharedFlow()
 
     // Maximum exercises allowed in a superset (2 for free, 3 for premium later)
     val maxSupersetExercises = 2
@@ -109,6 +116,12 @@ class ExerciseSelectionViewModel @Inject constructor(
      * If already selected, removes it. If not, adds it (up to max).
      */
     fun toggleExerciseSelection(exercise: Exercise) {
+        if (supersetMode && adHocParentId != null && adHocParentId != -1L) {
+            // Ad-hoc mode: We have parent A, just clicked B. Start superset and go back.
+            startAdHocSuperset(exercise)
+            return
+        }
+
         val current = _selectedForSuperset.value.toMutableList()
         val existingIndex = current.indexOfFirst { it.id == exercise.id }
 
@@ -186,6 +199,14 @@ class ExerciseSelectionViewModel @Inject constructor(
                 }
             }
             exerciseDao.updateStarredStatus(exercise.id, !exercise.isStarred)
+        }
+    }
+    private fun startAdHocSuperset(secondExercise: Exercise) {
+        viewModelScope.launch {
+            val firstExercise = exerciseDao.getExerciseById(adHocParentId!!).first() ?: return@launch
+            supersetManager.startSuperset(listOf(firstExercise, secondExercise))
+            // Emit the SECOND exercise ID so the UI navigates to the new one
+            _supersetStarted.emit(secondExercise.id)
         }
     }
 }

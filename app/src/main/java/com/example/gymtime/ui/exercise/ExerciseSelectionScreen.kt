@@ -90,11 +90,16 @@ fun ExerciseSelectionContent(
     navController: NavController,
     viewModel: ExerciseSelectionViewModel = hiltViewModel()
 ) {
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.supersetStarted.collect { parentId: Long ->
+            navController.popBackStack()
+        }
+    }
     val accentColor = MaterialTheme.colorScheme.primary
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedMuscles by viewModel.selectedMuscles.collectAsState()
-    val availableMuscles by viewModel.availableMuscles.collectAsState(initial = emptyList())
-    val filteredExercises by viewModel.filteredExercises.collectAsState(initial = emptyList())
+    val availableMuscles by viewModel.availableMuscles.collectAsState(initial = emptyList<String>())
+    val filteredExercises by viewModel.filteredExercises.collectAsState(initial = emptyList<com.example.gymtime.data.db.entity.Exercise>())
 
     // Superset mode state
     val isSupersetMode by viewModel.isSupersetModeEnabled.collectAsState()
