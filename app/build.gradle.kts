@@ -35,14 +35,18 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    kotlinOptions {
-        jvmTarget = "11"
-    }
     buildFeatures {
         compose = true
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+    }
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "META-INF/LICENSE.md"
+            excludes += "META-INF/LICENSE-notice.md"
+        }
     }
 }
 
@@ -66,9 +70,9 @@ dependencies {
     kapt(libs.hilt.compiler)
 
     // Vico charting library for Analytics
-    implementation("com.patrykandpatrick.vico:compose:2.0.0-beta.1")
-    implementation("com.patrykandpatrick.vico:compose-m3:2.0.0-beta.1")
-    implementation("com.patrykandpatrick.vico:core:2.0.0-beta.1")
+    implementation(libs.vico.compose)
+    implementation(libs.vico.compose.m3)
+    implementation(libs.vico.core)
 
     // Unit Testing
     testImplementation(libs.junit)
@@ -89,4 +93,10 @@ dependencies {
     // Debug
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+    }
 }

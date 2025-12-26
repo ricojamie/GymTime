@@ -100,9 +100,9 @@ fun WeeklyVolumeCard(
 
                 // Format volume nicely (e.g., 22,000 or 22K if large)
                 val volumeDisplay = when {
-                    weeklyVolume >= 1000000 -> String.format("%.1fM lbs", weeklyVolume / 1000000f)
-                    weeklyVolume >= 1000 -> String.format("%,.0f lbs", weeklyVolume)
-                    else -> String.format("%.0f lbs", weeklyVolume)
+                    weeklyVolume >= 1000000 -> String.format(java.util.Locale.US, "%.1fM lbs", weeklyVolume / 1000000f)
+                    weeklyVolume >= 1000 -> String.format(java.util.Locale.US, "%,.0f lbs", weeklyVolume)
+                    else -> String.format(java.util.Locale.US, "%.0f lbs", weeklyVolume)
                 }
 
                 Text(

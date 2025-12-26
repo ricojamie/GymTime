@@ -1,0 +1,28 @@
+
+> Configure project :app
+e: file:///C:/Users/ricoj/Desktop/AI_Stuff/Coding_Projects/Gym_App/app/build.gradle.kts:38:5: Unresolved reference: compilerOptions
+e: file:///C:/Users/ricoj/Desktop/AI_Stuff/Coding_Projects/Gym_App/app/build.gradle.kts:39:9: Unresolved reference: jvmTarget
+
+FAILURE: Build failed with an exception.
+
+* Where:
+Build file 'C:\Users\ricoj\Desktop\AI_Stuff\Coding_Projects\Gym_App\app\build.gradle.kts' line: 38
+
+* What went wrong:
+Script compilation errors:
+
+  Line 38:     compilerOptions {
+               ^ Unresolved reference: compilerOptions
+
+  Line 39:         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+                   ^ Unresolved reference: jvmTarget
+
+2 errors
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 2s

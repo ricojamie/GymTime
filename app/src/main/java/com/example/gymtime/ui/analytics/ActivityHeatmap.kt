@@ -137,7 +137,7 @@ fun ActivityHeatmap(
                         )
                         
                         Text(
-                            text = if (day.volume > 0) String.format("%,.0f lbs", day.volume) else "Rest Day",
+                            text = if (day.volume > 0) String.format(java.util.Locale.US, "%,.0f lbs", day.volume) else "Rest Day",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color.White,
                             fontWeight = if (day.volume > 0) FontWeight.Bold else FontWeight.Normal

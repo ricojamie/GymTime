@@ -5,9 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.VolumeOrbRepository
 import com.example.gymtime.data.VolumeOrbState
-import com.example.gymtime.data.db.dao.SetDao
-import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.Workout
+import com.example.gymtime.data.repository.WorkoutRepository
 import com.example.gymtime.util.StreakCalculator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
@@ -22,20 +21,18 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val userPreferencesRepository: UserPreferencesRepository,
-    private val workoutDao: WorkoutDao,
+    private val workoutRepository: WorkoutRepository,
     private val routineDao: com.example.gymtime.data.db.dao.RoutineDao,
-    private val setDao: SetDao,
     private val volumeOrbRepository: VolumeOrbRepository
 ) : ViewModel() {
     val userName: Flow<String> = userPreferencesRepository.userName
-    val ongoingWorkout: StateFlow<Workout?> = workoutDao.getOngoingWorkout().stateIn(
+    val ongoingWorkout: StateFlow<Workout?> = workoutRepository.getOngoingWorkoutFlow().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = null
@@ -116,7 +113,7 @@ class HomeViewModel @Inject constructor(
             val startOfYear = cal.timeInMillis
             val endOfToday = System.currentTimeMillis()
             
-            _ytdVolume.value = setDao.getTotalVolume(startOfYear, endOfToday) ?: 0f
+            _ytdVolume.value = workoutRepository.getTotalVolume(startOfYear, endOfToday)
         }
     }
 
@@ -135,7 +132,7 @@ class HomeViewModel @Inject constructor(
             val weekEnd = System.currentTimeMillis()
 
             // Get total weekly volume
-            val volume = setDao.getTotalVolume(weekStart, weekEnd) ?: 0f
+            val volume = workoutRepository.getTotalVolume(weekStart, weekEnd)
             _weeklyVolume.value = volume
 
             // Get daily volume for the last 7 days for the trend chart
@@ -155,7 +152,7 @@ class HomeViewModel @Inject constructor(
                 dayCalendar.set(Calendar.MILLISECOND, 999)
                 val dayEnd = dayCalendar.timeInMillis
 
-                val dayVolume = setDao.getTotalVolume(dayStart, dayEnd) ?: 0f
+                val dayVolume = workoutRepository.getTotalVolume(dayStart, dayEnd)
                 dailyVolumes.add(dayVolume)
             }
             _weeklyVolumeTrend.value = dailyVolumes
@@ -164,7 +161,7 @@ class HomeViewModel @Inject constructor(
 
     private fun loadStreakData() {
         viewModelScope.launch {
-            val dateStrings = workoutDao.getWorkoutDatesWithWorkingSets()
+            val dateStrings = workoutRepository.getWorkoutDatesWithWorkingSets()
             val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
             val workoutDates = dateStrings.mapNotNull { dateStr ->
                 try {
@@ -183,7 +180,7 @@ class HomeViewModel @Inject constructor(
 
     private fun loadYtdWorkouts() {
         viewModelScope.launch {
-            _ytdWorkouts.value = workoutDao.getYearToDateWorkoutCount()
+            _ytdWorkouts.value = workoutRepository.getYearToDateWorkoutCount()
         }
     }
 

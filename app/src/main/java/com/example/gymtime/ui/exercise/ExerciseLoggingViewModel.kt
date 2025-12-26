@@ -13,18 +13,17 @@ import com.example.gymtime.data.RoutineRepository
 import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.VolumeOrbRepository
 import com.example.gymtime.data.VolumeOrbState
-import com.example.gymtime.data.db.dao.ExerciseDao
-import com.example.gymtime.data.db.dao.SetDao
-import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
+import com.example.gymtime.data.repository.ExerciseRepository
+import com.example.gymtime.data.repository.WorkoutRepository
 import com.example.gymtime.service.RestTimerService
-import com.example.gymtime.util.OneRepMaxCalculator
 import com.example.gymtime.util.PlateCalculator
 import com.example.gymtime.util.PlateLoadout
+import com.example.gymtime.util.TimeUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.Channel
@@ -32,14 +31,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import com.example.gymtime.data.db.dao.RoutineDayWithExercises
-import com.example.gymtime.data.db.entity.RoutineExercise
-import com.example.gymtime.util.TimeUtils
 import java.util.Date
 import javax.inject.Inject
 
@@ -57,12 +53,12 @@ data class PersonalRecords(
 )
 
 @HiltViewModel
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ExerciseLoggingViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val savedStateHandle: SavedStateHandle,
-    private val exerciseDao: ExerciseDao,
-    private val workoutDao: WorkoutDao,
-    private val setDao: SetDao,
+    private val exerciseRepository: ExerciseRepository,
+    private val workoutRepository: WorkoutRepository,
     private val userPreferencesRepository: UserPreferencesRepository,
     private val volumeOrbRepository: VolumeOrbRepository,
     private val supersetManager: SupersetManager,
@@ -206,8 +202,8 @@ class ExerciseLoggingViewModel @Inject constructor(
         Log.d("ExerciseLoggingVM", "Binding to RestTimerService")
 
         viewModelScope.launch {
-            // Load exercise
-            exerciseDao.getExerciseById(exerciseId).collectLatest { ex ->
+            // Load exercise via Repository
+            exerciseRepository.getExercise(exerciseId).collectLatest { ex ->
                 _exercise.value = ex
                 // Set timer to exercise's default rest time
                 ex?.let {
@@ -227,13 +223,11 @@ class ExerciseLoggingViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            // Load personal bests by rep count
-            val pbsWithTimestamps = setDao.getPersonalBestsWithTimestamps(exerciseId)
-            val pbMap = pbsWithTimestamps.associateBy { it.reps }
-            _personalBestsByReps.value = filterDominatedPBs(pbMap)
+            // Load personal bests via Repository
+            _personalBestsByReps.value = exerciseRepository.getPersonalBestsByReps(exerciseId)
 
             // Also find the overall heaviest set for the "Best set" hint
-            val heaviest = setDao.getPersonalBest(exerciseId)
+            val heaviest = exerciseRepository.getHeaviestSet(exerciseId)
             heaviest?.let {
                 _bestWeight.value = it.weight?.toString()
                 _bestReps.value = it.reps?.toString()
@@ -241,16 +235,9 @@ class ExerciseLoggingViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            // Load or create workout
-            val ongoing = workoutDao.getOngoingWorkout().first()
-            if (ongoing != null) {
-                _currentWorkout.value = ongoing
-            } else {
-                val newWorkoutId = workoutDao.insertWorkout(
-                    Workout(startTime = Date(), endTime = null, name = null, note = null)
-                )
-                _currentWorkout.value = workoutDao.getWorkoutById(newWorkoutId).first()
-            }
+            // Load or create workout via Repository
+            val workout = workoutRepository.getCurrentWorkout()
+            _currentWorkout.value = workout
         }
 
         // Initialize routine data reactively once workout is loaded
@@ -303,27 +290,23 @@ class ExerciseLoggingViewModel @Inject constructor(
                             supersetManager.setCurrentExerciseIndex(orderIndex)
                         }
                     }
-                } ?: run {
-                    // Logic removed: Do NOT exit superset mode here.
-                    // Ad-hoc supersets (created manually) do not have a routineGroupId,
-                    // so exiting here would destroy them immediately upon loading.
                 }
             }
         }
 
         viewModelScope.launch {
-            // Load and observe sets for current workout
+            // Load and observe sets for current workout via Repository
             _currentWorkout.filterNotNull().collectLatest { workout ->
-                setDao.getSetsForWorkout(workout.id).collectLatest { sets ->
+                workoutRepository.getSetsForWorkout(workout.id).collectLatest { sets ->
                     _loggedSets.value = sets.filter { it.exerciseId == exerciseId }.sortedBy { it.timestamp }
                 }
             }
         }
 
         viewModelScope.launch {
-            // Load last workout sets for this exercise
+            // Load last workout sets for this exercise via Repository
             _currentWorkout.filterNotNull().collectLatest { workout ->
-                val previousSets = setDao.getLastWorkoutSetsForExercise(exerciseId, workout.id)
+                val previousSets = workoutRepository.getLastWorkoutSetsForExercise(exerciseId, workout.id)
                 _lastWorkoutSets.value = previousSets
                 
                 // Prefill if first set
@@ -334,29 +317,6 @@ class ExerciseLoggingViewModel @Inject constructor(
                 }
             }
         }
-    }
-
-    private fun filterDominatedPBs(rawPBs: Map<Int, com.example.gymtime.data.db.dao.PBWithTimestamp>): Map<Int, com.example.gymtime.data.db.dao.PBWithTimestamp> {
-        val result = mutableMapOf<Int, com.example.gymtime.data.db.dao.PBWithTimestamp>()
-        val candidates = rawPBs.entries.toList()
-        for (candidate in candidates) {
-            val repsA = candidate.key
-            val pbA = candidate.value
-            var isDominated = false
-            for (challenger in candidates) {
-                if (candidate == challenger) continue
-                val repsB = challenger.key
-                val pbB = challenger.value
-                val strictlyBetter = (pbB.maxWeight > pbA.maxWeight) || (repsB > repsA)
-                val atLeastAsGood = (pbB.maxWeight >= pbA.maxWeight) && (repsB >= repsA)
-                if (atLeastAsGood && strictlyBetter) {
-                    isDominated = true
-                    break
-                }
-            }
-            if (!isDominated) result[repsA] = pbA
-        }
-        return result
     }
 
     fun updateWeight(value: String) {
@@ -487,7 +447,8 @@ class ExerciseLoggingViewModel @Inject constructor(
                 )
             }
 
-            setDao.insertSet(newSet)
+            // Log set via Repository
+            workoutRepository.logSet(newSet)
 
             // Update personal bests if this is a new record for this rep count (only for WEIGHT_REPS)
             if (exercise.logType == LogType.WEIGHT_REPS) {
@@ -497,12 +458,11 @@ class ExerciseLoggingViewModel @Inject constructor(
                     val currentPBs = _personalBestsByReps.value.toMutableMap()
                     val currentPBForReps = currentPBs[newReps]
 
-                    // If this is a raw improvement for this specific rep count, update and re-filter
+                    // If this is a raw improvement for this specific rep count, update...
+                    // Note: We might want to refresh from Repository here, but local update for UI responsiveness
                     if (currentPBForReps == null || newWeight > currentPBForReps.maxWeight) {
-                        // Use the same timestamp as the set
-                        currentPBs[newReps] = com.example.gymtime.data.db.dao.PBWithTimestamp(newReps, newWeight, setTimestamp.time)
-                        _personalBestsByReps.value = filterDominatedPBs(currentPBs)
-                        Log.d("ExerciseLoggingVM", "New PB! $newWeight x $newReps (first achieved at ${setTimestamp.time})")
+                         // Refresh PBs
+                         _personalBestsByReps.value = exerciseRepository.getPersonalBestsByReps(exerciseId)
                     }
                 }
             }
@@ -511,11 +471,6 @@ class ExerciseLoggingViewModel @Inject constructor(
             _rpe.value = ""
             _setNote.value = ""
             _isWarmup.value = false
-
-            // Weight and reps persist to make next set logging easier
-
-            // Refresh volume orb after logging set
-            volumeOrbRepository.onSetLogged()
 
             // Auto-switch to next exercise if in superset mode
             if (supersetManager.isInSupersetMode.value) {
@@ -547,7 +502,8 @@ class ExerciseLoggingViewModel @Inject constructor(
                     distanceMeters = _distance.value.toFloatOrNull()?.let { TimeUtils.milesToMeters(it) },
                     isWarmup = _isWarmup.value
                 )
-                setDao.updateSet(updatedSet)
+                // Update via Repository
+                workoutRepository.updateSet(updatedSet)
                 Log.d("ExerciseLoggingVM", "Set updated: id=${set.id}")
 
                 // Clear editing state and form
@@ -575,7 +531,8 @@ class ExerciseLoggingViewModel @Inject constructor(
     fun deleteSet(setId: Long) {
         viewModelScope.launch {
             Log.e("DELETE_DEBUG", "Attempting to delete set: $setId")
-            setDao.deleteSetById(setId)
+            // Delete via Repository
+            workoutRepository.deleteSet(setId)
             Log.d("ExerciseLoggingVM", "Set deleted: id=$setId")
         }
     }
@@ -583,7 +540,8 @@ class ExerciseLoggingViewModel @Inject constructor(
     fun updateSetNote(set: Set, note: String?) {
         viewModelScope.launch {
             val updatedSet = set.copy(note = note?.takeIf { it.isNotBlank() })
-            setDao.updateSet(updatedSet)
+            // Update via Repository
+            workoutRepository.updateSet(updatedSet)
             Log.d("ExerciseLoggingVM", "Set note updated: id=${set.id}, note=$note")
         }
     }
@@ -617,8 +575,8 @@ class ExerciseLoggingViewModel @Inject constructor(
     fun finishWorkout() {
         viewModelScope.launch {
             val workout = _currentWorkout.value ?: return@launch
-            val updatedWorkout = workout.copy(endTime = Date())
-            workoutDao.updateWorkout(updatedWorkout)
+            // Finish via Repository
+            workoutRepository.finishWorkout(workout.id)
 
             // Exit superset mode when finishing workout
             supersetManager.exitSupersetMode()
@@ -627,9 +585,6 @@ class ExerciseLoggingViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Exit superset mode. Called when user taps "Exit Superset" or navigates away.
-     */
     fun exitSupersetMode() {
         supersetManager.exitSupersetMode()
         Log.d("ExerciseLoggingVM", "Exited superset mode")
@@ -639,84 +594,34 @@ class ExerciseLoggingViewModel @Inject constructor(
     fun loadWorkoutOverview() {
         viewModelScope.launch {
             _currentWorkout.value?.let { workout ->
-                // If workout is from a routine, include unstarted routine exercises
-                val overviewFlow = if (workout.routineDayId != null) {
-                    setDao.getWorkoutExerciseSummariesWithRoutine(workout.id, workout.routineDayId)
-                } else {
-                    setDao.getWorkoutExerciseSummaries(workout.id)
-                }
-                overviewFlow.collectLatest { overview ->
-                    _workoutOverview.value = overview
-                    Log.d("ExerciseLoggingVM", "Workout overview loaded: ${overview.size} exercises")
-                }
+                // Load overview via Repository
+                workoutRepository.getWorkoutOverview(workout.id, workout.routineDayId)
+                    .collectLatest { overview ->
+                        _workoutOverview.value = overview
+                        Log.d("ExerciseLoggingVM", "Workout overview loaded: ${overview.size} exercises")
+                    }
             }
         }
     }
 
     // Calculate personal records for the current exercise
     suspend fun getPersonalRecords(): PersonalRecords {
-        val heaviest = setDao.getPersonalBest(exerciseId)
-        val workingSets = setDao.getWorkingSetsForE1RMCalculation(exerciseId)
-
-        // Find best E1RM
-        val bestE1RM = workingSets
-            .mapNotNull { set ->
-                val e1rm = OneRepMaxCalculator.calculateE1RM(
-                    set.weight ?: return@mapNotNull null,
-                    set.reps ?: return@mapNotNull null
-                )
-                e1rm?.let { set to it }
-            }
-            .maxByOrNull { it.second }
-
-        // Find best E10RM (premium feature)
-        val bestE10RM = workingSets
-            .mapNotNull { set ->
-                val e10rm = OneRepMaxCalculator.calculateE10RM(
-                    set.weight ?: return@mapNotNull null,
-                    set.reps ?: return@mapNotNull null
-                )
-                e10rm?.let { set to it }
-            }
-            .maxByOrNull { it.second }
-
-        return PersonalRecords(
-            heaviestWeight = heaviest,
-            bestE1RM = bestE1RM,
-            bestE10RM = bestE10RM
-        )
+        // Delegate to Repository
+        return exerciseRepository.getPersonalRecords(exerciseId)
     }
 
     // Get exercise history grouped by workout
     suspend fun getExerciseHistory(): Map<Long, List<Set>> {
-        val allSets = setDao.getExerciseHistoryByWorkout(exerciseId)
-        return allSets.groupBy { it.workoutId }
+        // Delegate to Repository
+        return exerciseRepository.getExerciseHistory(exerciseId)
     }
 
     // Calculate workout stats
     fun getWorkoutStats(): WorkoutStats {
         val workout = _currentWorkout.value
         val overview = _workoutOverview.value
-
-        val totalSets = overview.sumOf { it.setCount }
-        val totalVolume = overview.sumOf { summary ->
-            ((summary.bestWeight ?: 0f) * summary.setCount).toDouble()
-        }.toFloat()
-
-        val duration = workout?.let {
-            val durationMs = Date().time - it.startTime.time
-            val minutes = durationMs / 1000 / 60
-            val hours = minutes / 60
-            val remainingMinutes = minutes % 60
-            if (hours > 0) "${hours}h ${remainingMinutes}m" else "${minutes}m"
-        } ?: "0m"
-
-        return WorkoutStats(
-            totalSets = totalSets,
-            totalVolume = totalVolume,
-            exerciseCount = overview.size,
-            duration = duration
-        )
+        // Delegate calculation to Repository
+        return workoutRepository.calculateWorkoutStats(workout, overview)
     }
 
     // Calculate plates for a given target weight

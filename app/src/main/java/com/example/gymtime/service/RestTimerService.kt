@@ -143,19 +143,17 @@ class RestTimerService : Service() {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Rest Timer",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Rest timer countdown notifications"
-                setSound(null, null)
-            }
-
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Rest Timer",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Rest timer countdown notifications"
+            setSound(null, null)
         }
+
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.createNotificationChannel(channel)
     }
 
     private fun createNotification(seconds: Int): Notification {
@@ -198,13 +196,7 @@ class RestTimerService : Service() {
     }
 
     private fun formatTime(seconds: Int): String {
-        val mins = seconds / 60
-        val secs = seconds % 60
-        return if (mins > 0) {
-            String.format("%d:%02d", mins, secs)
-        } else {
-            String.format("0:%02d", secs)
-        }
+        return com.example.gymtime.util.TimeFormatter.formatSecondsToMMSS(seconds)
     }
 
     private fun playNotificationTone() {
@@ -230,13 +222,8 @@ class RestTimerService : Service() {
     }
 
     private fun vibrateDevice() {
-        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-            vibratorManager.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-        }
+        val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+        val vibrator = vibratorManager.defaultVibrator
         vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
     }
 

@@ -3,9 +3,8 @@ package com.example.gymtime.ui.exercise
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gymtime.data.db.dao.ExerciseDao
-import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.entity.Exercise
+import com.example.gymtime.data.repository.ExerciseRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -20,8 +19,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ExerciseSelectionViewModel @Inject constructor(
-    private val exerciseDao: ExerciseDao,
-    private val muscleGroupDao: MuscleGroupDao,
+    private val exerciseRepository: ExerciseRepository,
     private val supersetManager: SupersetManager,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -46,16 +44,16 @@ class ExerciseSelectionViewModel @Inject constructor(
     private val _selectedForSuperset = MutableStateFlow<List<Exercise>>(emptyList())
     val selectedForSuperset: StateFlow<List<Exercise>> = _selectedForSuperset
 
-    private val _supersetStarted = kotlinx.coroutines.flow.MutableSharedFlow<Long>()
+    private val _supersetStarted = MutableSharedFlow<Long>()
     val supersetStarted = _supersetStarted.asSharedFlow()
 
     // Maximum exercises allowed in a superset (2 for free, 3 for premium later)
     val maxSupersetExercises = 2
 
-    private val allExercises: Flow<List<Exercise>> = exerciseDao.getAllExercises()
+    private val allExercises: Flow<List<Exercise>> = exerciseRepository.getAllExercises()
 
     // Get muscle groups from database
-    val availableMuscles: Flow<List<String>> = muscleGroupDao.getAllMuscleGroups().map { groups ->
+    val availableMuscles: Flow<List<String>> = exerciseRepository.getAllMuscleGroups().map { groups ->
         val dbMuscles = groups.map { it.name }
         val defaultMuscles = listOf("Back", "Biceps", "Chest", "Core", "Legs", "Shoulders", "Triceps", "Cardio")
         (dbMuscles + defaultMuscles).distinct().sorted()
@@ -94,7 +92,7 @@ class ExerciseSelectionViewModel @Inject constructor(
 
     fun deleteExercise(exerciseId: Long) {
         viewModelScope.launch {
-            exerciseDao.deleteExerciseById(exerciseId)
+            exerciseRepository.deleteExercise(exerciseId)
         }
     }
 
@@ -192,18 +190,18 @@ class ExerciseSelectionViewModel @Inject constructor(
         viewModelScope.launch {
             if (!exercise.isStarred) {
                 // Check if we already have 3 starred
-                val currentStarredCount = exerciseDao.getStarredExercises().first().size
+                val currentStarredCount = exerciseRepository.getStarredExercises().first().size
                 if (currentStarredCount >= 3) {
                     // Maximum reached - UI should ideally show a message
                     return@launch
                 }
             }
-            exerciseDao.updateStarredStatus(exercise.id, !exercise.isStarred)
+            exerciseRepository.updateStarredStatus(exercise.id, !exercise.isStarred)
         }
     }
     private fun startAdHocSuperset(secondExercise: Exercise) {
         viewModelScope.launch {
-            val firstExercise = exerciseDao.getExerciseById(adHocParentId!!).first() ?: return@launch
+            val firstExercise = exerciseRepository.getExercise(adHocParentId!!).first() ?: return@launch
             supersetManager.startSuperset(listOf(firstExercise, secondExercise))
             // Emit the SECOND exercise ID so the UI navigates to the new one
             _supersetStarted.emit(secondExercise.id)

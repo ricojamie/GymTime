@@ -246,8 +246,8 @@ private fun ConsistencyScoreSection(score: Int, onInfoClick: () -> Unit) {
 
 private fun compactVolumeFormat(volume: Float): String {
     return when {
-        volume >= 1_000_000 -> String.format("%.1fm", volume / 1_000_000)
-        volume >= 1_000 -> String.format("%.1fk", volume / 1_000)
+        volume >= 1_000_000 -> String.format(Locale.US, "%.1fm", volume / 1_000_000)
+        volume >= 1_000 -> String.format(Locale.US, "%.1fk", volume / 1_000)
         else -> volume.toInt().toString()
     }
 }

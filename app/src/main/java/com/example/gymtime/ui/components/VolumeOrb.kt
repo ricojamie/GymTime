@@ -92,9 +92,9 @@ private data class OrbParticle(
 fun VolumeOrb(
     state: VolumeOrbState,
     size: OrbSize,
+    modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
-    onOverflowAnimationComplete: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    onOverflowAnimationComplete: (() -> Unit)? = null
 ) {
     val density = LocalDensity.current
     val sizePx = with(density) { size.dp.toPx() }
@@ -568,8 +568,8 @@ fun VolumeProgressBar(
     // Format volume for display
     fun formatVolume(volume: Float): String {
         return when {
-            volume >= 1000 -> String.format("%.1fk", volume / 1000)
-            else -> String.format("%.0f", volume)
+            volume >= 1000 -> String.format(java.util.Locale.US, "%.1fk", volume / 1000)
+            else -> String.format(java.util.Locale.US, "%.0f", volume)
         }
     }
 

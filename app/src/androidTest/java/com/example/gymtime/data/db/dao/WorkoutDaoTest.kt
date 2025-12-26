@@ -145,6 +145,9 @@ class WorkoutDaoTest {
         thisYear.set(Calendar.MONTH, Calendar.JANUARY)
         thisYear.set(Calendar.DAY_OF_MONTH, 15)
 
+        // Insert an exercise to be referenced by sets
+        exerciseDao.insertExercise(testExercise)
+
         val workout1 = Workout(
             startTime = thisYear.time,
             endTime = Date(thisYear.timeInMillis + 3600000),
@@ -156,7 +159,42 @@ class WorkoutDaoTest {
         )
 
         workoutDao.insertWorkout(workout1)
-        workoutDao.insertWorkout(workout1.copy(startTime = Date()))
+        
+        // Add working sets to ensure they are counted
+        val workoutId1 = workoutDao.insertWorkout(workout1)
+        setDao.insertSet(Set(
+            workoutId = workoutId1,
+            exerciseId = 1L,
+            weight = 100f,
+            reps = 10,
+            rpe = null,
+            durationSeconds = null,
+            distanceMeters = null,
+            isWarmup = false,
+            isComplete = true,
+            timestamp = Date(),
+            note = null,
+            supersetGroupId = null,
+            supersetOrderIndex = 0
+        ))
+
+        val workout2 = workout1.copy(id = 0, startTime = Date(), name = "YTD Workout 2")
+        val workoutId2 = workoutDao.insertWorkout(workout2)
+        setDao.insertSet(Set(
+            workoutId = workoutId2,
+            exerciseId = 1L,
+            weight = 100f,
+            reps = 10,
+            rpe = null,
+            durationSeconds = null,
+            distanceMeters = null,
+            isWarmup = false,
+            isComplete = true,
+            timestamp = Date(),
+            note = null,
+            supersetGroupId = null,
+            supersetOrderIndex = 0
+        ))
 
         val count = workoutDao.getYearToDateWorkoutCount()
         assertEquals(2, count)
