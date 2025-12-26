@@ -27,7 +27,8 @@ object StreakCalculator {
         val state: StreakState,
         val streakDays: Int,
         val skipsRemaining: Int,    // 0, 1, or 2
-        val nextResetDate: Date     // Next Sunday
+        val nextResetDate: Date,    // Next Sunday
+        val brokeToday: Boolean = false  // True only on the day the streak breaks
     )
 
     fun calculateStreak(workoutDates: List<Date>): StreakResult {
@@ -65,11 +66,17 @@ object StreakCalculator {
             totalStreakDays = calculateTotalStreakDays(today, workoutDaysNormalized, earliestWorkout)
         }
 
+        // 4. Determine if streak broke TODAY (exactly 3 skips used and today is a miss)
+        val brokeToday = state == StreakState.BROKEN &&
+                         usedSkipsThisWeek == 3 &&
+                         !workedOutToday
+
         return StreakResult(
             state = state,
             streakDays = totalStreakDays,
             skipsRemaining = skipsRemaining,
-            nextResetDate = getNextSunday()
+            nextResetDate = getNextSunday(),
+            brokeToday = brokeToday
         )
     }
 

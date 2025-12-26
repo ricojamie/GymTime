@@ -67,4 +67,35 @@ class StreakCalculatorTest {
         val result = StreakCalculator.calculateStreak(workouts)
         assertTrue(result.streakDays >= 0)
     }
+
+    // brokeToday tests
+
+    @Test
+    fun brokeTodayIsFalseForEmptyList() {
+        val result = StreakCalculator.calculateStreak(emptyList())
+        assertFalse(result.brokeToday)
+    }
+
+    @Test
+    fun brokeTodayIsFalseWhenActiveStreak() {
+        val workouts = listOf(today())
+        val result = StreakCalculator.calculateStreak(workouts)
+        assertFalse(result.brokeToday)
+    }
+
+    @Test
+    fun brokeTodayIsFalseWhenRestingWithValidStreak() {
+        // Workout yesterday, resting today - streak should still be valid
+        val workouts = listOf(daysAgo(1))
+        val result = StreakCalculator.calculateStreak(workouts)
+        // brokeToday should be false since we're in RESTING state (not BROKEN)
+        assertFalse(result.brokeToday)
+    }
+
+    @Test
+    fun brokeTodayFieldExists() {
+        // Ensure the field exists and has a boolean value
+        val result = StreakCalculator.calculateStreak(emptyList())
+        assertNotNull(result.brokeToday)
+    }
 }

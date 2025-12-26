@@ -292,11 +292,16 @@ private fun StreakCardCompact(
 ) {
     val accentColor = MaterialTheme.colorScheme.primary
 
+    // Determine if this is a fresh start (0 days and not broken today)
+    val isFreshStart = streakResult.streakDays == 0 &&
+        (streakResult.state != StreakCalculator.StreakState.BROKEN || !streakResult.brokeToday)
+
     // State-based styling
-    val (stateIcon, stateColor) = when (streakResult.state) {
-        StreakCalculator.StreakState.ACTIVE -> Pair("\uD83D\uDD25", accentColor)
-        StreakCalculator.StreakState.RESTING -> Pair("\u2744\uFE0F", Color(0xFF64B5F6))
-        StreakCalculator.StreakState.BROKEN -> Pair("\uD83D\uDC80", Color(0xFFEF5350))
+    val (stateIcon, stateColor) = when {
+        isFreshStart -> Pair("⭐", accentColor)  // Fresh start
+        streakResult.state == StreakCalculator.StreakState.BROKEN -> Pair("\uD83D\uDC80", Color(0xFFEF5350))
+        streakResult.state == StreakCalculator.StreakState.ACTIVE -> Pair("\uD83D\uDD25", accentColor)
+        else -> Pair("\u2744\uFE0F", Color(0xFF64B5F6))  // Resting
     }
 
     GlowCard(
@@ -329,18 +334,20 @@ private fun StreakCardCompact(
             // Streak count
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "${streakResult.streakDays}",
+                    text = if (isFreshStart) "NEW" else "${streakResult.streakDays}",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.ExtraBold,
                     color = stateColor,
                     lineHeight = 28.sp
                 )
-                Text(
-                    text = "DAYS",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextTertiary,
-                    letterSpacing = 1.sp
-                )
+                if (!isFreshStart) {
+                    Text(
+                        text = "DAYS",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextTertiary,
+                        letterSpacing = 1.sp
+                    )
+                }
             }
 
             // Skip Indicators (Blue circles)
@@ -384,6 +391,10 @@ private fun StreakDetailContent(
     val accentColor = MaterialTheme.colorScheme.primary
     val numberFormat = NumberFormat.getNumberInstance(Locale.US)
 
+    // Determine if this is a fresh start (0 days and not broken today)
+    val isFreshStart = streakResult.streakDays == 0 &&
+        (streakResult.state != StreakCalculator.StreakState.BROKEN || !streakResult.brokeToday)
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -396,7 +407,7 @@ private fun StreakDetailContent(
             fontWeight = FontWeight.Bold,
             color = TextPrimary
         )
-        
+
         Spacer(modifier = Modifier.height(24.dp))
 
         // Large Streak Circle
@@ -416,15 +427,16 @@ private fun StreakDetailContent(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = when (streakResult.state) {
-                        StreakCalculator.StreakState.ACTIVE -> "\uD83D\uDD25"
-                        StreakCalculator.StreakState.RESTING -> "\u2744\uFE0F"
-                        StreakCalculator.StreakState.BROKEN -> "\uD83D\uDC80"
+                    text = when {
+                        isFreshStart -> "⭐"
+                        streakResult.state == StreakCalculator.StreakState.BROKEN -> "\uD83D\uDC80"
+                        streakResult.state == StreakCalculator.StreakState.ACTIVE -> "\uD83D\uDD25"
+                        else -> "\u2744\uFE0F"
                     },
                     fontSize = 32.sp
                 )
                 Text(
-                    text = "${streakResult.streakDays}",
+                    text = if (isFreshStart) "NEW" else "${streakResult.streakDays}",
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.ExtraBold,
                     color = accentColor
@@ -432,7 +444,21 @@ private fun StreakDetailContent(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Fresh start motivational message
+        if (isFreshStart) {
+            Text(
+                text = "Your next workout starts a new streak!",
+                style = MaterialTheme.typography.bodyMedium,
+                color = accentColor,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Skips remaining section
         Text(

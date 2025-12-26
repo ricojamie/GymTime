@@ -1187,7 +1187,7 @@ private fun TimeInputCard(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     lastValue: String? = null,
-    lastLabel: String = "LAST"
+    lastLabel: String = "BEST"
 ) {
     val segments = value.split(":").toMutableList()
     if (segments.size < 3) {
@@ -1345,7 +1345,7 @@ private fun InputCard(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     lastValue: String? = null,
-    lastLabel: String = "LAST"
+    lastLabel: String = "BEST"
 ) {
     Card(
         modifier = modifier.height(100.dp),
