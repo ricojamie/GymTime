@@ -36,7 +36,10 @@
       "WebFetch(domain:archive.patrykandpatrick.com)",
       "WebSearch",
       "WebFetch(domain:www.patrykandpatrick.com)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(./gradlew testDebugUnitTest:*)",
+      "Bash(cat:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

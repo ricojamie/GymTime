@@ -361,6 +361,124 @@ fun ExerciseListItem(
 
 ---
 
-**Last Updated**: December 16, 2025
-**Current Phase**: MVP+ Complete - In active use
-**Codebase Status**: Cleaned and optimized (refactor completed Dec 10, 2025)
+## 12. Automated Testing
+
+### Running Tests
+
+**Unit Tests (JVM - Fast, No Emulator Required):**
+```bash
+./gradlew testDebugUnitTest
+```
+- Runs all unit tests in `app/src/test/`
+- Results: `app/build/reports/tests/testDebugUnitTest/index.html`
+
+**Instrumented Tests (Requires Emulator/Device):**
+```bash
+./gradlew connectedDebugAndroidTest
+```
+- Runs DAO integration tests with in-memory Room database
+- Results: `app/build/reports/androidTests/connected/index.html`
+
+**Run Specific Test Class:**
+```bash
+./gradlew testDebugUnitTest --tests "com.example.gymtime.util.PlateCalculatorTest"
+```
+
+### Test Structure
+
+```
+app/src/
+├── test/java/com/example/gymtime/       # Unit tests (JVM)
+│   ├── util/
+│   │   ├── TestDispatcherRule.kt        # Coroutine test helper
+│   │   ├── StreakCalculatorTest.kt
+│   │   ├── PlateCalculatorTest.kt
+│   │   ├── OneRepMaxCalculatorTest.kt
+│   │   └── WeekUtilsTest.kt
+│   ├── ui/home/
+│   │   └── HomeViewModelTest.kt
+│   ├── ui/summary/
+│   │   └── PostWorkoutSummaryViewModelTest.kt
+│   └── data/
+│       └── VolumeOrbRepositoryTest.kt
+└── androidTest/java/com/example/gymtime/ # Instrumented tests
+    └── data/db/dao/
+        ├── SetDaoTest.kt
+        └── WorkoutDaoTest.kt
+```
+
+### Test Dependencies
+- **MockK** (1.13.8) - Kotlin mocking framework
+- **Turbine** (1.1.0) - Flow testing
+- **Coroutines Test** (1.8.0) - TestDispatcher for coroutine testing
+- **Room Testing** (2.6.1) - In-memory database for DAO tests
+
+### Writing New Tests
+
+**ViewModel Test Pattern:**
+```kotlin
+@OptIn(ExperimentalCoroutinesApi::class)
+class MyViewModelTest {
+    @get:Rule
+    val dispatcherRule = TestDispatcherRule()
+
+    private lateinit var mockDao: MyDao
+
+    @Before
+    fun setup() {
+        mockDao = mockk(relaxed = true)
+        coEvery { mockDao.getData() } returns flowOf(testData)
+    }
+
+    @Test
+    fun loadDataUpdatesState() = runTest {
+        val viewModel = MyViewModel(mockDao)
+        advanceUntilIdle()
+        assertEquals(expected, viewModel.state.value)
+    }
+}
+```
+
+**DAO Integration Test Pattern:**
+```kotlin
+@RunWith(AndroidJUnit4::class)
+class MyDaoTest {
+    private lateinit var database: GymTimeDatabase
+    private lateinit var dao: MyDao
+
+    @Before
+    fun setup() {
+        database = Room.inMemoryDatabaseBuilder(
+            ApplicationProvider.getApplicationContext(),
+            GymTimeDatabase::class.java
+        ).allowMainThreadQueries().build()
+        dao = database.myDao()
+    }
+
+    @After
+    fun teardown() { database.close() }
+
+    @Test
+    fun insertAndRetrieve() = runTest {
+        dao.insert(testEntity)
+        val result = dao.getAll().first()
+        assertEquals(testEntity, result)
+    }
+}
+```
+
+### Current Test Coverage
+- **63 unit tests** across utilities, ViewModels, and repositories
+- **DAO integration tests** for SetDao and WorkoutDao
+- Focus areas: Volume calculations, streak logic, workout stats
+
+### Known Testing Considerations
+- `android.util.Log` calls require `testOptions { unitTests.isReturnDefaultValues = true }`
+- StreakCalculator has timezone-sensitive edge cases at week boundaries
+- ViewModel tests need `TestDispatcherRule` for proper coroutine handling
+
+---
+
+**Last Updated**: December 26, 2025
+**Current Phase**: MVP+ Complete - In active use with automated testing
+**Codebase Status**: Production-ready with test suite
