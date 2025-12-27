@@ -33,6 +33,14 @@ private const val TAG = "DatabaseModule"
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
+    // Migration from version 1 to 2: No schema changes (placeholder for migration path)
+    private val MIGRATION_1_2 = object : Migration(1, 2) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            Log.d(TAG, "Running migration 1 -> 2: No schema changes needed")
+            // No schema changes between v1 and v2
+        }
+    }
+
     // Migration from version 2 to 3: Add timestamp index for analytics performance
     private val MIGRATION_2_3 = object : Migration(2, 3) {
         override fun migrate(database: SupportSQLiteDatabase) {
@@ -153,8 +161,7 @@ object DatabaseModule {
             GymTimeDatabase::class.java,
             "gym_time_db"
         )
-        .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
-        .fallbackToDestructiveMigration() // For development simplicity
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
