@@ -22,7 +22,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.example.gymtime.ui.theme.SurfaceCards
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 
@@ -30,10 +36,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 fun BottomNavigationBar(navController: NavController) {
     val accentColor = MaterialTheme.colorScheme.primary
     val items = listOf(
-        Screen.Home,
-        Screen.History,
-        Screen.Library,
-        Screen.Analytics
+        Screen.Home to "Home",
+        Screen.History to "History",
+        Screen.Library to "Library",
+        Screen.Analytics to "Stats"
     )
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -42,73 +48,74 @@ fun BottomNavigationBar(navController: NavController) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.Black)
+            .padding(horizontal = 24.dp, vertical = 24.dp) // Making it float
+            .navigationBarsPadding()
     ) {
-        // Top Neon Border
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .align(Alignment.TopCenter)
-                .background(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            accentColor,
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding() // Handle system gesture bar
-                .padding(vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(32.dp),
+            color = SurfaceCards.copy(alpha = 0.95f),
+            tonalElevation = 8.dp,
+            border = androidx.compose.foundation.BorderStroke(
+                width = 0.5.dp,
+                color = accentColor.copy(alpha = 0.2f)
+            )
         ) {
-            items.forEach { screen ->
-                val isSelected = currentRoute == screen.route
-                val color = if (isSelected) accentColor else Color.Gray
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items.forEach { (screen, label) ->
+                    val isSelected = currentRoute == screen.route
+                    val color = if (isSelected) accentColor else Color.Gray
 
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null // Remove ripple for cleaner look
-                        ) {
-                            if (screen == Screen.Home) {
-                                navController.navigate(screen.route) {
-                                    popUpTo(navController.graph.startDestinationId) {
-                                        inclusive = true
-                                        saveState = false
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null 
+                            ) {
+                                if (screen == Screen.Home) {
+                                    navController.navigate(screen.route) {
+                                        popUpTo(navController.graph.startDestinationId) {
+                                            inclusive = true
+                                            saveState = false
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = false
                                     }
-                                    launchSingleTop = true
-                                    restoreState = false
-                                }
-                            } else {
-                                navController.navigate(screen.route) {
-                                    popUpTo(navController.graph.startDestinationId) {
-                                        saveState = true
+                                } else {
+                                    navController.navigate(screen.route) {
+                                        popUpTo(navController.graph.startDestinationId) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
-                                    launchSingleTop = true
-                                    restoreState = true
                                 }
                             }
-                        }
-                        .padding(16.dp) // Touch target padding
-                ) {
-                    Icon(
-                        imageVector = screen.icon,
-                        contentDescription = screen.route,
-                        tint = color,
-                        modifier = Modifier.size(26.dp)
-                    )
-                    
-                    // Removed the dot indicator as requested for "Option 2" clean look
+                            .padding(vertical = 8.dp, horizontal = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = screen.icon,
+                            contentDescription = label,
+                            tint = color,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        androidx.compose.material3.Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = color,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 10.sp
+                        )
+                    }
                 }
             }
         }

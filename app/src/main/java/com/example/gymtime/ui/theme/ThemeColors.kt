@@ -51,6 +51,46 @@ object ThemeColors {
         gradientEnd = Color(0xFF0A0A0A)    // Very dark black
     )
 
+    val BloodRed = AppColorScheme(
+        primaryAccent = Color(0xFFEF4444),
+        primaryAccentDark = Color(0xFFB91C1C),
+        primaryAccentLight = Color(0xFFF87171),
+        gradientStart = Color(0xFF1A0A0A),
+        gradientEnd = Color(0xFF0A0A0A)
+    )
+
+    val SunsetOrange = AppColorScheme(
+        primaryAccent = Color(0xFFF97316),
+        primaryAccentDark = Color(0xFFC2410C),
+        primaryAccentLight = Color(0xFFFB923C),
+        gradientStart = Color(0xFF1A110A),
+        gradientEnd = Color(0xFF0A0A0A)
+    )
+
+    val MintFresh = AppColorScheme(
+        primaryAccent = Color(0xFF10B981),
+        primaryAccentDark = Color(0xFF047857),
+        primaryAccentLight = Color(0xFF34D399),
+        gradientStart = Color(0xFF0A1A14),
+        gradientEnd = Color(0xFF0A0A0A)
+    )
+
+    val SlateGrey = AppColorScheme(
+        primaryAccent = Color(0xFF64748B),
+        primaryAccentDark = Color(0xFF334155),
+        primaryAccentLight = Color(0xFF94A3B8),
+        gradientStart = Color(0xFF0F1217),
+        gradientEnd = Color(0xFF0A0A0A)
+    )
+
+    val LavenderFocus = AppColorScheme(
+        primaryAccent = Color(0xFF8B5CF6),
+        primaryAccentDark = Color(0xFF6D28D9),
+        primaryAccentLight = Color(0xFFA78BFA),
+        gradientStart = Color(0xFF120A1A),
+        gradientEnd = Color(0xFF0A0A0A)
+    )
+
     fun getScheme(colorName: String): AppColorScheme {
         return when (colorName) {
             "lime" -> LimeGreen
@@ -58,6 +98,11 @@ object ThemeColors {
             "purple" -> CyberPurple
             "pink" -> HotPink
             "gold" -> GoldAmber
+            "red" -> BloodRed
+            "orange" -> SunsetOrange
+            "mint" -> MintFresh
+            "slate" -> SlateGrey
+            "lavender" -> LavenderFocus
             else -> LimeGreen
         }
     }

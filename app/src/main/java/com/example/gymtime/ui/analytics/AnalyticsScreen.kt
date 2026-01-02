@@ -107,7 +107,7 @@ fun AnalyticsScreen(
         }
         
         // Content
-        Box(
+        Column(
              modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
@@ -118,7 +118,7 @@ fun AnalyticsScreen(
                 2 -> TrendsTabContent(viewModel)
             }
             
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(100.dp))
         }
     }
 }

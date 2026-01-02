@@ -1,6 +1,7 @@
 package com.example.gymtime.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -221,11 +222,55 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         // Color options
-                        ColorOption("Lime Green", "lime", ThemeColors.LimeGreen.primaryAccent, themeColor, viewModel)
-                        ColorOption("Electric Blue", "blue", ThemeColors.ElectricBlue.primaryAccent, themeColor, viewModel)
-                        ColorOption("Cyber Purple", "purple", ThemeColors.CyberPurple.primaryAccent, themeColor, viewModel)
-                        ColorOption("Hot Pink", "pink", ThemeColors.HotPink.primaryAccent, themeColor, viewModel)
-                        ColorOption("Gold Amber", "gold", ThemeColors.GoldAmber.primaryAccent, themeColor, viewModel)
+                        // Color Grid (2 rows of 5)
+                        val colorsRow1 = listOf(
+                             Triple("lime", ThemeColors.LimeGreen.primaryAccent, "Lime"),
+                             Triple("blue", ThemeColors.ElectricBlue.primaryAccent, "Blue"),
+                             Triple("purple", ThemeColors.CyberPurple.primaryAccent, "Purple"),
+                             Triple("pink", ThemeColors.HotPink.primaryAccent, "Pink"),
+                             Triple("gold", ThemeColors.GoldAmber.primaryAccent, "Gold")
+                        )
+                        val colorsRow2 = listOf(
+                             Triple("red", ThemeColors.BloodRed.primaryAccent, "Red"),
+                             Triple("orange", ThemeColors.SunsetOrange.primaryAccent, "Orange"),
+                             Triple("mint", ThemeColors.MintFresh.primaryAccent, "Mint"),
+                             Triple("slate", ThemeColors.SlateGrey.primaryAccent, "Slate"),
+                             Triple("lavender", ThemeColors.LavenderFocus.primaryAccent, "Lavender")
+                        )
+
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                        ) {
+                            // Row 1
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                colorsRow1.forEach { (key, color, label) ->
+                                    ColorSwatch(
+                                        colorKey = key,
+                                        color = color,
+                                        selectedColor = themeColor,
+                                        onClick = { viewModel.setThemeColor(key) }
+                                    )
+                                }
+                            }
+                            // Row 2
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                colorsRow2.forEach { (key, color, label) ->
+                                    ColorSwatch(
+                                        colorKey = key,
+                                        color = color,
+                                        selectedColor = themeColor,
+                                        onClick = { viewModel.setThemeColor(key) }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -316,7 +361,7 @@ fun SettingsScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Version 1.0.0",
+                        text = "Version 1.1.0",
                         fontSize = 14.sp,
                         color = TextTertiary,
                         fontWeight = FontWeight.Medium
@@ -336,16 +381,18 @@ fun SettingsScreen(
     if (showChangelog) {
         AlertDialog(
             onDismissRequest = { showChangelog = false },
-            title = { Text("What's New in v1.0 🚀", color = TextPrimary) },
+            title = { Text("What's New in v1.1 🚀", color = TextPrimary) },
             text = {
                 Column {
-                    Text("Welcome to Iron Log! 🦾", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("Performance & UI Overhaul ⚡", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "• Officially rebranded to Iron Log! 🎨\n" +
-                        "• All-new industrial-strength app icon 🦾\n" +
-                        "• Stability improvements and bug fixes ⚡\n" +
-                        "• Ready to help you track those gains! 💪",
+                        "• 📱 Android 14 optimization and MinSDK 34 upgrade\n" +
+                        "• 🎨 5 new theme colors (Blood Red, Sunset Orange, etc.)\n" +
+                        "• 🧭 Modernized floating and rounded navigation bar\n" +
+                        "• ⏲️ Dynamic theme-matched rest timer notifications\n" +
+                        "• 📊 Improved scrolling and layouts in Analytics tabs\n" +
+                        "• 🔙 Support for Predictive Back gestures",
                         color = TextPrimary
                     )
                 }
@@ -509,6 +556,42 @@ fun PlateToggleOption(
             },
             fontWeight = if (isEnabled) FontWeight.Bold else FontWeight.Normal,
             fontSize = 13.sp
+        )
+    }
+}
+
+@Composable
+fun ColorSwatch(
+    colorKey: String,
+    color: Color,
+    selectedColor: String,
+    onClick: () -> Unit
+) {
+    val isSelected = selectedColor == colorKey
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick)
+            .background(Color.Transparent),
+        contentAlignment = Alignment.Center
+    ) {
+        // Selection indicator (ring)
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(Color.Transparent, CircleShape)
+                    .border(2.dp, color, CircleShape)
+            )
+        }
+
+        // Inner color circle
+        Box(
+            modifier = Modifier
+                .size(if (isSelected) 34.dp else 40.dp)
+                .clip(CircleShape)
+                .background(color)
         )
     }
 }

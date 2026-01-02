@@ -4,10 +4,17 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import android.util.Log
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -21,6 +28,7 @@ import androidx.compose.animation.fadeOut
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.navigation.BottomNavigationBar
 import com.example.gymtime.navigation.Screen
@@ -44,6 +52,9 @@ class MainActivity : ComponentActivity() {
         // Check for stale sessions on app launch
         mainViewModel.checkActiveSession()
 
+        // Request notification permission for Android 13+
+        requestNotificationPermission()
+
         enableEdgeToEdge()
         setContent {
             val themeColorName by userPreferencesRepository.themeColor.collectAsState(initial = "lime")
@@ -55,27 +66,39 @@ class MainActivity : ComponentActivity() {
                 Surface(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(
-                                        gradientColors.first,
-                                        gradientColors.second
-                                    )
-                                )
-                            )
-                    ) {
-                        val navController = rememberNavController()
+                    val navController = rememberNavController()
+                    val navBackStackEntry by navController.currentBackStackEntryAsState()
+                    val currentRoute = navBackStackEntry?.destination?.route
+
+                    // Define which screens should show the bottom bar
+                    val bottomBarScreens = listOf(
+                        Screen.Home.route,
+                        Screen.History.route,
+                        Screen.Library.route,
+                        Screen.Analytics.route
+                    )
+                    val showBottomBar = currentRoute in bottomBarScreens
+
+                    // Outer Box to allow BottomNavigationBar to overlay content
+                    Box(modifier = Modifier.fillMaxSize()) {
                         Scaffold(
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.fillMaxSize(),
                             containerColor = Color.Transparent
                         ) { innerPadding ->
                             NavHost(
                                 navController = navController,
                                 startDestination = Screen.Home.route,
-                                modifier = Modifier.padding(innerPadding)
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(
+                                                gradientColors.first,
+                                                gradientColors.second
+                                            )
+                                        )
+                                    )
+                                    .padding(innerPadding)
                             ) {
                                 composable(Screen.Home.route) { HomeScreen(navController = navController) }
                                 composable(Screen.History.route) { HistoryScreen(navController = navController) }
@@ -122,8 +145,6 @@ class MainActivity : ComponentActivity() {
                                     arguments = listOf(androidx.navigation.navArgument("exerciseId") {
                                         type = androidx.navigation.NavType.LongType
                                     }),
-                                    enterTransition = { fadeIn() },
-                                    exitTransition = { fadeOut() }
                                 ) {
                                     com.example.gymtime.ui.exercise.ExerciseLoggingScreen(navController = navController)
                                 }
@@ -210,11 +231,39 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        
-                        BottomNavigationBar(navController = navController)
+
+                        if (showBottomBar) {
+                            Box(
+                                modifier = Modifier
+                                    .align(androidx.compose.ui.Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                            ) {
+                                BottomNavigationBar(navController = navController)
+                            }
+                        }
                     }
                 }
             }
+        }
+    }
+
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            Log.d("MainActivity", "Notification permission granted")
+        } else {
+            Log.d("MainActivity", "Notification permission denied")
+        }
+    }
+
+    private fun requestNotificationPermission() {
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 }

@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Binder
 import android.os.Build
+import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.VibrationEffect
@@ -46,10 +47,13 @@ class RestTimerService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
 
     private val _remainingSeconds = MutableStateFlow(0)
+    private var _totalSeconds = 0 // Track total duration for progress bar
     val remainingSeconds: StateFlow<Int> = _remainingSeconds
 
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning
+
+    private val _currentThemeColor = MutableStateFlow("lime")
 
     inner class TimerBinder : Binder() {
         fun getService(): RestTimerService = this@RestTimerService
@@ -61,13 +65,35 @@ class RestTimerService : Service() {
         super.onCreate()
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "GymTime:RestTimerWakeLock")
+
+        // Collect theme color updates
+        serviceScope.launch {
+            userPreferencesRepository.themeColor.collect { colorName ->
+                _currentThemeColor.value = colorName
+                if (_isRunning.value) {
+                    updateNotification(_remainingSeconds.value)
+                }
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val seconds = intent?.getIntExtra(EXTRA_SECONDS, 90) ?: 90
+        
+        // Android 14 requirement: call startForeground immediately for EVERY path when started via startForegroundService
+        createNotificationChannel()
+        startForeground(
+            NOTIFICATION_ID, 
+            createNotification(seconds), 
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        )
+
         when (intent?.action) {
             ACTION_START_TIMER -> {
-                val seconds = intent.getIntExtra(EXTRA_SECONDS, 90)
                 startTimer(seconds)
+            }
+            ACTION_ADD_TIME -> {
+                addTime(30)
             }
             ACTION_STOP_TIMER -> {
                 stopTimer()
@@ -79,6 +105,7 @@ class RestTimerService : Service() {
     fun startTimer(seconds: Int) {
         Log.d(TAG, "Starting timer: $seconds seconds")
         _remainingSeconds.value = seconds
+        _totalSeconds = seconds
         _isRunning.value = true
 
         // Acquire WakeLock to keep CPU running
@@ -87,9 +114,6 @@ class RestTimerService : Service() {
                 it.acquire(seconds * 1000L + 5000L) // Acquire for duration + buffer
             }
         }
-
-        createNotificationChannel()
-        startForeground(NOTIFICATION_ID, createNotification(seconds))
 
         timerJob?.cancel()
         timerJob = serviceScope.launch {
@@ -108,6 +132,12 @@ class RestTimerService : Service() {
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
+    }
+
+    private fun addTime(secondsToAdd: Int) {
+        _remainingSeconds.value += secondsToAdd
+        _totalSeconds += secondsToAdd // Increase scale so progress bar doesn't jump weirdly
+        updateNotification(_remainingSeconds.value)
     }
 
     private fun viewModelScope_launch_feedback() {
@@ -177,16 +207,52 @@ class RestTimerService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val addTimeIntent = Intent(this, RestTimerService::class.java).apply {
+            action = ACTION_ADD_TIME
+        }
+        val addTimePendingIntent = PendingIntent.getService(
+            this,
+            1, // Different RequestCode
+            addTimeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val formattedTime = formatTime(seconds)
+        val progressMax = if (_totalSeconds > 0) _totalSeconds else 1
+        
+        val themeColor = getNotificationColor(_currentThemeColor.value)
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Rest Timer")
-            .setContentText(formatTime(seconds))
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm) // Using system icon for now
+            .setContentText("$formattedTime remaining")
+            .setSmallIcon(R.drawable.ic_timer)
+            .setColor(themeColor)
+            .setColorized(true)
+            .setProgress(progressMax, seconds, false)
             .setContentIntent(tapPendingIntent)
             .setOngoing(true)
+            .addAction(R.drawable.ic_timer, "+30s", addTimePendingIntent)
             .addAction(android.R.drawable.ic_delete, "Stop", stopPendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setOnlyAlertOnce(true) 
             .build()
+    }
+
+    private fun getNotificationColor(colorName: String): Int {
+        return when (colorName) {
+            "lime" -> 0xFFA3E635.toInt()
+            "blue" -> 0xFF3B82F6.toInt()
+            "purple" -> 0xFFA855F7.toInt()
+            "pink" -> 0xFFEC4899.toInt()
+            "gold" -> 0xFFF59E0B.toInt()
+            "red" -> 0xFFEF4444.toInt()
+            "orange" -> 0xFFF97316.toInt()
+            "mint" -> 0xFF10B981.toInt()
+            "slate" -> 0xFF64748B.toInt()
+            "lavender" -> 0xFF8B5CF6.toInt()
+            else -> 0xFFA3E635.toInt()
+        }
     }
 
     private fun updateNotification(seconds: Int) {
@@ -239,6 +305,7 @@ class RestTimerService : Service() {
         private const val NOTIFICATION_ID = 1
 
         const val ACTION_START_TIMER = "com.example.gymtime.action.START_TIMER"
+        const val ACTION_ADD_TIME = "com.example.gymtime.action.ADD_TIME"
         const val ACTION_STOP_TIMER = "com.example.gymtime.action.STOP_TIMER"
         const val EXTRA_SECONDS = "extra_seconds"
     }

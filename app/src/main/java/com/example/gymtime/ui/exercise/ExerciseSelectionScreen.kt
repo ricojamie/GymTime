@@ -118,6 +118,7 @@ fun ExerciseSelectionContent(
             if (isSupersetMode && canStartSuperset) {
                 // Show "Start Superset" button when 2 exercises selected
                 ExtendedFloatingActionButton(
+                    modifier = Modifier.padding(bottom = 100.dp),
                     onClick = {
                         val firstExerciseId = viewModel.startSuperset()
                         navController.navigate(Screen.ExerciseLogging.createRoute(firstExerciseId))
@@ -141,6 +142,7 @@ fun ExerciseSelectionContent(
             } else if (!isSupersetMode) {
                 // Normal "Add Exercise" FAB
                 FloatingActionButton(
+                    modifier = Modifier.padding(bottom = 100.dp),
                     onClick = {
                         navController.navigate(Screen.ExerciseForm.createRoute(fromWorkout = isWorkoutMode))
                     },
@@ -208,7 +210,8 @@ fun ExerciseSelectionContent(
                 }
             } else {
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 100.dp)
                 ) {
                     items(filteredExercises) { exercise ->
                         val isSelected = selectedForSuperset.any { it.id == exercise.id }
