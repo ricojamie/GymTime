@@ -26,7 +26,7 @@ import com.example.gymtime.navigation.BottomNavigationBar
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.history.HistoryScreen
 import com.example.gymtime.ui.home.HomeScreen
-import com.example.gymtime.ui.theme.GymTimeTheme
+import com.example.gymtime.ui.theme.IronLogTheme
 import com.example.gymtime.ui.theme.ThemeColors
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -49,7 +49,7 @@ class MainActivity : ComponentActivity() {
             val themeColorName by userPreferencesRepository.themeColor.collectAsState(initial = "lime")
             val colorScheme = ThemeColors.getScheme(themeColorName)
 
-            GymTimeTheme(appColorScheme = colorScheme) {
+            IronLogTheme(appColorScheme = colorScheme) {
                 val gradientColors = com.example.gymtime.ui.theme.LocalGradientColors.current
 
                 Surface(

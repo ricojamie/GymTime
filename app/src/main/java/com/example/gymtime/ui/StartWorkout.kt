@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gymtime.R
 import com.example.gymtime.ui.components.GlowCard
-import com.example.gymtime.ui.theme.GymTimeTheme
+import com.example.gymtime.ui.theme.IronLogTheme
 import com.example.gymtime.ui.theme.TextPrimary
 import com.example.gymtime.ui.theme.TextTertiary
 

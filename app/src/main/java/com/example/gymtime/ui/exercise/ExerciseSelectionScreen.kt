@@ -62,7 +62,7 @@ import com.example.gymtime.R
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.GlowCard
-import com.example.gymtime.ui.theme.GymTimeTheme
+import com.example.gymtime.ui.theme.IronLogTheme
 import com.example.gymtime.ui.theme.SurfaceCards
 import com.example.gymtime.ui.theme.TextPrimary
 import com.example.gymtime.ui.theme.TextSecondary
@@ -537,7 +537,7 @@ private fun ExerciseListItem(
 @Preview(showBackground = true)
 @Composable
 private fun ExerciseSelectionScreenPreview() {
-    GymTimeTheme {
+    IronLogTheme {
         // This would be a mock preview without actual navigation
     }
 }

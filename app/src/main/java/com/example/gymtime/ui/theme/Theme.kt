@@ -13,7 +13,7 @@ val LocalGradientColors = staticCompositionLocalOf<Pair<Color, Color>> {
 }
 
 @Composable
-fun GymTimeTheme(
+fun IronLogTheme(
     appColorScheme: AppColorScheme = ThemeColors.LimeGreen,
     content: @Composable () -> Unit
 ) {

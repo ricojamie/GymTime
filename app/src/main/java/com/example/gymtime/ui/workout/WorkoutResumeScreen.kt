@@ -317,7 +317,7 @@ private fun EmptyStateCard(onAddExerciseClick: () -> Unit) {
 @Preview(showBackground = true, backgroundColor = 0xFF121212)
 @Composable
 private fun WorkoutResumeScreenPreview() {
-    GymTimeTheme {
+    IronLogTheme {
         Box(
             modifier = Modifier
                 .fillMaxSize()

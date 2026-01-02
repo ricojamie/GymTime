@@ -94,7 +94,7 @@ import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.PlateCalculatorSheet
 import com.example.gymtime.ui.components.VolumeProgressBar
-import com.example.gymtime.ui.theme.GymTimeTheme
+import com.example.gymtime.ui.theme.IronLogTheme
 import com.example.gymtime.ui.theme.SurfaceCards
 import com.example.gymtime.ui.theme.TextPrimary
 import com.example.gymtime.ui.theme.TextTertiary
@@ -461,7 +461,8 @@ fun ExerciseLoggingScreen(
                             value = duration,
                             onValueChange = { viewModel.updateDuration(it) },
                             modifier = Modifier.weight(1f),
-                            lastValue = null
+                            lastValue = null,
+                            lastLabel = "BEST"
                         )
                     }
                     LogType.WEIGHT_DISTANCE -> {
@@ -480,7 +481,8 @@ fun ExerciseLoggingScreen(
                             value = distance,
                             onValueChange = { viewModel.updateDistance(it) },
                             modifier = Modifier.weight(1f),
-                            lastValue = null
+                            lastValue = null,
+                            lastLabel = "BEST"
                         )
                     }
                     LogType.DISTANCE_TIME -> {
@@ -490,7 +492,8 @@ fun ExerciseLoggingScreen(
                             value = distance,
                             onValueChange = { viewModel.updateDistance(it) },
                             modifier = Modifier.weight(1f),
-                            lastValue = null
+                            lastValue = null,
+                            lastLabel = "BEST"
                         )
                         // Time Input
                         TimeInputCard(
@@ -498,7 +501,8 @@ fun ExerciseLoggingScreen(
                             value = duration,
                             onValueChange = { viewModel.updateDuration(it) },
                             modifier = Modifier.weight(1f),
-                            lastValue = null
+                            lastValue = null,
+                            lastLabel = "BEST"
                         )
                     }
                     null -> {
@@ -1190,7 +1194,7 @@ fun ExerciseLoggingScreen(
 @Preview(showBackground = true)
 @Composable
 private fun ExerciseLoggingScreenPreview() {
-    GymTimeTheme {
+    IronLogTheme {
         // Preview would require mock NavController
     }
 }

@@ -38,6 +38,8 @@ fun SettingsScreen(
     val barWeight by viewModel.barWeight.collectAsState(initial = 45f)
     val loadingSides by viewModel.loadingSides.collectAsState(initial = 2)
     val availablePlates by viewModel.availablePlates.collectAsState(initial = listOf(45f, 35f, 25f, 15f, 10f, 5f, 2.5f))
+    
+    var showChangelog by remember { mutableStateOf(false) }
 
     var nameInput by remember { mutableStateOf(userName) }
 
@@ -305,8 +307,58 @@ fun SettingsScreen(
 
             item {
                 Spacer(modifier = Modifier.height(32.dp))
+                
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp)
+                        .clickable { showChangelog = true },
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Version 1.0.0",
+                        fontSize = 14.sp,
+                        color = TextTertiary,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Tap for changelog",
+                        fontSize = 10.sp,
+                        color = TextTertiary.copy(alpha = 0.5f)
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
+    }
+
+    if (showChangelog) {
+        AlertDialog(
+            onDismissRequest = { showChangelog = false },
+            title = { Text("What's New in v1.0 🚀", color = TextPrimary) },
+            text = {
+                Column {
+                    Text("Welcome to Iron Log! 🦾", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "• Officially rebranded to Iron Log! 🎨\n" +
+                        "• All-new industrial-strength app icon 🦾\n" +
+                        "• Stability improvements and bug fixes ⚡\n" +
+                        "• Ready to help you track those gains! 💪",
+                        color = TextPrimary
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showChangelog = false }) {
+                    Text("Let's Go!", color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            containerColor = SurfaceCards,
+            titleContentColor = TextPrimary,
+            textContentColor = TextPrimary
+        )
     }
 }
 

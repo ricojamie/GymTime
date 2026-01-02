@@ -61,7 +61,7 @@ fun InputCard(
 
                 lastValue?.let {
                     Text(
-                        text = "Last: $it",
+                        text = "$lastLabel: $it",
                         style = MaterialTheme.typography.labelSmall,
                         color = TextTertiary.copy(alpha = 0.7f),
                         fontSize = 11.sp
@@ -117,7 +117,8 @@ fun TimeInputCard(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    lastValue: String? = null
+    lastValue: String? = null,
+    lastLabel: String = "LAST"
 ) {
     // Parse current value (Format: HH:MM:SS)
     // If empty or invalid, default to empty strings
@@ -153,7 +154,7 @@ fun TimeInputCard(
                 )
                 lastValue?.let {
                     Text(
-                        text = "Last: $it",
+                        text = "$lastLabel: $it",
                         style = MaterialTheme.typography.labelSmall,
                         color = TextTertiary.copy(alpha = 0.7f),
                         fontSize = 11.sp
