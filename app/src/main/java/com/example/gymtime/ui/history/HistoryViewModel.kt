@@ -9,10 +9,13 @@ import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
 import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.db.entity.WorkoutWithMuscles
 import com.example.gymtime.data.db.dao.WorkoutDao
+import com.example.gymtime.data.repository.WorkoutRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -21,8 +24,13 @@ private const val TAG = "HistoryViewModel"
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
     private val workoutDao: WorkoutDao,
-    private val setDao: SetDao
+    private val setDao: SetDao,
+    private val workoutRepository: WorkoutRepository
 ) : ViewModel() {
+
+    // Navigation event for resuming workout
+    private val _resumeWorkoutEvent = Channel<Long>(Channel.BUFFERED)
+    val resumeWorkoutEvent = _resumeWorkoutEvent.receiveAsFlow()
 
     private val _allWorkouts = MutableStateFlow<List<WorkoutWithMuscles>>(emptyList())
     val allWorkouts: StateFlow<List<WorkoutWithMuscles>> = _allWorkouts.asStateFlow()
@@ -90,4 +98,16 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
+    fun resumeWorkout(workoutId: Long) {
+        viewModelScope.launch {
+            try {
+                workoutRepository.reopenWorkout(workoutId)
+                clearSelection()
+                _resumeWorkoutEvent.send(workoutId)
+                Log.d(TAG, "Reopened workout $workoutId for resume")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error reopening workout", e)
+            }
+        }
+    }
 }

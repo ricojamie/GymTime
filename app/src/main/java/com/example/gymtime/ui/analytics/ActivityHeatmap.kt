@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gymtime.domain.analytics.HeatMapDay
 import kotlinx.coroutines.delay
+import java.util.Calendar
 
 @Composable
 fun ActivityHeatmap(
@@ -75,7 +76,7 @@ fun ActivityHeatmap(
                 
                 // Legend or status
                 Text(
-                    text = "Last 365 Days",
+                    text = "${Calendar.getInstance().get(Calendar.YEAR)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray
                 )
@@ -137,9 +138,13 @@ fun ActivityHeatmap(
                         )
                         
                         Text(
-                            text = if (day.volume > 0) String.format(java.util.Locale.US, "%,.0f lbs", day.volume) else "Rest Day",
+                            text = when {
+                                day.level == -1 -> "Future"
+                                day.volume > 0 -> String.format(java.util.Locale.US, "%,.0f lbs", day.volume)
+                                else -> "Rest Day"
+                            },
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White,
+                            color = if (day.level == -1) Color.Gray else Color.White,
                             fontWeight = if (day.volume > 0) FontWeight.Bold else FontWeight.Normal
                         )
                     }
@@ -164,9 +169,10 @@ fun HeatMapSquare(
     onClick: () -> Unit
 ) {
     val baseColor = MaterialTheme.colorScheme.primary
-    
+
     val color = when (day.level) {
-        0 -> Color(0xFF1E1E1E) // Empty
+        -1 -> Color(0xFF0F0F0F) // Future day - darker
+        0 -> Color(0xFF1E1E1E) // Empty/rest day
         1 -> baseColor.copy(alpha = 0.3f)
         2 -> baseColor.copy(alpha = 0.6f)
         3 -> baseColor.copy(alpha = 1.0f)

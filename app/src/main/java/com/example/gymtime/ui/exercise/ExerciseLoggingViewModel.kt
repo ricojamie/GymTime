@@ -3,6 +3,7 @@ package com.example.gymtime.ui.exercise
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import androidx.core.content.ContextCompat
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.util.Log
@@ -142,6 +143,9 @@ class ExerciseLoggingViewModel @Inject constructor(
 
     // Store the exercise's default rest time
     private var exerciseDefaultRestSeconds: Int = 90
+
+    // Flag to ensure we only prefill weight/reps once per ViewModel instance
+    private var hasPrefilled = false
 
     private val _isWarmup = MutableStateFlow(false)
     val isWarmup: StateFlow<Boolean> = _isWarmup
@@ -308,12 +312,13 @@ class ExerciseLoggingViewModel @Inject constructor(
             _currentWorkout.filterNotNull().collectLatest { workout ->
                 val previousSets = workoutRepository.getLastWorkoutSetsForExercise(exerciseId, workout.id)
                 _lastWorkoutSets.value = previousSets
-                
-                // Prefill if first set
-                if (_loggedSets.value.isEmpty() && previousSets.isNotEmpty()) {
+
+                // Prefill weight/reps from last workout (only once per ViewModel instance)
+                if (!hasPrefilled && previousSets.isNotEmpty()) {
+                    hasPrefilled = true
                     val lastSet = previousSets.first()
-                    if (_weight.value.isBlank()) lastSet.weight?.let { _weight.value = it.toString() }
-                    if (_reps.value.isBlank()) lastSet.reps?.let { _reps.value = it.toString() }
+                    lastSet.weight?.let { _weight.value = it.toString() }
+                    lastSet.reps?.let { _reps.value = it.toString() }
                 }
             }
         }
@@ -554,7 +559,7 @@ class ExerciseLoggingViewModel @Inject constructor(
             action = RestTimerService.ACTION_START_TIMER
             putExtra(RestTimerService.EXTRA_SECONDS, seconds)
         }
-        context.startService(serviceIntent)
+        ContextCompat.startForegroundService(context, serviceIntent)
     }
 
     fun stopTimer() {

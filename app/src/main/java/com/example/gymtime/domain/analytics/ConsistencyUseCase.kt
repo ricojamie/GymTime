@@ -17,7 +17,7 @@ import javax.inject.Inject
 data class HeatMapDay(
     val date: Long, // Start of day timestamp
     val volume: Float,
-    val level: Int, // 0 = Empty, 1 = Low, 2 = Medium, 3 = High
+    val level: Int, // -1 = Future, 0 = Empty, 1 = Low, 2 = Medium, 3 = High
     val formattedDate: String // e.g. "Oct 12"
 )
 
@@ -37,51 +37,63 @@ class ConsistencyUseCase @Inject constructor(
 
     suspend fun getHeatMapData(): List<HeatMapDay> = withContext(Dispatchers.IO) {
         val rawData = workoutDao.getDailyVolumeForHeatMap()
-        
-        if (rawData.isEmpty()) return@withContext emptyList()
 
-        // 1. Calculate Percentiles
+        // 1. Calculate Percentiles (only from non-zero data)
         val volumes = rawData.map { it.dailyVol }.sorted()
-        
+
         val p33 = if (volumes.isNotEmpty()) volumes[(volumes.size * 0.33).toInt()] else 0f
         val p66 = if (volumes.isNotEmpty()) volumes[(volumes.size * 0.66).toInt()] else 0f
-        
+
         val map = rawData.associateBy { stripTime(it.date) }
-        
+
+        // Calendar year: January 1 to December 31
+        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+
         val calendar = Calendar.getInstance()
+        calendar.set(Calendar.YEAR, currentYear)
+        calendar.set(Calendar.MONTH, Calendar.JANUARY)
+        calendar.set(Calendar.DAY_OF_MONTH, 1)
         calendar.set(Calendar.HOUR_OF_DAY, 0)
         calendar.set(Calendar.MINUTE, 0)
         calendar.set(Calendar.SECOND, 0)
         calendar.set(Calendar.MILLISECOND, 0)
-        
+
+        val today = Calendar.getInstance()
+        today.set(Calendar.HOUR_OF_DAY, 23)
+        today.set(Calendar.MINUTE, 59)
+        today.set(Calendar.SECOND, 59)
+
+        val endOfYear = Calendar.getInstance()
+        endOfYear.set(Calendar.YEAR, currentYear)
+        endOfYear.set(Calendar.MONTH, Calendar.DECEMBER)
+        endOfYear.set(Calendar.DAY_OF_MONTH, 31)
+
         val days = mutableListOf<HeatMapDay>()
-        val totalDays = 365 // 52 weeks * 7 approx
-        
-        // Go back 364 days
-        calendar.add(Calendar.DAY_OF_YEAR, -(totalDays - 1))
-        
-        for (i in 0 until totalDays) {
+
+        while (!calendar.after(endOfYear)) {
             val dateMs = calendar.timeInMillis
+            val isFuture = calendar.after(today)
             val item = map[dateMs]
-            val volume = item?.dailyVol ?: 0f
-            
+            val volume = if (isFuture) 0f else (item?.dailyVol ?: 0f)
+
             val level = when {
+                isFuture -> -1  // Future day marker
                 volume == 0f -> 0
                 volume <= p33 -> 1
                 volume <= p66 -> 2
                 else -> 3
             }
-            
+
             days.add(HeatMapDay(
                 date = dateMs,
                 volume = volume,
                 level = level,
                 formattedDate = formatDate(dateMs)
             ))
-            
+
             calendar.add(Calendar.DAY_OF_YEAR, 1)
         }
-        
+
         days
     }
 

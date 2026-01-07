@@ -122,7 +122,7 @@ fun RoutineListScreen(
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(top = 12.dp, bottom = 80.dp),
+                        contentPadding = PaddingValues(top = 12.dp, bottom = 100.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         items(routines) { routine ->

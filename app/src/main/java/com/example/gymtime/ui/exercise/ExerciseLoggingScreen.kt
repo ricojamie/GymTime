@@ -241,7 +241,7 @@ fun ExerciseLoggingScreen(
                     },
                     navigationIcon = {
                         IconButton(onClick = {
-                            navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
+                            navController.popBackStack()
                         }) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -725,7 +725,17 @@ fun ExerciseLoggingScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Logged Sets List
+            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+            
+            // Auto-scroll to bottom when a new set is added
+            LaunchedEffect(loggedSets.size) {
+                if (loggedSets.isNotEmpty()) {
+                    listState.animateScrollToItem(loggedSets.size - 1)
+                }
+            }
+
             LazyColumn(
+                state = listState,
                 modifier = Modifier.weight(1.5f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -772,7 +782,7 @@ fun ExerciseLoggingScreen(
                             // Exit superset mode before navigating to add exercise
                             viewModel.exitSupersetMode()
                         }
-                        navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
+                        navController.popBackStack()
                     },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.outlinedButtonColors(

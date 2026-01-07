@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
+import com.example.gymtime.ui.components.ExerciseIcons
 import com.example.gymtime.ui.theme.SurfaceCards
 import com.example.gymtime.ui.theme.TextPrimary
 import com.example.gymtime.ui.theme.TextTertiary
@@ -484,21 +485,45 @@ fun WorkoutOverviewContent(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Status indicator
-                            Text(
-                                text = if (isActive) "→" else "✓",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = if (isActive) MaterialTheme.colorScheme.primary else TextPrimary,
-                                fontWeight = FontWeight.Bold
-                            )
+                            // Muscle group icon
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(
+                                        if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                        else Color(0xFF1A1A1A),
+                                        RoundedCornerShape(8.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = ExerciseIcons.getIconForMuscle(summary.targetMuscle),
+                                    contentDescription = summary.targetMuscle,
+                                    tint = if (isActive) MaterialTheme.colorScheme.primary else TextTertiary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
 
                             Column {
-                                Text(
-                                    text = summary.exerciseName,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isActive) MaterialTheme.colorScheme.primary else TextPrimary
-                                )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = summary.exerciseName,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isActive) MaterialTheme.colorScheme.primary else TextPrimary
+                                    )
+                                    if (isActive) {
+                                        Text(
+                                            text = "→",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
                                 Text(
                                     text = summary.targetMuscle,
                                     style = MaterialTheme.typography.bodySmall,

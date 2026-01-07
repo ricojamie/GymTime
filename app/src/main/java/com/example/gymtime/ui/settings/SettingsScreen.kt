@@ -361,7 +361,7 @@ fun SettingsScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Version 1.1.0",
+                        text = "Version 1.2.0",
                         fontSize = 14.sp,
                         color = TextTertiary,
                         fontWeight = FontWeight.Medium
@@ -381,18 +381,19 @@ fun SettingsScreen(
     if (showChangelog) {
         AlertDialog(
             onDismissRequest = { showChangelog = false },
-            title = { Text("What's New in v1.1 🚀", color = TextPrimary) },
+            title = { Text("What's New in v1.2", color = TextPrimary) },
             text = {
                 Column {
-                    Text("Performance & UI Overhaul ⚡", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("Quality of Life Update", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "• 📱 Android 14 optimization and MinSDK 34 upgrade\n" +
-                        "• 🎨 5 new theme colors (Blood Red, Sunset Orange, etc.)\n" +
-                        "• 🧭 Modernized floating and rounded navigation bar\n" +
-                        "• ⏲️ Dynamic theme-matched rest timer notifications\n" +
-                        "• 📊 Improved scrolling and layouts in Analytics tabs\n" +
-                        "• 🔙 Support for Predictive Back gestures",
+                        "• Timer audio now uses media volume\n" +
+                        "• Activity calendar shows calendar year\n" +
+                        "• Fixed superset value preloading bug\n" +
+                        "• Adaptive icons for Pixel launchers\n" +
+                        "• New animated splash screen\n" +
+                        "• Improved bottom sheets with icons\n" +
+                        "• Resume workouts from History",
                         color = TextPrimary
                     )
                 }

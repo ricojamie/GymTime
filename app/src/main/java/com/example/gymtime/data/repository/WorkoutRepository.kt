@@ -71,6 +71,14 @@ class WorkoutRepository @Inject constructor(
         val updatedWorkout = workout.copy(endTime = Date())
         workoutDao.updateWorkout(updatedWorkout)
     }
+
+    suspend fun reopenWorkout(workoutId: Long) {
+        workoutDao.reopenWorkout(workoutId)
+    }
+
+    suspend fun getLastCompletedWorkout(): Workout? {
+        return workoutDao.getLastCompletedWorkout()
+    }
     
     fun getWorkoutOverview(workoutId: Long, routineDayId: Long?): Flow<List<WorkoutExerciseSummary>> {
         return if (routineDayId != null) {

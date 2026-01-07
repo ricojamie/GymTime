@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -22,6 +23,7 @@ import androidx.navigation.NavController
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.WorkoutWithMuscles
 import com.example.gymtime.data.db.dao.SetWithExerciseInfo
+import com.example.gymtime.ui.components.ExerciseIcons
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.*
 import java.text.SimpleDateFormat
@@ -38,6 +40,13 @@ fun HistoryScreen(
     val selectedWorkoutDetails by viewModel.selectedWorkoutDetails.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val accentColor = MaterialTheme.colorScheme.primary
+
+    // Handle resume workout navigation
+    LaunchedEffect(Unit) {
+        viewModel.resumeWorkoutEvent.collect { workoutId ->
+            navController.navigate("workout_resume")
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -74,7 +83,7 @@ fun HistoryScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    contentPadding = PaddingValues(top = 12.dp, start = 16.dp, end = 16.dp, bottom = 100.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(workouts) { workout ->
@@ -99,7 +108,8 @@ fun HistoryScreen(
             WorkoutDetailsSheet(
                 workout = selectedWorkout!!,
                 sets = selectedWorkoutDetails!!,
-                onDismiss = { viewModel.clearSelection() }
+                onDismiss = { viewModel.clearSelection() },
+                onResumeWorkout = { viewModel.resumeWorkout(selectedWorkout!!.workout.id) }
             )
         }
     }
@@ -261,8 +271,11 @@ fun WorkoutDetailsSheet(
     workout: WorkoutWithMuscles,
     sets: List<SetWithExerciseInfo>,
     onDismiss: () -> Unit,
+    onResumeWorkout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val accentColor = MaterialTheme.colorScheme.primary
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -318,6 +331,23 @@ fun WorkoutDetailsSheet(
                     fontSize = 12.sp
                 )
             }
+
+            // Resume Workout button
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = onResumeWorkout,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = accentColor
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    "Resume This Workout",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
         HorizontalDivider(
@@ -353,25 +383,94 @@ fun ExerciseSetGroup(
     sets: List<SetWithExerciseInfo>,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text(
-            exerciseName,
-            color = TextPrimary,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold
-        )
+    val muscleGroup = sets.firstOrNull()?.targetMuscle ?: "Other"
+    val accentColor = MaterialTheme.colorScheme.primary
 
-        sets.forEach { setInfo ->
-            SetRow(setInfo.set)
+    // Find the best (heaviest) working set for this exercise in this workout
+    val bestSet = sets
+        .filter { !it.set.isWarmup && it.set.weight != null }
+        .maxByOrNull { it.set.weight ?: 0f }
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF0D0D0D)
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Header with icon
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Muscle group icon
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(
+                            accentColor.copy(alpha = 0.15f),
+                            RoundedCornerShape(8.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = ExerciseIcons.getIconForMuscle(muscleGroup),
+                        contentDescription = muscleGroup,
+                        tint = accentColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        exerciseName,
+                        color = TextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        muscleGroup,
+                        color = TextTertiary,
+                        fontSize = 11.sp
+                    )
+                }
+
+                // Set count badge
+                Text(
+                    text = "${sets.count { !it.set.isWarmup }} sets",
+                    color = TextTertiary,
+                    fontSize = 11.sp
+                )
+            }
+
+            // Sets list
+            sets.forEachIndexed { index, setInfo ->
+                val isBestSet = setInfo == bestSet
+                SetRow(
+                    set = setInfo.set,
+                    setNumber = index + 1,
+                    isBestSet = isBestSet
+                )
+            }
         }
     }
 }
 
 @Composable
-fun SetRow(set: Set, modifier: Modifier = Modifier) {
+fun SetRow(
+    set: Set,
+    setNumber: Int = 0,
+    isBestSet: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val accentColor = MaterialTheme.colorScheme.primary
     val setText = buildString {
         if (set.weight != null) append("${set.weight.toInt()} lbs")
         if (set.reps != null) {
@@ -383,24 +482,68 @@ fun SetRow(set: Set, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 8.dp),
+            .then(
+                if (isBestSet && !set.isWarmup) {
+                    Modifier
+                        .background(
+                            accentColor.copy(alpha = 0.1f),
+                            RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                } else {
+                    Modifier.padding(start = 8.dp, top = 2.dp, bottom = 2.dp)
+                }
+            ),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = setText,
-            color = if (set.isWarmup) TextTertiary else TextSecondary,
-            fontSize = 12.sp,
-            modifier = Modifier.weight(1f)
-        )
-
-        if (set.isWarmup) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
-                "[Warmup]",
+                text = "$setNumber.",
                 color = TextTertiary,
-                fontSize = 10.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
             )
+            Text(
+                text = setText,
+                color = if (set.isWarmup) TextTertiary else if (isBestSet) accentColor else TextSecondary,
+                fontSize = 12.sp,
+                fontWeight = if (isBestSet && !set.isWarmup) FontWeight.SemiBold else FontWeight.Normal
+            )
+        }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (isBestSet && !set.isWarmup) {
+                Text(
+                    text = "BEST",
+                    color = Color.Black,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier
+                        .background(accentColor, RoundedCornerShape(3.dp))
+                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                )
+            }
+            if (set.isWarmup) {
+                Text(
+                    "WU",
+                    color = accentColor,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .background(
+                            accentColor.copy(alpha = 0.2f),
+                            RoundedCornerShape(3.dp)
+                        )
+                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                )
+            }
         }
     }
 }

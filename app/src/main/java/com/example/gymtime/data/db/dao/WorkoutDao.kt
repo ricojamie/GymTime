@@ -33,6 +33,14 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts WHERE endTime IS NULL ORDER BY startTime DESC LIMIT 1")
     fun getOngoingWorkout(): Flow<Workout?>
 
+    // Reopen a finished workout (for "Resume" feature)
+    @Query("UPDATE workouts SET endTime = NULL WHERE id = :workoutId")
+    suspend fun reopenWorkout(workoutId: Long)
+
+    // Get the most recently completed workout
+    @Query("SELECT * FROM workouts WHERE endTime IS NOT NULL ORDER BY endTime DESC LIMIT 1")
+    suspend fun getLastCompletedWorkout(): Workout?
+
     @Query("""
         SELECT
             w.*,
