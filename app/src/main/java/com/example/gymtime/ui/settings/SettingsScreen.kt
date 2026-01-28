@@ -1,5 +1,7 @@
 package com.example.gymtime.ui.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -39,7 +42,8 @@ fun SettingsScreen(
     val barWeight by viewModel.barWeight.collectAsState(initial = 45f)
     val loadingSides by viewModel.loadingSides.collectAsState(initial = 2)
     val availablePlates by viewModel.availablePlates.collectAsState(initial = listOf(45f, 35f, 25f, 15f, 10f, 5f, 2.5f))
-    
+    val importState by viewModel.importState.collectAsState()
+
     var showChangelog by remember { mutableStateOf(false) }
 
     var nameInput by remember { mutableStateOf(userName) }
@@ -47,6 +51,18 @@ fun SettingsScreen(
     // Update nameInput when userName changes from DataStore
     LaunchedEffect(userName) {
         nameInput = userName
+    }
+
+    // File picker for FitNotes import
+    val context = LocalContext.current
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            context.contentResolver.openInputStream(it)?.let { inputStream ->
+                viewModel.importFitNotes(inputStream)
+            }
+        }
     }
 
     Scaffold(
@@ -350,9 +366,53 @@ fun SettingsScreen(
                 }
             }
 
+            // Import Data Section
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+                SectionHeader("Import Data")
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceCards),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("FitNotes Import", fontSize = 16.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+                        Text(
+                            "Import workout history from FitNotes CSV export",
+                            fontSize = 12.sp,
+                            color = TextTertiary
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = { filePickerLauncher.launch("text/*") },
+                            enabled = importState !is SettingsViewModel.ImportState.InProgress,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = Color.Black
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (importState is SettingsViewModel.ImportState.InProgress) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = Color.Black,
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Importing...")
+                            } else {
+                                Text("Select CSV File")
+                            }
+                        }
+                    }
+                }
+            }
+
             item {
                 Spacer(modifier = Modifier.height(32.dp))
-                
+
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -361,7 +421,7 @@ fun SettingsScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Version 1.2.0",
+                        text = "Version 1.3.0",
                         fontSize = 14.sp,
                         color = TextTertiary,
                         fontWeight = FontWeight.Medium
@@ -372,35 +432,80 @@ fun SettingsScreen(
                         color = TextTertiary.copy(alpha = 0.5f)
                     )
                 }
-                
+
                 Spacer(modifier = Modifier.height(32.dp))
             }
         }
     }
 
+    // Import Result Dialog
+    when (val state = importState) {
+        is SettingsViewModel.ImportState.Success -> {
+            AlertDialog(
+                onDismissRequest = { viewModel.clearImportState() },
+                title = { Text("Import Complete", color = TextPrimary) },
+                text = {
+                    Column {
+                        Text("${state.result.workoutsImported} workouts imported", color = TextPrimary)
+                        Text("${state.result.setsImported} sets imported", color = TextPrimary)
+                        Text("${state.result.exercisesCreated} new exercises created", color = TextPrimary)
+                        if (state.result.duplicatesSkipped > 0) {
+                            Text("${state.result.duplicatesSkipped} duplicates skipped", color = TextTertiary)
+                        }
+                        if (state.result.errors.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("${state.result.errors.size} errors occurred", color = Color(0xFFEF5350))
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.clearImportState() }) {
+                        Text("Done", color = MaterialTheme.colorScheme.primary)
+                    }
+                },
+                containerColor = SurfaceCards
+            )
+        }
+        is SettingsViewModel.ImportState.Error -> {
+            AlertDialog(
+                onDismissRequest = { viewModel.clearImportState() },
+                title = { Text("Import Failed", color = Color(0xFFEF5350)) },
+                text = { Text(state.message, color = TextPrimary) },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.clearImportState() }) {
+                        Text("OK", color = MaterialTheme.colorScheme.primary)
+                    }
+                },
+                containerColor = SurfaceCards
+            )
+        }
+        else -> { /* Idle or InProgress - no dialog */ }
+    }
+
     if (showChangelog) {
         AlertDialog(
             onDismissRequest = { showChangelog = false },
-            title = { Text("What's New in v1.2", color = TextPrimary) },
+            title = { Text("What's New in v1.3 🎉", color = TextPrimary) },
             text = {
                 Column {
-                    Text("Quality of Life Update", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("New Year, New Gains! 💪", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "• Timer audio now uses media volume\n" +
-                        "• Activity calendar shows calendar year\n" +
-                        "• Fixed superset value preloading bug\n" +
-                        "• Adaptive icons for Pixel launchers\n" +
-                        "• New animated splash screen\n" +
-                        "• Improved bottom sheets with icons\n" +
-                        "• Resume workouts from History",
+                        "📥 FitNotes Import\n" +
+                        "Import your workout history from FitNotes CSV exports. Smart duplicate detection keeps your data clean!\n\n" +
+                        "📊 Year-over-Year Stats\n" +
+                        "Track your progress against last year's total volume in the Iron Streak overview.\n\n" +
+                        "🗓️ Dynamic Year Labels\n" +
+                        "All stats now show the correct year automatically.\n\n" +
+                        "📈 Activity Heatmap\n" +
+                        "Calendar now starts at January instead of today.",
                         color = TextPrimary
                     )
                 }
             },
             confirmButton = {
                 TextButton(onClick = { showChangelog = false }) {
-                    Text("Let's Go!", color = MaterialTheme.colorScheme.primary)
+                    Text("Let's Lift! 🏋️", color = MaterialTheme.colorScheme.primary)
                 }
             },
             containerColor = SurfaceCards,

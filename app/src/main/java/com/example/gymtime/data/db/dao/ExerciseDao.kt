@@ -36,4 +36,7 @@ interface ExerciseDao {
 
     @Query("SELECT * FROM exercises WHERE isStarred = 1 LIMIT 3")
     fun getStarredExercises(): Flow<List<Exercise>>
+
+    @Query("SELECT * FROM exercises WHERE LOWER(name) = LOWER(:name) LIMIT 1")
+    suspend fun getExerciseByName(name: String): Exercise?
 }

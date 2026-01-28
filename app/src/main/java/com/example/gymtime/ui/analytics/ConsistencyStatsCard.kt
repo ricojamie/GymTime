@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.example.gymtime.domain.analytics.ConsistencyStats
 import com.example.gymtime.util.StreakCalculator
 import java.text.NumberFormat
+import java.util.Calendar
 import java.util.Locale
 
 @Composable
@@ -169,7 +170,8 @@ private fun StreakSection(stats: ConsistencyStats) {
 @Composable
 private fun StatsGridSection(stats: ConsistencyStats) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.US)
-    
+    val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -182,11 +184,11 @@ private fun StatsGridSection(stats: ConsistencyStats) {
             value = "${stats.bestStreak} Days"
         )
         StatGridItem(
-            label = "2025 LOGS",
+            label = "$currentYear LOGS",
             value = "${stats.ytdWorkouts}"
         )
         StatGridItem(
-            label = "2025 VOL",
+            label = "$currentYear VOL",
             value = "${compactVolumeFormat(stats.ytdVolume)}"
         )
     }

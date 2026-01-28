@@ -386,6 +386,22 @@ interface SetDao {
           AND timestamp < :endMs
     """)
     suspend fun getSupersetGroupsInRange(startMs: Long, endMs: Long): List<String>
+
+    // Check for duplicate sets (for import deduplication)
+    @Query("""
+        SELECT COUNT(*) FROM sets
+        WHERE exerciseId = :exerciseId
+          AND timestamp BETWEEN :dayStart AND :dayEnd
+          AND (weight = :weight OR (weight IS NULL AND :weight IS NULL))
+          AND (reps = :reps OR (reps IS NULL AND :reps IS NULL))
+    """)
+    suspend fun countMatchingSets(
+        exerciseId: Long,
+        dayStart: Long,
+        dayEnd: Long,
+        weight: Float?,
+        reps: Int?
+    ): Int
 }
 
 // Data class for rep-based personal records

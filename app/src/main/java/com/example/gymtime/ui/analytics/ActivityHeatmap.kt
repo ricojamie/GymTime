@@ -19,7 +19,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,7 +31,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gymtime.domain.analytics.HeatMapDay
-import kotlinx.coroutines.delay
 import java.util.Calendar
 
 @Composable
@@ -42,15 +40,6 @@ fun ActivityHeatmap(
 ) {
     val scrollState = rememberScrollState()
     var selectedDay by remember { mutableStateOf<HeatMapDay?>(null) }
-    
-    // Auto-scroll to the end (today) when data loads
-    LaunchedEffect(data) {
-        if (data.isNotEmpty()) {
-            // Short delay to allow layout to calculate
-            delay(100) 
-            scrollState.animateScrollTo(scrollState.maxValue)
-        }
-    }
 
     Card(
         modifier = modifier.fillMaxWidth(),

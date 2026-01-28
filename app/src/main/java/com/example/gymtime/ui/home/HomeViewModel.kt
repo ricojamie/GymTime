@@ -84,12 +84,17 @@ class HomeViewModel @Inject constructor(
     private val _ytdVolume = MutableStateFlow(0f)
     val ytdVolume: StateFlow<Float> = _ytdVolume.asStateFlow()
 
+    // Last year's total volume (full year)
+    private val _lastYearVolume = MutableStateFlow(0f)
+    val lastYearVolume: StateFlow<Float> = _lastYearVolume.asStateFlow()
+
     init {
         loadWeeklyVolume()
         refreshVolumeOrb()
         loadStreakData()
         loadYtdWorkouts()
         loadYtdVolume()
+        loadLastYearVolume()
     }
 
     private fun refreshVolumeOrb() {
@@ -112,8 +117,35 @@ class HomeViewModel @Inject constructor(
             cal.set(Calendar.MILLISECOND, 0)
             val startOfYear = cal.timeInMillis
             val endOfToday = System.currentTimeMillis()
-            
+
             _ytdVolume.value = workoutRepository.getTotalVolume(startOfYear, endOfToday)
+        }
+    }
+
+    private fun loadLastYearVolume() {
+        viewModelScope.launch {
+            val cal = Calendar.getInstance()
+            val currentYear = cal.get(Calendar.YEAR)
+
+            // Start of last year (Jan 1, previous year, 00:00:00)
+            cal.set(Calendar.YEAR, currentYear - 1)
+            cal.set(Calendar.DAY_OF_YEAR, 1)
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            val startOfLastYear = cal.timeInMillis
+
+            // End of last year (Dec 31, previous year, 23:59:59)
+            cal.set(Calendar.MONTH, Calendar.DECEMBER)
+            cal.set(Calendar.DAY_OF_MONTH, 31)
+            cal.set(Calendar.HOUR_OF_DAY, 23)
+            cal.set(Calendar.MINUTE, 59)
+            cal.set(Calendar.SECOND, 59)
+            cal.set(Calendar.MILLISECOND, 999)
+            val endOfLastYear = cal.timeInMillis
+
+            _lastYearVolume.value = workoutRepository.getTotalVolume(startOfLastYear, endOfLastYear)
         }
     }
 
@@ -190,5 +222,6 @@ class HomeViewModel @Inject constructor(
         loadStreakData()
         loadYtdWorkouts()
         loadYtdVolume()
+        loadLastYearVolume()
     }
 }

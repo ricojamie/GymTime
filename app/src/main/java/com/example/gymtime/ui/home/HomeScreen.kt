@@ -57,6 +57,7 @@ import com.example.gymtime.ui.theme.TextTertiary
 import com.example.gymtime.util.StreakCalculator
 import kotlinx.coroutines.delay
 import java.text.NumberFormat
+import java.util.Calendar
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,6 +77,7 @@ fun HomeScreen(
     val bestStreak by viewModel.bestStreak.collectAsState()
     val ytdWorkouts by viewModel.ytdWorkouts.collectAsState()
     val ytdVolume by viewModel.ytdVolume.collectAsState()
+    val lastYearVolume by viewModel.lastYearVolume.collectAsState()
 
     var showStreakDetail by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
@@ -213,6 +215,7 @@ fun HomeScreen(
                     bestStreak = bestStreak,
                     ytdWorkouts = ytdWorkouts,
                     ytdVolume = ytdVolume,
+                    lastYearVolume = lastYearVolume,
                     onClose = { showStreakDetail = false }
                 )
             }
@@ -386,10 +389,13 @@ private fun StreakDetailContent(
     bestStreak: Int,
     ytdWorkouts: Int,
     ytdVolume: Float,
+    lastYearVolume: Float,
     onClose: () -> Unit
 ) {
     val accentColor = MaterialTheme.colorScheme.primary
     val numberFormat = NumberFormat.getNumberInstance(Locale.US)
+    val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+    val lastYear = currentYear - 1
 
     // Determine if this is a fresh start (0 days and not broken today)
     val isFreshStart = streakResult.streakDays == 0 &&
@@ -513,19 +519,43 @@ private fun StreakDetailContent(
                 modifier = Modifier.weight(1f)
             )
             StatItem(
-                label = "2025 WORKOUTS",
+                label = "$currentYear WORKOUTS",
                 value = "$ytdWorkouts",
                 modifier = Modifier.weight(1f)
             )
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
-        StatItem(
-            label = "2025 TOTAL WEIGHT LIFTED",
-            value = "${numberFormat.format(ytdVolume.toLong())} lbs",
-            modifier = Modifier.fillMaxWidth()
-        )
+
+        // Year-over-year volume comparison
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            StatItem(
+                label = "$currentYear VOLUME",
+                value = "${numberFormat.format(ytdVolume.toLong())} lbs",
+                modifier = Modifier.weight(1f)
+            )
+            StatItem(
+                label = "$lastYear TOTAL",
+                value = "${numberFormat.format(lastYearVolume.toLong())} lbs",
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // Progress percentage
+        if (lastYearVolume > 0) {
+            Spacer(modifier = Modifier.height(8.dp))
+            val progressPercent = (ytdVolume / lastYearVolume * 100)
+            Text(
+                text = "${String.format("%.1f", progressPercent)}% of last year's total",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (progressPercent >= 100) accentColor else TextSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
 
         Spacer(modifier = Modifier.height(40.dp))
     }

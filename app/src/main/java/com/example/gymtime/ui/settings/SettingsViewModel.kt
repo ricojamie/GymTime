@@ -3,13 +3,20 @@ package com.example.gymtime.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.UserPreferencesRepository
+import com.example.gymtime.util.FitNotesImporter
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.InputStream
 import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val userPreferencesRepository: UserPreferencesRepository
+    private val userPreferencesRepository: UserPreferencesRepository,
+    private val fitNotesImporter: FitNotesImporter
 ) : ViewModel() {
 
     val userName = userPreferencesRepository.userName
@@ -69,5 +76,32 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             userPreferencesRepository.togglePlate(plate, currentPlates)
         }
+    }
+
+    // FitNotes Import State
+    sealed class ImportState {
+        object Idle : ImportState()
+        object InProgress : ImportState()
+        data class Success(val result: FitNotesImporter.ImportResult) : ImportState()
+        data class Error(val message: String) : ImportState()
+    }
+
+    private val _importState = MutableStateFlow<ImportState>(ImportState.Idle)
+    val importState: StateFlow<ImportState> = _importState.asStateFlow()
+
+    fun importFitNotes(inputStream: InputStream) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _importState.value = ImportState.InProgress
+            try {
+                val result = fitNotesImporter.importCsv(inputStream)
+                _importState.value = ImportState.Success(result)
+            } catch (e: Exception) {
+                _importState.value = ImportState.Error(e.message ?: "Unknown error during import")
+            }
+        }
+    }
+
+    fun clearImportState() {
+        _importState.value = ImportState.Idle
     }
 }
