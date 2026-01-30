@@ -1,5 +1,6 @@
 package com.example.gymtime.domain.analytics
 
+import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.MuscleFreshness
 import com.example.gymtime.util.TestDispatcherRule
@@ -20,11 +21,15 @@ class BalanceUseCaseTest {
     val testDispatcherRule = TestDispatcherRule()
 
     private val workoutDao: WorkoutDao = mockk()
+    private val muscleGroupDao: MuscleGroupDao = mockk()
     private lateinit var balanceUseCase: BalanceUseCase
+
+    private val testMuscleGroups = listOf("Chest", "Back", "Legs", "Shoulders", "Biceps", "Triceps", "Core")
 
     @Before
     fun setup() {
-        balanceUseCase = BalanceUseCase(workoutDao)
+        coEvery { muscleGroupDao.getAllMuscleGroupNames() } returns testMuscleGroups
+        balanceUseCase = BalanceUseCase(workoutDao, muscleGroupDao)
     }
 
     @Test

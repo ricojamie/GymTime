@@ -17,6 +17,7 @@ import javax.inject.Inject
 class AnalyticsViewModel @Inject constructor(
     private val setDao: SetDao,
     private val exerciseDao: ExerciseDao,
+    private val muscleGroupDao: com.example.gymtime.data.db.dao.MuscleGroupDao,
     private val consistencyUseCase: com.example.gymtime.domain.analytics.ConsistencyUseCase,
     private val balanceUseCase: com.example.gymtime.domain.analytics.BalanceUseCase,
     private val trendUseCase: com.example.gymtime.domain.analytics.TrendUseCase
@@ -63,6 +64,9 @@ class AnalyticsViewModel @Inject constructor(
     val trophyCasePRs = _trophyCasePRs.asStateFlow()
 
     val allExercises = exerciseDao.getAllExercises()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allMuscleGroups = muscleGroupDao.getAllMuscleGroups()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {

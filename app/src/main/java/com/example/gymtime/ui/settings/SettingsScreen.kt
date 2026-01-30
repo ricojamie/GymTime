@@ -366,6 +366,38 @@ fun SettingsScreen(
                 }
             }
 
+            // Muscle Groups Section
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+                SectionHeader("Customization")
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { navController.navigate(com.example.gymtime.navigation.Screen.MuscleGroupManagement.route) },
+                    colors = CardDefaults.cardColors(containerColor = SurfaceCards),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Manage Muscle Groups", fontSize = 16.sp, color = TextPrimary)
+                            Text(
+                                "Add, edit, or remove muscle groups",
+                                fontSize = 12.sp,
+                                color = TextTertiary
+                            )
+                        }
+                        Text("→", fontSize = 18.sp, color = TextTertiary)
+                    }
+                }
+            }
+
             // Import Data Section
             item {
                 Spacer(modifier = Modifier.height(24.dp))
@@ -421,7 +453,7 @@ fun SettingsScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Version 1.3.0",
+                        text = "Version 1.4.0",
                         fontSize = 14.sp,
                         color = TextTertiary,
                         fontWeight = FontWeight.Medium
@@ -485,20 +517,20 @@ fun SettingsScreen(
     if (showChangelog) {
         AlertDialog(
             onDismissRequest = { showChangelog = false },
-            title = { Text("What's New in v1.3 🎉", color = TextPrimary) },
+            title = { Text("What's New in v1.4 🎉", color = TextPrimary) },
             text = {
                 Column {
-                    Text("New Year, New Gains! 💪", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("Your Body, Your Rules! 💪", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "📥 FitNotes Import\n" +
-                        "Import your workout history from FitNotes CSV exports. Smart duplicate detection keeps your data clean!\n\n" +
-                        "📊 Year-over-Year Stats\n" +
-                        "Track your progress against last year's total volume in the Iron Streak overview.\n\n" +
-                        "🗓️ Dynamic Year Labels\n" +
-                        "All stats now show the correct year automatically.\n\n" +
-                        "📈 Activity Heatmap\n" +
-                        "Calendar now starts at January instead of today.",
+                        "🎯 Custom Muscle Groups\n" +
+                        "Add, rename, or remove muscle groups to match YOUR training style. Calves? Forearms? Glutes? You decide!\n\n" +
+                        "🔄 Smart Renaming\n" +
+                        "Rename a muscle group and all your exercises update automatically. Your workout history stays intact.\n\n" +
+                        "🛡️ Data Protection\n" +
+                        "Can't accidentally delete muscle groups with logged workouts. Your gains are safe!\n\n" +
+                        "📊 Dynamic Analytics\n" +
+                        "All charts and filters now use your custom muscle groups.",
                         color = TextPrimary
                     )
                 }

@@ -41,6 +41,7 @@ sealed class Screen(val route: String, val icon: ImageVector) {
     }
 
     object Settings : Screen("settings", Icons.Filled.Settings) // Settings screen
+    object MuscleGroupManagement : Screen("muscle_group_management", Icons.Filled.Settings)
 
     // Routine Routes
     object RoutineList : Screen("routine_list", Icons.Filled.Home)

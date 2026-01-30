@@ -13,6 +13,9 @@ interface MuscleGroupDao {
     @Query("SELECT * FROM muscle_groups ORDER BY name ASC")
     fun getAllMuscleGroups(): Flow<List<MuscleGroup>>
 
+    @Query("SELECT name FROM muscle_groups ORDER BY name ASC")
+    suspend fun getAllMuscleGroupNames(): List<String>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertMuscleGroup(muscleGroup: MuscleGroup)
 
@@ -21,4 +24,20 @@ interface MuscleGroupDao {
 
     @Delete
     suspend fun deleteMuscleGroup(muscleGroup: MuscleGroup)
+
+    @Query("DELETE FROM muscle_groups WHERE name = :name")
+    suspend fun deleteMuscleGroupByName(name: String)
+
+    @Query("SELECT COUNT(*) FROM exercises WHERE LOWER(targetMuscle) = LOWER(:muscleName)")
+    suspend fun getExerciseCountForMuscle(muscleName: String): Int
+
+    @Query("""
+        SELECT COUNT(*) FROM sets s
+        INNER JOIN exercises e ON s.exerciseId = e.id
+        WHERE LOWER(e.targetMuscle) = LOWER(:muscleName)
+    """)
+    suspend fun getLoggedSetCountForMuscle(muscleName: String): Int
+
+    @Query("SELECT COUNT(*) FROM muscle_groups WHERE LOWER(name) = LOWER(:name)")
+    suspend fun muscleGroupExists(name: String): Int
 }

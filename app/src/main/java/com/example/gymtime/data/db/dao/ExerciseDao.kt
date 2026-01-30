@@ -39,4 +39,7 @@ interface ExerciseDao {
 
     @Query("SELECT * FROM exercises WHERE LOWER(name) = LOWER(:name) LIMIT 1")
     suspend fun getExerciseByName(name: String): Exercise?
+
+    @Query("UPDATE exercises SET targetMuscle = :newMuscle WHERE LOWER(targetMuscle) = LOWER(:oldMuscle)")
+    suspend fun updateExercisesTargetMuscle(oldMuscle: String, newMuscle: String)
 }

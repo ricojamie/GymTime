@@ -181,6 +181,9 @@ class MainActivity : ComponentActivity() {
                                 composable(Screen.Settings.route) {
                                     com.example.gymtime.ui.settings.SettingsScreen(navController = navController)
                                 }
+                                composable(Screen.MuscleGroupManagement.route) {
+                                    com.example.gymtime.ui.settings.MuscleGroupManagementScreen(navController = navController)
+                                }
 
                                 // Routine Routes
                                 composable(Screen.RoutineList.route) {

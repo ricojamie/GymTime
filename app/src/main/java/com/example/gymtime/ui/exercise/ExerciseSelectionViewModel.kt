@@ -54,9 +54,7 @@ class ExerciseSelectionViewModel @Inject constructor(
 
     // Get muscle groups from database
     val availableMuscles: Flow<List<String>> = exerciseRepository.getAllMuscleGroups().map { groups ->
-        val dbMuscles = groups.map { it.name }
-        val defaultMuscles = listOf("Back", "Biceps", "Chest", "Core", "Legs", "Shoulders", "Triceps", "Cardio")
-        (dbMuscles + defaultMuscles).distinct().sorted()
+        groups.map { it.name }.sorted()
     }
 
     // Filtered exercises based on search query and selected muscles, sorted alphabetically

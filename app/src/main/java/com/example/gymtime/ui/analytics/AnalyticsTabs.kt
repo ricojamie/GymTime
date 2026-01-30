@@ -132,6 +132,7 @@ fun TrendsTabContent(
     val selectedMuscle by viewModel.selectedMuscleFilter.collectAsState()
     val selectedExerciseId by viewModel.selectedExerciseFilterId.collectAsState()
     val allExercises by viewModel.allExercises.collectAsState()
+    val allMuscleGroups by viewModel.allMuscleGroups.collectAsState()
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -147,6 +148,7 @@ fun TrendsTabContent(
             selectedMuscle = selectedMuscle,
             selectedExerciseId = selectedExerciseId,
             allExercises = allExercises,
+            allMuscleGroups = allMuscleGroups.map { it.name },
             onMetricChange = viewModel::updateMetric,
             onPeriodChange = viewModel::updatePeriod,
             onIntervalChange = viewModel::updateInterval,
@@ -182,6 +184,7 @@ private fun TrendsFilters(
     selectedMuscle: String?,
     selectedExerciseId: Long?,
     allExercises: List<com.example.gymtime.data.db.entity.Exercise>,
+    allMuscleGroups: List<String>,
     onMetricChange: (TrendMetric) -> Unit,
     onPeriodChange: (TimePeriod) -> Unit,
     onIntervalChange: (AggregateInterval) -> Unit,
@@ -227,12 +230,12 @@ private fun TrendsFilters(
                 label = "Filter",
                 current = filterLabel,
                 options = listOf("All") +
-                          listOf("Chest", "Back", "Legs", "Shoulders", "Biceps", "Triceps", "Core") +
+                          allMuscleGroups +
                           allExercises.map { it.name },
                 onSelect = { selected ->
                     when {
                         selected == "All" -> onMuscleChange("All")
-                        selected in listOf("Chest", "Back", "Legs", "Shoulders", "Biceps", "Triceps", "Core") -> onMuscleChange(selected)
+                        selected in allMuscleGroups -> onMuscleChange(selected)
                         else -> {
                             val exercise = allExercises.find { it.name == selected }
                             onExerciseChange(exercise?.id)

@@ -1,6 +1,7 @@
 package com.example.gymtime.domain.analytics
 
 import androidx.compose.ui.graphics.Color
+import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.MuscleDistribution
 import kotlinx.coroutines.Dispatchers
@@ -24,7 +25,8 @@ enum class RecoveryStatus {
 }
 
 class BalanceUseCase @Inject constructor(
-    private val workoutDao: WorkoutDao
+    private val workoutDao: WorkoutDao,
+    private val muscleGroupDao: MuscleGroupDao
 ) {
 
     suspend fun getMuscleDistribution(): List<MuscleDistribution> = withContext(Dispatchers.IO) {
@@ -34,10 +36,10 @@ class BalanceUseCase @Inject constructor(
     suspend fun getMuscleFreshness(): List<MuscleFreshnessStatus> = withContext(Dispatchers.IO) {
         val rawData = workoutDao.getMuscleLastTrainedDates()
         val now = System.currentTimeMillis()
-        
-        // Define all major muscles we want to track
-        val allMuscles = listOf("Chest", "Back", "Legs", "Shoulders", "Biceps", "Triceps", "Core")
-        
+
+        // Get all muscle groups from database dynamically
+        val allMuscles = muscleGroupDao.getAllMuscleGroupNames()
+
         // Map existing data
         val knownFreshness = rawData.associateBy { it.muscle }
         

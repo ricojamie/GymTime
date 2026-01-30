@@ -57,11 +57,17 @@ class ConsistencyUseCaseTest {
 
         val result = consistencyUseCase.getHeatMapData()
 
-        assertEquals(365, result.size)
-        val todayData = result.last()
-        assertEquals(today, todayData.date)
-        assertEquals(100f, todayData.volume)
-        assertEquals(1, todayData.level) // <= 200
+        // Result covers the full calendar year (Jan 1 - Dec 31)
+        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+        val isLeapYear = (currentYear % 4 == 0 && currentYear % 100 != 0) || (currentYear % 400 == 0)
+        val expectedDays = if (isLeapYear) 366 else 365
+        assertEquals(expectedDays, result.size)
+
+        // Find today's data in the result
+        val todayData = result.find { it.date == today }
+        assertEquals(today, todayData?.date)
+        assertEquals(100f, todayData?.volume)
+        assertEquals(1, todayData?.level) // <= 200
 
         val level3Data = result.find { it.volume == 600f }
         assertEquals(3, level3Data?.level) // > 400
@@ -95,11 +101,20 @@ class ConsistencyUseCaseTest {
     }
 
     @Test
-    fun `getHeatMapData returns empty list when no data`() = runTest {
+    fun `getHeatMapData returns full calendar year with zero volume when no workout data`() = runTest {
         coEvery { workoutDao.getDailyVolumeForHeatMap() } returns emptyList()
-        
+
         val result = consistencyUseCase.getHeatMapData()
-        
-        assertTrue(result.isEmpty())
+
+        // Result still contains full calendar year, but all past days have level 0
+        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+        val isLeapYear = (currentYear % 4 == 0 && currentYear % 100 != 0) || (currentYear % 400 == 0)
+        val expectedDays = if (isLeapYear) 366 else 365
+        assertEquals(expectedDays, result.size)
+
+        // All past/present days should have level 0 (no volume)
+        val pastDays = result.filter { it.level != -1 } // Exclude future days
+        assertTrue(pastDays.all { it.level == 0 })
+        assertTrue(pastDays.all { it.volume == 0f })
     }
 }
