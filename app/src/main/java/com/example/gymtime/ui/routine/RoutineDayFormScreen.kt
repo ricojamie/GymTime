@@ -61,14 +61,14 @@ fun RoutineDayFormScreen(
                 title = {
                     Text(
                         if (isEditMode) "Edit Day" else "New Day",
-                        color = TextPrimary,
+                        color = LocalAppColors.current.textPrimary,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = LocalAppColors.current.textPrimary)
                     }
                 },
                 actions = {
@@ -79,7 +79,7 @@ fun RoutineDayFormScreen(
                         Icon(
                             Icons.Default.Check,
                             contentDescription = "Save",
-                            tint = if (isSaveEnabled) accentColor else TextTertiary
+                            tint = if (isSaveEnabled) accentColor else LocalAppColors.current.textTertiary
                         )
                     }
                 },
@@ -114,7 +114,7 @@ fun RoutineDayFormScreen(
                         .fillMaxWidth()
                         .padding(20.dp),
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = TextPrimary,
+                        color = LocalAppColors.current.textPrimary,
                         fontSize = 18.sp
                     ),
                     decorationBox = { innerTextField ->
@@ -122,7 +122,7 @@ fun RoutineDayFormScreen(
                             Text(
                                 text = "Day Name (e.g., Push Day)",
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = TextTertiary,
+                                color = LocalAppColors.current.textTertiary,
                                 fontSize = 18.sp
                             )
                         }
@@ -137,7 +137,7 @@ fun RoutineDayFormScreen(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.5.sp,
-                color = TextTertiary
+                color = LocalAppColors.current.textTertiary
             )
 
             if (selectedExercises.isEmpty()) {
@@ -149,7 +149,7 @@ fun RoutineDayFormScreen(
                 ) {
                     Text(
                         text = "No exercises added yet.",
-                        color = TextTertiary
+                        color = LocalAppColors.current.textTertiary
                     )
                 }
             } else {
@@ -225,7 +225,7 @@ fun ExerciseListItem(
             Spacer(modifier = Modifier.width(12.dp))
             
             Surface(
-                color = SurfaceCards,
+                color = LocalAppColors.current.surfaceCards,
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.weight(1f)
             ) {
@@ -239,18 +239,18 @@ fun ExerciseListItem(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = exercise.name,
-                            color = TextPrimary,
+                            color = LocalAppColors.current.textPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )
                         Text(
                             text = exercise.targetMuscle,
-                            color = TextSecondary,
+                            color = LocalAppColors.current.textSecondary,
                             fontSize = 12.sp
                         )
                     }
                     IconButton(onClick = onRemove) {
-                        Icon(Icons.Default.Close, contentDescription = "Remove", tint = TextTertiary)
+                        Icon(Icons.Default.Close, contentDescription = "Remove", tint = LocalAppColors.current.textTertiary)
                     }
                 }
             }
@@ -326,7 +326,7 @@ fun ExercisePickerDialog(
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = BackgroundCanvas
+            color = LocalAppColors.current.backgroundCanvas
         ) {
             Column(
                 modifier = Modifier
@@ -341,19 +341,19 @@ fun ExercisePickerDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = LocalAppColors.current.textPrimary)
                     }
                     Text(
                         text = "Add Exercises",
                         style = MaterialTheme.typography.titleLarge,
-                        color = TextPrimary,
+                        color = LocalAppColors.current.textPrimary,
                         modifier = Modifier.weight(1f)
                     )
                 }
 
                 // Search
                 Surface(
-                    color = SurfaceCards,
+                    color = LocalAppColors.current.surfaceCards,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -363,16 +363,16 @@ fun ExercisePickerDialog(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Search, contentDescription = null, tint = TextTertiary)
+                        Icon(Icons.Default.Search, contentDescription = null, tint = LocalAppColors.current.textTertiary)
                         Spacer(modifier = Modifier.width(8.dp))
                         BasicTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
                             modifier = Modifier.weight(1f),
-                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary),
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = LocalAppColors.current.textPrimary),
                             decorationBox = { innerTextField ->
                                 if (searchQuery.isEmpty()) {
-                                    Text("Search exercises...", color = TextTertiary)
+                                    Text("Search exercises...", color = LocalAppColors.current.textTertiary)
                                 }
                                 innerTextField()
                             }
@@ -423,7 +423,7 @@ fun ExercisePickerItem(
 ) {
     val accentColor = MaterialTheme.colorScheme.primary
     Surface(
-        color = if (isSelected) accentColor.copy(alpha = 0.1f) else SurfaceCards,
+        color = if (isSelected) accentColor.copy(alpha = 0.1f) else LocalAppColors.current.surfaceCards,
         shape = RoundedCornerShape(12.dp),
         border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, accentColor) else null,
         modifier = Modifier.fillMaxWidth()
@@ -437,19 +437,19 @@ fun ExercisePickerItem(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = exercise.name,
-                    color = TextPrimary,
+                    color = LocalAppColors.current.textPrimary,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = exercise.targetMuscle,
-                    color = TextSecondary,
+                    color = LocalAppColors.current.textSecondary,
                     fontSize = 12.sp
                 )
             }
             if (isSelected) {
                 Icon(Icons.Default.Check, contentDescription = "Selected", tint = accentColor)
             } else {
-                Icon(Icons.Default.Add, contentDescription = "Add", tint = TextTertiary)
+                Icon(Icons.Default.Add, contentDescription = "Add", tint = LocalAppColors.current.textTertiary)
             }
         }
     }

@@ -1,6 +1,7 @@
 package com.example.gymtime
 
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -26,6 +28,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.ui.platform.LocalView
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -62,9 +65,22 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val themeColorName by userPreferencesRepository.themeColor.collectAsState(initial = "lime")
+            val keepScreenOn by userPreferencesRepository.keepScreenOn.collectAsState(initial = false)
+            val darkMode by userPreferencesRepository.darkMode.collectAsState(initial = true)
             val colorScheme = ThemeColors.getScheme(themeColorName)
 
-            IronLogTheme(appColorScheme = colorScheme) {
+            DisposableEffect(keepScreenOn) {
+                if (keepScreenOn) {
+                    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                } else {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+                onDispose {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+            }
+
+            IronLogTheme(appColorScheme = colorScheme, darkMode = darkMode) {
                 val gradientColors = com.example.gymtime.ui.theme.LocalGradientColors.current
 
                 Surface(
@@ -126,6 +142,10 @@ class MainActivity : ComponentActivity() {
                                         androidx.navigation.navArgument("adHocParentId") {
                                             type = androidx.navigation.NavType.LongType
                                             defaultValue = -1L // Use -1 to indicate null
+                                        },
+                                        androidx.navigation.navArgument("addToSuperset") {
+                                            type = androidx.navigation.NavType.BoolType
+                                            defaultValue = false
                                         }
                                     )
                                 ) {

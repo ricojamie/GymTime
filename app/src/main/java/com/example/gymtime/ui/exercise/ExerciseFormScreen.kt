@@ -69,7 +69,7 @@ fun ExerciseFormScreen(
                 title = {
                     Text(
                         text = if (isEditMode) "Edit Exercise" else "Create Exercise",
-                        color = TextPrimary
+                        color = LocalAppColors.current.textPrimary
                     )
                 },
                 navigationIcon = {
@@ -77,7 +77,7 @@ fun ExerciseFormScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = TextPrimary
+                            tint = LocalAppColors.current.textPrimary
                         )
                     }
                 },
@@ -89,7 +89,7 @@ fun ExerciseFormScreen(
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = "Save",
-                            tint = if (isSaveEnabled) accentColor else TextTertiary
+                            tint = if (isSaveEnabled) accentColor else LocalAppColors.current.textTertiary
                         )
                     }
                 },
@@ -114,7 +114,7 @@ fun ExerciseFormScreen(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.2.sp,
-                color = TextTertiary
+                color = LocalAppColors.current.textTertiary
             )
 
             GlowCard(
@@ -128,7 +128,7 @@ fun ExerciseFormScreen(
                         .fillMaxWidth()
                         .padding(16.dp),
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = TextPrimary,
+                        color = LocalAppColors.current.textPrimary,
                         fontSize = 18.sp
                     ),
                     keyboardOptions = KeyboardOptions(
@@ -139,7 +139,7 @@ fun ExerciseFormScreen(
                             Text(
                                 text = "Enter exercise name...",
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = TextTertiary
+                                color = LocalAppColors.current.textTertiary
                             )
                         }
                         innerTextField()
@@ -156,7 +156,7 @@ fun ExerciseFormScreen(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.2.sp,
-                color = TextTertiary
+                color = LocalAppColors.current.textTertiary
             )
 
             Box {
@@ -174,12 +174,12 @@ fun ExerciseFormScreen(
                         Text(
                             text = targetMuscle.ifEmpty { "Select muscle group..." },
                             fontSize = 18.sp,
-                            color = if (targetMuscle.isEmpty()) TextTertiary else TextPrimary
+                            color = if (targetMuscle.isEmpty()) LocalAppColors.current.textTertiary else LocalAppColors.current.textPrimary
                         )
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
                             contentDescription = "Dropdown",
-                            tint = TextTertiary
+                            tint = LocalAppColors.current.textTertiary
                         )
                     }
                 }
@@ -189,11 +189,11 @@ fun ExerciseFormScreen(
                     onDismissRequest = { showMuscleDropdown = false },
                     modifier = Modifier
                         .fillMaxWidth(0.9f)
-                        .background(SurfaceCards)
+                        .background(LocalAppColors.current.surfaceCards)
                 ) {
                     availableMuscles.forEach { muscle ->
                         DropdownMenuItem(
-                            text = { Text(muscle, color = TextPrimary) },
+                            text = { Text(muscle, color = LocalAppColors.current.textPrimary) },
                             onClick = {
                                 viewModel.updateTargetMuscle(muscle)
                                 showMuscleDropdown = false
@@ -211,7 +211,7 @@ fun ExerciseFormScreen(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.2.sp,
-                color = TextTertiary
+                color = LocalAppColors.current.textTertiary
             )
 
             Box {
@@ -230,19 +230,19 @@ fun ExerciseFormScreen(
                             Text(
                                 text = logType.displayName,
                                 fontSize = 18.sp,
-                                color = TextPrimary,
+                                color = LocalAppColors.current.textPrimary,
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
                                 text = logType.description,
                                 fontSize = 12.sp,
-                                color = TextSecondary
+                                color = LocalAppColors.current.textSecondary
                             )
                         }
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
                             contentDescription = "Dropdown",
-                            tint = TextTertiary
+                            tint = LocalAppColors.current.textTertiary
                         )
                     }
                 }
@@ -252,14 +252,14 @@ fun ExerciseFormScreen(
                     onDismissRequest = { showLogTypeDropdown = false },
                     modifier = Modifier
                         .fillMaxWidth(0.9f)
-                        .background(SurfaceCards)
+                        .background(LocalAppColors.current.surfaceCards)
                 ) {
                     LogType.entries.forEach { type ->
                         DropdownMenuItem(
                             text = {
                                 Column {
-                                    Text(type.displayName, color = TextPrimary, fontWeight = FontWeight.Medium)
-                                    Text(type.description, color = TextSecondary, fontSize = 12.sp)
+                                    Text(type.displayName, color = LocalAppColors.current.textPrimary, fontWeight = FontWeight.Medium)
+                                    Text(type.description, color = LocalAppColors.current.textSecondary, fontSize = 12.sp)
                                 }
                             },
                             onClick = {
@@ -279,7 +279,7 @@ fun ExerciseFormScreen(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.2.sp,
-                color = TextTertiary
+                color = LocalAppColors.current.textTertiary
             )
 
             GlowCard(
@@ -293,7 +293,7 @@ fun ExerciseFormScreen(
                         .fillMaxWidth()
                         .padding(16.dp),
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = TextPrimary,
+                        color = LocalAppColors.current.textPrimary,
                         fontSize = 18.sp
                     ),
                     decorationBox = { innerTextField ->
@@ -301,7 +301,7 @@ fun ExerciseFormScreen(
                             Text(
                                 text = "90",
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = TextTertiary
+                                color = LocalAppColors.current.textTertiary
                             )
                         }
                         innerTextField()
@@ -319,7 +319,7 @@ fun ExerciseFormScreen(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.2.sp,
-                color = TextTertiary
+                color = LocalAppColors.current.textTertiary
             )
 
             GlowCard(
@@ -334,14 +334,14 @@ fun ExerciseFormScreen(
                         .height(120.dp)
                         .padding(16.dp),
                     textStyle = MaterialTheme.typography.bodyMedium.copy(
-                        color = TextPrimary
+                        color = LocalAppColors.current.textPrimary
                     ),
                     decorationBox = { innerTextField ->
                         if (notes.isEmpty()) {
                             Text(
                                 text = "Add form cues, equipment notes, etc...",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = TextTertiary
+                                color = LocalAppColors.current.textTertiary
                             )
                         }
                         innerTextField()

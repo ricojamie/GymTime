@@ -80,7 +80,7 @@ fun PostWorkoutSummaryScreen(
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 2.sp,
-                color = TextTertiary,
+                color = LocalAppColors.current.textTertiary,
                 textAlign = TextAlign.Center
             )
 
@@ -105,7 +105,7 @@ fun PostWorkoutSummaryScreen(
                     )
 
                     HorizontalDivider(
-                        color = TextTertiary.copy(alpha = 0.2f),
+                        color = LocalAppColors.current.textTertiary.copy(alpha = 0.2f),
                         modifier = Modifier.padding(vertical = 20.dp)
                     )
 
@@ -131,7 +131,7 @@ fun PostWorkoutSummaryScreen(
                     }
 
                     HorizontalDivider(
-                        color = TextTertiary.copy(alpha = 0.2f),
+                        color = LocalAppColors.current.textTertiary.copy(alpha = 0.2f),
                         modifier = Modifier.padding(vertical = 20.dp)
                     )
 
@@ -141,7 +141,7 @@ fun PostWorkoutSummaryScreen(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.5.sp,
-                        color = TextTertiary
+                        color = LocalAppColors.current.textTertiary
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -150,12 +150,12 @@ fun PostWorkoutSummaryScreen(
                         text = workoutStats?.muscleGroups?.joinToString(" • ") ?: "None",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium,
-                        color = TextPrimary,
+                        color = LocalAppColors.current.textPrimary,
                         textAlign = TextAlign.Center
                     )
 
                     HorizontalDivider(
-                        color = TextTertiary.copy(alpha = 0.2f),
+                        color = LocalAppColors.current.textTertiary.copy(alpha = 0.2f),
                         modifier = Modifier.padding(vertical = 20.dp)
                     )
 
@@ -165,7 +165,7 @@ fun PostWorkoutSummaryScreen(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.5.sp,
-                        color = TextTertiary
+                        color = LocalAppColors.current.textTertiary
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -198,13 +198,13 @@ fun PostWorkoutSummaryScreen(
                                 "${(volumeOrbState.progressPercent * 100).toInt()}% of last week's volume"
                             },
                             fontSize = 12.sp,
-                            color = if (volumeOrbState.hasOverflowed) accentColor else TextTertiary
+                            color = if (volumeOrbState.hasOverflowed) accentColor else LocalAppColors.current.textTertiary
                         )
                     } else {
                         Text(
                             text = "Building your baseline...",
                             fontSize = 12.sp,
-                            color = TextTertiary
+                            color = LocalAppColors.current.textTertiary
                         )
                     }
 
@@ -216,7 +216,7 @@ fun PostWorkoutSummaryScreen(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.5.sp,
-                        color = TextTertiary
+                        color = LocalAppColors.current.textTertiary
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -236,12 +236,12 @@ fun PostWorkoutSummaryScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(
-                                color = BackgroundCanvas,
+                                color = LocalAppColors.current.backgroundCanvas,
                                 shape = RoundedCornerShape(12.dp)
                             )
                             .padding(16.dp),
                         textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            color = TextPrimary,
+                            color = LocalAppColors.current.textPrimary,
                             textAlign = TextAlign.Center
                         ),
                         decorationBox = { innerTextField ->
@@ -253,7 +253,7 @@ fun PostWorkoutSummaryScreen(
                                     Text(
                                         text = "Add a note (optional)...",
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = TextTertiary,
+                                        color = LocalAppColors.current.textTertiary,
                                         textAlign = TextAlign.Center
                                     )
                                 }
@@ -305,7 +305,7 @@ fun PostWorkoutSummaryScreen(
                 Text(
                     text = "Skip",
                     fontSize = 14.sp,
-                    color = TextSecondary
+                    color = LocalAppColors.current.textSecondary
                 )
             }
         }
@@ -327,7 +327,7 @@ private fun StatRow(
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.5.sp,
-            color = TextTertiary
+            color = LocalAppColors.current.textTertiary
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -336,7 +336,7 @@ private fun StatRow(
             text = value,
             fontSize = if (emphasize) 48.sp else 32.sp,
             fontWeight = FontWeight.ExtraBold,
-            color = if (emphasize) accentColor else TextPrimary
+            color = if (emphasize) accentColor else LocalAppColors.current.textPrimary
         )
     }
 }
@@ -354,7 +354,7 @@ private fun StatColumn(
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.sp,
-            color = TextTertiary
+            color = LocalAppColors.current.textTertiary
         )
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -363,7 +363,7 @@ private fun StatColumn(
             text = value,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
-            color = TextPrimary
+            color = LocalAppColors.current.textPrimary
         )
     }
 }

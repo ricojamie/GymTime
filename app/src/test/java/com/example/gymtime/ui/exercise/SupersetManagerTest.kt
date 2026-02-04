@@ -87,13 +87,62 @@ class SupersetManagerTest {
     }
 
     @Test
-    fun `exitSupersetMode clears all state`() {
+    fun `exitSupersetMode clears all state including last logged values`() {
         supersetManager.startSuperset(listOf(exercise1, exercise2))
+        supersetManager.saveLastLoggedValues(exercise1.id, LastLoggedValues(weight = "100", reps = "5"))
         supersetManager.exitSupersetMode()
 
         assertFalse(supersetManager.isInSupersetMode.value)
         assertTrue(supersetManager.supersetExercises.value.isEmpty())
         assertNull(supersetManager.supersetGroupId.value)
         assertEquals(0, supersetManager.currentExerciseIndex.value)
+        assertNull(supersetManager.getLastLoggedValues(exercise1.id))
+    }
+
+    @Test
+    fun `addExercise appends to existing superset`() {
+        supersetManager.startSuperset(listOf(exercise1, exercise2))
+        assertEquals(2, supersetManager.supersetExercises.value.size)
+
+        supersetManager.addExercise(exercise3)
+        assertEquals(3, supersetManager.supersetExercises.value.size)
+        assertEquals(exercise3, supersetManager.supersetExercises.value[2])
+    }
+
+    @Test
+    fun `addExercise does not add duplicate`() {
+        supersetManager.startSuperset(listOf(exercise1, exercise2))
+        supersetManager.addExercise(exercise1)
+
+        assertEquals(2, supersetManager.supersetExercises.value.size)
+    }
+
+    @Test
+    fun `addExercise does nothing when not in superset mode`() {
+        supersetManager.addExercise(exercise1)
+        assertTrue(supersetManager.supersetExercises.value.isEmpty())
+    }
+
+    @Test
+    fun `N-exercise rotation cycles through all exercises`() {
+        val exercise4 = Exercise(id = 4, name = "OHP", targetMuscle = "Shoulders", logType = LogType.WEIGHT_REPS, isCustom = false, notes = null, defaultRestSeconds = 90)
+        val exercises = listOf(exercise1, exercise2, exercise3, exercise4)
+        supersetManager.startSuperset(exercises)
+
+        assertEquals(exercise1.id, supersetManager.getCurrentExerciseId())
+        assertEquals(exercise2.id, supersetManager.switchToNextExercise())
+        assertEquals(exercise3.id, supersetManager.switchToNextExercise())
+        assertEquals(exercise4.id, supersetManager.switchToNextExercise())
+        assertEquals(exercise1.id, supersetManager.switchToNextExercise()) // Wraps around
+    }
+
+    @Test
+    fun `saveLastLoggedValues and getLastLoggedValues work correctly`() {
+        supersetManager.startSuperset(listOf(exercise1, exercise2))
+        val values = LastLoggedValues(weight = "225", reps = "8", duration = "", distance = "")
+        supersetManager.saveLastLoggedValues(exercise1.id, values)
+
+        assertEquals(values, supersetManager.getLastLoggedValues(exercise1.id))
+        assertNull(supersetManager.getLastLoggedValues(exercise2.id))
     }
 }

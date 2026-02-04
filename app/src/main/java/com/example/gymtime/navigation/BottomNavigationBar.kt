@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.example.gymtime.ui.theme.SurfaceCards
+import com.example.gymtime.ui.theme.LocalAppColors
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 
@@ -54,7 +54,7 @@ fun BottomNavigationBar(navController: NavController) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(32.dp),
-            color = SurfaceCards.copy(alpha = 0.95f),
+            color = LocalAppColors.current.surfaceCards.copy(alpha = 0.95f),
             tonalElevation = 8.dp,
             border = androidx.compose.foundation.BorderStroke(
                 width = 0.5.dp,

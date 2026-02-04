@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.SideEffect
 import com.example.gymtime.data.VolumeOrbState
+import com.example.gymtime.ui.theme.LocalAppColors
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -218,6 +219,7 @@ fun VolumeOrb(
     val liquidColor = if (isOverflowed) OrbGoldColor else primaryColor
     val liquidColorDark = if (isOverflowed) OrbGoldColorDark else primaryColorDark
     val glowColor = if (isOverflowed) OrbGoldColor.copy(alpha = 0.5f) else primaryColor.copy(alpha = 0.4f)
+    val orbInputBackground = LocalAppColors.current.inputBackground
 
     Box(
         modifier = modifier
@@ -256,7 +258,7 @@ fun VolumeOrb(
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        Color(0xFF1A1A1A),
+                        orbInputBackground,
                         Color(0xFF050505)
                     ),
                     center = Offset(center.x + radius * 0.2f, center.y + radius * 0.2f),
@@ -561,6 +563,7 @@ fun VolumeProgressBar(
     val fillColor = if (isOverflowed) OrbGoldColor else primaryColor
     val fillColorDark = if (isOverflowed) OrbGoldColorDark else primaryColorDark
     val glowColor = if (isOverflowed) OrbGoldColor.copy(alpha = 0.5f) else primaryColor.copy(alpha = 0.4f)
+    val barInputBackground = LocalAppColors.current.inputBackground
 
     val barHeight = 12.dp
     val cornerRadius = 6.dp
@@ -616,7 +619,7 @@ fun VolumeProgressBar(
 
             // 1. Draw background track
             drawRoundRect(
-                color = Color(0xFF1a1a1a),
+                color = barInputBackground,
                 topLeft = Offset.Zero,
                 size = Size(width, height),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadiusPx)

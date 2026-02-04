@@ -13,8 +13,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.gymtime.ui.theme.TextPrimary
-import com.example.gymtime.ui.theme.TextTertiary
+import com.example.gymtime.ui.theme.LocalAppColors
 
 @Composable
 fun HomeHeader(userName: String, modifier: Modifier = Modifier) {
@@ -25,7 +24,7 @@ fun HomeHeader(userName: String, modifier: Modifier = Modifier) {
         Text(
             text = "WELCOME BACK",
             style = MaterialTheme.typography.labelMedium,
-            color = TextTertiary,
+            color = LocalAppColors.current.textTertiary,
             letterSpacing = 2.sp
         )
 
@@ -36,7 +35,7 @@ fun HomeHeader(userName: String, modifier: Modifier = Modifier) {
             text = userName,
             style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.Bold,
-            color = TextPrimary
+            color = LocalAppColors.current.textPrimary
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -44,7 +43,7 @@ fun HomeHeader(userName: String, modifier: Modifier = Modifier) {
         // Split-color app name
         Text(
             text = buildAnnotatedString {
-                withStyle(style = SpanStyle(color = TextPrimary)) {
+                withStyle(style = SpanStyle(color = LocalAppColors.current.textPrimary)) {
                     append("Iron")
                 }
                 withStyle(style = SpanStyle(color = accentColor)) {

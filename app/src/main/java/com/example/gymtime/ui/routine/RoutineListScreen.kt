@@ -45,14 +45,14 @@ fun RoutineListScreen(
                 title = {
                     Text(
                         "My Routines",
-                        color = TextPrimary,
+                        color = LocalAppColors.current.textPrimary,
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.ExtraBold
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = LocalAppColors.current.textPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -67,7 +67,7 @@ fun RoutineListScreen(
                         showMaxRoutinesDialog = true
                     }
                 },
-                containerColor = if (canCreateMore) accentColor else TextTertiary,
+                containerColor = if (canCreateMore) accentColor else LocalAppColors.current.textTertiary,
                 contentColor = Color.Black,
                 shape = RoundedCornerShape(16.dp),
                 elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp)
@@ -106,13 +106,13 @@ fun RoutineListScreen(
                             )
                             Text(
                                 text = "No routines yet.",
-                                color = TextPrimary,
+                                color = LocalAppColors.current.textPrimary,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = "Tap + to create your first routine!",
-                                color = TextTertiary,
+                                color = LocalAppColors.current.textTertiary,
                                 fontSize = 14.sp,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                 modifier = Modifier.padding(top = 8.dp)
@@ -211,7 +211,7 @@ fun RoutineListItem(
                 ) {
                     Text(
                         text = routine.name,
-                        color = TextPrimary,
+                        color = LocalAppColors.current.textPrimary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -241,7 +241,7 @@ fun RoutineListItem(
             ) {
                 if (!isActive) {
                     DropdownMenuItem(
-                        text = { Text("Set as Active", color = TextPrimary) },
+                        text = { Text("Set as Active", color = LocalAppColors.current.textPrimary) },
                         onClick = {
                             showMenu = false
                             onSetActive()
@@ -249,7 +249,7 @@ fun RoutineListItem(
                     )
                 }
                 DropdownMenuItem(
-                    text = { Text("Edit Name", color = TextPrimary) },
+                    text = { Text("Edit Name", color = LocalAppColors.current.textPrimary) },
                     onClick = {
                         showMenu = false
                         onEdit()

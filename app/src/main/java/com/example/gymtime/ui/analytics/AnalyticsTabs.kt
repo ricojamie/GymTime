@@ -67,7 +67,7 @@ fun ConsistencyTabContent(
         Text(
             text = "Star up to 3 exercises to track them here",
             style = MaterialTheme.typography.bodySmall,
-            color = TextTertiary,
+            color = LocalAppColors.current.textTertiary,
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Start
         )
@@ -87,7 +87,7 @@ fun ConsistencyTabContent(
         } else {
             Text(
                 "Go to Library > Exercises and star your main lifts!",
-                color = TextTertiary,
+                color = LocalAppColors.current.textTertiary,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(vertical = 24.dp)
             )
@@ -166,10 +166,10 @@ fun TrendsTabContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp)
-                    .background(SurfaceCards, RoundedCornerShape(12.dp)),
+                    .background(LocalAppColors.current.surfaceCards, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("No data for current filters", color = TextTertiary)
+                Text("No data for current filters", color = LocalAppColors.current.textTertiary)
             }
         }
 
@@ -259,12 +259,12 @@ private fun FilterDropdown(
     var expanded by remember { mutableStateOf(false) }
 
     Column(modifier = modifier) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = TextTertiary, modifier = Modifier.padding(start = 4.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = LocalAppColors.current.textTertiary, modifier = Modifier.padding(start = 4.dp))
         Spacer(modifier = Modifier.height(4.dp))
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(SurfaceCards, RoundedCornerShape(8.dp))
+                .background(LocalAppColors.current.surfaceCards, RoundedCornerShape(8.dp))
                 .clickable { expanded = true }
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
@@ -272,14 +272,14 @@ private fun FilterDropdown(
                 Text(
                     text = current,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextPrimary,
+                    color = LocalAppColors.current.textPrimary,
                     maxLines = 1,
                     modifier = Modifier.weight(1f)
                 )
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowDown,
                     contentDescription = null,
-                    tint = TextTertiary,
+                    tint = LocalAppColors.current.textTertiary,
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -287,11 +287,11 @@ private fun FilterDropdown(
             DropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
-                modifier = Modifier.background(SurfaceCards)
+                modifier = Modifier.background(LocalAppColors.current.surfaceCards)
             ) {
                 options.forEach { option ->
                     DropdownMenuItem(
-                        text = { Text(option, color = TextPrimary) },
+                        text = { Text(option, color = LocalAppColors.current.textPrimary) },
                         onClick = {
                             onSelect(option)
                             expanded = false
@@ -311,7 +311,7 @@ private fun TrophyCard(pr: TrophyPR) {
             .width(160.dp)
             .height(110.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceCards),
+        colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
     ) {
         Column(
@@ -323,7 +323,7 @@ private fun TrophyCard(pr: TrophyPR) {
             Text(
                 text = pr.exercise.name,
                 style = MaterialTheme.typography.labelLarge,
-                color = TextTertiary,
+                color = LocalAppColors.current.textTertiary,
                 maxLines = 1
             )
 
@@ -337,14 +337,14 @@ private fun TrophyCard(pr: TrophyPR) {
                 Text(
                     text = "for ${pr.reps} reps",
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
+                    color = LocalAppColors.current.textSecondary
                 )
             }
 
             Text(
                 text = sdf.format(pr.date),
                 style = androidx.compose.ui.text.TextStyle(fontSize = 10.sp),
-                color = TextTertiary,
+                color = LocalAppColors.current.textTertiary,
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.End
             )
@@ -376,7 +376,7 @@ private fun TrendLineChart(
         modifier = Modifier
             .fillMaxWidth()
             .height(280.dp)
-            .background(SurfaceCards, RoundedCornerShape(16.dp))
+            .background(LocalAppColors.current.surfaceCards, RoundedCornerShape(16.dp))
             .padding(16.dp)
     ) {
         if (data.isNotEmpty()) {

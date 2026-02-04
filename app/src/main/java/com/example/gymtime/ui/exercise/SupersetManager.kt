@@ -8,6 +8,16 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
+ * Values from the last logged set for an exercise, persisted across navigation within a superset.
+ */
+data class LastLoggedValues(
+    val weight: String = "",
+    val reps: String = "",
+    val duration: String = "",
+    val distance: String = ""
+)
+
+/**
  * Singleton manager for superset state that persists across navigation.
  * Coordinates superset mode between ExerciseSelection and ExerciseLogging screens.
  */
@@ -17,6 +27,9 @@ class SupersetManager @Inject constructor() {
     // Whether we're currently in an active superset logging session
     private val _isInSupersetMode = MutableStateFlow(false)
     val isInSupersetMode: StateFlow<Boolean> = _isInSupersetMode
+
+    // Last-logged form values per exercise (persists across navigation)
+    private val _lastLoggedValues = mutableMapOf<Long, LastLoggedValues>()
 
     // The exercises in the current superset (ordered)
     private val _supersetExercises = MutableStateFlow<List<Exercise>>(emptyList())
@@ -90,6 +103,31 @@ class SupersetManager @Inject constructor() {
     }
 
     /**
+     * Add an exercise to an existing active superset.
+     * @param exercise The exercise to add
+     */
+    fun addExercise(exercise: Exercise) {
+        if (!_isInSupersetMode.value) return
+        // Don't add duplicates
+        if (_supersetExercises.value.any { it.id == exercise.id }) return
+        _supersetExercises.value = _supersetExercises.value + exercise
+    }
+
+    /**
+     * Save the last-logged form values for an exercise.
+     */
+    fun saveLastLoggedValues(exerciseId: Long, values: LastLoggedValues) {
+        _lastLoggedValues[exerciseId] = values
+    }
+
+    /**
+     * Get the last-logged form values for an exercise, if any.
+     */
+    fun getLastLoggedValues(exerciseId: Long): LastLoggedValues? {
+        return _lastLoggedValues[exerciseId]
+    }
+
+    /**
      * Exit superset mode and clear all state.
      */
     fun exitSupersetMode() {
@@ -97,5 +135,6 @@ class SupersetManager @Inject constructor() {
         _supersetExercises.value = emptyList()
         _supersetGroupId.value = null
         _currentExerciseIndex.value = 0
+        _lastLoggedValues.clear()
     }
 }

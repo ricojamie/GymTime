@@ -22,9 +22,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.gymtime.ui.theme.SurfaceCards
-import com.example.gymtime.ui.theme.TextPrimary
-import com.example.gymtime.ui.theme.TextTertiary
+import com.example.gymtime.ui.theme.LocalAppColors
 
 @Composable
 fun InputCard(
@@ -37,7 +35,7 @@ fun InputCard(
 ) {
     Card(
         modifier = modifier.height(100.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceCards),
+        colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(
@@ -55,7 +53,7 @@ fun InputCard(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelMedium,
-                    color = TextTertiary,
+                    color = LocalAppColors.current.textTertiary,
                     letterSpacing = 1.sp
                 )
 
@@ -63,7 +61,7 @@ fun InputCard(
                     Text(
                         text = "$lastLabel: $it",
                         style = MaterialTheme.typography.labelSmall,
-                        color = TextTertiary.copy(alpha = 0.7f),
+                        color = LocalAppColors.current.textTertiary.copy(alpha = 0.7f),
                         fontSize = 11.sp
                     )
                 }
@@ -88,7 +86,7 @@ fun InputCard(
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
                             fontSize = 34.sp,
-                            color = TextTertiary.copy(alpha = 0.3f)
+                            color = LocalAppColors.current.textTertiary.copy(alpha = 0.3f)
                         )
                     )
                 }
@@ -99,7 +97,7 @@ fun InputCard(
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
                         fontSize = 34.sp,
-                        color = TextPrimary
+                        color = LocalAppColors.current.textPrimary
                     ),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -133,7 +131,7 @@ fun TimeInputCard(
 
     Card(
         modifier = modifier.height(100.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceCards),
+        colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(
@@ -149,14 +147,14 @@ fun TimeInputCard(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelMedium,
-                    color = TextTertiary,
+                    color = LocalAppColors.current.textTertiary,
                     letterSpacing = 1.sp
                 )
                 lastValue?.let {
                     Text(
                         text = "$lastLabel: $it",
                         style = MaterialTheme.typography.labelSmall,
-                        color = TextTertiary.copy(alpha = 0.7f),
+                        color = LocalAppColors.current.textTertiary.copy(alpha = 0.7f),
                         fontSize = 11.sp
                     )
                 }
@@ -185,7 +183,7 @@ fun TimeInputCard(
                     }
                 )
                 
-                Text(":", style = MaterialTheme.typography.displaySmall, color = TextTertiary.copy(alpha = 0.5f))
+                Text(":", style = MaterialTheme.typography.displaySmall, color = LocalAppColors.current.textTertiary.copy(alpha = 0.5f))
 
                 // MM
                 TimeSegmentField(
@@ -206,7 +204,7 @@ fun TimeInputCard(
                     }
                 )
 
-                Text(":", style = MaterialTheme.typography.displaySmall, color = TextTertiary.copy(alpha = 0.5f))
+                Text(":", style = MaterialTheme.typography.displaySmall, color = LocalAppColors.current.textTertiary.copy(alpha = 0.5f))
 
                 // SS
                 TimeSegmentField(
@@ -246,7 +244,7 @@ fun TimeSegmentField(
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                     fontSize = 30.sp,
-                    color = TextTertiary.copy(alpha = 0.2f)
+                    color = LocalAppColors.current.textTertiary.copy(alpha = 0.2f)
                 )
             )
         }
@@ -257,7 +255,7 @@ fun TimeSegmentField(
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
                 fontSize = 30.sp,
-                color = TextPrimary
+                color = LocalAppColors.current.textPrimary
             ),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),

@@ -31,6 +31,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Vibration
@@ -95,9 +96,7 @@ import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.PlateCalculatorSheet
 import com.example.gymtime.ui.components.VolumeProgressBar
 import com.example.gymtime.ui.theme.IronLogTheme
-import com.example.gymtime.ui.theme.SurfaceCards
-import com.example.gymtime.ui.theme.TextPrimary
-import com.example.gymtime.ui.theme.TextTertiary
+import com.example.gymtime.ui.theme.LocalAppColors
 import com.example.gymtime.util.TimeUtils
 import com.example.gymtime.util.TimeFormatter
 import com.example.gymtime.ui.components.InputCard
@@ -227,7 +226,7 @@ fun ExerciseLoggingScreen(
                                 text = ex.name,
                                 style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary,
+                                color = LocalAppColors.current.textPrimary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -246,7 +245,7 @@ fun ExerciseLoggingScreen(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = TextPrimary
+                                tint = LocalAppColors.current.textPrimary
                             )
                         }
                     },
@@ -269,7 +268,7 @@ fun ExerciseLoggingScreen(
                         Surface(
                             onClick = { showTimerDialog = true },
                             shape = androidx.compose.foundation.shape.CircleShape,
-                            color = if (timerJustFinished) MaterialTheme.colorScheme.primary else SurfaceCards,
+                            color = if (timerJustFinished) MaterialTheme.colorScheme.primary else LocalAppColors.current.surfaceCards,
                             border = androidx.compose.foundation.BorderStroke(
                                 width = if (timerJustFinished) 2.dp else 1.dp,
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = if (timerJustFinished) 1f else 0.5f)
@@ -307,7 +306,7 @@ fun ExerciseLoggingScreen(
                             modifier = Modifier
                                 .height(24.dp)
                                 .padding(horizontal = 4.dp),
-                            color = TextTertiary.copy(alpha = 0.3f)
+                            color = LocalAppColors.current.textTertiary.copy(alpha = 0.3f)
                         )
 
                         // Workout overview icon
@@ -367,7 +366,7 @@ fun ExerciseLoggingScreen(
                             Text(
                                 text = notes,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = TextPrimary,
+                                color = LocalAppColors.current.textPrimary,
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -546,7 +545,7 @@ fun ExerciseLoggingScreen(
                             onClick = { viewModel.toggleWarmup() },
                             shape = RoundedCornerShape(50),
                             color = if (isWarmup) MaterialTheme.colorScheme.primary else Color.Transparent,
-                            border = if (isWarmup) null else androidx.compose.foundation.BorderStroke(1.dp, TextTertiary),
+                            border = if (isWarmup) null else androidx.compose.foundation.BorderStroke(1.dp, LocalAppColors.current.textTertiary),
                             modifier = Modifier.height(32.dp)
                         ) {
                             Row(
@@ -561,7 +560,7 @@ fun ExerciseLoggingScreen(
                                     text = "Warmup",
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isWarmup) Color.Black else TextTertiary
+                                    color = if (isWarmup) Color.Black else LocalAppColors.current.textTertiary
                                 )
                             }
                         }
@@ -592,11 +591,42 @@ fun ExerciseLoggingScreen(
                         }
                     }
 
-                    // Superset Toggle Pill
+                    // Superset Toggle Pill / Add Exercise to Superset
                     val isInSupersetMode by viewModel.isInSupersetMode.collectAsState()
-                    if (!isInSupersetMode) {
+                    if (isInSupersetMode) {
+                        // Already in superset - show "Add" button to add more exercises
                         Surface(
-                            onClick = { 
+                            onClick = {
+                                navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true, addToSuperset = true))
+                            },
+                            shape = RoundedCornerShape(50),
+                            color = Color.Transparent,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Add",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    } else {
+                        Surface(
+                            onClick = {
                                 exercise?.id?.let { id ->
                                     navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true, supersetMode = true, adHocParentId = id))
                                 }
@@ -653,7 +683,7 @@ fun ExerciseLoggingScreen(
                         onClick = { viewModel.cancelEditing() },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = TextTertiary
+                            contentColor = LocalAppColors.current.textTertiary
                         )
                     ) {
                         Text("Cancel")
@@ -711,7 +741,7 @@ fun ExerciseLoggingScreen(
                 Text(
                     text = "SESSION LOG",
                     style = MaterialTheme.typography.labelLarge,
-                    color = TextTertiary,
+                    color = LocalAppColors.current.textTertiary,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
                 )
@@ -839,7 +869,7 @@ fun ExerciseLoggingScreen(
                     text = "Rest Timer",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary
+                    color = LocalAppColors.current.textPrimary
                 )
             },
             text = {
@@ -863,13 +893,13 @@ fun ExerciseLoggingScreen(
                     ) {
                         OutlinedButton(
                             onClick = { viewModel.updateRestTime(maxOf(0, restTime - 15)) },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextTertiary)
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = LocalAppColors.current.textTertiary)
                         ) {
                             Text("-15s")
                         }
                         OutlinedButton(
                             onClick = { viewModel.updateRestTime(restTime + 15) },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextTertiary)
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = LocalAppColors.current.textTertiary)
                         ) {
                             Text("+15s")
                         }
@@ -877,7 +907,7 @@ fun ExerciseLoggingScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    HorizontalDivider(color = TextTertiary.copy(alpha = 0.1f))
+                    HorizontalDivider(color = LocalAppColors.current.textTertiary.copy(alpha = 0.1f))
 
                     Row(
                         modifier = Modifier
@@ -890,11 +920,11 @@ fun ExerciseLoggingScreen(
                             Icon(
                                     imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                                 contentDescription = null,
-                                tint = if (timerAudioEnabled) MaterialTheme.colorScheme.primary else TextTertiary,
+                                tint = if (timerAudioEnabled) MaterialTheme.colorScheme.primary else LocalAppColors.current.textTertiary,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Audio", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                            Text("Audio", style = MaterialTheme.typography.bodyMedium, color = LocalAppColors.current.textPrimary)
                         }
                         Switch(
                             checked = timerAudioEnabled,
@@ -914,11 +944,11 @@ fun ExerciseLoggingScreen(
                             Icon(
                                 imageVector = Icons.Filled.Vibration,
                                 contentDescription = null,
-                                tint = if (timerVibrateEnabled) MaterialTheme.colorScheme.primary else TextTertiary,
+                                tint = if (timerVibrateEnabled) MaterialTheme.colorScheme.primary else LocalAppColors.current.textTertiary,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Vibration", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                            Text("Vibration", style = MaterialTheme.typography.bodyMedium, color = LocalAppColors.current.textPrimary)
                         }
                         Switch(
                             checked = timerVibrateEnabled,
@@ -941,10 +971,10 @@ fun ExerciseLoggingScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showTimerDialog = false }) {
-                    Text("Close", color = TextTertiary)
+                    Text("Close", color = LocalAppColors.current.textTertiary)
                 }
             },
-            containerColor = SurfaceCards
+            containerColor = LocalAppColors.current.surfaceCards
         )
     }
 
@@ -957,14 +987,14 @@ fun ExerciseLoggingScreen(
                     text = "Delete Set?",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary
+                    color = LocalAppColors.current.textPrimary
                 )
             },
             text = {
                 Text(
                     text = "Are you sure you want to delete this set? This action cannot be undone.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextTertiary
+                    color = LocalAppColors.current.textTertiary
                 )
             },
             confirmButton = {
@@ -982,10 +1012,10 @@ fun ExerciseLoggingScreen(
             },
             dismissButton = {
                 TextButton(onClick = { selectedSetToDelete = null }) {
-                    Text("Cancel", color = TextTertiary)
+                    Text("Cancel", color = LocalAppColors.current.textTertiary)
                 }
             },
-            containerColor = SurfaceCards
+            containerColor = LocalAppColors.current.surfaceCards
         )
     }
 
@@ -1001,7 +1031,7 @@ fun ExerciseLoggingScreen(
                     text = if (set.note.isNullOrBlank()) "Add Note" else "Edit Note",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary
+                    color = LocalAppColors.current.textPrimary
                 )
             },
             text = {
@@ -1009,19 +1039,19 @@ fun ExerciseLoggingScreen(
                     Text(
                         text = "Set ${loggedSets.indexOf(set) + 1}: ${set.weight?.toInt()} lbs × ${set.reps} reps",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextTertiary,
+                        color = LocalAppColors.current.textTertiary,
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
                     androidx.compose.material3.OutlinedTextField(
                         value = noteText,
                         onValueChange = { noteText = it },
-                        placeholder = { Text("Enter note...", color = TextTertiary) },
+                        placeholder = { Text("Enter note...", color = LocalAppColors.current.textTertiary) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = TextTertiary,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
+                            unfocusedBorderColor = LocalAppColors.current.textTertiary,
+                            focusedTextColor = LocalAppColors.current.textPrimary,
+                            unfocusedTextColor = LocalAppColors.current.textPrimary,
                             cursorColor = MaterialTheme.colorScheme.primary
                         ),
                         maxLines = 3
@@ -1045,10 +1075,10 @@ fun ExerciseLoggingScreen(
                     setToAddNote = null
                     noteText = ""
                 }) {
-                    Text("Cancel", color = TextTertiary)
+                    Text("Cancel", color = LocalAppColors.current.textTertiary)
                 }
             },
-            containerColor = SurfaceCards
+            containerColor = LocalAppColors.current.surfaceCards
         )
     }
 
@@ -1061,14 +1091,14 @@ fun ExerciseLoggingScreen(
                     text = "Finish Workout?",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary
+                    color = LocalAppColors.current.textPrimary
                 )
             },
             text = {
                 Text(
                     text = "Are you sure you want to finish this workout session?",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextTertiary
+                    color = LocalAppColors.current.textTertiary
                 )
             },
             confirmButton = {
@@ -1084,10 +1114,10 @@ fun ExerciseLoggingScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showFinishDialog = false }) {
-                    Text("Cancel", color = TextTertiary)
+                    Text("Cancel", color = LocalAppColors.current.textTertiary)
                 }
             },
-            containerColor = SurfaceCards
+            containerColor = LocalAppColors.current.surfaceCards
         )
     }
 
@@ -1100,14 +1130,14 @@ fun ExerciseLoggingScreen(
                     text = "Exit Superset?",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary
+                    color = LocalAppColors.current.textPrimary
                 )
             },
             text = {
                 Text(
                     text = "Are you sure you want to exit superset mode? You can continue logging exercises individually.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextTertiary
+                    color = LocalAppColors.current.textTertiary
                 )
             },
             confirmButton = {
@@ -1127,7 +1157,7 @@ fun ExerciseLoggingScreen(
                     Text("Continue Superset", color = MaterialTheme.colorScheme.primary)
                 }
             },
-            containerColor = SurfaceCards
+            containerColor = LocalAppColors.current.surfaceCards
         )
     }
 
@@ -1154,7 +1184,7 @@ fun ExerciseLoggingScreen(
     if (showWorkoutOverview) {
         ModalBottomSheet(
             onDismissRequest = { showWorkoutOverview = false },
-            containerColor = SurfaceCards,
+            containerColor = LocalAppColors.current.surfaceCards,
             scrimColor = Color.Black.copy(alpha = 0.5f)
         ) {
             WorkoutOverviewContent(
@@ -1182,7 +1212,7 @@ fun ExerciseLoggingScreen(
     if (showExerciseHistory) {
         ModalBottomSheet(
             onDismissRequest = { showExerciseHistory = false },
-            containerColor = SurfaceCards,
+            containerColor = LocalAppColors.current.surfaceCards,
             scrimColor = Color.Black.copy(alpha = 0.5f)
         ) {
             exercise?.let { ex ->

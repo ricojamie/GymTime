@@ -20,8 +20,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.gymtime.ui.theme.TextPrimary
-import com.example.gymtime.ui.theme.TextTertiary
+import com.example.gymtime.ui.theme.LocalAppColors
 
 @Composable
 fun WeeklyVolumeCard(
@@ -47,7 +46,7 @@ fun WeeklyVolumeCard(
                 Text(
                     text = "VOLUME TREND",
                     style = MaterialTheme.typography.labelSmall,
-                    color = TextTertiary,
+                    color = LocalAppColors.current.textTertiary,
                     letterSpacing = 1.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -109,13 +108,13 @@ fun WeeklyVolumeCard(
                     text = volumeDisplay,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary
+                    color = LocalAppColors.current.textPrimary
                 )
 
                 Text(
                     text = "This week",
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextTertiary
+                    color = LocalAppColors.current.textTertiary
                 )
             }
         }

@@ -63,10 +63,7 @@ import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.IronLogTheme
-import com.example.gymtime.ui.theme.SurfaceCards
-import com.example.gymtime.ui.theme.TextPrimary
-import com.example.gymtime.ui.theme.TextSecondary
-import com.example.gymtime.ui.theme.TextTertiary
+import com.example.gymtime.ui.theme.LocalAppColors
 
 private const val TAG = "ExerciseSelectionScreen"
 
@@ -95,6 +92,11 @@ fun ExerciseSelectionContent(
             navController.popBackStack()
         }
     }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.exerciseAddedToSuperset.collect { exerciseId: Long ->
+            navController.popBackStack()
+        }
+    }
     val accentColor = MaterialTheme.colorScheme.primary
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedMuscles by viewModel.selectedMuscles.collectAsState()
@@ -104,7 +106,7 @@ fun ExerciseSelectionContent(
     // Superset mode state
     val isSupersetMode by viewModel.isSupersetModeEnabled.collectAsState()
     val selectedForSuperset by viewModel.selectedForSuperset.collectAsState()
-    val canStartSuperset = selectedForSuperset.size == viewModel.maxSupersetExercises
+    val canStartSuperset = selectedForSuperset.size >= 2
 
     // Workout mode state (for navigation after creating exercise)
     val isWorkoutMode by viewModel.isWorkoutMode.collectAsState()
@@ -116,7 +118,7 @@ fun ExerciseSelectionContent(
     Scaffold(
         floatingActionButton = {
             if (isSupersetMode && canStartSuperset) {
-                // Show "Start Superset" button when 2 exercises selected
+                // Show "Start Superset" button when 2+ exercises selected
                 ExtendedFloatingActionButton(
                     modifier = Modifier.padding(bottom = 100.dp),
                     onClick = {
@@ -178,7 +180,6 @@ fun ExerciseSelectionContent(
             SupersetModeToggle(
                 isSupersetMode = isSupersetMode,
                 selectedCount = selectedForSuperset.size,
-                maxCount = viewModel.maxSupersetExercises,
                 onToggle = { viewModel.toggleSupersetMode() }
             )
 
@@ -205,7 +206,7 @@ fun ExerciseSelectionContent(
                     Text(
                         text = "No exercises found",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = TextTertiary
+                        color = LocalAppColors.current.textTertiary
                     )
                 }
             } else {
@@ -219,11 +220,13 @@ fun ExerciseSelectionContent(
 
                         ExerciseListItem(
                             exercise = exercise,
-                            isSupersetMode = isSupersetMode,
+                            isSupersetMode = isSupersetMode || viewModel.isAddToSupersetMode,
                             isSelected = isSelected,
                             selectionOrder = selectionOrder,
                             onClick = {
-                                if (isSupersetMode) {
+                                if (viewModel.isAddToSupersetMode) {
+                                    viewModel.toggleExerciseSelection(exercise)
+                                } else if (isSupersetMode) {
                                     viewModel.toggleExerciseSelection(exercise)
                                 } else {
                                     navController.navigate(Screen.ExerciseLogging.createRoute(exercise.id))
@@ -270,12 +273,12 @@ fun ExerciseSelectionContent(
             },
             dismissButton = {
                 TextButton(onClick = { exerciseToDelete = null }) {
-                    Text(text = "Cancel", color = TextPrimary)
+                    Text(text = "Cancel", color = LocalAppColors.current.textPrimary)
                 }
             },
-            containerColor = SurfaceCards,
-            titleContentColor = TextPrimary,
-            textContentColor = TextSecondary
+            containerColor = LocalAppColors.current.surfaceCards,
+            titleContentColor = LocalAppColors.current.textPrimary,
+            textContentColor = LocalAppColors.current.textSecondary
         )
     }
 }
@@ -304,13 +307,13 @@ private fun ExerciseSearchBox(
                 modifier = Modifier
                     .weight(1f)
                     .align(Alignment.CenterVertically),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = LocalAppColors.current.textPrimary),
                 decorationBox = { innerTextField ->
                     if (query.isEmpty()) {
                         Text(
                             text = "Search exercises...",
                             style = MaterialTheme.typography.bodyLarge,
-                            color = TextTertiary
+                            color = LocalAppColors.current.textTertiary
                         )
                     }
                     innerTextField()
@@ -348,13 +351,13 @@ private fun ExerciseFilterPills(
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = accentColor,
                     selectedLabelColor = Color.Black,
-                    containerColor = SurfaceCards,
-                    labelColor = TextPrimary
+                    containerColor = LocalAppColors.current.surfaceCards,
+                    labelColor = LocalAppColors.current.textPrimary
                 ),
                 border = FilterChipDefaults.filterChipBorder(
                     enabled = true,
                     selected = muscle in selectedMuscles,
-                    borderColor = if (muscle in selectedMuscles) accentColor else TextTertiary,
+                    borderColor = if (muscle in selectedMuscles) accentColor else LocalAppColors.current.textTertiary,
                     selectedBorderColor = accentColor
                 )
             )
@@ -366,7 +369,6 @@ private fun ExerciseFilterPills(
 private fun SupersetModeToggle(
     isSupersetMode: Boolean,
     selectedCount: Int,
-    maxCount: Int,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -379,9 +381,9 @@ private fun SupersetModeToggle(
     ) {
         // Label showing selection count when in superset mode
         Text(
-            text = if (isSupersetMode) "SELECT $selectedCount/$maxCount EXERCISES" else "EXERCISES",
+            text = if (isSupersetMode) "SELECT EXERCISES ($selectedCount)" else "EXERCISES",
             style = MaterialTheme.typography.labelMedium,
-            color = if (isSupersetMode) accentColor else TextTertiary,
+            color = if (isSupersetMode) accentColor else LocalAppColors.current.textTertiary,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.sp
         )
@@ -436,7 +438,7 @@ private fun ExerciseListItem(
             .height(64.dp),
         onClick = onClick,
         onLongClick = if (!isSupersetMode) ({ showMenu = true }) else null,
-        backgroundColor = if (isSelected) accentColor.copy(alpha = 0.15f) else SurfaceCards
+        backgroundColor = if (isSelected) accentColor.copy(alpha = 0.15f) else LocalAppColors.current.surfaceCards
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Row(
@@ -453,7 +455,7 @@ private fun ExerciseListItem(
                         onCheckedChange = { onClick() },
                         colors = CheckboxDefaults.colors(
                             checkedColor = accentColor,
-                            uncheckedColor = TextTertiary,
+                            uncheckedColor = LocalAppColors.current.textTertiary,
                             checkmarkColor = Color.Black
                         ),
                         modifier = Modifier.size(24.dp)
@@ -469,12 +471,12 @@ private fun ExerciseListItem(
                         text = exercise.name,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Bold,
-                        color = if (isSelected) accentColor else TextPrimary
+                        color = if (isSelected) accentColor else LocalAppColors.current.textPrimary
                     )
                     Text(
                         text = exercise.targetMuscle,
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextTertiary
+                        color = LocalAppColors.current.textTertiary
                     )
                 }
 
@@ -486,7 +488,7 @@ private fun ExerciseListItem(
                         Icon(
                             imageVector = if (exercise.isStarred) androidx.compose.material.icons.Icons.Default.Star else androidx.compose.material.icons.Icons.Default.StarBorder,
                             contentDescription = "Star Exercise",
-                            tint = if (exercise.isStarred) Color(0xFFFFD700) else TextTertiary, // Gold or Gray
+                            tint = if (exercise.isStarred) Color(0xFFFFD700) else LocalAppColors.current.textTertiary, // Gold or Gray
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -515,10 +517,10 @@ private fun ExerciseListItem(
                 DropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
-                    modifier = Modifier.background(SurfaceCards)
+                    modifier = Modifier.background(LocalAppColors.current.surfaceCards)
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Edit", color = TextPrimary) },
+                        text = { Text("Edit", color = LocalAppColors.current.textPrimary) },
                         onClick = {
                             showMenu = false
                             onEdit()

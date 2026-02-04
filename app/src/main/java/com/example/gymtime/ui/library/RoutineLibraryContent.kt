@@ -49,7 +49,7 @@ fun RoutineLibraryContent(
                         showMaxRoutinesDialog = true
                     }
                 },
-                containerColor = if (canCreateMore) accentColor else TextTertiary,
+                containerColor = if (canCreateMore) accentColor else LocalAppColors.current.textTertiary,
                 contentColor = Color.Black,
                 shape = RoundedCornerShape(16.dp)
             ) {
@@ -72,7 +72,7 @@ fun RoutineLibraryContent(
                 ) {
                     Text(
                         text = "No routines yet.\nTap + to create your first routine!",
-                        color = TextTertiary,
+                        color = LocalAppColors.current.textTertiary,
                         fontSize = 16.sp,
                         textAlign = TextAlign.Center
                     )
@@ -101,14 +101,14 @@ fun RoutineLibraryContent(
     if (showMaxRoutinesDialog) {
         AlertDialog(
             onDismissRequest = { showMaxRoutinesDialog = false },
-            title = { Text("Maximum Routines Reached", color = TextPrimary) },
-            text = { Text("You can only create up to 3 routines. Delete an existing routine to create a new one.", color = TextSecondary) },
+            title = { Text("Maximum Routines Reached", color = LocalAppColors.current.textPrimary) },
+            text = { Text("You can only create up to 3 routines. Delete an existing routine to create a new one.", color = LocalAppColors.current.textSecondary) },
             confirmButton = {
                 TextButton(onClick = { showMaxRoutinesDialog = false }) {
                     Text("OK", color = accentColor)
                 }
             },
-            containerColor = SurfaceCards
+            containerColor = LocalAppColors.current.surfaceCards
         )
     }
 
@@ -116,8 +116,8 @@ fun RoutineLibraryContent(
     routineToDelete?.let { routine ->
         AlertDialog(
             onDismissRequest = { routineToDelete = null },
-            title = { Text("Delete Routine?", color = TextPrimary) },
-            text = { Text("This will permanently delete \"${routine.name}\" and all its days and exercises.", color = TextSecondary) },
+            title = { Text("Delete Routine?", color = LocalAppColors.current.textPrimary) },
+            text = { Text("This will permanently delete \"${routine.name}\" and all its days and exercises.", color = LocalAppColors.current.textSecondary) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -131,10 +131,10 @@ fun RoutineLibraryContent(
             },
             dismissButton = {
                 TextButton(onClick = { routineToDelete = null }) {
-                    Text("Cancel", color = TextPrimary)
+                    Text("Cancel", color = LocalAppColors.current.textPrimary)
                 }
             },
-            containerColor = SurfaceCards
+            containerColor = LocalAppColors.current.surfaceCards
         )
     }
 }
@@ -173,7 +173,7 @@ private fun RoutineLibraryItem(
                 ) {
                     Text(
                         text = routine.name,
-                        color = if (isRoutineActive) TextPrimary else TextTertiary,
+                        color = if (isRoutineActive) LocalAppColors.current.textPrimary else LocalAppColors.current.textTertiary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -185,12 +185,12 @@ private fun RoutineLibraryItem(
                         // Inactive badge
                         if (!isRoutineActive) {
                             Surface(
-                                color = TextTertiary.copy(alpha = 0.2f),
+                                color = LocalAppColors.current.textTertiary.copy(alpha = 0.2f),
                                 shape = RoundedCornerShape(4.dp)
                             ) {
                                 Text(
                                     text = "INACTIVE",
-                                    color = TextTertiary,
+                                    color = LocalAppColors.current.textTertiary,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 1.sp,
@@ -220,7 +220,7 @@ private fun RoutineLibraryItem(
 
                 Text(
                     text = if (isRoutineActive) "Tap to view and edit" else "Tap to view (inactive)",
-                    color = TextTertiary,
+                    color = LocalAppColors.current.textTertiary,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 4.dp)
                 )
@@ -235,7 +235,7 @@ private fun RoutineLibraryItem(
                     text = {
                         Text(
                             text = if (isRoutineActive) "Deactivate" else "Activate",
-                            color = TextPrimary
+                            color = LocalAppColors.current.textPrimary
                         )
                     },
                     onClick = {

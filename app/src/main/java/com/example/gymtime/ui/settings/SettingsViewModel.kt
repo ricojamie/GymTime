@@ -25,6 +25,10 @@ class SettingsViewModel @Inject constructor(
     val timerAudioEnabled = userPreferencesRepository.timerAudioEnabled
     val timerVibrateEnabled = userPreferencesRepository.timerVibrateEnabled
 
+    // Display settings
+    val keepScreenOn = userPreferencesRepository.keepScreenOn
+    val darkMode = userPreferencesRepository.darkMode
+
     // Plate calculator settings
     val barWeight = userPreferencesRepository.barWeight
     val loadingSides = userPreferencesRepository.loadingSides
@@ -57,6 +61,18 @@ class SettingsViewModel @Inject constructor(
     fun setTimerVibrateEnabled(enabled: Boolean) {
         viewModelScope.launch {
             userPreferencesRepository.setTimerVibrateEnabled(enabled)
+        }
+    }
+
+    fun setKeepScreenOn(enabled: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setKeepScreenOn(enabled)
+        }
+    }
+
+    fun setDarkMode(enabled: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setDarkMode(enabled)
         }
     }
 

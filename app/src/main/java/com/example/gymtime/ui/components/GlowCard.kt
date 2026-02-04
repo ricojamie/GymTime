@@ -14,7 +14,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.example.gymtime.ui.theme.SurfaceCards
+import com.example.gymtime.ui.theme.LocalAppColors
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -22,9 +22,14 @@ fun GlowCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
-    backgroundColor: Color = SurfaceCards,
+    backgroundColor: Color = Color.Unspecified,
     content: @Composable () -> Unit
 ) {
+    val resolvedBackgroundColor = if (backgroundColor == Color.Unspecified) {
+        LocalAppColors.current.surfaceCards
+    } else {
+        backgroundColor
+    }
     val accentColor = MaterialTheme.colorScheme.primary
     Card(
         modifier = modifier
@@ -44,8 +49,8 @@ fun GlowCard(
                     brush = Brush.radialGradient(
                         colors = listOf(
                             accentColor.copy(alpha = 0.12f), // Very subtle glow
-                            backgroundColor,
-                            backgroundColor
+                            resolvedBackgroundColor,
+                            resolvedBackgroundColor
                         ),
                         center = androidx.compose.ui.geometry.Offset(
                             x = 0.15f, // Top-left corner glow position (0.0 = left, 1.0 = right)

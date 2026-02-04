@@ -26,8 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.example.gymtime.R
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.IronLogTheme
-import com.example.gymtime.ui.theme.TextPrimary
-import com.example.gymtime.ui.theme.TextTertiary
+import com.example.gymtime.ui.theme.LocalAppColors
 
 @Composable
 fun QuickStartCard(isOngoing: Boolean, onClick: () -> Unit) {
@@ -79,7 +78,7 @@ fun QuickStartCard(isOngoing: Boolean, onClick: () -> Unit) {
                 Text(
                     text = if (isOngoing) "Continue your session" else "Build as you go",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextTertiary
+                    color = LocalAppColors.current.textTertiary
                 )
             }
         }

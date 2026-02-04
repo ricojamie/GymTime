@@ -21,6 +21,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.gymtime.ui.theme.LocalAppColors
 import com.example.gymtime.util.PlateCalculator
 import com.example.gymtime.util.PlateLoadout
 
@@ -111,7 +112,7 @@ fun PlateCalculatorSheet(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFF1A1A1A)
+                        containerColor = LocalAppColors.current.inputBackground
                     )
                 ) {
                     Column(
@@ -248,7 +249,7 @@ fun PlateCalculatorSheet(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFF1A1A1A)
+                        containerColor = LocalAppColors.current.inputBackground
                     )
                 ) {
                     Column(

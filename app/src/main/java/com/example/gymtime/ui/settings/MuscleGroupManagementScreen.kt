@@ -45,14 +45,14 @@ fun MuscleGroupManagementScreen(
                 title = {
                     Text(
                         "Muscle Groups",
-                        color = TextPrimary,
+                        color = LocalAppColors.current.textPrimary,
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.ExtraBold
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = LocalAppColors.current.textPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -99,13 +99,13 @@ fun MuscleGroupManagementScreen(
                             )
                             Text(
                                 text = "No muscle groups yet.",
-                                color = TextPrimary,
+                                color = LocalAppColors.current.textPrimary,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = "Tap + to create your first muscle group!",
-                                color = TextTertiary,
+                                color = LocalAppColors.current.textTertiary,
                                 fontSize = 14.sp,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                 modifier = Modifier.padding(top = 8.dp)
@@ -139,7 +139,7 @@ fun MuscleGroupManagementScreen(
             title = {
                 Text(
                     if (isEditing) "Edit Muscle Group" else "Add Muscle Group",
-                    color = TextPrimary
+                    color = LocalAppColors.current.textPrimary
                 )
             },
             text = {
@@ -149,20 +149,20 @@ fun MuscleGroupManagementScreen(
                         onValueChange = { viewModel.updateMuscleNameInput(it) },
                         textStyle = androidx.compose.ui.text.TextStyle(
                             fontSize = 18.sp,
-                            color = TextPrimary,
+                            color = LocalAppColors.current.textPrimary,
                             fontWeight = FontWeight.Medium
                         ),
                         cursorBrush = SolidColor(accentColor),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFF1A1A1A), RoundedCornerShape(8.dp))
+                            .background(LocalAppColors.current.inputBackground, RoundedCornerShape(8.dp))
                             .padding(12.dp),
                         decorationBox = { innerTextField ->
                             Box {
                                 if (muscleNameInput.isEmpty()) {
                                     Text(
                                         "Muscle group name",
-                                        color = TextTertiary,
+                                        color = LocalAppColors.current.textTertiary,
                                         fontSize = 18.sp
                                     )
                                 }
@@ -193,10 +193,10 @@ fun MuscleGroupManagementScreen(
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.clearDialog() }) {
-                    Text("Cancel", color = TextSecondary)
+                    Text("Cancel", color = LocalAppColors.current.textSecondary)
                 }
             },
-            containerColor = SurfaceCards
+            containerColor = LocalAppColors.current.surfaceCards
         )
     }
 
@@ -206,8 +206,8 @@ fun MuscleGroupManagementScreen(
             is DeleteCheckResult.CanDelete -> {
                 AlertDialog(
                     onDismissRequest = { viewModel.clearDeleteDialog() },
-                    title = { Text("Delete Muscle Group?", color = TextPrimary) },
-                    text = { Text("Are you sure you want to delete \"$name\"?", color = TextPrimary) },
+                    title = { Text("Delete Muscle Group?", color = LocalAppColors.current.textPrimary) },
+                    text = { Text("Are you sure you want to delete \"$name\"?", color = LocalAppColors.current.textPrimary) },
                     confirmButton = {
                         Button(
                             onClick = { viewModel.deleteMuscleGroup(name) },
@@ -218,21 +218,21 @@ fun MuscleGroupManagementScreen(
                     },
                     dismissButton = {
                         TextButton(onClick = { viewModel.clearDeleteDialog() }) {
-                            Text("Cancel", color = TextSecondary)
+                            Text("Cancel", color = LocalAppColors.current.textSecondary)
                         }
                     },
-                    containerColor = SurfaceCards
+                    containerColor = LocalAppColors.current.surfaceCards
                 )
             }
             is DeleteCheckResult.HasExercises -> {
                 AlertDialog(
                     onDismissRequest = { viewModel.clearDeleteDialog() },
-                    title = { Text("Delete Muscle Group?", color = TextPrimary) },
+                    title = { Text("Delete Muscle Group?", color = LocalAppColors.current.textPrimary) },
                     text = {
                         Text(
                             "\"$name\" has ${result.exerciseCount} exercise(s) assigned to it. " +
                                 "Deleting will move these exercises to \"Uncategorized\".",
-                            color = TextPrimary
+                            color = LocalAppColors.current.textPrimary
                         )
                     },
                     confirmButton = {
@@ -245,10 +245,10 @@ fun MuscleGroupManagementScreen(
                     },
                     dismissButton = {
                         TextButton(onClick = { viewModel.clearDeleteDialog() }) {
-                            Text("Cancel", color = TextSecondary)
+                            Text("Cancel", color = LocalAppColors.current.textSecondary)
                         }
                     },
-                    containerColor = SurfaceCards
+                    containerColor = LocalAppColors.current.surfaceCards
                 )
             }
             is DeleteCheckResult.BlockedByLoggedSets -> {
@@ -259,7 +259,7 @@ fun MuscleGroupManagementScreen(
                         Text(
                             "\"$name\" cannot be deleted because it has ${result.setCount} logged set(s) in your workout history. " +
                                 "Rename the muscle group instead if needed.",
-                            color = TextPrimary
+                            color = LocalAppColors.current.textPrimary
                         )
                     },
                     confirmButton = {
@@ -267,7 +267,7 @@ fun MuscleGroupManagementScreen(
                             Text("OK", color = accentColor)
                         }
                     },
-                    containerColor = SurfaceCards
+                    containerColor = LocalAppColors.current.surfaceCards
                 )
             }
         }
@@ -297,7 +297,7 @@ fun MuscleGroupItem(
             ) {
                 Text(
                     text = muscleGroup.name,
-                    color = TextPrimary,
+                    color = LocalAppColors.current.textPrimary,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -308,7 +308,7 @@ fun MuscleGroupItem(
                 onDismissRequest = { showMenu = false }
             ) {
                 DropdownMenuItem(
-                    text = { Text("Edit", color = TextPrimary) },
+                    text = { Text("Edit", color = LocalAppColors.current.textPrimary) },
                     onClick = {
                         showMenu = false
                         onEdit()

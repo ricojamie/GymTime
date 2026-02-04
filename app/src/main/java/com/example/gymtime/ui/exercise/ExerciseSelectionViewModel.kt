@@ -27,6 +27,7 @@ class ExerciseSelectionViewModel @Inject constructor(
     private val workoutMode: Boolean = savedStateHandle["workoutMode"] ?: false
     private val supersetMode: Boolean = savedStateHandle["supersetMode"] ?: false
     private val adHocParentId: Long? = savedStateHandle["adHocParentId"]
+    private val addToSuperset: Boolean = savedStateHandle["addToSuperset"] ?: false
 
     // Track if we're in workout mode (passed from navigation, not DB query)
     val isWorkoutMode: StateFlow<Boolean> = MutableStateFlow(workoutMode)
@@ -47,8 +48,15 @@ class ExerciseSelectionViewModel @Inject constructor(
     private val _supersetStarted = MutableSharedFlow<Long>()
     val supersetStarted = _supersetStarted.asSharedFlow()
 
-    // Maximum exercises allowed in a superset (2 for free, 3 for premium later)
-    val maxSupersetExercises = 2
+    // Event when exercise is added to existing superset (pop back)
+    private val _exerciseAddedToSuperset = MutableSharedFlow<Long>()
+    val exerciseAddedToSuperset = _exerciseAddedToSuperset.asSharedFlow()
+
+    // Expose add-to-superset mode for UI
+    val isAddToSupersetMode: Boolean = addToSuperset
+
+    // Maximum exercises allowed in a superset
+    val maxSupersetExercises = 10
 
     private val allExercises: Flow<List<Exercise>> = exerciseRepository.getAllExercises()
 
@@ -112,6 +120,12 @@ class ExerciseSelectionViewModel @Inject constructor(
      * If already selected, removes it. If not, adds it (up to max).
      */
     fun toggleExerciseSelection(exercise: Exercise) {
+        if (addToSuperset) {
+            // Add-to-existing-superset mode: add exercise and pop back
+            addExerciseToExistingSuperset(exercise)
+            return
+        }
+
         if (supersetMode && adHocParentId != null && adHocParentId != -1L) {
             // Ad-hoc mode: We have parent A, just clicked B. Start superset and go back.
             startAdHocSuperset(exercise)
@@ -153,7 +167,7 @@ class ExerciseSelectionViewModel @Inject constructor(
      * Check if we have enough exercises selected to start a superset.
      */
     fun canStartSuperset(): Boolean {
-        return _selectedForSuperset.value.size == maxSupersetExercises
+        return _selectedForSuperset.value.size >= 2
     }
 
     /**
@@ -197,6 +211,13 @@ class ExerciseSelectionViewModel @Inject constructor(
             exerciseRepository.updateStarredStatus(exercise.id, !exercise.isStarred)
         }
     }
+    private fun addExerciseToExistingSuperset(exercise: Exercise) {
+        viewModelScope.launch {
+            supersetManager.addExercise(exercise)
+            _exerciseAddedToSuperset.emit(exercise.id)
+        }
+    }
+
     private fun startAdHocSuperset(secondExercise: Exercise) {
         viewModelScope.launch {
             val firstExercise = exerciseRepository.getExercise(adHocParentId!!).first() ?: return@launch

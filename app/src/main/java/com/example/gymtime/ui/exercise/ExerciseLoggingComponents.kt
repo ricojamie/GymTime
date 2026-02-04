@@ -4,8 +4,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,9 +26,7 @@ import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
 import com.example.gymtime.ui.components.ExerciseIcons
-import com.example.gymtime.ui.theme.SurfaceCards
-import com.example.gymtime.ui.theme.TextPrimary
-import com.example.gymtime.ui.theme.TextTertiary
+import com.example.gymtime.ui.theme.LocalAppColors
 import com.example.gymtime.util.TimeUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -40,9 +40,12 @@ fun SupersetIndicatorPills(
     modifier: Modifier = Modifier
 ) {
     val accentColor = MaterialTheme.colorScheme.primary
+    val nameMaxChars = if (exercises.size > 3) 8 else 12
 
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -94,10 +97,10 @@ fun SupersetIndicatorPills(
                         color = if (isActive) Color.Black else accentColor
                     )
                     Text(
-                        text = exercise.name.take(12) + if (exercise.name.length > 12) "..." else "",
+                        text = exercise.name.take(nameMaxChars) + if (exercise.name.length > nameMaxChars) ".." else "",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Medium,
-                        color = if (isActive) Color.Black else TextPrimary,
+                        color = if (isActive) Color.Black else LocalAppColors.current.textPrimary,
                         maxLines = 1
                     )
                 }
@@ -170,7 +173,7 @@ fun ExerciseSetLogCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (isPersonalBest) accentColor.copy(alpha = 0.15f) else SurfaceCards
+            containerColor = if (isPersonalBest) accentColor.copy(alpha = 0.15f) else LocalAppColors.current.surfaceCards
         ),
         shape = RoundedCornerShape(12.dp),
         border = if (isPersonalBest) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
@@ -198,7 +201,7 @@ fun ExerciseSetLogCard(
                     Text(
                         text = "$setNumber",
                         style = MaterialTheme.typography.titleMedium,
-                        color = TextTertiary,
+                        color = LocalAppColors.current.textTertiary,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -207,7 +210,7 @@ fun ExerciseSetLogCard(
                     Text(
                         text = "$it LBS",
                         style = MaterialTheme.typography.titleMedium,
-                        color = if (isPersonalBest) MaterialTheme.colorScheme.primary else TextPrimary,
+                        color = if (isPersonalBest) MaterialTheme.colorScheme.primary else LocalAppColors.current.textPrimary,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -216,7 +219,7 @@ fun ExerciseSetLogCard(
                     Text(
                         text = "/",
                         style = MaterialTheme.typography.titleMedium,
-                        color = TextTertiary
+                        color = LocalAppColors.current.textTertiary
                     )
                 }
 
@@ -224,7 +227,7 @@ fun ExerciseSetLogCard(
                     Text(
                         text = "$it REPS",
                         style = MaterialTheme.typography.titleMedium,
-                        color = if (isPersonalBest) MaterialTheme.colorScheme.primary else TextPrimary,
+                        color = if (isPersonalBest) MaterialTheme.colorScheme.primary else LocalAppColors.current.textPrimary,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -234,7 +237,7 @@ fun ExerciseSetLogCard(
                     Text(
                         text = "${TimeUtils.formatMiles(miles)} MI",
                         style = MaterialTheme.typography.titleMedium,
-                        color = TextPrimary,
+                        color = LocalAppColors.current.textPrimary,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -243,7 +246,7 @@ fun ExerciseSetLogCard(
                     Text(
                         text = "/",
                         style = MaterialTheme.typography.titleMedium,
-                        color = TextTertiary
+                        color = LocalAppColors.current.textTertiary
                     )
                 }
 
@@ -251,7 +254,7 @@ fun ExerciseSetLogCard(
                     Text(
                         text = TimeUtils.formatSecondsToHMS(seconds),
                         style = MaterialTheme.typography.titleMedium,
-                        color = TextPrimary,
+                        color = LocalAppColors.current.textPrimary,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -316,7 +319,7 @@ fun ExerciseSetLogCard(
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = "More options",
-                tint = TextTertiary.copy(alpha = 0.4f),
+                tint = LocalAppColors.current.textTertiary.copy(alpha = 0.4f),
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -326,7 +329,7 @@ fun ExerciseSetLogCard(
             Text(
                 text = noteText,
                 style = MaterialTheme.typography.bodySmall,
-                color = TextTertiary,
+                color = LocalAppColors.current.textTertiary,
                 modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp)
             )
         }
@@ -379,7 +382,7 @@ fun WorkoutOverviewContent(
             text = "Current Workout",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            color = TextPrimary
+            color = LocalAppColors.current.textPrimary
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -392,16 +395,16 @@ fun WorkoutOverviewContent(
             Text(
                 text = "Duration: ${workoutStats.duration}",
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextTertiary
+                color = LocalAppColors.current.textTertiary
             )
             Text(
                 text = "·",
-                color = TextTertiary
+                color = LocalAppColors.current.textTertiary
             )
             Text(
                 text = "${workoutStats.totalSets} sets",
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextTertiary
+                color = LocalAppColors.current.textTertiary
             )
         }
 
@@ -491,7 +494,7 @@ fun WorkoutOverviewContent(
                                     .size(40.dp)
                                     .background(
                                         if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                        else Color(0xFF1A1A1A),
+                                        else LocalAppColors.current.inputBackground,
                                         RoundedCornerShape(8.dp)
                                     ),
                                 contentAlignment = Alignment.Center
@@ -499,7 +502,7 @@ fun WorkoutOverviewContent(
                                 Icon(
                                     imageVector = ExerciseIcons.getIconForMuscle(summary.targetMuscle),
                                     contentDescription = summary.targetMuscle,
-                                    tint = if (isActive) MaterialTheme.colorScheme.primary else TextTertiary,
+                                    tint = if (isActive) MaterialTheme.colorScheme.primary else LocalAppColors.current.textTertiary,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -513,7 +516,7 @@ fun WorkoutOverviewContent(
                                         text = summary.exerciseName,
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isActive) MaterialTheme.colorScheme.primary else TextPrimary
+                                        color = if (isActive) MaterialTheme.colorScheme.primary else LocalAppColors.current.textPrimary
                                     )
                                     if (isActive) {
                                         Text(
@@ -527,7 +530,7 @@ fun WorkoutOverviewContent(
                                 Text(
                                     text = summary.targetMuscle,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = TextTertiary,
+                                    color = LocalAppColors.current.textTertiary,
                                     fontSize = 12.sp
                                 )
                             }
@@ -539,13 +542,13 @@ fun WorkoutOverviewContent(
                             Text(
                                 text = "${summary.setCount} sets",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = TextTertiary
+                                color = LocalAppColors.current.textTertiary
                             )
                             summary.bestWeight?.let { weight ->
                                 Text(
                                     text = "${weight.toInt()} lbs",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = TextTertiary.copy(alpha = 0.7f),
+                                    color = LocalAppColors.current.textTertiary.copy(alpha = 0.7f),
                                     fontSize = 11.sp
                                 )
                             }
@@ -589,7 +592,7 @@ fun ExerciseHistoryContent(
             text = exerciseName,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            color = TextPrimary
+            color = LocalAppColors.current.textPrimary
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -597,7 +600,7 @@ fun ExerciseHistoryContent(
         Text(
             text = "PERSONAL RECORDS",
             style = MaterialTheme.typography.labelMedium,
-            color = TextTertiary,
+            color = LocalAppColors.current.textTertiary,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.sp
         )
@@ -635,7 +638,7 @@ fun ExerciseHistoryContent(
         Text(
             text = "RECENT HISTORY",
             style = MaterialTheme.typography.labelMedium,
-            color = TextTertiary,
+            color = LocalAppColors.current.textTertiary,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.sp
         )
@@ -663,7 +666,7 @@ fun ExerciseHistoryContent(
             onClick = onDismiss,
             modifier = Modifier.align(Alignment.CenterHorizontally)
         ) {
-            Text("Close", color = TextTertiary)
+            Text("Close", color = LocalAppColors.current.textTertiary)
         }
     }
 }
@@ -696,7 +699,7 @@ fun PRBadge(
             Text(
                 text = title,
                 style = MaterialTheme.typography.labelSmall,
-                color = TextTertiary,
+                color = LocalAppColors.current.textTertiary,
                 fontSize = 10.sp
             )
             Spacer(modifier = Modifier.height(2.dp))
@@ -709,7 +712,7 @@ fun PRBadge(
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = TextTertiary,
+                color = LocalAppColors.current.textTertiary,
                 fontSize = 11.sp
             )
         }
@@ -742,7 +745,7 @@ fun WorkoutHistoryCard(
                 text = dateStr,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
-                color = TextPrimary
+                color = LocalAppColors.current.textPrimary
             )
             Spacer(modifier = Modifier.height(8.dp))
             sets.forEachIndexed { index, set ->
@@ -753,7 +756,7 @@ fun WorkoutHistoryCard(
                     Text(
                         text = "Set ${index + 1}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextTertiary
+                        color = LocalAppColors.current.textTertiary
                     )
                     Text(
                         text = buildString {
@@ -763,7 +766,7 @@ fun WorkoutHistoryCard(
                             if (set.isWarmup) append(" (WU)")
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextPrimary
+                        color = LocalAppColors.current.textPrimary
                     )
                 }
                 if (index < sets.size - 1) {

@@ -47,7 +47,7 @@ fun RoutineDayListScreen(
                     Column {
                         Text(
                             routineName,
-                            color = TextPrimary,
+                            color = LocalAppColors.current.textPrimary,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
@@ -61,7 +61,7 @@ fun RoutineDayListScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = LocalAppColors.current.textPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -76,7 +76,7 @@ fun RoutineDayListScreen(
                         showMaxDaysDialog = true
                     }
                 },
-                containerColor = if (canAddMoreDays) accentColor else TextTertiary,
+                containerColor = if (canAddMoreDays) accentColor else LocalAppColors.current.textTertiary,
                 contentColor = Color.Black,
                 shape = RoundedCornerShape(16.dp),
                 elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp)
@@ -115,13 +115,13 @@ fun RoutineDayListScreen(
                             )
                             Text(
                                 text = "No days yet.",
-                                color = TextPrimary,
+                                color = LocalAppColors.current.textPrimary,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = "Tap + to add a workout day!",
-                                color = TextTertiary,
+                                color = LocalAppColors.current.textTertiary,
                                 fontSize = 14.sp,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                 modifier = Modifier.padding(top = 8.dp)
@@ -208,7 +208,7 @@ fun RoutineDayItem(
             ) {
                 Text(
                     text = day.name,
-                    color = TextPrimary,
+                    color = LocalAppColors.current.textPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -220,7 +220,7 @@ fun RoutineDayItem(
                 onDismissRequest = { showMenu = false }
             ) {
                 DropdownMenuItem(
-                    text = { Text("Edit", color = TextPrimary) },
+                    text = { Text("Edit", color = LocalAppColors.current.textPrimary) },
                     onClick = {
                         showMenu = false
                         onTap()

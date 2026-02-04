@@ -36,6 +36,10 @@ class UserPreferencesRepository @Inject constructor(
         val BAR_WEIGHT = androidx.datastore.preferences.core.floatPreferencesKey("bar_weight")
         val LOADING_SIDES = androidx.datastore.preferences.core.intPreferencesKey("loading_sides")
 
+        // Display preferences
+        val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
+        val DARK_MODE = booleanPreferencesKey("dark_mode")
+
         // Streak tracking
         val BEST_STREAK = intPreferencesKey("best_streak")
     }
@@ -93,6 +97,16 @@ class UserPreferencesRepository @Inject constructor(
     val loadingSides: Flow<Int> = context.dataStore.data
         .map { preferences ->
             preferences[PreferencesKeys.LOADING_SIDES] ?: 2
+        }
+
+    val keepScreenOn: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.KEEP_SCREEN_ON] ?: false
+        }
+
+    val darkMode: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.DARK_MODE] ?: true
         }
 
     val bestStreak: Flow<Int> = context.dataStore.data
@@ -162,6 +176,18 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun setLoadingSides(sides: Int) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.LOADING_SIDES] = sides
+        }
+    }
+
+    suspend fun setKeepScreenOn(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.KEEP_SCREEN_ON] = enabled
+        }
+    }
+
+    suspend fun setDarkMode(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.DARK_MODE] = enabled
         }
     }
 

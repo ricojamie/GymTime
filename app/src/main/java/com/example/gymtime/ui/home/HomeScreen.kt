@@ -50,10 +50,7 @@ import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.components.OrbSize
 import com.example.gymtime.ui.components.RoutineCard
 import com.example.gymtime.ui.components.VolumeOrb
-import com.example.gymtime.ui.theme.SurfaceCards
-import com.example.gymtime.ui.theme.TextPrimary
-import com.example.gymtime.ui.theme.TextSecondary
-import com.example.gymtime.ui.theme.TextTertiary
+import com.example.gymtime.ui.theme.LocalAppColors
 import com.example.gymtime.util.StreakCalculator
 import kotlinx.coroutines.delay
 import java.text.NumberFormat
@@ -207,7 +204,7 @@ fun HomeScreen(
             ModalBottomSheet(
                 onDismissRequest = { showStreakDetail = false },
                 sheetState = sheetState,
-                containerColor = SurfaceCards,
+                containerColor = LocalAppColors.current.surfaceCards,
                 scrimColor = Color.Black.copy(alpha = 0.6f)
             ) {
                 StreakDetailContent(
@@ -276,7 +273,7 @@ private fun QuickStartCard(
                 Text(
                     text = if (isOngoing) "Continue your session" else "Build as you go",
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextTertiary
+                    color = LocalAppColors.current.textTertiary
                 )
             }
         }
@@ -322,7 +319,7 @@ private fun StreakCardCompact(
             Text(
                 text = "IRON STREAK",
                 style = MaterialTheme.typography.labelSmall,
-                color = TextTertiary,
+                color = LocalAppColors.current.textTertiary,
                 letterSpacing = 1.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -347,7 +344,7 @@ private fun StreakCardCompact(
                     Text(
                         text = "DAYS",
                         style = MaterialTheme.typography.labelSmall,
-                        color = TextTertiary,
+                        color = LocalAppColors.current.textTertiary,
                         letterSpacing = 1.sp
                     )
                 }
@@ -411,7 +408,7 @@ private fun StreakDetailContent(
             text = "Iron Streak Overview",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            color = TextPrimary
+            color = LocalAppColors.current.textPrimary
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -470,7 +467,7 @@ private fun StreakDetailContent(
         Text(
             text = "SKIPS REMAINING THIS WEEK",
             style = MaterialTheme.typography.labelMedium,
-            color = TextTertiary,
+            color = LocalAppColors.current.textTertiary,
             letterSpacing = 1.5.sp
         )
         
@@ -484,7 +481,7 @@ private fun StreakDetailContent(
                         modifier = Modifier
                             .size(24.dp)
                             .background(
-                                color = if (isLit) Color(0xFF64B5F6) else Color(0xFF1A1A1A),
+                                color = if (isLit) Color(0xFF64B5F6) else LocalAppColors.current.inputBackground,
                                 shape = androidx.compose.foundation.shape.CircleShape
                             )
                             .then(
@@ -502,7 +499,7 @@ private fun StreakDetailContent(
                 "You have ${streakResult.skipsRemaining} free skips left until Sunday." 
                 else "No skips left! Workout next to keep the streak alive.",
             style = MaterialTheme.typography.bodySmall,
-            color = if (streakResult.skipsRemaining > 0) TextSecondary else Color(0xFFEF5350),
+            color = if (streakResult.skipsRemaining > 0) LocalAppColors.current.textSecondary else Color(0xFFEF5350),
             textAlign = TextAlign.Center
         )
 
@@ -551,7 +548,7 @@ private fun StreakDetailContent(
             Text(
                 text = "${String.format("%.1f", progressPercent)}% of last year's total",
                 style = MaterialTheme.typography.bodySmall,
-                color = if (progressPercent >= 100) accentColor else TextSecondary,
+                color = if (progressPercent >= 100) accentColor else LocalAppColors.current.textSecondary,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -576,7 +573,7 @@ private fun StatItem(
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = TextTertiary,
+            color = LocalAppColors.current.textTertiary,
             letterSpacing = 1.sp
         )
         Spacer(modifier = Modifier.height(4.dp))
@@ -584,7 +581,7 @@ private fun StatItem(
             text = value,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = TextPrimary
+            color = LocalAppColors.current.textPrimary
         )
     }
 }
@@ -622,7 +619,7 @@ private fun VolumeOrbSection(
         Text(
             text = "WEEKLY VOLUME",
             style = MaterialTheme.typography.labelSmall,
-            color = TextTertiary,
+            color = LocalAppColors.current.textTertiary,
             letterSpacing = 1.5.sp,
             fontWeight = FontWeight.Medium
         )
@@ -653,12 +650,12 @@ private fun VolumeOrbSection(
                             text = "${java.text.NumberFormat.getNumberInstance().format(volumeOrbState.currentWeekVolume.toLong())}",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = LocalAppColors.current.textPrimary
                         )
                         Text(
                             text = "of ${java.text.NumberFormat.getNumberInstance().format(volumeOrbState.lastWeekVolume.toLong())} lbs",
                             style = MaterialTheme.typography.labelSmall,
-                            color = TextSecondary
+                            color = LocalAppColors.current.textSecondary
                         )
                     }
                 }
@@ -677,7 +674,7 @@ private fun VolumeOrbSection(
             text = percentText,
             style = MaterialTheme.typography.bodySmall,
             fontWeight = if (!volumeOrbState.isFirstWeek) FontWeight.Bold else FontWeight.Normal,
-            color = if (volumeOrbState.hasOverflowed) MaterialTheme.colorScheme.primary else TextSecondary
+            color = if (volumeOrbState.hasOverflowed) MaterialTheme.colorScheme.primary else LocalAppColors.current.textSecondary
         )
     }
 }

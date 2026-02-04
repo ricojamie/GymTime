@@ -39,6 +39,8 @@ fun SettingsScreen(
     val timerAutoStart by viewModel.timerAutoStart.collectAsState(initial = true)
     val timerAudioEnabled by viewModel.timerAudioEnabled.collectAsState(initial = true)
     val timerVibrateEnabled by viewModel.timerVibrateEnabled.collectAsState(initial = true)
+    val keepScreenOn by viewModel.keepScreenOn.collectAsState(initial = false)
+    val darkMode by viewModel.darkMode.collectAsState(initial = true)
     val barWeight by viewModel.barWeight.collectAsState(initial = 45f)
     val loadingSides by viewModel.loadingSides.collectAsState(initial = 2)
     val availablePlates by viewModel.availablePlates.collectAsState(initial = listOf(45f, 35f, 25f, 15f, 10f, 5f, 2.5f))
@@ -68,13 +70,13 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings", color = TextPrimary) },
+                title = { Text("Settings", color = LocalAppColors.current.textPrimary) },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = TextPrimary
+                            tint = LocalAppColors.current.textPrimary
                         )
                     }
                 },
@@ -99,11 +101,11 @@ fun SettingsScreen(
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceCards),
+                    colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Name", fontSize = 12.sp, color = TextTertiary)
+                        Text("Name", fontSize = 12.sp, color = LocalAppColors.current.textTertiary)
                         Spacer(modifier = Modifier.height(8.dp))
 
                         BasicTextField(
@@ -114,13 +116,13 @@ fun SettingsScreen(
                             },
                             textStyle = androidx.compose.ui.text.TextStyle(
                                 fontSize = 18.sp,
-                                color = TextPrimary,
+                                color = LocalAppColors.current.textPrimary,
                                 fontWeight = FontWeight.Medium
                             ),
                             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(Color(0xFF1A1A1A), RoundedCornerShape(8.dp))
+                                .background(LocalAppColors.current.inputBackground, RoundedCornerShape(8.dp))
                                 .padding(12.dp)
                         )
                     }
@@ -135,7 +137,7 @@ fun SettingsScreen(
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceCards),
+                    colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Row(
@@ -146,11 +148,11 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("Auto-start timer", fontSize = 16.sp, color = TextPrimary)
+                            Text("Auto-start timer", fontSize = 16.sp, color = LocalAppColors.current.textPrimary)
                             Text(
                                 "Start rest timer after logging set",
                                 fontSize = 12.sp,
-                                color = TextTertiary
+                                color = LocalAppColors.current.textTertiary
                             )
                         }
 
@@ -164,7 +166,7 @@ fun SettingsScreen(
                         )
                     }
 
-                    HorizontalDivider(color = TextTertiary.copy(alpha = 0.1f), modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(color = LocalAppColors.current.textTertiary.copy(alpha = 0.1f), modifier = Modifier.padding(horizontal = 16.dp))
 
                     Row(
                         modifier = Modifier
@@ -174,11 +176,11 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("Timer Audio", fontSize = 16.sp, color = TextPrimary)
+                            Text("Timer Audio", fontSize = 16.sp, color = LocalAppColors.current.textPrimary)
                             Text(
                                 "Play a tone when timer expires",
                                 fontSize = 12.sp,
-                                color = TextTertiary
+                                color = LocalAppColors.current.textTertiary
                             )
                         }
 
@@ -192,7 +194,7 @@ fun SettingsScreen(
                         )
                     }
 
-                    HorizontalDivider(color = TextTertiary.copy(alpha = 0.1f), modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(color = LocalAppColors.current.textTertiary.copy(alpha = 0.1f), modifier = Modifier.padding(horizontal = 16.dp))
 
                     Row(
                         modifier = Modifier
@@ -202,11 +204,11 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("Timer Vibration", fontSize = 16.sp, color = TextPrimary)
+                            Text("Timer Vibration", fontSize = 16.sp, color = LocalAppColors.current.textPrimary)
                             Text(
                                 "Vibrate when timer expires",
                                 fontSize = 12.sp,
-                                color = TextTertiary
+                                color = LocalAppColors.current.textTertiary
                             )
                         }
 
@@ -225,16 +227,83 @@ fun SettingsScreen(
             item {
                 Spacer(modifier = Modifier.height(24.dp))
 
+                // Display Section
+                SectionHeader("Display")
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Keep Screen On", fontSize = 16.sp, color = LocalAppColors.current.textPrimary)
+                            Text(
+                                "Prevent screen from dimming during workouts",
+                                fontSize = 12.sp,
+                                color = LocalAppColors.current.textTertiary
+                            )
+                        }
+
+                        Switch(
+                            checked = keepScreenOn,
+                            onCheckedChange = { viewModel.setKeepScreenOn(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                            )
+                        )
+                    }
+
+                    HorizontalDivider(color = LocalAppColors.current.textTertiary.copy(alpha = 0.1f), modifier = Modifier.padding(horizontal = 16.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Dark Mode", fontSize = 16.sp, color = LocalAppColors.current.textPrimary)
+                            Text(
+                                "Switch between dark and light theme",
+                                fontSize = 12.sp,
+                                color = LocalAppColors.current.textTertiary
+                            )
+                        }
+
+                        Switch(
+                            checked = darkMode,
+                            onCheckedChange = { viewModel.setDarkMode(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                            )
+                        )
+                    }
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+
                 // Theme Section
                 SectionHeader("Theme")
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceCards),
+                    colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Accent Color", fontSize = 14.sp, color = TextTertiary)
+                        Text("Accent Color", fontSize = 14.sp, color = LocalAppColors.current.textTertiary)
                         Spacer(modifier = Modifier.height(12.dp))
 
                         // Color options
@@ -299,12 +368,12 @@ fun SettingsScreen(
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceCards),
+                    colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         // Bar Weight
-                        Text("Bar Weight", fontSize = 14.sp, color = TextTertiary)
+                        Text("Bar Weight", fontSize = 14.sp, color = LocalAppColors.current.textTertiary)
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -319,7 +388,7 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         // Loading Sides
-                        Text("Loading Sides", fontSize = 14.sp, color = TextTertiary)
+                        Text("Loading Sides", fontSize = 14.sp, color = LocalAppColors.current.textTertiary)
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -340,11 +409,11 @@ fun SettingsScreen(
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceCards),
+                    colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Select Available Plates", fontSize = 14.sp, color = TextTertiary)
+                        Text("Select Available Plates", fontSize = 14.sp, color = LocalAppColors.current.textTertiary)
                         Spacer(modifier = Modifier.height(12.dp))
 
                         // All available plate options
@@ -375,7 +444,7 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { navController.navigate(com.example.gymtime.navigation.Screen.MuscleGroupManagement.route) },
-                    colors = CardDefaults.cardColors(containerColor = SurfaceCards),
+                    colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Row(
@@ -386,14 +455,14 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("Manage Muscle Groups", fontSize = 16.sp, color = TextPrimary)
+                            Text("Manage Muscle Groups", fontSize = 16.sp, color = LocalAppColors.current.textPrimary)
                             Text(
                                 "Add, edit, or remove muscle groups",
                                 fontSize = 12.sp,
-                                color = TextTertiary
+                                color = LocalAppColors.current.textTertiary
                             )
                         }
-                        Text("→", fontSize = 18.sp, color = TextTertiary)
+                        Text("→", fontSize = 18.sp, color = LocalAppColors.current.textTertiary)
                     }
                 }
             }
@@ -405,15 +474,15 @@ fun SettingsScreen(
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceCards),
+                    colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("FitNotes Import", fontSize = 16.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+                        Text("FitNotes Import", fontSize = 16.sp, color = LocalAppColors.current.textPrimary, fontWeight = FontWeight.Medium)
                         Text(
                             "Import workout history from FitNotes CSV export",
                             fontSize = 12.sp,
-                            color = TextTertiary
+                            color = LocalAppColors.current.textTertiary
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
@@ -453,15 +522,15 @@ fun SettingsScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Version 1.4.0",
+                        text = "Version 1.5.0",
                         fontSize = 14.sp,
-                        color = TextTertiary,
+                        color = LocalAppColors.current.textTertiary,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
                         text = "Tap for changelog",
                         fontSize = 10.sp,
-                        color = TextTertiary.copy(alpha = 0.5f)
+                        color = LocalAppColors.current.textTertiary.copy(alpha = 0.5f)
                     )
                 }
 
@@ -475,14 +544,14 @@ fun SettingsScreen(
         is SettingsViewModel.ImportState.Success -> {
             AlertDialog(
                 onDismissRequest = { viewModel.clearImportState() },
-                title = { Text("Import Complete", color = TextPrimary) },
+                title = { Text("Import Complete", color = LocalAppColors.current.textPrimary) },
                 text = {
                     Column {
-                        Text("${state.result.workoutsImported} workouts imported", color = TextPrimary)
-                        Text("${state.result.setsImported} sets imported", color = TextPrimary)
-                        Text("${state.result.exercisesCreated} new exercises created", color = TextPrimary)
+                        Text("${state.result.workoutsImported} workouts imported", color = LocalAppColors.current.textPrimary)
+                        Text("${state.result.setsImported} sets imported", color = LocalAppColors.current.textPrimary)
+                        Text("${state.result.exercisesCreated} new exercises created", color = LocalAppColors.current.textPrimary)
                         if (state.result.duplicatesSkipped > 0) {
-                            Text("${state.result.duplicatesSkipped} duplicates skipped", color = TextTertiary)
+                            Text("${state.result.duplicatesSkipped} duplicates skipped", color = LocalAppColors.current.textTertiary)
                         }
                         if (state.result.errors.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(8.dp))
@@ -495,20 +564,20 @@ fun SettingsScreen(
                         Text("Done", color = MaterialTheme.colorScheme.primary)
                     }
                 },
-                containerColor = SurfaceCards
+                containerColor = LocalAppColors.current.surfaceCards
             )
         }
         is SettingsViewModel.ImportState.Error -> {
             AlertDialog(
                 onDismissRequest = { viewModel.clearImportState() },
                 title = { Text("Import Failed", color = Color(0xFFEF5350)) },
-                text = { Text(state.message, color = TextPrimary) },
+                text = { Text(state.message, color = LocalAppColors.current.textPrimary) },
                 confirmButton = {
                     TextButton(onClick = { viewModel.clearImportState() }) {
                         Text("OK", color = MaterialTheme.colorScheme.primary)
                     }
                 },
-                containerColor = SurfaceCards
+                containerColor = LocalAppColors.current.surfaceCards
             )
         }
         else -> { /* Idle or InProgress - no dialog */ }
@@ -517,21 +586,21 @@ fun SettingsScreen(
     if (showChangelog) {
         AlertDialog(
             onDismissRequest = { showChangelog = false },
-            title = { Text("What's New in v1.4 🎉", color = TextPrimary) },
+            title = { Text("What's New in v1.5 🎉", color = LocalAppColors.current.textPrimary) },
             text = {
                 Column {
-                    Text("Your Body, Your Rules! 💪", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("Supersets Unleashed! ⚡", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "🎯 Custom Muscle Groups\n" +
-                        "Add, rename, or remove muscle groups to match YOUR training style. Calves? Forearms? Glutes? You decide!\n\n" +
-                        "🔄 Smart Renaming\n" +
-                        "Rename a muscle group and all your exercises update automatically. Your workout history stays intact.\n\n" +
-                        "🛡️ Data Protection\n" +
-                        "Can't accidentally delete muscle groups with logged workouts. Your gains are safe!\n\n" +
-                        "📊 Dynamic Analytics\n" +
-                        "All charts and filters now use your custom muscle groups.",
-                        color = TextPrimary
+                        "🔗 Unlimited Supersets\n" +
+                        "Why stop at 2? Chain 3, 4, 5+ exercises together. Tri-sets, giant sets, circuit mayhem - you name it!\n\n" +
+                        "🧠 Smart Form Memory\n" +
+                        "Cycling through a superset? Your weight & reps now stick when you return to each exercise. No more re-entering!\n\n" +
+                        "☀️ Light Mode\n" +
+                        "For the daywalkers among us. Toggle dark/light in Display settings. Your eyes will thank you.\n\n" +
+                        "📱 Screen Awake Mode\n" +
+                        "No more phone sleeping mid-set! Keep your screen alive during workouts.",
+                        color = LocalAppColors.current.textPrimary
                     )
                 }
             },
@@ -540,9 +609,9 @@ fun SettingsScreen(
                     Text("Let's Lift! 🏋️", color = MaterialTheme.colorScheme.primary)
                 }
             },
-            containerColor = SurfaceCards,
-            titleContentColor = TextPrimary,
-            textContentColor = TextPrimary
+            containerColor = LocalAppColors.current.surfaceCards,
+            titleContentColor = LocalAppColors.current.textPrimary,
+            textContentColor = LocalAppColors.current.textPrimary
         )
     }
 }
@@ -553,7 +622,7 @@ fun SectionHeader(text: String) {
         text = text.uppercase(),
         fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
-        color = TextTertiary,
+        color = LocalAppColors.current.textTertiary,
         letterSpacing = 1.5.sp,
         modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
     )
@@ -583,7 +652,7 @@ fun ColorOption(
                     .background(color)
             )
             Spacer(modifier = Modifier.width(12.dp))
-            Text(label, fontSize = 16.sp, color = TextPrimary)
+            Text(label, fontSize = 16.sp, color = LocalAppColors.current.textPrimary)
         }
 
         RadioButton(
@@ -610,7 +679,7 @@ fun RowScope.BarWeightOption(
             containerColor = if (isSelected) {
                 MaterialTheme.colorScheme.primary
             } else {
-                Color(0xFF1A1A1A)
+                LocalAppColors.current.inputBackground
             },
             contentColor = if (isSelected) {
                 Color.Black
@@ -644,7 +713,7 @@ fun RowScope.LoadingSidesOption(
             containerColor = if (isSelected) {
                 MaterialTheme.colorScheme.primary
             } else {
-                Color(0xFF1A1A1A)
+                LocalAppColors.current.inputBackground
             },
             contentColor = if (isSelected) {
                 Color.Black
@@ -676,7 +745,7 @@ fun PlateToggleOption(
             containerColor = if (isEnabled) {
                 MaterialTheme.colorScheme.primary
             } else {
-                Color(0xFF1A1A1A)
+                LocalAppColors.current.inputBackground
             },
             contentColor = if (isEnabled) {
                 Color.Black

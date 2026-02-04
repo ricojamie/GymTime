@@ -54,20 +54,20 @@ fun RoutineDayStartScreen(
                     Column {
                         Text(
                             "Start Workout",
-                            color = TextPrimary,
+                            color = LocalAppColors.current.textPrimary,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             routineName,
-                            color = TextSecondary,
+                            color = LocalAppColors.current.textSecondary,
                             fontSize = 14.sp
                         )
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = LocalAppColors.current.textPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -86,7 +86,7 @@ fun RoutineDayStartScreen(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.5.sp,
-                color = TextTertiary,
+                color = LocalAppColors.current.textTertiary,
                 modifier = Modifier.padding(vertical = 16.dp)
             )
 
@@ -97,7 +97,7 @@ fun RoutineDayStartScreen(
                 ) {
                     Text(
                         text = "This routine has no days setup yet.",
-                        color = TextTertiary
+                        color = LocalAppColors.current.textTertiary
                     )
                 }
             } else {
@@ -136,14 +136,14 @@ fun RoutineDayStartItem(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = dayWithExercises.day.name,
-                    color = TextPrimary,
+                    color = LocalAppColors.current.textPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "${dayWithExercises.exercises.size} Exercises",
-                    color = TextSecondary,
+                    color = LocalAppColors.current.textSecondary,
                     fontSize = 14.sp
                 )
                 // List first few exercises as preview
@@ -152,7 +152,7 @@ fun RoutineDayStartItem(
                     Text(
                         text = dayWithExercises.exercises.take(3).joinToString(", ") { it.exercise.name } +
                                 if (dayWithExercises.exercises.size > 3) ", ..." else "",
-                        color = TextTertiary,
+                        color = LocalAppColors.current.textTertiary,
                         fontSize = 12.sp,
                         maxLines = 1
                     )

@@ -29,7 +29,7 @@ fun LibraryScreen(navController: NavController) {
             containerColor = Color.Transparent,
             contentColor = accentColor,
             divider = {
-                HorizontalDivider(color = TextTertiary.copy(alpha = 0.3f))
+                HorizontalDivider(color = LocalAppColors.current.textTertiary.copy(alpha = 0.3f))
             }
         ) {
             tabs.forEachIndexed { index, title ->
@@ -41,7 +41,7 @@ fun LibraryScreen(navController: NavController) {
                             text = title,
                             fontSize = 14.sp,
                             fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Medium,
-                            color = if (selectedTabIndex == index) accentColor else TextSecondary
+                            color = if (selectedTabIndex == index) accentColor else LocalAppColors.current.textSecondary
                         )
                     }
                 )

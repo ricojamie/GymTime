@@ -49,14 +49,14 @@ fun RoutineFormScreen(
                 title = {
                     Text(
                         if (isEditMode) "Edit Routine" else "New Routine",
-                        color = TextPrimary,
+                        color = LocalAppColors.current.textPrimary,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = LocalAppColors.current.textPrimary)
                     }
                 },
                 actions = {
@@ -67,7 +67,7 @@ fun RoutineFormScreen(
                         Icon(
                             Icons.Default.Check,
                             contentDescription = "Save",
-                            tint = if (isSaveEnabled) accentColor else TextTertiary
+                            tint = if (isSaveEnabled) accentColor else LocalAppColors.current.textTertiary
                         )
                     }
                 },
@@ -88,7 +88,7 @@ fun RoutineFormScreen(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.5.sp,
-                color = TextTertiary
+                color = LocalAppColors.current.textTertiary
             )
 
             GlowCard(onClick = {}, modifier = Modifier.fillMaxWidth()) {
@@ -99,7 +99,7 @@ fun RoutineFormScreen(
                         .fillMaxWidth()
                         .padding(20.dp),
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = TextPrimary,
+                        color = LocalAppColors.current.textPrimary,
                         fontSize = 18.sp
                     ),
                     keyboardOptions = KeyboardOptions(
@@ -110,7 +110,7 @@ fun RoutineFormScreen(
                             Text(
                                 text = "e.g., Push Pull Legs",
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = TextTertiary,
+                                color = LocalAppColors.current.textTertiary,
                                 fontSize = 18.sp
                             )
                         }

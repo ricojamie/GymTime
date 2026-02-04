@@ -54,7 +54,7 @@ fun HistoryScreen(
                 title = {
                     Text(
                         "Workout History",
-                        color = TextPrimary,
+                        color = LocalAppColors.current.textPrimary,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -69,7 +69,7 @@ fun HistoryScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(BackgroundCanvas)
+                .background(LocalAppColors.current.backgroundCanvas)
         ) {
             if (isLoading) {
                 Box(
@@ -102,7 +102,7 @@ fun HistoryScreen(
     if (selectedWorkout != null && selectedWorkoutDetails != null) {
         ModalBottomSheet(
             onDismissRequest = { viewModel.clearSelection() },
-            containerColor = SurfaceCards,
+            containerColor = LocalAppColors.current.surfaceCards,
             scrimColor = Color.Black.copy(alpha = 0.32f)
         ) {
             WorkoutDetailsSheet(
@@ -148,7 +148,7 @@ fun WorkoutCard(
                     if (workout.muscleGroups.size > 3) {
                         Text(
                             "+${workout.muscleGroups.size - 3}",
-                            color = TextTertiary,
+                            color = LocalAppColors.current.textTertiary,
                             fontSize = 12.sp
                         )
                     }
@@ -158,7 +158,7 @@ fun WorkoutCard(
             // Date and time
             Text(
                 formatWorkoutDateTime(workout.workout.startTime),
-                color = TextPrimary,
+                color = LocalAppColors.current.textPrimary,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -174,7 +174,7 @@ fun WorkoutCard(
                 if (volume > 0) {
                     Text(
                         text = "${formatVolume(volume)} lbs",
-                        color = TextSecondary,
+                        color = LocalAppColors.current.textSecondary,
                         fontSize = 12.sp
                     )
                 }
@@ -184,7 +184,7 @@ fun WorkoutCard(
                 if (setCount > 0) {
                     Text(
                         text = "$setCount sets",
-                        color = TextSecondary,
+                        color = LocalAppColors.current.textSecondary,
                         fontSize = 12.sp
                     )
                 }
@@ -201,7 +201,7 @@ fun WorkoutCard(
                     val durationMinutes = ((workout.workout.endTime!!.time - workout.workout.startTime.time) / 1000 / 60).toInt()
                     Text(
                         "$durationMinutes min",
-                        color = TextTertiary,
+                        color = LocalAppColors.current.textTertiary,
                         fontSize = 12.sp
                     )
                 } else {
@@ -279,7 +279,7 @@ fun WorkoutDetailsSheet(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(SurfaceCards)
+            .background(LocalAppColors.current.surfaceCards)
             .padding(bottom = 32.dp)
     ) {
         // Header
@@ -296,7 +296,7 @@ fun WorkoutDetailsSheet(
             ) {
                 Text(
                     formatWorkoutDateTime(workout.workout.startTime),
-                    color = TextPrimary,
+                    color = LocalAppColors.current.textPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -322,12 +322,12 @@ fun WorkoutDetailsSheet(
                 val timeRange = "${SimpleDateFormat("h:mm a", Locale.getDefault()).format(workout.workout.startTime)} - ${SimpleDateFormat("h:mm a", Locale.getDefault()).format(workout.workout.endTime!!)}"
                 Text(
                     timeRange,
-                    color = TextTertiary,
+                    color = LocalAppColors.current.textTertiary,
                     fontSize = 12.sp
                 )
                 Text(
                     "$durationMinutes minutes",
-                    color = TextTertiary,
+                    color = LocalAppColors.current.textTertiary,
                     fontSize = 12.sp
                 )
             }
@@ -351,7 +351,7 @@ fun WorkoutDetailsSheet(
         }
 
         HorizontalDivider(
-            color = TextTertiary.copy(alpha = 0.2f),
+            color = LocalAppColors.current.textTertiary.copy(alpha = 0.2f),
             thickness = 1.dp
         )
 
@@ -431,13 +431,13 @@ fun ExerciseSetGroup(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         exerciseName,
-                        color = TextPrimary,
+                        color = LocalAppColors.current.textPrimary,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
                         muscleGroup,
-                        color = TextTertiary,
+                        color = LocalAppColors.current.textTertiary,
                         fontSize = 11.sp
                     )
                 }
@@ -445,7 +445,7 @@ fun ExerciseSetGroup(
                 // Set count badge
                 Text(
                     text = "${sets.count { !it.set.isWarmup }} sets",
-                    color = TextTertiary,
+                    color = LocalAppColors.current.textTertiary,
                     fontSize = 11.sp
                 )
             }
@@ -503,13 +503,13 @@ fun SetRow(
         ) {
             Text(
                 text = "$setNumber.",
-                color = TextTertiary,
+                color = LocalAppColors.current.textTertiary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
             )
             Text(
                 text = setText,
-                color = if (set.isWarmup) TextTertiary else if (isBestSet) accentColor else TextSecondary,
+                color = if (set.isWarmup) LocalAppColors.current.textTertiary else if (isBestSet) accentColor else LocalAppColors.current.textSecondary,
                 fontSize = 12.sp,
                 fontWeight = if (isBestSet && !set.isWarmup) FontWeight.SemiBold else FontWeight.Normal
             )
@@ -581,7 +581,7 @@ fun EmptyHistoryState(navController: NavController) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundCanvas),
+            .background(LocalAppColors.current.backgroundCanvas),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -591,14 +591,14 @@ fun EmptyHistoryState(navController: NavController) {
         ) {
             Text(
                 "No Workouts Yet",
-                color = TextPrimary,
+                color = LocalAppColors.current.textPrimary,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
 
             Text(
                 "Start logging to see your workout history here.",
-                color = TextTertiary,
+                color = LocalAppColors.current.textTertiary,
                 fontSize = 14.sp,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )

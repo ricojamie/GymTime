@@ -313,12 +313,25 @@ class ExerciseLoggingViewModel @Inject constructor(
                 val previousSets = workoutRepository.getLastWorkoutSetsForExercise(exerciseId, workout.id)
                 _lastWorkoutSets.value = previousSets
 
-                // Prefill weight/reps from last workout (only once per ViewModel instance)
-                if (!hasPrefilled && previousSets.isNotEmpty()) {
+                // Prefill weight/reps (only once per ViewModel instance)
+                if (!hasPrefilled) {
                     hasPrefilled = true
-                    val lastSet = previousSets.first()
-                    lastSet.weight?.let { _weight.value = it.toString() }
-                    lastSet.reps?.let { _reps.value = it.toString() }
+
+                    // In superset mode, prefer stored values from this session
+                    val supersetValues = if (supersetManager.isInSupersetMode.value) {
+                        supersetManager.getLastLoggedValues(exerciseId)
+                    } else null
+
+                    if (supersetValues != null) {
+                        _weight.value = supersetValues.weight
+                        _reps.value = supersetValues.reps
+                        _duration.value = supersetValues.duration
+                        _distance.value = supersetValues.distance
+                    } else if (previousSets.isNotEmpty()) {
+                        val lastSet = previousSets.first()
+                        lastSet.weight?.let { _weight.value = it.toString() }
+                        lastSet.reps?.let { _reps.value = it.toString() }
+                    }
                 }
             }
         }
@@ -479,6 +492,17 @@ class ExerciseLoggingViewModel @Inject constructor(
 
             // Auto-switch to next exercise if in superset mode
             if (supersetManager.isInSupersetMode.value) {
+                // Save current form values before switching
+                supersetManager.saveLastLoggedValues(
+                    exerciseId,
+                    LastLoggedValues(
+                        weight = _weight.value,
+                        reps = _reps.value,
+                        duration = _duration.value,
+                        distance = _distance.value
+                    )
+                )
+
                 val nextExerciseId = supersetManager.switchToNextExercise()
                 if (nextExerciseId > 0) {
                     Log.d("ExerciseLoggingVM", "Superset auto-switching to exercise: $nextExerciseId")

@@ -48,7 +48,7 @@ fun WorkoutResumeScreen(
             if (todaysExercises.isNotEmpty()) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    color = SurfaceCards,
+                    color = LocalAppColors.current.surfaceCards,
                     shadowElevation = 16.dp
                 ) {
                     Row(
@@ -64,7 +64,7 @@ fun WorkoutResumeScreen(
                                 .weight(1f)
                                 .height(56.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = SurfaceCards,
+                                containerColor = LocalAppColors.current.surfaceCards,
                                 contentColor = accentColor
                             ),
                             shape = RoundedCornerShape(12.dp),
@@ -125,7 +125,7 @@ fun WorkoutResumeScreen(
             Text(
                 text = if (todaysExercises.isEmpty()) "No exercises logged yet" else "${todaysExercises.size} exercises",
                 fontSize = 14.sp,
-                color = TextSecondary,
+                color = LocalAppColors.current.textSecondary,
                 letterSpacing = 1.sp,
                 modifier = Modifier.padding(bottom = 24.dp)
             )
@@ -236,12 +236,12 @@ private fun ExerciseSummaryCard(
                     text = exercise.exerciseName,
                     fontSize = if (isUnstarted) 16.sp else 18.sp,
                     fontWeight = if (isUnstarted) FontWeight.Medium else FontWeight.Bold,
-                    color = if (isUnstarted) TextSecondary else Color.White
+                    color = if (isUnstarted) LocalAppColors.current.textSecondary else Color.White
                 )
                 Text(
                     text = exercise.targetMuscle.uppercase(),
                     fontSize = 12.sp,
-                    color = TextTertiary,
+                    color = LocalAppColors.current.textTertiary,
                     letterSpacing = 1.2.sp,
                     modifier = Modifier.padding(top = 4.dp)
                 )
@@ -252,7 +252,7 @@ private fun ExerciseSummaryCard(
                     text = "Not started",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Normal,
-                    color = TextTertiary
+                    color = LocalAppColors.current.textTertiary
                 )
             } else {
                 Column(horizontalAlignment = Alignment.End) {
@@ -266,7 +266,7 @@ private fun ExerciseSummaryCard(
                         Text(
                             text = "Best: ${weight.toInt()} lbs",
                             fontSize = 12.sp,
-                            color = TextSecondary,
+                            color = LocalAppColors.current.textSecondary,
                             modifier = Modifier.padding(top = 2.dp)
                         )
                     }
@@ -307,7 +307,7 @@ private fun EmptyStateCard(onAddExerciseClick: () -> Unit) {
             Text(
                 text = "Tap to add your first exercise",
                 fontSize = 14.sp,
-                color = TextSecondary,
+                color = LocalAppColors.current.textSecondary,
                 modifier = Modifier.padding(top = 8.dp)
             )
         }

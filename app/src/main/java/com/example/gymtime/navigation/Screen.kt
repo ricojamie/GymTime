@@ -13,13 +13,14 @@ sealed class Screen(val route: String, val icon: ImageVector) {
     object History : Screen("history", Icons.Filled.History)
     object Library : Screen("library", Icons.AutoMirrored.Filled.MenuBook)
     object Analytics : Screen("analytics", Icons.AutoMirrored.Filled.ShowChart)
-    object ExerciseSelection : Screen("exercise_selection?workoutMode={workoutMode}&supersetMode={supersetMode}&adHocParentId={adHocParentId}", Icons.Filled.Home) {
-        fun createRoute(workoutMode: Boolean = false, supersetMode: Boolean = false, adHocParentId: Long? = null) = buildString {
+    object ExerciseSelection : Screen("exercise_selection?workoutMode={workoutMode}&supersetMode={supersetMode}&adHocParentId={adHocParentId}&addToSuperset={addToSuperset}", Icons.Filled.Home) {
+        fun createRoute(workoutMode: Boolean = false, supersetMode: Boolean = false, adHocParentId: Long? = null, addToSuperset: Boolean = false) = buildString {
             append("exercise_selection")
             val params = mutableListOf<String>()
             if (workoutMode) params.add("workoutMode=true")
             if (supersetMode) params.add("supersetMode=true")
             adHocParentId?.let { params.add("adHocParentId=$it") }
+            if (addToSuperset) params.add("addToSuperset=true")
             if (params.isNotEmpty()) append("?${params.joinToString("&")}")
         }
     }
