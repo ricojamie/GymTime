@@ -41,10 +41,13 @@ fun SettingsScreen(
     val timerVibrateEnabled by viewModel.timerVibrateEnabled.collectAsState(initial = true)
     val keepScreenOn by viewModel.keepScreenOn.collectAsState(initial = false)
     val darkMode by viewModel.darkMode.collectAsState(initial = true)
+    val restDaysPerWeek by viewModel.restDaysPerWeek.collectAsState(initial = 2)
     val barWeight by viewModel.barWeight.collectAsState(initial = 45f)
     val loadingSides by viewModel.loadingSides.collectAsState(initial = 2)
     val availablePlates by viewModel.availablePlates.collectAsState(initial = listOf(45f, 35f, 25f, 15f, 10f, 5f, 2.5f))
     val importState by viewModel.importState.collectAsState()
+    val exportState by viewModel.exportState.collectAsState()
+    val ironLogImportState by viewModel.ironLogImportState.collectAsState()
 
     var showChangelog by remember { mutableStateOf(false) }
 
@@ -63,6 +66,28 @@ fun SettingsScreen(
         uri?.let {
             context.contentResolver.openInputStream(it)?.let { inputStream ->
                 viewModel.importFitNotes(inputStream)
+            }
+        }
+    }
+
+    // File creator for IronLog export
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        uri?.let {
+            context.contentResolver.openOutputStream(it)?.let { outputStream ->
+                viewModel.exportData(outputStream)
+            }
+        }
+    }
+
+    // File picker for IronLog import
+    val ironLogImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            context.contentResolver.openInputStream(it)?.let { inputStream ->
+                viewModel.importIronLog(inputStream)
             }
         }
     }
@@ -294,7 +319,6 @@ fun SettingsScreen(
             item {
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Theme Section
                 SectionHeader("Theme")
 
                 Card(
@@ -302,60 +326,85 @@ fun SettingsScreen(
                     colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
                     shape = RoundedCornerShape(16.dp)
                 ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { navController.navigate(com.example.gymtime.navigation.Screen.ThemeSettings.route) }
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Theme", fontSize = 16.sp, color = LocalAppColors.current.textPrimary)
+                            Text(
+                                "Accent color, custom color wheel, and fonts",
+                                fontSize = 12.sp,
+                                color = LocalAppColors.current.textTertiary
+                            )
+                        }
+                        Text(
+                            text = "Open",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Consistency Section
+                SectionHeader("Consistency")
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Accent Color", fontSize = 14.sp, color = LocalAppColors.current.textTertiary)
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // Color options
-                        // Color Grid (2 rows of 5)
-                        val colorsRow1 = listOf(
-                             Triple("lime", ThemeColors.LimeGreen.primaryAccent, "Lime"),
-                             Triple("blue", ThemeColors.ElectricBlue.primaryAccent, "Blue"),
-                             Triple("purple", ThemeColors.CyberPurple.primaryAccent, "Purple"),
-                             Triple("pink", ThemeColors.HotPink.primaryAccent, "Pink"),
-                             Triple("gold", ThemeColors.GoldAmber.primaryAccent, "Gold")
+                        Text("Iron Streak Rest Days", fontSize = 16.sp, color = LocalAppColors.current.textPrimary)
+                        Text(
+                            "This sets how many misses are allowed each week before the streak breaks.",
+                            fontSize = 12.sp,
+                            color = LocalAppColors.current.textTertiary
                         )
-                        val colorsRow2 = listOf(
-                             Triple("red", ThemeColors.BloodRed.primaryAccent, "Red"),
-                             Triple("orange", ThemeColors.SunsetOrange.primaryAccent, "Orange"),
-                             Triple("mint", ThemeColors.MintFresh.primaryAccent, "Mint"),
-                             Triple("slate", ThemeColors.SlateGrey.primaryAccent, "Slate"),
-                             Triple("lavender", ThemeColors.LavenderFocus.primaryAccent, "Lavender")
-                        )
-
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Row 1
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                colorsRow1.forEach { (key, color, label) ->
-                                    ColorSwatch(
-                                        colorKey = key,
-                                        color = color,
-                                        selectedColor = themeColor,
-                                        onClick = { viewModel.setThemeColor(key) }
-                                    )
-                                }
-                            }
-                            // Row 2
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                colorsRow2.forEach { (key, color, label) ->
-                                    ColorSwatch(
-                                        colorKey = key,
-                                        color = color,
-                                        selectedColor = themeColor,
-                                        onClick = { viewModel.setThemeColor(key) }
+                            (0..7).forEach { dayCount ->
+                                val isSelected = restDaysPerWeek == dayCount
+                                Button(
+                                    onClick = { viewModel.setRestDaysPerWeek(dayCount) },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isSelected) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            LocalAppColors.current.inputBackground
+                                        },
+                                        contentColor = if (isSelected) Color.Black else LocalAppColors.current.textPrimary
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Text(
+                                        text = dayCount.toString(),
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                     )
                                 }
                             }
                         }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "$restDaysPerWeek rest day${if (restDaysPerWeek == 1) "" else "s"} allowed each week",
+                            fontSize = 12.sp,
+                            color = LocalAppColors.current.textSecondary
+                        )
                     }
                 }
             }
@@ -467,10 +516,88 @@ fun SettingsScreen(
                 }
             }
 
-            // Import Data Section
+            // Backup & Restore Section
             item {
                 Spacer(modifier = Modifier.height(24.dp))
-                SectionHeader("Import Data")
+                SectionHeader("Backup & Restore")
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Export IronLog Backup", fontSize = 16.sp, color = LocalAppColors.current.textPrimary, fontWeight = FontWeight.Medium)
+                        Text(
+                            "Save all data to a ZIP file for transfer to another device",
+                            fontSize = 12.sp,
+                            color = LocalAppColors.current.textTertiary
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = { exportLauncher.launch("ironlog_backup.zip") },
+                            enabled = exportState !is SettingsViewModel.ExportState.InProgress,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = Color.Black
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (exportState is SettingsViewModel.ExportState.InProgress) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = Color.Black,
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Exporting...")
+                            } else {
+                                Text("Export Backup")
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = LocalAppColors.current.textTertiary.copy(alpha = 0.1f), modifier = Modifier.padding(horizontal = 16.dp))
+
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Import IronLog Backup", fontSize = 16.sp, color = LocalAppColors.current.textPrimary, fontWeight = FontWeight.Medium)
+                        Text(
+                            "Restore data from an IronLog backup ZIP file",
+                            fontSize = 12.sp,
+                            color = LocalAppColors.current.textTertiary
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = { ironLogImportLauncher.launch("application/zip") },
+                            enabled = ironLogImportState !is SettingsViewModel.IronLogImportState.InProgress,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = Color.Black
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (ironLogImportState is SettingsViewModel.IronLogImportState.InProgress) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = Color.Black,
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Importing...")
+                            } else {
+                                Text("Import Backup")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Import Data Section (FitNotes)
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+                SectionHeader("Import from Other Apps")
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -539,7 +666,91 @@ fun SettingsScreen(
         }
     }
 
-    // Import Result Dialog
+    // Export Result Dialog
+    when (val state = exportState) {
+        is SettingsViewModel.ExportState.Success -> {
+            AlertDialog(
+                onDismissRequest = { viewModel.clearExportState() },
+                title = { Text("Export Complete", color = LocalAppColors.current.textPrimary) },
+                text = {
+                    Column {
+                        Text("${state.result.exerciseCount} exercises", color = LocalAppColors.current.textPrimary)
+                        Text("${state.result.workoutCount} workouts", color = LocalAppColors.current.textPrimary)
+                        Text("${state.result.setCount} sets", color = LocalAppColors.current.textPrimary)
+                        if (state.result.routineCount > 0) {
+                            Text("${state.result.routineCount} routines", color = LocalAppColors.current.textPrimary)
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.clearExportState() }) {
+                        Text("Done", color = MaterialTheme.colorScheme.primary)
+                    }
+                },
+                containerColor = LocalAppColors.current.surfaceCards
+            )
+        }
+        is SettingsViewModel.ExportState.Error -> {
+            AlertDialog(
+                onDismissRequest = { viewModel.clearExportState() },
+                title = { Text("Export Failed", color = Color(0xFFEF5350)) },
+                text = { Text(state.message, color = LocalAppColors.current.textPrimary) },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.clearExportState() }) {
+                        Text("OK", color = MaterialTheme.colorScheme.primary)
+                    }
+                },
+                containerColor = LocalAppColors.current.surfaceCards
+            )
+        }
+        else -> { /* Idle or InProgress */ }
+    }
+
+    // IronLog Import Result Dialog
+    when (val state = ironLogImportState) {
+        is SettingsViewModel.IronLogImportState.Success -> {
+            AlertDialog(
+                onDismissRequest = { viewModel.clearIronLogImportState() },
+                title = { Text("Import Complete", color = LocalAppColors.current.textPrimary) },
+                text = {
+                    Column {
+                        Text("${state.result.exercisesImported} exercises imported", color = LocalAppColors.current.textPrimary)
+                        Text("${state.result.workoutsImported} workouts imported", color = LocalAppColors.current.textPrimary)
+                        Text("${state.result.setsImported} sets imported", color = LocalAppColors.current.textPrimary)
+                        if (state.result.routinesImported > 0) {
+                            Text("${state.result.routinesImported} routines imported", color = LocalAppColors.current.textPrimary)
+                        }
+                        if (state.result.errors.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("${state.result.errors.size} errors occurred", color = Color(0xFFEF5350))
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.clearIronLogImportState() }) {
+                        Text("Done", color = MaterialTheme.colorScheme.primary)
+                    }
+                },
+                containerColor = LocalAppColors.current.surfaceCards
+            )
+        }
+        is SettingsViewModel.IronLogImportState.Error -> {
+            AlertDialog(
+                onDismissRequest = { viewModel.clearIronLogImportState() },
+                title = { Text("Import Failed", color = Color(0xFFEF5350)) },
+                text = { Text(state.message, color = LocalAppColors.current.textPrimary) },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.clearIronLogImportState() }) {
+                        Text("OK", color = MaterialTheme.colorScheme.primary)
+                    }
+                },
+                containerColor = LocalAppColors.current.surfaceCards
+            )
+        }
+        else -> { /* Idle or InProgress */ }
+    }
+
+    // FitNotes Import Result Dialog
     when (val state = importState) {
         is SettingsViewModel.ImportState.Success -> {
             AlertDialog(

@@ -9,6 +9,7 @@ data class Exercise(
     val name: String,
     val targetMuscle: String,
     val logType: LogType,
+    val defaultDistanceUnit: DistanceUnit = DistanceUnit.MILES,
     val isCustom: Boolean,
     val notes: String?,
     val defaultRestSeconds: Int,

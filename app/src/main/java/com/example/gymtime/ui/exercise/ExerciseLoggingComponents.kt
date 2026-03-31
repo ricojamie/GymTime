@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
@@ -215,7 +216,23 @@ fun ExerciseSetLogCard(
                     )
                 }
 
-                if (set.weight != null && (set.reps != null || set.distanceMeters != null)) {
+                set.calories?.let {
+                    if (set.weight != null) {
+                        Text(
+                            text = "/",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = LocalAppColors.current.textTertiary
+                        )
+                    }
+                    Text(
+                        text = "${it.toInt()} CAL",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = LocalAppColors.current.textPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                if (set.weight != null && (set.reps != null || displayDistance(set) != null)) {
                     Text(
                         text = "/",
                         style = MaterialTheme.typography.titleMedium,
@@ -232,17 +249,16 @@ fun ExerciseSetLogCard(
                     )
                 }
 
-                set.distanceMeters?.let { meters ->
-                    val miles = TimeUtils.metersToMiles(meters)
+                displayDistance(set)?.let { distanceText ->
                     Text(
-                        text = "${TimeUtils.formatMiles(miles)} MI",
+                        text = distanceText,
                         style = MaterialTheme.typography.titleMedium,
                         color = LocalAppColors.current.textPrimary,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
-                if (set.distanceMeters != null && set.durationSeconds != null) {
+                if (displayDistance(set) != null && set.durationSeconds != null) {
                     Text(
                         text = "/",
                         style = MaterialTheme.typography.titleMedium,
@@ -362,6 +378,26 @@ fun ExerciseSetLogCard(
             )
         }
     }
+}
+
+private fun displayDistance(set: Set): String? {
+    val unit = set.distanceUnit ?: DistanceUnit.MILES
+    val value = when {
+        set.distanceValue != null -> set.distanceValue
+        set.distanceMeters != null && unit.isConvertibleToMeters -> TimeUtils.metersToDistance(set.distanceMeters, unit)
+        else -> null
+    } ?: return null
+
+    val label = when (unit) {
+        DistanceUnit.METERS -> "M"
+        DistanceUnit.KILOMETERS -> "KM"
+        DistanceUnit.YARDS -> "YD"
+        DistanceUnit.FEET -> "FT"
+        DistanceUnit.MILES -> "MI"
+        DistanceUnit.STEPS -> "STEPS"
+        DistanceUnit.FLOORS -> "FLOORS"
+    }
+    return "${TimeUtils.formatDistance(value, unit)} $label"
 }
 
 @Composable

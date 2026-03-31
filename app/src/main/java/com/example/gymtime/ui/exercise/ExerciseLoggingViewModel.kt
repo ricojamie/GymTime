@@ -15,6 +15,7 @@ import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.VolumeOrbRepository
 import com.example.gymtime.data.VolumeOrbState
 import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
+import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
@@ -123,6 +124,9 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _weight = MutableStateFlow("")
     val weight: StateFlow<String> = _weight
 
+    private val _calories = MutableStateFlow("")
+    val calories: StateFlow<String> = _calories
+
     private val _reps = MutableStateFlow("")
     val reps: StateFlow<String> = _reps
 
@@ -134,6 +138,9 @@ class ExerciseLoggingViewModel @Inject constructor(
 
     private val _distance = MutableStateFlow("") // For WEIGHT_DISTANCE and DISTANCE_TIME exercises
     val distance: StateFlow<String> = _distance
+
+    private val _selectedDistanceUnit = MutableStateFlow(DistanceUnit.MILES)
+    val selectedDistanceUnit: StateFlow<DistanceUnit> = _selectedDistanceUnit
 
     private val _restTime = MutableStateFlow(90) // Represents the timer SETTING
     val restTime: StateFlow<Int> = _restTime
@@ -213,6 +220,7 @@ class ExerciseLoggingViewModel @Inject constructor(
                 ex?.let {
                     exerciseDefaultRestSeconds = it.defaultRestSeconds
                     _restTime.value = it.defaultRestSeconds
+                    _selectedDistanceUnit.value = it.defaultDistanceUnit
                     
                     // Initial sync with SupersetManager if already in a superset (e.g. from blank workout)
                     if (supersetManager.isInSupersetMode.value) {
@@ -324,13 +332,19 @@ class ExerciseLoggingViewModel @Inject constructor(
 
                     if (supersetValues != null) {
                         _weight.value = supersetValues.weight
+                        _calories.value = supersetValues.calories
                         _reps.value = supersetValues.reps
                         _duration.value = supersetValues.duration
                         _distance.value = supersetValues.distance
+                        supersetValues.distanceUnit?.let { _selectedDistanceUnit.value = it }
                     } else if (previousSets.isNotEmpty()) {
                         val lastSet = previousSets.first()
+                        lastSet.distanceUnit?.let { _selectedDistanceUnit.value = it }
                         lastSet.weight?.let { _weight.value = it.toString() }
+                        lastSet.calories?.let { _calories.value = it.toString() }
                         lastSet.reps?.let { _reps.value = it.toString() }
+                        lastSet.durationSeconds?.let { _duration.value = TimeUtils.formatSecondsToHMS(it) }
+                        _distance.value = formatDistanceForEditing(lastSet, _selectedDistanceUnit.value)
                     }
                 }
             }
@@ -339,6 +353,10 @@ class ExerciseLoggingViewModel @Inject constructor(
 
     fun updateWeight(value: String) {
         _weight.value = value
+    }
+
+    fun updateCalories(value: String) {
+        _calories.value = value
     }
 
     fun updateReps(value: String) {
@@ -355,6 +373,10 @@ class ExerciseLoggingViewModel @Inject constructor(
 
     fun updateDistance(value: String) {
         _distance.value = value
+    }
+
+    fun updateSelectedDistanceUnit(unit: DistanceUnit) {
+        _selectedDistanceUnit.value = unit
     }
 
     fun updateRestTime(seconds: Int) {
@@ -387,6 +409,9 @@ class ExerciseLoggingViewModel @Inject constructor(
             } else 0
 
             // Build set based on exercise LogType
+            val distanceUnit = _selectedDistanceUnit.value
+            val distanceValue = _distance.value.toFloatOrNull()
+            val normalizedDistance = distanceValue?.let { TimeUtils.distanceToMeters(it, distanceUnit) }
             val newSet = when (exercise.logType) {
                 LogType.WEIGHT_REPS -> Set(
                     workoutId = workout.id,
@@ -440,7 +465,9 @@ class ExerciseLoggingViewModel @Inject constructor(
                     reps = null,
                     rpe = _rpe.value.toFloatOrNull(),
                     durationSeconds = null,
-                    distanceMeters = _distance.value.toFloatOrNull()?.let { TimeUtils.milesToMeters(it) },
+                    distanceValue = distanceValue,
+                    distanceUnit = distanceUnit,
+                    distanceMeters = normalizedDistance,
                     isWarmup = isWarmup,
                     isComplete = true,
                     timestamp = setTimestamp,
@@ -455,7 +482,40 @@ class ExerciseLoggingViewModel @Inject constructor(
                     reps = null,
                     rpe = _rpe.value.toFloatOrNull(),
                     durationSeconds = TimeUtils.parseHMSToSeconds(_duration.value),
-                    distanceMeters = _distance.value.toFloatOrNull()?.let { TimeUtils.milesToMeters(it) },
+                    distanceValue = distanceValue,
+                    distanceUnit = distanceUnit,
+                    distanceMeters = normalizedDistance,
+                    isWarmup = isWarmup,
+                    isComplete = true,
+                    timestamp = setTimestamp,
+                    note = note,
+                    supersetGroupId = supersetGroupId,
+                    supersetOrderIndex = supersetOrderIndex
+                )
+                LogType.WEIGHT_TIME -> Set(
+                    workoutId = workout.id,
+                    exerciseId = exercise.id,
+                    weight = _weight.value.toFloatOrNull(),
+                    reps = null,
+                    rpe = _rpe.value.toFloatOrNull(),
+                    durationSeconds = TimeUtils.parseHMSToSeconds(_duration.value),
+                    distanceMeters = null,
+                    isWarmup = isWarmup,
+                    isComplete = true,
+                    timestamp = setTimestamp,
+                    note = note,
+                    supersetGroupId = supersetGroupId,
+                    supersetOrderIndex = supersetOrderIndex
+                )
+                LogType.CALORIES_TIME -> Set(
+                    workoutId = workout.id,
+                    exerciseId = exercise.id,
+                    weight = null,
+                    calories = _calories.value.toFloatOrNull(),
+                    reps = null,
+                    rpe = _rpe.value.toFloatOrNull(),
+                    durationSeconds = TimeUtils.parseHMSToSeconds(_duration.value),
+                    distanceMeters = null,
                     isWarmup = isWarmup,
                     isComplete = true,
                     timestamp = setTimestamp,
@@ -497,9 +557,11 @@ class ExerciseLoggingViewModel @Inject constructor(
                     exerciseId,
                     LastLoggedValues(
                         weight = _weight.value,
+                        calories = _calories.value,
                         reps = _reps.value,
                         duration = _duration.value,
-                        distance = _distance.value
+                        distance = _distance.value,
+                        distanceUnit = _selectedDistanceUnit.value
                     )
                 )
 
@@ -514,21 +576,29 @@ class ExerciseLoggingViewModel @Inject constructor(
 
     fun startEditingSet(set: Set) {
         _editingSet.value = set
+        set.distanceUnit?.let { _selectedDistanceUnit.value = it }
         _weight.value = set.weight?.toString() ?: ""
+        _calories.value = set.calories?.toString() ?: ""
         _reps.value = set.reps?.toString() ?: ""
         _duration.value = set.durationSeconds?.let { TimeUtils.formatSecondsToHMS(it) } ?: ""
-        _distance.value = set.distanceMeters?.let { TimeUtils.formatMiles(TimeUtils.metersToMiles(it)) } ?: ""
+        _distance.value = formatDistanceForEditing(set, _selectedDistanceUnit.value)
         _isWarmup.value = set.isWarmup
     }
 
     fun saveEditedSet() {
         viewModelScope.launch {
             _editingSet.value?.let { set ->
+                val exercise = _exercise.value
+                val currentUnit = _selectedDistanceUnit.value
+                val rawDistance = _distance.value.toFloatOrNull()
                 val updatedSet = set.copy(
                     weight = _weight.value.toFloatOrNull(),
+                    calories = _calories.value.toFloatOrNull(),
                     reps = _reps.value.toIntOrNull(),
                     durationSeconds = TimeUtils.parseHMSToSeconds(_duration.value),
-                    distanceMeters = _distance.value.toFloatOrNull()?.let { TimeUtils.milesToMeters(it) },
+                    distanceValue = rawDistance,
+                    distanceUnit = if (exercise?.logType == LogType.WEIGHT_DISTANCE || exercise?.logType == LogType.DISTANCE_TIME) currentUnit else null,
+                    distanceMeters = rawDistance?.let { TimeUtils.distanceToMeters(it, currentUnit) },
                     isWarmup = _isWarmup.value
                 )
                 // Update via Repository
@@ -538,6 +608,7 @@ class ExerciseLoggingViewModel @Inject constructor(
                 // Clear editing state and form
                 _editingSet.value = null
                 _weight.value = ""
+                _calories.value = ""
                 _reps.value = ""
                 _rpe.value = ""
                 _duration.value = ""
@@ -550,6 +621,7 @@ class ExerciseLoggingViewModel @Inject constructor(
     fun cancelEditing() {
         _editingSet.value = null
         _weight.value = ""
+        _calories.value = ""
         _reps.value = ""
         _rpe.value = ""
         _duration.value = ""
@@ -686,6 +758,17 @@ class ExerciseLoggingViewModel @Inject constructor(
     fun toggleTimerAudio(enabled: Boolean) {
         viewModelScope.launch {
             userPreferencesRepository.setTimerAudioEnabled(enabled)
+        }
+    }
+
+    private fun formatDistanceForEditing(set: Set, fallbackUnit: DistanceUnit): String {
+        val unit = set.distanceUnit ?: fallbackUnit
+        return when {
+            set.distanceValue != null -> TimeUtils.formatDistance(set.distanceValue, unit)
+            set.distanceMeters != null && unit.isConvertibleToMeters -> {
+                TimeUtils.formatDistance(TimeUtils.metersToDistance(set.distanceMeters, unit), unit)
+            }
+            else -> ""
         }
     }
 }

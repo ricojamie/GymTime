@@ -10,6 +10,7 @@ import com.example.gymtime.data.repository.WorkoutRepository
 import com.example.gymtime.util.StreakCalculator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -68,6 +69,7 @@ class HomeViewModel @Inject constructor(
         state = StreakCalculator.StreakState.RESTING,
         streakDays = 0,
         skipsRemaining = 2,
+        allowedSkipsPerWeek = 2,
         nextResetDate = java.util.Date()
     ))
     val streakResult: StateFlow<StreakCalculator.StreakResult> = _streakResult.asStateFlow()
@@ -194,6 +196,7 @@ class HomeViewModel @Inject constructor(
     private fun loadStreakData() {
         viewModelScope.launch {
             val dateStrings = workoutRepository.getWorkoutDatesWithWorkingSets()
+            val allowedRestDays = userPreferencesRepository.restDaysPerWeek.firstOrNull() ?: 2
             val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
             val workoutDates = dateStrings.mapNotNull { dateStr ->
                 try {
@@ -202,7 +205,10 @@ class HomeViewModel @Inject constructor(
                     null
                 }
             }
-            val result = StreakCalculator.calculateStreak(workoutDates)
+            val result = StreakCalculator.calculateStreak(
+                workoutDates = workoutDates,
+                allowedSkipsPerWeek = allowedRestDays
+            )
             _streakResult.value = result
 
             // Update best streak if current is higher

@@ -50,9 +50,15 @@ val LocalGradientColors = staticCompositionLocalOf<Pair<Color, Color>> {
 fun IronLogTheme(
     appColorScheme: AppColorScheme = ThemeColors.LimeGreen,
     darkMode: Boolean = true,
+    themeFontKey: String = ThemeFontOption.BEBAS_NEUE.storageKey,
+    customFontUri: String? = null,
     content: @Composable () -> Unit
 ) {
     val appColors = if (darkMode) DarkAppColors else LightAppColors
+    val typography = rememberAppTypography(
+        themeFontKey = themeFontKey,
+        customFontUri = customFontUri
+    )
 
     val dynamicColorScheme = if (darkMode) {
         darkColorScheme(
@@ -94,7 +100,7 @@ fun IronLogTheme(
     ) {
         MaterialTheme(
             colorScheme = dynamicColorScheme,
-            typography = Typography,
+            typography = typography,
             content = content
         )
     }

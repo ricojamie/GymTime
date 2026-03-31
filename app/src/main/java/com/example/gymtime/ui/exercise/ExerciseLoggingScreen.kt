@@ -91,6 +91,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.PlateCalculatorSheet
@@ -114,10 +115,12 @@ fun ExerciseLoggingScreen(
     val currentWorkout by viewModel.currentWorkout.collectAsState()
     val loggedSets by viewModel.loggedSets.collectAsState()
     val weight by viewModel.weight.collectAsState()
+    val calories by viewModel.calories.collectAsState()
     val reps by viewModel.reps.collectAsState()
     val rpe by viewModel.rpe.collectAsState()
     val duration by viewModel.duration.collectAsState()
     val distance by viewModel.distance.collectAsState()
+    val selectedDistanceUnit by viewModel.selectedDistanceUnit.collectAsState()
     val restTime by viewModel.restTime.collectAsState()
     val countdownTimer by viewModel.countdownTimer.collectAsState()
     val isWarmup by viewModel.isWarmup.collectAsState()
@@ -135,6 +138,7 @@ fun ExerciseLoggingScreen(
     val barWeight by viewModel.barWeight.collectAsState(initial = 45f)
     val availablePlates by viewModel.availablePlates.collectAsState(initial = listOf(45f, 35f, 25f, 10f, 5f, 2.5f))
     val loadingSides by viewModel.loadingSides.collectAsState(initial = 2)
+    var showDistanceUnitMenu by remember { mutableStateOf(false) }
 
     // Superset state
     val isInSupersetMode by viewModel.isInSupersetMode.collectAsState()
@@ -476,7 +480,7 @@ fun ExerciseLoggingScreen(
                         )
                         // Distance Input
                         InputCard(
-                            label = "DISTANCE (MI)",
+                            label = "DISTANCE (${selectedDistanceUnit.shortLabel})",
                             value = distance,
                             onValueChange = { viewModel.updateDistance(it) },
                             modifier = Modifier.weight(1f),
@@ -487,7 +491,7 @@ fun ExerciseLoggingScreen(
                     LogType.DISTANCE_TIME -> {
                         // Distance Input
                         InputCard(
-                            label = "DISTANCE (MI)",
+                            label = "DISTANCE (${selectedDistanceUnit.shortLabel})",
                             value = distance,
                             onValueChange = { viewModel.updateDistance(it) },
                             modifier = Modifier.weight(1f),
@@ -495,6 +499,42 @@ fun ExerciseLoggingScreen(
                             lastLabel = "BEST"
                         )
                         // Time Input
+                        TimeInputCard(
+                            label = "TIME (HH:MM:SS)",
+                            value = duration,
+                            onValueChange = { viewModel.updateDuration(it) },
+                            modifier = Modifier.weight(1f),
+                            lastValue = null,
+                            lastLabel = "BEST"
+                        )
+                    }
+                    LogType.WEIGHT_TIME -> {
+                        InputCard(
+                            label = "WEIGHT",
+                            value = weight,
+                            onValueChange = { viewModel.updateWeight(it) },
+                            modifier = Modifier.weight(1f),
+                            lastValue = bestWeight?.let { "$it lbs" },
+                            lastLabel = "BEST"
+                        )
+                        TimeInputCard(
+                            label = "TIME (HH:MM:SS)",
+                            value = duration,
+                            onValueChange = { viewModel.updateDuration(it) },
+                            modifier = Modifier.weight(1f),
+                            lastValue = null,
+                            lastLabel = "BEST"
+                        )
+                    }
+                    LogType.CALORIES_TIME -> {
+                        InputCard(
+                            label = "CALORIES",
+                            value = calories,
+                            onValueChange = { viewModel.updateCalories(it) },
+                            modifier = Modifier.weight(1f),
+                            lastValue = null,
+                            lastLabel = "BEST"
+                        )
                         TimeInputCard(
                             label = "TIME (HH:MM:SS)",
                             value = duration,
@@ -526,11 +566,64 @@ fun ExerciseLoggingScreen(
                 }
             }
 
+            if (exercise?.logType.usesDistanceUnit) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Box {
+                    OutlinedButton(
+                        onClick = { showDistanceUnitMenu = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text(
+                            text = "Distance Type: ${selectedDistanceUnit.displayName}",
+                            color = LocalAppColors.current.textPrimary
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showDistanceUnitMenu,
+                        onDismissRequest = { showDistanceUnitMenu = false },
+                        modifier = Modifier.background(LocalAppColors.current.surfaceCards)
+                    ) {
+                        DistanceUnit.entries.forEach { unit ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(unit.displayName, color = LocalAppColors.current.textPrimary)
+                                        Text(
+                                            text = unit.loggingDescription,
+                                            color = LocalAppColors.current.textTertiary,
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    viewModel.updateSelectedDistanceUnit(unit)
+                                    showDistanceUnitMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
 
             // Warmup Toggle and Plate Calculator Row - show based on LogType
-            val showWarmupToggle = exercise?.logType in listOf(LogType.WEIGHT_REPS, LogType.REPS_ONLY, LogType.WEIGHT_DISTANCE, null)
-            val showPlateCalculatorButton = exercise?.logType in listOf(LogType.WEIGHT_REPS, LogType.WEIGHT_DISTANCE, null)
+            val showWarmupToggle = exercise?.logType in listOf(
+                LogType.WEIGHT_REPS,
+                LogType.REPS_ONLY,
+                LogType.WEIGHT_DISTANCE,
+                LogType.WEIGHT_TIME,
+                null
+            )
+            val showPlateCalculatorButton = exercise?.logType in listOf(
+                LogType.WEIGHT_REPS,
+                LogType.WEIGHT_DISTANCE,
+                LogType.WEIGHT_TIME,
+                null
+            )
 
             if (showWarmupToggle || showPlateCalculatorButton) {
                 Row(
@@ -669,6 +762,8 @@ fun ExerciseLoggingScreen(
                 LogType.DURATION -> duration.isNotBlank()
                 LogType.WEIGHT_DISTANCE -> weight.isNotBlank() && distance.isNotBlank()
                 LogType.DISTANCE_TIME -> distance.isNotBlank() && duration.isNotBlank()
+                LogType.WEIGHT_TIME -> weight.isNotBlank() && duration.isNotBlank()
+                LogType.CALORIES_TIME -> calories.isNotBlank() && duration.isNotBlank()
                 null -> weight.isNotBlank() && reps.isNotBlank()
             }
 
@@ -1037,7 +1132,7 @@ fun ExerciseLoggingScreen(
             text = {
                 Column {
                     Text(
-                        text = "Set ${loggedSets.indexOf(set) + 1}: ${set.weight?.toInt()} lbs × ${set.reps} reps",
+                        text = buildSetSummary(set, selectedDistanceUnit, loggedSets.indexOf(set) + 1),
                         style = MaterialTheme.typography.bodySmall,
                         color = LocalAppColors.current.textTertiary,
                         modifier = Modifier.padding(bottom = 12.dp)
@@ -1237,4 +1332,68 @@ private fun ExerciseLoggingScreenPreview() {
     IronLogTheme {
         // Preview would require mock NavController
     }
+}
+
+private val DistanceUnit.shortLabel: String
+    get() = when (this) {
+        DistanceUnit.METERS -> "M"
+        DistanceUnit.KILOMETERS -> "KM"
+        DistanceUnit.YARDS -> "YD"
+        DistanceUnit.FEET -> "FT"
+        DistanceUnit.MILES -> "MI"
+        DistanceUnit.STEPS -> "STEPS"
+        DistanceUnit.FLOORS -> "FLOORS"
+    }
+
+private val DistanceUnit.displayName: String
+    get() = when (this) {
+        DistanceUnit.METERS -> "Meters"
+        DistanceUnit.KILOMETERS -> "Kilometers"
+        DistanceUnit.YARDS -> "Yards"
+        DistanceUnit.FEET -> "Feet"
+        DistanceUnit.MILES -> "Miles"
+        DistanceUnit.STEPS -> "Steps"
+        DistanceUnit.FLOORS -> "Floors"
+    }
+
+private val DistanceUnit.loggingDescription: String
+    get() = when (this) {
+        DistanceUnit.METERS -> "Track work and short intervals"
+        DistanceUnit.KILOMETERS -> "Longer runs and rides"
+        DistanceUnit.YARDS -> "Pools, turf, and field work"
+        DistanceUnit.FEET -> "Carries and stair machines"
+        DistanceUnit.MILES -> "Road runs and outdoor cardio"
+        DistanceUnit.STEPS -> "Pedometer and step-based cardio"
+        DistanceUnit.FLOORS -> "Stair climbers and floor goals"
+    }
+
+private val LogType?.usesDistanceUnit: Boolean
+    get() = this == LogType.WEIGHT_DISTANCE || this == LogType.DISTANCE_TIME
+
+private fun buildSetSummary(
+    set: com.example.gymtime.data.db.entity.Set,
+    fallbackDistanceUnit: DistanceUnit,
+    setNumber: Int
+): String {
+    val parts = mutableListOf<String>()
+
+    set.weight?.let { parts += "${it.toInt()} lbs" }
+    set.calories?.let { parts += "${it.toInt()} cal" }
+    set.reps?.let { parts += "$it reps" }
+
+    val unit = set.distanceUnit ?: fallbackDistanceUnit
+    val distanceValue = when {
+        set.distanceValue != null -> set.distanceValue
+        set.distanceMeters != null && unit.isConvertibleToMeters -> {
+            com.example.gymtime.util.TimeUtils.metersToDistance(set.distanceMeters, unit)
+        }
+        else -> null
+    }
+    distanceValue?.let {
+        parts += "${com.example.gymtime.util.TimeUtils.formatDistance(it, unit)} ${unit.shortLabel.lowercase()}"
+    }
+
+    set.durationSeconds?.let { parts += com.example.gymtime.util.TimeUtils.formatSecondsToHMS(it) }
+
+    return "Set $setNumber: " + if (parts.isEmpty()) "No data" else parts.joinToString(" × ")
 }

@@ -65,9 +65,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val themeColorName by userPreferencesRepository.themeColor.collectAsState(initial = "lime")
+            val customThemeColor by userPreferencesRepository.customThemeColor.collectAsState(initial = null)
+            val themeFont by userPreferencesRepository.themeFont.collectAsState(initial = "bebas_neue")
+            val customFontUri by userPreferencesRepository.customFontUri.collectAsState(initial = null)
             val keepScreenOn by userPreferencesRepository.keepScreenOn.collectAsState(initial = false)
             val darkMode by userPreferencesRepository.darkMode.collectAsState(initial = true)
-            val colorScheme = ThemeColors.getScheme(themeColorName)
+            val colorScheme = ThemeColors.getScheme(themeColorName, customThemeColor)
 
             DisposableEffect(keepScreenOn) {
                 if (keepScreenOn) {
@@ -80,7 +83,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            IronLogTheme(appColorScheme = colorScheme, darkMode = darkMode) {
+            IronLogTheme(
+                appColorScheme = colorScheme,
+                darkMode = darkMode,
+                themeFontKey = themeFont,
+                customFontUri = customFontUri
+            ) {
                 val gradientColors = com.example.gymtime.ui.theme.LocalGradientColors.current
 
                 Surface(
@@ -200,6 +208,9 @@ class MainActivity : ComponentActivity() {
                                 }
                                 composable(Screen.Settings.route) {
                                     com.example.gymtime.ui.settings.SettingsScreen(navController = navController)
+                                }
+                                composable(Screen.ThemeSettings.route) {
+                                    com.example.gymtime.ui.settings.ThemeSettingsScreen(navController = navController)
                                 }
                                 composable(Screen.MuscleGroupManagement.route) {
                                     com.example.gymtime.ui.settings.MuscleGroupManagementScreen(navController = navController)

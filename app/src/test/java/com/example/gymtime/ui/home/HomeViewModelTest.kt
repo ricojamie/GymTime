@@ -39,6 +39,7 @@ class HomeViewModelTest {
         every { userPreferencesRepository.userName } returns flowOf("Test User")
         every { userPreferencesRepository.activeRoutineId } returns flowOf(null)
         every { userPreferencesRepository.bestStreak } returns flowOf(0)
+        every { userPreferencesRepository.restDaysPerWeek } returns flowOf(2)
         every { workoutRepository.getOngoingWorkoutFlow() } returns flowOf(null)
         every { volumeOrbRepository.orbState } returns MutableStateFlow(VolumeOrbState())
 

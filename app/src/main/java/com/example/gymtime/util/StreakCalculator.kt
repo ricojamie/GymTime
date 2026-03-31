@@ -8,10 +8,10 @@ import java.util.Date
  *
  * Rules:
  * 1. The week starts on Sunday and ends on Saturday.
- * 2. Every user gets 2 "free skips" per calendar week.
- * 3. On Sunday morning, the skip count resets to 2.
- * 4. A streak is maintained as long as the user doesn't use more than 2 skips in a week.
- * 5. If a user misses a 3rd workout in a week (after using 2 skips), the streak ends.
+ * 2. Every user gets a configurable number of "free skips" per calendar week.
+ * 3. On Sunday morning, the skip count resets.
+ * 4. A streak is maintained as long as the user doesn't exceed their weekly skips.
+ * 5. If a user misses one more workout than allowed in a week, the streak ends.
  * 6. Skips don't increment the streak count, but they don't break it.
  * 7. For new users, the "clock" starts on the day of their first workout.
  */
@@ -26,17 +26,21 @@ object StreakCalculator {
     data class StreakResult(
         val state: StreakState,
         val streakDays: Int,
-        val skipsRemaining: Int,    // 0, 1, or 2
+        val skipsRemaining: Int,
+        val allowedSkipsPerWeek: Int,
         val nextResetDate: Date,    // Next Sunday
         val brokeToday: Boolean = false  // True only on the day the streak breaks
     )
 
-    fun calculateStreak(workoutDates: List<Date>): StreakResult {
+    fun calculateStreak(workoutDates: List<Date>, allowedSkipsPerWeek: Int = 2): StreakResult {
+        val safeAllowedSkips = allowedSkipsPerWeek.coerceIn(0, 7)
+
         if (workoutDates.isEmpty()) {
             return StreakResult(
                 state = StreakState.RESTING,
                 streakDays = 0,
-                skipsRemaining = 2,
+                skipsRemaining = safeAllowedSkips,
+                allowedSkipsPerWeek = safeAllowedSkips,
                 nextResetDate = getNextSunday()
             )
         }
@@ -48,12 +52,12 @@ object StreakCalculator {
         // 1. Calculate how many skips have been used THIS calendar week (Sun-Sat)
         val currentWeekStart = getStartOfCurrentWeek()
         val usedSkipsThisWeek = countUsedSkipsInWeek(currentWeekStart, today, workoutDaysNormalized)
-        val skipsRemaining = (2 - usedSkipsThisWeek).coerceAtLeast(0)
+        val skipsRemaining = (safeAllowedSkips - usedSkipsThisWeek).coerceAtLeast(0)
 
         // 2. Determine current state
         val workedOutToday = workoutDaysNormalized.contains(today)
         val state = when {
-            usedSkipsThisWeek > 2 -> StreakState.BROKEN
+            usedSkipsThisWeek > safeAllowedSkips -> StreakState.BROKEN
             workedOutToday -> StreakState.ACTIVE
             else -> StreakState.RESTING
         }
@@ -63,18 +67,24 @@ object StreakCalculator {
         // We count total workout days in consecutive safe weeks.
         var totalStreakDays = 0
         if (state != StreakState.BROKEN) {
-            totalStreakDays = calculateTotalStreakDays(today, workoutDaysNormalized, earliestWorkout)
+            totalStreakDays = calculateTotalStreakDays(
+                today = today,
+                workoutDays = workoutDaysNormalized,
+                earliestWorkout = earliestWorkout,
+                allowedSkipsPerWeek = safeAllowedSkips
+            )
         }
 
-        // 4. Determine if streak broke TODAY (exactly 3 skips used and today is a miss)
+        // 4. Determine if streak broke TODAY (exactly one miss over the weekly allowance)
         val brokeToday = state == StreakState.BROKEN &&
-                         usedSkipsThisWeek == 3 &&
+                         usedSkipsThisWeek == safeAllowedSkips + 1 &&
                          !workedOutToday
 
         return StreakResult(
             state = state,
             streakDays = totalStreakDays,
             skipsRemaining = skipsRemaining,
+            allowedSkipsPerWeek = safeAllowedSkips,
             nextResetDate = getNextSunday(),
             brokeToday = brokeToday
         )
@@ -95,7 +105,12 @@ object StreakCalculator {
         return misses
     }
 
-    private fun calculateTotalStreakDays(today: Date, workoutDays: Set<Date>, earliestWorkout: Date): Int {
+    private fun calculateTotalStreakDays(
+        today: Date,
+        workoutDays: Set<Date>,
+        earliestWorkout: Date,
+        allowedSkipsPerWeek: Int
+    ): Int {
         var totalDays = 0
         var currentWeekEnd = today
         val cal = Calendar.getInstance()
@@ -126,7 +141,7 @@ object StreakCalculator {
                 walkCal.add(Calendar.DAY_OF_YEAR, 1)
             }
 
-            if (missesInWeek > 2) {
+            if (missesInWeek > allowedSkipsPerWeek) {
                 // Streak broke in this week
                 break
             }

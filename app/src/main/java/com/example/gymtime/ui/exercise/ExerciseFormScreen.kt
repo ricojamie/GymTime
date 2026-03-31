@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.GlowCard
@@ -37,6 +38,7 @@ fun ExerciseFormScreen(
     val exerciseName by viewModel.exerciseName.collectAsState()
     val targetMuscle by viewModel.targetMuscle.collectAsState()
     val logType by viewModel.logType.collectAsState()
+    val defaultDistanceUnit by viewModel.defaultDistanceUnit.collectAsState()
     val notes by viewModel.notes.collectAsState()
     val defaultRestSeconds by viewModel.defaultRestSeconds.collectAsState()
     val availableMuscles by viewModel.availableMuscles.collectAsState(initial = emptyList())
@@ -46,6 +48,7 @@ fun ExerciseFormScreen(
 
     var showMuscleDropdown by remember { mutableStateOf(false) }
     var showLogTypeDropdown by remember { mutableStateOf(false) }
+    var showDistanceUnitDropdown by remember { mutableStateOf(false) }
     val accentColor = MaterialTheme.colorScheme.primary
 
     // Observe save success event and navigate accordingly
@@ -273,6 +276,83 @@ fun ExerciseFormScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            if (logType.usesDistanceUnit) {
+                Text(
+                    text = "DISTANCE TYPE",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.2.sp,
+                    color = LocalAppColors.current.textTertiary
+                )
+
+                Box {
+                    GlowCard(
+                        onClick = { showDistanceUnitDropdown = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = defaultDistanceUnit.displayName,
+                                    fontSize = 18.sp,
+                                    color = LocalAppColors.current.textPrimary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = defaultDistanceUnit.description,
+                                    fontSize = 12.sp,
+                                    color = LocalAppColors.current.textSecondary
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Dropdown",
+                                tint = LocalAppColors.current.textTertiary
+                            )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = showDistanceUnitDropdown,
+                        onDismissRequest = { showDistanceUnitDropdown = false },
+                        modifier = Modifier
+                            .fillMaxWidth(0.9f)
+                            .background(LocalAppColors.current.surfaceCards)
+                    ) {
+                        DistanceUnit.entries.forEach { unit ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(
+                                            unit.displayName,
+                                            color = LocalAppColors.current.textPrimary,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Text(
+                                            unit.description,
+                                            color = LocalAppColors.current.textSecondary,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    viewModel.updateDefaultDistanceUnit(unit)
+                                    showDistanceUnitDropdown = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
             // Default Rest Time Input
             Text(
                 text = "DEFAULT REST TIME (SECONDS)",
@@ -363,6 +443,8 @@ private val LogType.displayName: String
         LogType.DURATION -> "Duration"
         LogType.WEIGHT_DISTANCE -> "Weight + Distance"
         LogType.DISTANCE_TIME -> "Distance + Time"
+        LogType.WEIGHT_TIME -> "Weight + Time"
+        LogType.CALORIES_TIME -> "Calories + Time"
     }
 
 private val LogType.description: String
@@ -372,6 +454,33 @@ private val LogType.description: String
         LogType.DURATION -> "Planks, cardio time"
         LogType.WEIGHT_DISTANCE -> "Sled push, farmer's carry"
         LogType.DISTANCE_TIME -> "Running, cycling, rowing"
+        LogType.WEIGHT_TIME -> "Loaded carries, timed holds"
+        LogType.CALORIES_TIME -> "Bike, rower, treadmill calorie goal"
+    }
+
+private val LogType.usesDistanceUnit: Boolean
+    get() = this == LogType.WEIGHT_DISTANCE || this == LogType.DISTANCE_TIME
+
+private val DistanceUnit.displayName: String
+    get() = when (this) {
+        DistanceUnit.METERS -> "Meters"
+        DistanceUnit.KILOMETERS -> "Kilometers"
+        DistanceUnit.YARDS -> "Yards"
+        DistanceUnit.FEET -> "Feet"
+        DistanceUnit.MILES -> "Miles"
+        DistanceUnit.STEPS -> "Steps"
+        DistanceUnit.FLOORS -> "Floors"
+    }
+
+private val DistanceUnit.description: String
+    get() = when (this) {
+        DistanceUnit.METERS -> "Track work and short cardio pieces"
+        DistanceUnit.KILOMETERS -> "Longer runs and rides"
+        DistanceUnit.YARDS -> "Pools, turf, and field work"
+        DistanceUnit.FEET -> "Stair machines and short carries"
+        DistanceUnit.MILES -> "Road runs and outdoor cardio"
+        DistanceUnit.STEPS -> "Pedometer and step-based cardio"
+        DistanceUnit.FLOORS -> "Climbers and stair sessions"
     }
 
 // Extension to capitalize first letter of each word

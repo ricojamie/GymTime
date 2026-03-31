@@ -42,4 +42,7 @@ interface ExerciseDao {
 
     @Query("UPDATE exercises SET targetMuscle = :newMuscle WHERE LOWER(targetMuscle) = LOWER(:oldMuscle)")
     suspend fun updateExercisesTargetMuscle(oldMuscle: String, newMuscle: String)
+
+    @Query("SELECT * FROM exercises")
+    suspend fun getAllExercisesSync(): List<Exercise>
 }

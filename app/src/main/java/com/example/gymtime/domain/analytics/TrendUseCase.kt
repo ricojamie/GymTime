@@ -4,7 +4,9 @@ import com.example.gymtime.data.db.dao.SetWithExerciseInfo
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.WorkoutDao
+import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.Exercise
+import com.example.gymtime.util.TimeUtils
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
@@ -12,7 +14,7 @@ import java.util.*
 import javax.inject.Inject
 
 enum class TrendMetric {
-    VOLUME, E1RM, AVG_WEIGHT, DENSITY, REPS
+    VOLUME, E1RM, AVG_WEIGHT, DENSITY, REPS, DURATION, DISTANCE, CALORIES
 }
 
 enum class TimePeriod(val months: Int?) {
@@ -65,7 +67,7 @@ class TrendUseCase @Inject constructor(
                     exercise = exercise,
                     weight = pb.weight ?: 0f,
                     reps = pb.reps ?: 0,
-                    date = pb.timestamp ?: java.util.Date()
+                    date = pb.timestamp
                 )
             } else null
         }
@@ -116,7 +118,7 @@ class TrendUseCase @Inject constructor(
         val sdf = SimpleDateFormat("MMM d", Locale.getDefault())
         return sets.groupBy { it.set.workoutId }
             .mapNotNull { (workoutId, workoutSets) ->
-                val firstSet = workoutSets.minByOrNull { it.set.timestamp?.time ?: 0L }
+                val firstSet = workoutSets.minByOrNull { it.set.timestamp.time }
                 val date = firstSet?.set?.timestamp ?: return@mapNotNull null
                 
                 val value = calculateMetric(workoutSets, metric)
@@ -144,13 +146,13 @@ class TrendUseCase @Inject constructor(
         }
 
         return sets.groupBy {
-            val cal = Calendar.getInstance().apply { time = it.set.timestamp ?: Date() }
+            val cal = Calendar.getInstance().apply { time = it.set.timestamp }
             val year = cal.get(Calendar.YEAR)
             val period = cal.get(calendarField)
             "$year-$period"
         }
         .mapNotNull { (_, periodSets) ->
-            val firstSet = periodSets.minByOrNull { it.set.timestamp?.time ?: 0L }
+            val firstSet = periodSets.minByOrNull { it.set.timestamp.time }
             val date = firstSet?.set?.timestamp ?: return@mapNotNull null
             
             val value = calculateMetric(periodSets, metric)
@@ -166,30 +168,87 @@ class TrendUseCase @Inject constructor(
     }
 
     private fun calculateMetric(sets: List<SetWithExerciseInfo>, metric: TrendMetric): Float {
+        val workingSets = sets.filter { !it.set.isWarmup }
+
         return when (metric) {
             TrendMetric.VOLUME -> {
-                sets.sumOf { (it.set.weight?.toDouble() ?: 0.0) * (it.set.reps ?: 0) }.toFloat()
+                workingSets.sumOf { setWithInfo ->
+                    val weight = setWithInfo.set.weight ?: return@sumOf 0.0
+                    val reps = setWithInfo.set.reps ?: return@sumOf 0.0
+                    weight.toDouble() * reps
+                }.toFloat()
             }
             TrendMetric.E1RM -> {
-                sets.maxOfOrNull { 
+                workingSets.maxOfOrNull {
                     val w = it.set.weight ?: 0f
                     val r = it.set.reps ?: 0
                     if (r == 0) 0f else w * (1 + 0.0333f * r) 
                 } ?: 0f
             }
             TrendMetric.AVG_WEIGHT -> {
-                val totalReps = sets.sumOf { it.set.reps ?: 0 }
+                val totalReps = workingSets.sumOf { it.set.reps ?: 0 }
                 if (totalReps == 0) 0f 
-                else (sets.sumOf { (it.set.weight?.toDouble() ?: 0.0) * (it.set.reps ?: 0) } / totalReps).toFloat()
+                else (
+                    workingSets.sumOf { setWithInfo ->
+                        val weight = setWithInfo.set.weight ?: return@sumOf 0.0
+                        val reps = setWithInfo.set.reps ?: return@sumOf 0.0
+                        weight.toDouble() * reps
+                    } / totalReps
+                ).toFloat()
             }
             TrendMetric.DENSITY -> {
-                 // Volume per set (simplified density for now without reliable workout duration here)
-                val totalVol = sets.sumOf { (it.set.weight?.toDouble() ?: 0.0) * (it.set.reps ?: 0) }
-                if (sets.isEmpty()) 0f else (totalVol / sets.size).toFloat()
+                // Volume per strength set.
+                val strengthSets = workingSets.filter { it.set.weight != null && it.set.reps != null }
+                val totalVol = strengthSets.sumOf { setWithInfo ->
+                    val weight = setWithInfo.set.weight ?: return@sumOf 0.0
+                    val reps = setWithInfo.set.reps ?: return@sumOf 0.0
+                    weight.toDouble() * reps
+                }
+                if (strengthSets.isEmpty()) 0f else (totalVol / strengthSets.size).toFloat()
             }
             TrendMetric.REPS -> {
-                sets.sumOf { it.set.reps ?: 0 }.toFloat()
+                workingSets.sumOf { it.set.reps ?: 0 }.toFloat()
+            }
+            TrendMetric.DURATION -> {
+                workingSets.sumOf { it.set.durationSeconds ?: 0 }.toFloat() / 60f
+            }
+            TrendMetric.DISTANCE -> {
+                calculateDistanceMetric(workingSets)
+            }
+            TrendMetric.CALORIES -> {
+                workingSets.sumOf { it.set.calories?.toDouble() ?: 0.0 }.toFloat()
             }
         }
+    }
+
+    /**
+     * Distance trends are safe when the bucket has a single unit.
+     * If multiple convertible units are mixed, normalize them to miles.
+     * If mixed with non-convertible units like steps/floors, skip the bucket to avoid nonsense totals.
+     */
+    private fun calculateDistanceMetric(sets: List<SetWithExerciseInfo>): Float {
+        val distanceEntries = sets.mapNotNull { setWithInfo ->
+            val set = setWithInfo.set
+            when {
+                set.distanceValue != null && set.distanceUnit != null -> set.distanceValue to set.distanceUnit
+                set.distanceMeters != null -> set.distanceMeters to DistanceUnit.METERS
+                else -> null
+            }
+        }
+
+        if (distanceEntries.isEmpty()) return 0f
+
+        val distinctUnits = distanceEntries.map { it.second }.distinct()
+        if (distinctUnits.size == 1) {
+            return distanceEntries.sumOf { it.first.toDouble() }.toFloat()
+        }
+
+        if (distinctUnits.all { it.isConvertibleToMeters }) {
+            return distanceEntries.sumOf { (value, unit) ->
+                TimeUtils.distanceToMeters(value, unit)?.toDouble() ?: 0.0
+            }.toFloat() / 1609.344f
+        }
+
+        return 0f
     }
 }

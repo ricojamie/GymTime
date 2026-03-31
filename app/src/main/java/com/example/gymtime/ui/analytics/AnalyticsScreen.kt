@@ -40,9 +40,11 @@ fun AnalyticsScreen(
     // State
     val heatMapData by viewModel.heatMapData.collectAsState()
     val muscleDistribution by viewModel.muscleDistribution.collectAsState()
+    val radarDistribution by viewModel.radarDistribution.collectAsState()
     val muscleFreshness by viewModel.muscleFreshness.collectAsState()
     val consistencyStats by viewModel.consistencyStats.collectAsState()
     val trophyCasePRs by viewModel.trophyCasePRs.collectAsState()
+    val selectedBalanceRange by viewModel.selectedBalanceRange.collectAsState()
     
     // Tab State
     var selectedTabIndex by remember { mutableIntStateOf(0) }
@@ -114,7 +116,13 @@ fun AnalyticsScreen(
         ) {
              when (selectedTabIndex) {
                 0 -> ConsistencyTabContent(heatMapData, consistencyStats, trophyCasePRs)
-                1 -> BalanceTabContent(muscleDistribution, muscleFreshness)
+                1 -> BalanceTabContent(
+                    distributionData = muscleDistribution,
+                    radarData = radarDistribution,
+                    freshnessData = muscleFreshness,
+                    selectedRange = selectedBalanceRange,
+                    onRangeChange = viewModel::updateBalanceRange
+                )
                 2 -> TrendsTabContent(viewModel)
             }
             

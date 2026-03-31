@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.util.FitNotesImporter
+import com.example.gymtime.util.IronLogExporter
+import com.example.gymtime.util.IronLogImporter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,16 +13,22 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.InputStream
+import java.io.OutputStream
 import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val userPreferencesRepository: UserPreferencesRepository,
-    private val fitNotesImporter: FitNotesImporter
+    private val fitNotesImporter: FitNotesImporter,
+    private val ironLogExporter: IronLogExporter,
+    private val ironLogImporter: IronLogImporter
 ) : ViewModel() {
 
     val userName = userPreferencesRepository.userName
     val themeColor = userPreferencesRepository.themeColor
+    val customThemeColor = userPreferencesRepository.customThemeColor
+    val themeFont = userPreferencesRepository.themeFont
+    val customFontUri = userPreferencesRepository.customFontUri
     val timerAutoStart = userPreferencesRepository.timerAutoStart
     val timerAudioEnabled = userPreferencesRepository.timerAudioEnabled
     val timerVibrateEnabled = userPreferencesRepository.timerVibrateEnabled
@@ -28,6 +36,7 @@ class SettingsViewModel @Inject constructor(
     // Display settings
     val keepScreenOn = userPreferencesRepository.keepScreenOn
     val darkMode = userPreferencesRepository.darkMode
+    val restDaysPerWeek = userPreferencesRepository.restDaysPerWeek
 
     // Plate calculator settings
     val barWeight = userPreferencesRepository.barWeight
@@ -43,6 +52,36 @@ class SettingsViewModel @Inject constructor(
     fun setThemeColor(color: String) {
         viewModelScope.launch {
             userPreferencesRepository.setThemeColor(color)
+        }
+    }
+
+    fun setCustomThemeColor(colorHex: String?) {
+        viewModelScope.launch {
+            userPreferencesRepository.setCustomThemeColor(colorHex)
+            if (!colorHex.isNullOrBlank()) {
+                userPreferencesRepository.setThemeColor("custom")
+            }
+        }
+    }
+
+    fun clearCustomThemeColor() {
+        viewModelScope.launch {
+            userPreferencesRepository.setCustomThemeColor(null)
+        }
+    }
+
+    fun setThemeFont(font: String) {
+        viewModelScope.launch {
+            userPreferencesRepository.setThemeFont(font)
+        }
+    }
+
+    fun setCustomFontUri(uri: String?) {
+        viewModelScope.launch {
+            userPreferencesRepository.setCustomFontUri(uri)
+            if (!uri.isNullOrBlank()) {
+                userPreferencesRepository.setThemeFont("custom")
+            }
         }
     }
 
@@ -73,6 +112,12 @@ class SettingsViewModel @Inject constructor(
     fun setDarkMode(enabled: Boolean) {
         viewModelScope.launch {
             userPreferencesRepository.setDarkMode(enabled)
+        }
+    }
+
+    fun setRestDaysPerWeek(days: Int) {
+        viewModelScope.launch {
+            userPreferencesRepository.setRestDaysPerWeek(days)
         }
     }
 
@@ -119,5 +164,59 @@ class SettingsViewModel @Inject constructor(
 
     fun clearImportState() {
         _importState.value = ImportState.Idle
+    }
+
+    // IronLog Export State
+    sealed class ExportState {
+        object Idle : ExportState()
+        object InProgress : ExportState()
+        data class Success(val result: IronLogExporter.ExportResult) : ExportState()
+        data class Error(val message: String) : ExportState()
+    }
+
+    private val _exportState = MutableStateFlow<ExportState>(ExportState.Idle)
+    val exportState: StateFlow<ExportState> = _exportState.asStateFlow()
+
+    fun exportData(outputStream: OutputStream) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _exportState.value = ExportState.InProgress
+            try {
+                val result = ironLogExporter.export(outputStream)
+                _exportState.value = ExportState.Success(result)
+            } catch (e: Exception) {
+                _exportState.value = ExportState.Error(e.message ?: "Unknown error during export")
+            }
+        }
+    }
+
+    fun clearExportState() {
+        _exportState.value = ExportState.Idle
+    }
+
+    // IronLog Import State
+    sealed class IronLogImportState {
+        object Idle : IronLogImportState()
+        object InProgress : IronLogImportState()
+        data class Success(val result: IronLogImporter.ImportResult) : IronLogImportState()
+        data class Error(val message: String) : IronLogImportState()
+    }
+
+    private val _ironLogImportState = MutableStateFlow<IronLogImportState>(IronLogImportState.Idle)
+    val ironLogImportState: StateFlow<IronLogImportState> = _ironLogImportState.asStateFlow()
+
+    fun importIronLog(inputStream: InputStream) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _ironLogImportState.value = IronLogImportState.InProgress
+            try {
+                val result = ironLogImporter.import(inputStream)
+                _ironLogImportState.value = IronLogImportState.Success(result)
+            } catch (e: Exception) {
+                _ironLogImportState.value = IronLogImportState.Error(e.message ?: "Unknown error during import")
+            }
+        }
+    }
+
+    fun clearIronLogImportState() {
+        _ironLogImportState.value = IronLogImportState.Idle
     }
 }

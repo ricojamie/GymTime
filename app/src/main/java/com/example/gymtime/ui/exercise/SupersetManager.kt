@@ -1,5 +1,6 @@
 package com.example.gymtime.ui.exercise
 
+import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.Exercise
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -12,9 +13,11 @@ import javax.inject.Singleton
  */
 data class LastLoggedValues(
     val weight: String = "",
+    val calories: String = "",
     val reps: String = "",
     val duration: String = "",
-    val distance: String = ""
+    val distance: String = "",
+    val distanceUnit: DistanceUnit? = null
 )
 
 /**

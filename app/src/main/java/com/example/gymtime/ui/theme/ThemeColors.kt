@@ -1,5 +1,6 @@
 package com.example.gymtime.ui.theme
 
+import android.graphics.Color.parseColor
 import androidx.compose.ui.graphics.Color
 
 data class AppColorScheme(
@@ -13,6 +14,36 @@ data class AppColorScheme(
 )
 
 object ThemeColors {
+    val SummerShred = AppColorScheme(
+        primaryAccent = Color(0xFFFF6B35),
+        primaryAccentDark = Color(0xFFE85A24),
+        primaryAccentLight = Color(0xFFFF8A5F),
+        gradientStart = Color(0xFF1A120A),
+        gradientEnd = Color(0xFF0A0A0A),
+        lightGradientStart = Color(0xFFFFF4EE),
+        lightGradientEnd = Color(0xFFF8F3EE)
+    )
+
+    val OceanDrive = AppColorScheme(
+        primaryAccent = Color(0xFF2EC4FF),
+        primaryAccentDark = Color(0xFF119DD6),
+        primaryAccentLight = Color(0xFF67D6FF),
+        gradientStart = Color(0xFF08141A),
+        gradientEnd = Color(0xFF090B12),
+        lightGradientStart = Color(0xFFF0F9FF),
+        lightGradientEnd = Color(0xFFF3F7FA)
+    )
+
+    val GraphitePunch = AppColorScheme(
+        primaryAccent = Color(0xFFD4AF37),
+        primaryAccentDark = Color(0xFFB6921C),
+        primaryAccentLight = Color(0xFFE7C867),
+        gradientStart = Color(0xFF141414),
+        gradientEnd = Color(0xFF080808),
+        lightGradientStart = Color(0xFFF7F4EA),
+        lightGradientEnd = Color(0xFFF2F2F2)
+    )
+
     val LimeGreen = AppColorScheme(
         primaryAccent = Color(0xFFA3E635),
         primaryAccentDark = Color(0xFF84CC16),
@@ -113,8 +144,16 @@ object ThemeColors {
         lightGradientEnd = Color(0xFFF5F5F5)
     )
 
-    fun getScheme(colorName: String): AppColorScheme {
+    fun getScheme(colorName: String, customColorHex: String? = null): AppColorScheme {
+        if (colorName == "custom") {
+            customColorHex?.let { parseCustomScheme(it) }?.let { return it }
+        }
+
         return when (colorName) {
+            ThemePreset.SUMMER_SHRED.storageKey -> SummerShred
+            ThemePreset.OCEAN_DRIVE.storageKey -> OceanDrive
+            ThemePreset.GRAPHITE_PUNCH.storageKey -> GraphitePunch
+            "custom" -> SummerShred
             "lime" -> LimeGreen
             "blue" -> ElectricBlue
             "purple" -> CyberPurple
@@ -125,7 +164,40 @@ object ThemeColors {
             "mint" -> MintFresh
             "slate" -> SlateGrey
             "lavender" -> LavenderFocus
-            else -> LimeGreen
+            else -> SummerShred
         }
     }
+
+    private fun parseCustomScheme(colorHex: String): AppColorScheme? {
+        return runCatching {
+            val accent = Color(parseColor(colorHex))
+            AppColorScheme(
+                primaryAccent = accent,
+                primaryAccentDark = accent.darken(0.18f),
+                primaryAccentLight = accent.lighten(0.18f),
+                gradientStart = accent.darken(0.88f),
+                gradientEnd = Color(0xFF080808),
+                lightGradientStart = accent.lighten(0.92f),
+                lightGradientEnd = Color(0xFFF5F5F5)
+            )
+        }.getOrNull()
+    }
+}
+
+private fun Color.lighten(amount: Float): Color {
+    return Color(
+        red = red + ((1f - red) * amount),
+        green = green + ((1f - green) * amount),
+        blue = blue + ((1f - blue) * amount),
+        alpha = alpha
+    )
+}
+
+private fun Color.darken(amount: Float): Color {
+    return Color(
+        red = red * (1f - amount),
+        green = green * (1f - amount),
+        blue = blue * (1f - amount),
+        alpha = alpha
+    )
 }

@@ -27,6 +27,9 @@ class UserPreferencesRepository @Inject constructor(
 
         // Theme and UI preferences
         val THEME_COLOR = stringPreferencesKey("theme_color")
+        val CUSTOM_THEME_COLOR = stringPreferencesKey("custom_theme_color")
+        val THEME_FONT = stringPreferencesKey("theme_font")
+        val CUSTOM_FONT_URI = stringPreferencesKey("custom_font_uri")
         val TIMER_AUTO_START = booleanPreferencesKey("timer_auto_start")
         val TIMER_AUDIO_ENABLED = booleanPreferencesKey("timer_audio_enabled")
         val TIMER_VIBRATE_ENABLED = booleanPreferencesKey("timer_vibrate_enabled")
@@ -42,6 +45,7 @@ class UserPreferencesRepository @Inject constructor(
 
         // Streak tracking
         val BEST_STREAK = intPreferencesKey("best_streak")
+        val REST_DAYS_PER_WEEK = intPreferencesKey("rest_days_per_week")
     }
 
     val userName: Flow<String> = context.dataStore.data
@@ -62,6 +66,21 @@ class UserPreferencesRepository @Inject constructor(
     val themeColor: Flow<String> = context.dataStore.data
         .map { preferences ->
             preferences[PreferencesKeys.THEME_COLOR] ?: "lime"
+        }
+
+    val customThemeColor: Flow<String?> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.CUSTOM_THEME_COLOR]
+        }
+
+    val themeFont: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.THEME_FONT] ?: "bebas_neue"
+        }
+
+    val customFontUri: Flow<String?> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.CUSTOM_FONT_URI]
         }
 
     val timerAutoStart: Flow<Boolean> = context.dataStore.data
@@ -114,6 +133,11 @@ class UserPreferencesRepository @Inject constructor(
             preferences[PreferencesKeys.BEST_STREAK] ?: 0
         }
 
+    val restDaysPerWeek: Flow<Int> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.REST_DAYS_PER_WEEK] ?: 2
+        }
+
     suspend fun setUserName(name: String) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.USER_NAME] = name
@@ -139,6 +163,32 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun setThemeColor(color: String) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.THEME_COLOR] = color
+        }
+    }
+
+    suspend fun setCustomThemeColor(colorHex: String?) {
+        context.dataStore.edit { preferences ->
+            if (colorHex.isNullOrBlank()) {
+                preferences.remove(PreferencesKeys.CUSTOM_THEME_COLOR)
+            } else {
+                preferences[PreferencesKeys.CUSTOM_THEME_COLOR] = colorHex
+            }
+        }
+    }
+
+    suspend fun setThemeFont(font: String) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.THEME_FONT] = font
+        }
+    }
+
+    suspend fun setCustomFontUri(uri: String?) {
+        context.dataStore.edit { preferences ->
+            if (uri.isNullOrBlank()) {
+                preferences.remove(PreferencesKeys.CUSTOM_FONT_URI)
+            } else {
+                preferences[PreferencesKeys.CUSTOM_FONT_URI] = uri
+            }
         }
     }
 
@@ -206,6 +256,12 @@ class UserPreferencesRepository @Inject constructor(
             if (currentStreak > currentBest) {
                 preferences[PreferencesKeys.BEST_STREAK] = currentStreak
             }
+        }
+    }
+
+    suspend fun setRestDaysPerWeek(days: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.REST_DAYS_PER_WEEK] = days.coerceIn(0, 7)
         }
     }
 }

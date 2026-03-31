@@ -37,6 +37,12 @@ class AnalyticsViewModel @Inject constructor(
     private val _muscleDistribution = MutableStateFlow<List<com.example.gymtime.data.db.entity.MuscleDistribution>>(emptyList())
     val muscleDistribution: StateFlow<List<com.example.gymtime.data.db.entity.MuscleDistribution>> = _muscleDistribution.asStateFlow()
 
+    private val _radarDistribution = MutableStateFlow<List<com.example.gymtime.data.db.entity.MuscleDistribution>>(emptyList())
+    val radarDistribution: StateFlow<List<com.example.gymtime.data.db.entity.MuscleDistribution>> = _radarDistribution.asStateFlow()
+
+    private val _selectedBalanceRange = MutableStateFlow(com.example.gymtime.domain.analytics.BalanceTimeRange.THIRTY_DAYS)
+    val selectedBalanceRange = _selectedBalanceRange.asStateFlow()
+
     private val _muscleFreshness = MutableStateFlow<List<com.example.gymtime.domain.analytics.MuscleFreshnessStatus>>(emptyList())
     val muscleFreshness: StateFlow<List<com.example.gymtime.domain.analytics.MuscleFreshnessStatus>> = _muscleFreshness.asStateFlow()
 
@@ -118,6 +124,11 @@ class AnalyticsViewModel @Inject constructor(
         refreshTrendData()
     }
 
+    fun updateBalanceRange(range: com.example.gymtime.domain.analytics.BalanceTimeRange) {
+        _selectedBalanceRange.value = range
+        refreshBalanceData()
+    }
+
     private fun refreshHeatMap() {
         viewModelScope.launch {
             try {
@@ -133,7 +144,8 @@ class AnalyticsViewModel @Inject constructor(
     private fun refreshBalanceData() {
         viewModelScope.launch {
             try {
-                _muscleDistribution.value = balanceUseCase.getMuscleDistribution()
+                _muscleDistribution.value = balanceUseCase.getMuscleDistribution(_selectedBalanceRange.value)
+                _radarDistribution.value = balanceUseCase.getRadarDistribution(_selectedBalanceRange.value)
                 _muscleFreshness.value = balanceUseCase.getMuscleFreshness()
             } catch (e: Exception) {
                  // Ignore for now

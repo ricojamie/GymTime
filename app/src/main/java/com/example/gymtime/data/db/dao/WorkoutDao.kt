@@ -30,6 +30,9 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts ORDER BY startTime DESC")
     fun getAllWorkouts(): Flow<List<Workout>>
 
+    @Query("SELECT * FROM workouts")
+    suspend fun getAllWorkoutsSync(): List<Workout>
+
     @Query("SELECT * FROM workouts WHERE endTime IS NULL ORDER BY startTime DESC LIMIT 1")
     fun getOngoingWorkout(): Flow<Workout?>
 
@@ -75,16 +78,15 @@ interface WorkoutDao {
     """)
     suspend fun getYearToDateWorkoutCount(): Int
 
-    // Get daily volume for the heat map (last 365 days)
+    // Get daily activity for the heat map (last 365 days).
+    // Uses working-set count so cardio and time-based workouts still register as activity.
     @Query("""
         SELECT 
-            SUM(s.weight * s.reps) as dailyVol,
+            CAST(COUNT(s.id) AS REAL) as dailyVol,
             w.startTime as date
         FROM workouts w
         INNER JOIN sets s ON w.id = s.workoutId
         WHERE s.isWarmup = 0
-          AND s.weight IS NOT NULL
-          AND s.reps IS NOT NULL
           AND w.startTime > (strftime('%s', 'now', '-1 year') * 1000)
         GROUP BY date(w.startTime / 1000, 'unixepoch')
         ORDER BY w.startTime ASC
@@ -104,6 +106,19 @@ interface WorkoutDao {
         ORDER BY setVolume DESC
     """)
     suspend fun getMuscleSetCountsLast30Days(): List<MuscleDistribution>
+
+    @Query("""
+        SELECT
+            e.targetMuscle as muscle,
+            COUNT(s.id) as setVolume
+        FROM sets s
+        INNER JOIN exercises e ON s.exerciseId = e.id
+        WHERE s.isWarmup = 0
+          AND s.timestamp BETWEEN :startTime AND :endTime
+        GROUP BY e.targetMuscle
+        ORDER BY setVolume DESC
+    """)
+    suspend fun getMuscleSetCountsInRange(startTime: Long, endTime: Long): List<MuscleDistribution>
 
     // Muscle Freshness (Last trained date for each muscle)
     @Query("""

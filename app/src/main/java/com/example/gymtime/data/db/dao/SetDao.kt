@@ -387,6 +387,9 @@ interface SetDao {
     """)
     suspend fun getSupersetGroupsInRange(startMs: Long, endMs: Long): List<String>
 
+    @Query("SELECT * FROM sets")
+    suspend fun getAllSets(): List<Set>
+
     // Check for duplicate sets (for import deduplication)
     @Query("""
         SELECT COUNT(*) FROM sets

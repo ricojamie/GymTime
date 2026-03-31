@@ -87,6 +87,7 @@ class ConsistencyUseCaseTest {
 
         coEvery { workoutDao.getDailyVolumeForHeatMap() } returns rawData
         coEvery { workoutDao.getWorkoutDatesWithWorkingSets() } returns emptyList()
+        coEvery { userPreferencesRepository.restDaysPerWeek } returns flowOf(2)
         coEvery { userPreferencesRepository.bestStreak } returns flowOf(0)
         coEvery { workoutDao.getYearToDateWorkoutCount() } returns 3
         coEvery { setDao.getTotalVolume(any(), any()) } returns 300f

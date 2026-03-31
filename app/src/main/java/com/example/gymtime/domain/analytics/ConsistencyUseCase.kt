@@ -8,6 +8,7 @@ import com.example.gymtime.data.db.entity.DailyVolume
 import com.example.gymtime.util.StreakCalculator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -112,10 +113,14 @@ class ConsistencyUseCase @Inject constructor(
         // 2. Iron Streak Data (From HomeViewModel logic)
         val dateStrings = workoutDao.getWorkoutDatesWithWorkingSets()
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val allowedRestDays = userPreferencesRepository.restDaysPerWeek.firstOrNull() ?: 2
         val workoutDates = dateStrings.mapNotNull { dateStr ->
             try { dateFormat.parse(dateStr) } catch (e: Exception) { null }
         }
-        val streakResult = StreakCalculator.calculateStreak(workoutDates)
+        val streakResult = StreakCalculator.calculateStreak(
+            workoutDates = workoutDates,
+            allowedSkipsPerWeek = allowedRestDays
+        )
 
         // 3. Best Streak (From Prefs)
         val bestStreak = userPreferencesRepository.bestStreak.first()

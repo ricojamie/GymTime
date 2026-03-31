@@ -7,6 +7,7 @@ import com.example.gymtime.data.db.entity.MuscleDistribution
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import java.util.Calendar
 import java.util.concurrent.TimeUnit
 import com.example.gymtime.ui.theme.ThemeColors
 
@@ -24,13 +25,25 @@ enum class RecoveryStatus {
     FATIGUED    // < 24 hours (Red)
 }
 
+enum class BalanceTimeRange(val label: String, val days: Int?) {
+    SEVEN_DAYS("7 Days", 7),
+    THIRTY_DAYS("30 Days", 30),
+    NINETY_DAYS("90 Days", 90),
+    ONE_YEAR("1 Year", 365),
+    ALL_TIME("All Time", null)
+}
+
 class BalanceUseCase @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val muscleGroupDao: MuscleGroupDao
 ) {
 
-    suspend fun getMuscleDistribution(): List<MuscleDistribution> = withContext(Dispatchers.IO) {
-        workoutDao.getMuscleSetCountsLast30Days().filter { it.setVolume > 0 }
+    suspend fun getMuscleDistribution(range: BalanceTimeRange): List<MuscleDistribution> = withContext(Dispatchers.IO) {
+        getBodyPartSetCounts(range).filter { it.setVolume > 0 }
+    }
+
+    suspend fun getRadarDistribution(range: BalanceTimeRange): List<MuscleDistribution> = withContext(Dispatchers.IO) {
+        getBodyPartSetCounts(range)
     }
 
     suspend fun getMuscleFreshness(): List<MuscleFreshnessStatus> = withContext(Dispatchers.IO) {
@@ -71,5 +84,26 @@ class BalanceUseCase @Inject constructor(
             )
         }.sortedBy { it.daysSince } // Show most recently trained (Fatigued) first? Or mostly fresh?
         // Let's sort by freshness: Fatigued (0 days) on top to show what NOT to train.
+    }
+
+    private suspend fun getBodyPartSetCounts(range: BalanceTimeRange): List<MuscleDistribution> {
+        val allMuscles = muscleGroupDao.getAllMuscleGroupNames()
+        val now = System.currentTimeMillis()
+        val start = range.days?.let { days ->
+            Calendar.getInstance().apply {
+                timeInMillis = now
+                add(Calendar.DAY_OF_YEAR, -days)
+            }.timeInMillis
+        } ?: 0L
+
+        val raw = if (range == BalanceTimeRange.THIRTY_DAYS) {
+            workoutDao.getMuscleSetCountsLast30Days()
+        } else {
+            workoutDao.getMuscleSetCountsInRange(start, now)
+        }.associateBy { it.muscle }
+
+        return allMuscles.map { muscle ->
+            raw[muscle] ?: MuscleDistribution(muscle = muscle, setVolume = 0)
+        }
     }
 }

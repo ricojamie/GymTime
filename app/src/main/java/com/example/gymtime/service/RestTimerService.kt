@@ -21,9 +21,11 @@ import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
 import androidx.core.app.NotificationCompat
+import androidx.compose.ui.graphics.toArgb
 import com.example.gymtime.MainActivity
 import com.example.gymtime.R
 import com.example.gymtime.data.UserPreferencesRepository
+import com.example.gymtime.ui.theme.ThemeColors
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,6 +56,7 @@ class RestTimerService : Service() {
     val isRunning: StateFlow<Boolean> = _isRunning
 
     private val _currentThemeColor = MutableStateFlow("lime")
+    private val _currentCustomThemeColor = MutableStateFlow<String?>(null)
 
     inner class TimerBinder : Binder() {
         fun getService(): RestTimerService = this@RestTimerService
@@ -70,6 +73,14 @@ class RestTimerService : Service() {
         serviceScope.launch {
             userPreferencesRepository.themeColor.collect { colorName ->
                 _currentThemeColor.value = colorName
+                if (_isRunning.value) {
+                    updateNotification(_remainingSeconds.value)
+                }
+            }
+        }
+        serviceScope.launch {
+            userPreferencesRepository.customThemeColor.collect { colorHex ->
+                _currentCustomThemeColor.value = colorHex
                 if (_isRunning.value) {
                     updateNotification(_remainingSeconds.value)
                 }
@@ -220,7 +231,10 @@ class RestTimerService : Service() {
         val formattedTime = formatTime(seconds)
         val progressMax = if (_totalSeconds > 0) _totalSeconds else 1
         
-        val themeColor = getNotificationColor(_currentThemeColor.value)
+        val themeColor = getNotificationColor(
+            colorName = _currentThemeColor.value,
+            customColorHex = _currentCustomThemeColor.value
+        )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Rest Timer")
@@ -239,20 +253,8 @@ class RestTimerService : Service() {
             .build()
     }
 
-    private fun getNotificationColor(colorName: String): Int {
-        return when (colorName) {
-            "lime" -> 0xFFA3E635.toInt()
-            "blue" -> 0xFF3B82F6.toInt()
-            "purple" -> 0xFFA855F7.toInt()
-            "pink" -> 0xFFEC4899.toInt()
-            "gold" -> 0xFFF59E0B.toInt()
-            "red" -> 0xFFEF4444.toInt()
-            "orange" -> 0xFFF97316.toInt()
-            "mint" -> 0xFF10B981.toInt()
-            "slate" -> 0xFF64748B.toInt()
-            "lavender" -> 0xFF8B5CF6.toInt()
-            else -> 0xFFA3E635.toInt()
-        }
+    private fun getNotificationColor(colorName: String, customColorHex: String?): Int {
+        return ThemeColors.getScheme(colorName, customColorHex).primaryAccent.toArgb()
     }
 
     private fun updateNotification(seconds: Int) {

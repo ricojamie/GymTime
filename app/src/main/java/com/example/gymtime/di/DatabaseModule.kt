@@ -153,6 +153,33 @@ object DatabaseModule {
         }
     }
 
+    // Migration from version 10 to 11: Add richer cardio logging support
+    private val MIGRATION_10_11 = object : Migration(10, 11) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            Log.d(TAG, "Running migration 10 -> 11: Adding cardio unit and calorie support")
+
+            database.execSQL("ALTER TABLE exercises ADD COLUMN defaultDistanceUnit TEXT NOT NULL DEFAULT 'MILES'")
+
+            database.execSQL("ALTER TABLE sets ADD COLUMN calories REAL DEFAULT NULL")
+            database.execSQL("ALTER TABLE sets ADD COLUMN distanceValue REAL DEFAULT NULL")
+            database.execSQL("ALTER TABLE sets ADD COLUMN distanceUnit TEXT DEFAULT NULL")
+
+            // Existing distance rows were entered/displayed as miles and stored normalized in meters.
+            // Backfill the new raw distance fields so upgrades preserve the displayed value users expect.
+            database.execSQL(
+                """
+                UPDATE sets
+                SET distanceUnit = 'MILES',
+                    distanceValue = CASE
+                        WHEN distanceMeters IS NOT NULL THEN distanceMeters / 1609.344
+                        ELSE NULL
+                    END
+                WHERE distanceMeters IS NOT NULL
+                """.trimIndent()
+            )
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): GymTimeDatabase {
@@ -161,7 +188,18 @@ object DatabaseModule {
             GymTimeDatabase::class.java,
             "gym_time_db"
         )
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+        .addMigrations(
+            MIGRATION_1_2,
+            MIGRATION_2_3,
+            MIGRATION_3_4,
+            MIGRATION_4_5,
+            MIGRATION_5_6,
+            MIGRATION_6_7,
+            MIGRATION_7_8,
+            MIGRATION_8_9,
+            MIGRATION_9_10,
+            MIGRATION_10_11
+        )
         .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {

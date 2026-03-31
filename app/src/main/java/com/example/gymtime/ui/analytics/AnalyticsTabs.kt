@@ -98,13 +98,48 @@ fun ConsistencyTabContent(
 @Composable
 fun BalanceTabContent(
     distributionData: List<com.example.gymtime.data.db.entity.MuscleDistribution>,
-    freshnessData: List<MuscleFreshnessStatus>
+    radarData: List<com.example.gymtime.data.db.entity.MuscleDistribution>,
+    freshnessData: List<MuscleFreshnessStatus>,
+    selectedRange: BalanceTimeRange,
+    onRangeChange: (BalanceTimeRange) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Training Split (30 Days)",
+            text = "Date Range",
+            color = LocalAppColors.current.textTertiary,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(start = 4.dp)
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            BalanceTimeRange.entries.forEach { range ->
+                FilterChip(
+                    selected = selectedRange == range,
+                    onClick = { onRangeChange(range) },
+                    label = { Text(range.label) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                        selectedLabelColor = MaterialTheme.colorScheme.primary,
+                        containerColor = LocalAppColors.current.surfaceCards,
+                        labelColor = LocalAppColors.current.textPrimary
+                    )
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Training Split (${selectedRange.label})",
             color = Color.White,
             modifier = Modifier.align(Alignment.CenterHorizontally),
             style = MaterialTheme.typography.titleMedium,
@@ -114,6 +149,13 @@ fun BalanceTabContent(
         Spacer(modifier = Modifier.height(16.dp))
 
         MuscleDistributionChart(data = distributionData)
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        MuscleRadarChart(
+            data = radarData,
+            selectedRangeLabel = selectedRange.label
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
 

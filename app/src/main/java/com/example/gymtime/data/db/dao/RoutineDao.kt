@@ -102,4 +102,13 @@ interface RoutineDao {
         ORDER BY re.orderIndex ASC
     """)
     fun getExerciseListForDay(dayId: Long): Flow<List<Exercise>>
+
+    @Query("SELECT * FROM routines")
+    suspend fun getAllRoutinesSync(): List<Routine>
+
+    @Query("SELECT * FROM routine_days")
+    suspend fun getAllRoutineDays(): List<RoutineDay>
+
+    @Query("SELECT * FROM routine_exercises")
+    suspend fun getAllRoutineExercises(): List<RoutineExercise>
 }

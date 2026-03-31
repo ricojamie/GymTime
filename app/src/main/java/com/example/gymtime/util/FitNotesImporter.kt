@@ -3,6 +3,7 @@ package com.example.gymtime.util
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.WorkoutDao
+import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
@@ -146,6 +147,8 @@ class FitNotesImporter @Inject constructor(
                             reps = reps,
                             rpe = null,
                             durationSeconds = parseTime(row.time),
+                            distanceValue = row.distance,
+                            distanceUnit = parseDistanceUnit(row.distanceUnit),
                             distanceMeters = convertDistance(row.distance, row.distanceUnit),
                             isWarmup = false,
                             isComplete = true,
@@ -220,6 +223,7 @@ class FitNotesImporter @Inject constructor(
             name = name,
             targetMuscle = normalizeCategory(category),
             logType = logType,
+            defaultDistanceUnit = parseDistanceUnit(row.distanceUnit),
             isCustom = true,
             notes = "Imported from FitNotes",
             defaultRestSeconds = 90,
@@ -267,11 +271,26 @@ class FitNotesImporter @Inject constructor(
 
     private fun convertDistance(distance: Float?, unit: String?): Float? {
         if (distance == null) return null
+        return when (parseDistanceUnit(unit)) {
+            DistanceUnit.KILOMETERS -> distance * 1000f
+            DistanceUnit.MILES -> distance * 1609.34f
+            DistanceUnit.METERS -> distance
+            DistanceUnit.YARDS -> distance * 0.9144f
+            DistanceUnit.FEET -> distance * 0.3048f
+            DistanceUnit.STEPS, DistanceUnit.FLOORS -> null
+        }
+    }
+
+    private fun parseDistanceUnit(unit: String?): DistanceUnit {
         return when (unit?.lowercase()) {
-            "km" -> distance * 1000f // Convert km to meters
-            "mi", "miles" -> distance * 1609.34f // Convert miles to meters
-            "m" -> distance // Already in meters
-            else -> distance // Unknown unit, keep as-is
+            "km" -> DistanceUnit.KILOMETERS
+            "mi", "mile", "miles" -> DistanceUnit.MILES
+            "m", "meter", "meters" -> DistanceUnit.METERS
+            "yd", "yard", "yards" -> DistanceUnit.YARDS
+            "ft", "foot", "feet" -> DistanceUnit.FEET
+            "steps", "step" -> DistanceUnit.STEPS
+            "floors", "floor" -> DistanceUnit.FLOORS
+            else -> DistanceUnit.MILES
         }
     }
 

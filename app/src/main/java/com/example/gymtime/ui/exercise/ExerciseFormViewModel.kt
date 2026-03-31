@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.MuscleGroupDao
+import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -33,6 +34,9 @@ class ExerciseFormViewModel @Inject constructor(
 
     private val _logType = MutableStateFlow(LogType.WEIGHT_REPS)
     val logType: StateFlow<LogType> = _logType
+
+    private val _defaultDistanceUnit = MutableStateFlow(DistanceUnit.MILES)
+    val defaultDistanceUnit: StateFlow<DistanceUnit> = _defaultDistanceUnit
 
     private val _notes = MutableStateFlow("")
     val notes: StateFlow<String> = _notes
@@ -68,6 +72,7 @@ class ExerciseFormViewModel @Inject constructor(
                     _exerciseName.value = exercise.name
                     _targetMuscle.value = exercise.targetMuscle
                     _logType.value = exercise.logType
+                    _defaultDistanceUnit.value = exercise.defaultDistanceUnit
                     _notes.value = exercise.notes ?: ""
                     _defaultRestSeconds.value = exercise.defaultRestSeconds.toString()
                 }
@@ -87,6 +92,10 @@ class ExerciseFormViewModel @Inject constructor(
         _logType.value = type
     }
 
+    fun updateDefaultDistanceUnit(unit: DistanceUnit) {
+        _defaultDistanceUnit.value = unit
+    }
+
     fun updateNotes(notes: String) {
         _notes.value = notes
     }
@@ -102,6 +111,7 @@ class ExerciseFormViewModel @Inject constructor(
                 name = _exerciseName.value.trim(),
                 targetMuscle = _targetMuscle.value,
                 logType = _logType.value,
+                defaultDistanceUnit = _defaultDistanceUnit.value,
                 isCustom = true,
                 notes = _notes.value.takeIf { it.isNotBlank() },
                 defaultRestSeconds = _defaultRestSeconds.value.toIntOrNull() ?: 90

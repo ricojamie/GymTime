@@ -1,5 +1,6 @@
 package com.example.gymtime.util
 
+import com.example.gymtime.data.db.entity.DistanceUnit
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -7,6 +8,10 @@ import kotlin.math.roundToInt
  * Utilities for time and distance formatting/conversion
  */
 object TimeUtils {
+    private const val METERS_PER_MILE = 1609.344f
+    private const val METERS_PER_KILOMETER = 1000f
+    private const val METERS_PER_YARD = 0.9144f
+    private const val METERS_PER_FOOT = 0.3048f
 
     /**
      * Converts seconds to HH:MM:SS format
@@ -49,14 +54,14 @@ object TimeUtils {
      * Converts meters to miles (1 mile = 1609.34 meters)
      */
     fun metersToMiles(meters: Float): Float {
-        return meters / 1609.344f
+        return meters / METERS_PER_MILE
     }
 
     /**
      * Converts miles to meters
      */
     fun milesToMeters(miles: Float): Float {
-        return miles * 1609.344f
+        return miles * METERS_PER_MILE
     }
 
     /**
@@ -64,5 +69,40 @@ object TimeUtils {
      */
     fun formatMiles(miles: Float): String {
         return String.format(Locale.US, "%.2f", miles)
+    }
+
+    fun distanceToMeters(value: Float, unit: DistanceUnit): Float? {
+        return when (unit) {
+            DistanceUnit.METERS -> value
+            DistanceUnit.KILOMETERS -> value * METERS_PER_KILOMETER
+            DistanceUnit.YARDS -> value * METERS_PER_YARD
+            DistanceUnit.FEET -> value * METERS_PER_FOOT
+            DistanceUnit.MILES -> value * METERS_PER_MILE
+            DistanceUnit.STEPS, DistanceUnit.FLOORS -> null
+        }
+    }
+
+    fun metersToDistance(meters: Float, unit: DistanceUnit): Float {
+        return when (unit) {
+            DistanceUnit.METERS -> meters
+            DistanceUnit.KILOMETERS -> meters / METERS_PER_KILOMETER
+            DistanceUnit.YARDS -> meters / METERS_PER_YARD
+            DistanceUnit.FEET -> meters / METERS_PER_FOOT
+            DistanceUnit.MILES -> meters / METERS_PER_MILE
+            DistanceUnit.STEPS, DistanceUnit.FLOORS -> meters
+        }
+    }
+
+    fun formatDistance(value: Float, unit: DistanceUnit): String {
+        val decimals = when (unit) {
+            DistanceUnit.METERS,
+            DistanceUnit.YARDS,
+            DistanceUnit.FEET,
+            DistanceUnit.STEPS,
+            DistanceUnit.FLOORS -> 0
+            DistanceUnit.KILOMETERS,
+            DistanceUnit.MILES -> 2
+        }
+        return "%.${decimals}f".format(Locale.US, value)
     }
 }
