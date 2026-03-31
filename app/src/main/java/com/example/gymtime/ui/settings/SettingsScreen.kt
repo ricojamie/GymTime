@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.gymtime.BuildConfig
 import com.example.gymtime.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -649,7 +650,7 @@ fun SettingsScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Version 1.5.0",
+                        text = "Version ${BuildConfig.VERSION_NAME}",
                         fontSize = 14.sp,
                         color = LocalAppColors.current.textTertiary,
                         fontWeight = FontWeight.Medium
@@ -797,27 +798,33 @@ fun SettingsScreen(
     if (showChangelog) {
         AlertDialog(
             onDismissRequest = { showChangelog = false },
-            title = { Text("What's New in v1.5 🎉", color = LocalAppColors.current.textPrimary) },
+            title = { Text("What's New in v${BuildConfig.VERSION_NAME} 🌞", color = LocalAppColors.current.textPrimary) },
             text = {
                 Column {
-                    Text("Supersets Unleashed! ⚡", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        "Summer Shred Update 💪",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "🔗 Unlimited Supersets\n" +
-                        "Why stop at 2? Chain 3, 4, 5+ exercises together. Tri-sets, giant sets, circuit mayhem - you name it!\n\n" +
-                        "🧠 Smart Form Memory\n" +
-                        "Cycling through a superset? Your weight & reps now stick when you return to each exercise. No more re-entering!\n\n" +
-                        "☀️ Light Mode\n" +
-                        "For the daywalkers among us. Toggle dark/light in Display settings. Your eyes will thank you.\n\n" +
-                        "📱 Screen Awake Mode\n" +
-                        "No more phone sleeping mid-set! Keep your screen alive during workouts.",
+                        "⏱️ New ways to log work\n" +
+                        "Track Weight x Time and Calories x Time alongside the classic strength flows.\n\n" +
+                        "🏃 Distance your way\n" +
+                        "Cardio now supports meters, kilometers, yards, feet, miles, steps, and floors, with live distance-type switching while you log.\n\n" +
+                        "🎨 Theme lab unlocked\n" +
+                        "Pick from 3 polished presets, spin up a custom accent color, choose from 5 fonts, or upload your own font file.\n\n" +
+                        "🔥 Smarter streaks\n" +
+                        "Set your own rest days per week so Iron Streak matches how you actually train.\n\n" +
+                        "📊 Analytics glow-up\n" +
+                        "Radar chart, range filters, better cardio-aware stats, and a much cleaner balance view.",
                         color = LocalAppColors.current.textPrimary
                     )
                 }
             },
             confirmButton = {
                 TextButton(onClick = { showChangelog = false }) {
-                    Text("Let's Lift! 🏋️", color = MaterialTheme.colorScheme.primary)
+                    Text("Shred On! ⚡", color = MaterialTheme.colorScheme.primary)
                 }
             },
             containerColor = LocalAppColors.current.surfaceCards,
