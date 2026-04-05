@@ -119,7 +119,8 @@ class IronLogImporter @Inject constructor(
                 val routine = Routine(
                     id = 0,
                     name = row["name"] ?: "Imported Routine",
-                    isActive = row["isActive"]?.toBooleanStrictOrNull() ?: true
+                    isActive = row["isActive"]?.toBooleanStrictOrNull() ?: false,
+                    nextDayOrderIndex = row["nextDayOrderIndex"]?.toIntOrNull() ?: 0
                 )
                 val newId = routineDao.insertRoutine(routine)
                 routineIdMap[oldId] = newId
@@ -167,7 +168,11 @@ class IronLogImporter @Inject constructor(
                     note = row["note"]?.takeIf { it.isNotEmpty() },
                     rating = row["rating"]?.toIntOrNull(),
                     ratingNote = row["ratingNote"]?.takeIf { it.isNotEmpty() },
-                    routineDayId = newRoutineDayId
+                    routineDayId = newRoutineDayId,
+                    routineId = row["routineId"]?.toLongOrNull()?.let { routineIdMap[it] },
+                    routineNameSnapshot = row["routineNameSnapshot"]?.takeIf { it.isNotEmpty() },
+                    routineDayNameSnapshot = row["routineDayNameSnapshot"]?.takeIf { it.isNotEmpty() },
+                    startedFromRoutine = row["startedFromRoutine"]?.toBooleanStrictOrNull() ?: false
                 )
                 val newId = workoutDao.insertWorkout(workout)
                 workoutIdMap[oldId] = newId
@@ -191,6 +196,11 @@ class IronLogImporter @Inject constructor(
                     routineDayId = newRoutineDayId,
                     exerciseId = newExerciseId,
                     orderIndex = row["orderIndex"]?.toIntOrNull() ?: 0,
+                    targetSets = row["targetSets"]?.toIntOrNull() ?: 3,
+                    targetRepsMin = row["targetRepsMin"]?.toIntOrNull(),
+                    targetRepsMax = row["targetRepsMax"]?.toIntOrNull(),
+                    targetRestSeconds = row["targetRestSeconds"]?.toIntOrNull(),
+                    notes = row["notes"]?.takeIf { it.isNotEmpty() },
                     supersetGroupId = row["supersetGroupId"]?.takeIf { it.isNotEmpty() },
                     supersetOrderIndex = row["supersetOrderIndex"]?.toIntOrNull() ?: 0
                 )

@@ -18,6 +18,7 @@ class RoutineFormViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val routineId: Long? = savedStateHandle.get<String>("routineId")?.toLongOrNull()
+    private var existingRoutine: Routine? = null
 
     private val _routineName = MutableStateFlow("")
     val routineName: StateFlow<String> = _routineName.asStateFlow()
@@ -35,6 +36,7 @@ class RoutineFormViewModel @Inject constructor(
         if (routineId != null) {
             viewModelScope.launch {
                 routineRepository.getRoutineById(routineId).firstOrNull()?.let { routine ->
+                    existingRoutine = routine
                     _routineName.value = routine.name
                 }
             }
@@ -52,11 +54,16 @@ class RoutineFormViewModel @Inject constructor(
 
             if (routineId != null) {
                 // Edit mode
-                routineRepository.updateRoutine(Routine(id = routineId, name = name))
+                val current = existingRoutine ?: return@launch
+                routineRepository.updateRoutine(current.copy(name = name))
                 _saveSuccessEvent.send(routineId)
             } else {
                 // Create mode
-                val newId = routineRepository.insertRoutine(Routine(name = name))
+                val hasAnyRoutine = routineRepository.getAllRoutines().first().isNotEmpty()
+                val newId = routineRepository.insertRoutine(Routine(name = name, isActive = !hasAnyRoutine))
+                if (!hasAnyRoutine) {
+                    routineRepository.setActiveRoutine(newId)
+                }
                 _saveSuccessEvent.send(newId)
             }
         }

@@ -68,7 +68,7 @@ class IronLogExporter @Inject constructor(
             // workouts.csv
             zip.putNextEntry(ZipEntry("workouts.csv"))
             zip.write(buildCsv(
-                header = "id,startTime,endTime,name,note,rating,ratingNote,routineDayId",
+                header = "id,startTime,endTime,name,note,rating,ratingNote,routineDayId,routineId,routineNameSnapshot,routineDayNameSnapshot,startedFromRoutine",
                 rows = workouts.map { w ->
                     listOf(
                         w.id.toString(),
@@ -78,7 +78,11 @@ class IronLogExporter @Inject constructor(
                         w.note ?: "",
                         w.rating?.toString() ?: "",
                         w.ratingNote ?: "",
-                        w.routineDayId?.toString() ?: ""
+                        w.routineDayId?.toString() ?: "",
+                        w.routineId?.toString() ?: "",
+                        w.routineNameSnapshot ?: "",
+                        w.routineDayNameSnapshot ?: "",
+                        w.startedFromRoutine.toString()
                     )
                 }
             ))
@@ -115,9 +119,9 @@ class IronLogExporter @Inject constructor(
             // routines.csv
             zip.putNextEntry(ZipEntry("routines.csv"))
             zip.write(buildCsv(
-                header = "id,name,isActive",
+                header = "id,name,isActive,nextDayOrderIndex",
                 rows = routines.map { r ->
-                    listOf(r.id.toString(), r.name, r.isActive.toString())
+                    listOf(r.id.toString(), r.name, r.isActive.toString(), r.nextDayOrderIndex.toString())
                 }
             ))
             zip.closeEntry()
@@ -135,13 +139,18 @@ class IronLogExporter @Inject constructor(
             // routine_exercises.csv
             zip.putNextEntry(ZipEntry("routine_exercises.csv"))
             zip.write(buildCsv(
-                header = "id,routineDayId,exerciseId,orderIndex,supersetGroupId,supersetOrderIndex",
+                header = "id,routineDayId,exerciseId,orderIndex,targetSets,targetRepsMin,targetRepsMax,targetRestSeconds,notes,supersetGroupId,supersetOrderIndex",
                 rows = routineExercises.map { re ->
                     listOf(
                         re.id.toString(),
                         re.routineDayId.toString(),
                         re.exerciseId.toString(),
                         re.orderIndex.toString(),
+                        re.targetSets.toString(),
+                        re.targetRepsMin?.toString() ?: "",
+                        re.targetRepsMax?.toString() ?: "",
+                        re.targetRestSeconds?.toString() ?: "",
+                        re.notes ?: "",
                         re.supersetGroupId ?: "",
                         re.supersetOrderIndex.toString()
                     )

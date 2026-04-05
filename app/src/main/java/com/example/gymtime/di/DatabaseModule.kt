@@ -11,6 +11,7 @@ import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.dao.RoutineDao
 import com.example.gymtime.data.db.dao.SetDao
+import com.example.gymtime.data.db.dao.WorkoutPlanDao
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
@@ -180,6 +181,58 @@ object DatabaseModule {
         }
     }
 
+    // Migration from version 11 to 12: Overhaul routines around live workout plan snapshots
+    private val MIGRATION_11_12 = object : Migration(11, 12) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            Log.d(TAG, "Running migration 11 -> 12: Rebuilding routines and adding workout plan snapshots")
+
+            database.execSQL("DELETE FROM routine_exercises")
+            database.execSQL("DELETE FROM routine_days")
+            database.execSQL("DELETE FROM routines")
+
+            database.execSQL("ALTER TABLE routines ADD COLUMN nextDayOrderIndex INTEGER NOT NULL DEFAULT 0")
+
+            database.execSQL("ALTER TABLE routine_exercises ADD COLUMN targetSets INTEGER NOT NULL DEFAULT 3")
+            database.execSQL("ALTER TABLE routine_exercises ADD COLUMN targetRepsMin INTEGER DEFAULT NULL")
+            database.execSQL("ALTER TABLE routine_exercises ADD COLUMN targetRepsMax INTEGER DEFAULT NULL")
+            database.execSQL("ALTER TABLE routine_exercises ADD COLUMN targetRestSeconds INTEGER DEFAULT NULL")
+            database.execSQL("ALTER TABLE routine_exercises ADD COLUMN notes TEXT DEFAULT NULL")
+
+            database.execSQL("ALTER TABLE workouts ADD COLUMN routineId INTEGER DEFAULT NULL")
+            database.execSQL("ALTER TABLE workouts ADD COLUMN routineNameSnapshot TEXT DEFAULT NULL")
+            database.execSQL("ALTER TABLE workouts ADD COLUMN routineDayNameSnapshot TEXT DEFAULT NULL")
+            database.execSQL("ALTER TABLE workouts ADD COLUMN startedFromRoutine INTEGER NOT NULL DEFAULT 0")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_workouts_routineId ON workouts(routineId)")
+
+            database.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS workout_exercise_instances (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    workoutId INTEGER NOT NULL,
+                    exerciseId INTEGER NOT NULL,
+                    routineExerciseId INTEGER DEFAULT NULL,
+                    orderIndex INTEGER NOT NULL,
+                    plannedSets INTEGER DEFAULT NULL,
+                    repMin INTEGER DEFAULT NULL,
+                    repMax INTEGER DEFAULT NULL,
+                    restSeconds INTEGER DEFAULT NULL,
+                    notes TEXT DEFAULT NULL,
+                    supersetGroupId TEXT DEFAULT NULL,
+                    supersetOrderIndex INTEGER NOT NULL DEFAULT 0,
+                    isSkipped INTEGER NOT NULL DEFAULT 0,
+                    addedDuringWorkout INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY(workoutId) REFERENCES workouts(id) ON DELETE CASCADE,
+                    FOREIGN KEY(exerciseId) REFERENCES exercises(id) ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_workout_exercise_instances_workoutId ON workout_exercise_instances(workoutId)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_workout_exercise_instances_exerciseId ON workout_exercise_instances(exerciseId)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_workout_exercise_instances_routineExerciseId ON workout_exercise_instances(routineExerciseId)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_workout_exercise_instances_supersetGroupId ON workout_exercise_instances(supersetGroupId)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): GymTimeDatabase {
@@ -198,7 +251,8 @@ object DatabaseModule {
             MIGRATION_7_8,
             MIGRATION_8_9,
             MIGRATION_9_10,
-            MIGRATION_10_11
+            MIGRATION_10_11,
+            MIGRATION_11_12
         )
         .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
         .addCallback(object : RoomDatabase.Callback() {
@@ -321,6 +375,9 @@ object DatabaseModule {
 
     @Provides
     fun provideRoutineDao(database: GymTimeDatabase): RoutineDao = database.routineDao()
+
+    @Provides
+    fun provideWorkoutPlanDao(database: GymTimeDatabase): WorkoutPlanDao = database.workoutPlanDao()
 
     @Provides
     fun provideMuscleGroupDao(database: GymTimeDatabase): MuscleGroupDao = database.muscleGroupDao()

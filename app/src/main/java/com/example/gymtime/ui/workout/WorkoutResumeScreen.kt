@@ -21,7 +21,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.*
 
@@ -115,7 +114,7 @@ fun WorkoutResumeScreen(
         ) {
             // Header
             Text(
-                text = "Today's Workout",
+                text = currentWorkout?.routineDayNameSnapshot ?: "Today's Workout",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
@@ -214,10 +213,10 @@ fun WorkoutResumeScreen(
 
 @Composable
 private fun ExerciseSummaryCard(
-    exercise: WorkoutExerciseSummary,
+    exercise: ResumeExerciseItem,
     onClick: () -> Unit
 ) {
-    val isUnstarted = exercise.setCount == 0
+    val isUnstarted = exercise.setCount == 0 && !exercise.isSkipped
     val accentColor = MaterialTheme.colorScheme.primary
 
     GlowCard(
@@ -248,12 +247,31 @@ private fun ExerciseSummaryCard(
             }
 
             if (isUnstarted) {
-                Text(
-                    text = "Not started",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = LocalAppColors.current.textTertiary
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "Not started",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = LocalAppColors.current.textTertiary
+                    )
+                    exercise.plannedSets?.let { sets ->
+                        Text(
+                            text = buildString {
+                                append("$sets sets")
+                                if (exercise.repMin != null) {
+                                    append(" • ")
+                                    append(exercise.repMin)
+                                    if (exercise.repMax != null && exercise.repMax != exercise.repMin) {
+                                        append("-${exercise.repMax}")
+                                    }
+                                    append(" reps")
+                                }
+                            },
+                            fontSize = 12.sp,
+                            color = accentColor
+                        )
+                    }
+                }
             } else {
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
@@ -332,14 +350,14 @@ private fun WorkoutResumeScreenPreview() {
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 ExerciseSummaryCard(
-                    exercise = WorkoutExerciseSummary(
+                    exercise = ResumeExerciseItem(
                         exerciseId = 1,
                         exerciseName = "Barbell Bench Press",
                         targetMuscle = "Chest",
                         setCount = 4,
                         bestWeight = 225f,
-                        firstSetTimestamp = System.currentTimeMillis(),
-                        supersetGroupId = null
+                        supersetGroupId = null,
+                        orderIndex = 0
                     ),
                     onClick = {}
                 )

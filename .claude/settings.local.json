@@ -39,7 +39,13 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(./gradlew testDebugUnitTest:*)",
       "Bash(cat:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(dir:*)",
+      "Bash(export ANDROID_HOME=\"$LOCALAPPDATA/Android/Sdk\")",
+      "Bash(git reset:*)",
+      "Bash(git pull:*)",
+      "Bash(xargs grep:*)",
+      "Bash(grep -l \"VolumeProgressBar\\\\|VolumeOrb\" D:/AI_Stuff/Coding_Projects/Gym_App/app/src/main/java/com/example/gymtime/ui/**/*.kt 2>/dev/null)"
     ],
     "deny": [],
     "ask": []

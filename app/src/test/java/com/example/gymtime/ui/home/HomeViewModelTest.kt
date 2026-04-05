@@ -3,7 +3,7 @@ package com.example.gymtime.ui.home
 import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.VolumeOrbRepository
 import com.example.gymtime.data.VolumeOrbState
-import com.example.gymtime.data.db.dao.RoutineDao
+import com.example.gymtime.data.RoutineRepository
 import com.example.gymtime.data.repository.WorkoutRepository
 import com.example.gymtime.util.StreakCalculator
 import com.example.gymtime.util.TestDispatcherRule
@@ -26,21 +26,21 @@ class HomeViewModelTest {
 
     private lateinit var userPreferencesRepository: UserPreferencesRepository
     private lateinit var workoutRepository: WorkoutRepository
-    private lateinit var routineDao: RoutineDao
+    private lateinit var routineRepository: RoutineRepository
     private lateinit var volumeOrbRepository: VolumeOrbRepository
 
     @Before
     fun setup() {
         userPreferencesRepository = mockk(relaxed = true)
         workoutRepository = mockk(relaxed = true)
-        routineDao = mockk(relaxed = true)
+        routineRepository = mockk(relaxed = true)
         volumeOrbRepository = mockk(relaxed = true)
 
         every { userPreferencesRepository.userName } returns flowOf("Test User")
-        every { userPreferencesRepository.activeRoutineId } returns flowOf(null)
         every { userPreferencesRepository.bestStreak } returns flowOf(0)
         every { userPreferencesRepository.restDaysPerWeek } returns flowOf(2)
         every { workoutRepository.getOngoingWorkoutFlow() } returns flowOf(null)
+        every { routineRepository.getActiveRoutineStatus() } returns flowOf(null)
         every { volumeOrbRepository.orbState } returns MutableStateFlow(VolumeOrbState())
 
         coEvery { workoutRepository.getTotalVolume(any(), any()) } returns 0f
@@ -50,7 +50,7 @@ class HomeViewModelTest {
     }
 
     private fun createViewModel(): HomeViewModel {
-        return HomeViewModel(userPreferencesRepository, workoutRepository, routineDao, volumeOrbRepository)
+        return HomeViewModel(userPreferencesRepository, workoutRepository, routineRepository, volumeOrbRepository)
     }
 
     @Test

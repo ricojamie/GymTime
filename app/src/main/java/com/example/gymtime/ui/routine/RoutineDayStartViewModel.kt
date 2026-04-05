@@ -4,19 +4,15 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.RoutineRepository
-import com.example.gymtime.data.db.dao.WorkoutDao
-import com.example.gymtime.data.db.entity.Workout
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.util.Date
 import javax.inject.Inject
 
 @HiltViewModel
 class RoutineDayStartViewModel @Inject constructor(
     private val routineRepository: RoutineRepository,
-    private val workoutDao: WorkoutDao,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -45,23 +41,9 @@ class RoutineDayStartViewModel @Inject constructor(
 
     fun startWorkoutFromDay(dayId: Long) {
         viewModelScope.launch {
-            // Get exercises for this day
-            val exercises = routineRepository.getExerciseListForDay(dayId).first()
-
-            if (exercises.isEmpty()) return@launch
-
-            // Create workout linked to routine day
-            val workoutId = workoutDao.insertWorkout(
-                Workout(
-                    startTime = Date(),
-                    endTime = null,
-                    name = null, // Could set a default name like "Leg Day" here if desired
-                    note = null,
-                    routineDayId = dayId
-                )
-            )
-
-            _startWorkoutEvent.send(exercises.first().id)
+            routineRepository.startRoutineDay(dayId)?.let { start ->
+                _startWorkoutEvent.send(start.firstExerciseId)
+            }
         }
     }
 }

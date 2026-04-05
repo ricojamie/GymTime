@@ -14,6 +14,7 @@ import com.example.gymtime.data.RoutineRepository
 import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.VolumeOrbRepository
 import com.example.gymtime.data.VolumeOrbState
+import com.example.gymtime.data.db.dao.WorkoutPlanSummary
 import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
 import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.Exercise
@@ -188,6 +189,9 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _workoutOverview = MutableStateFlow<List<WorkoutExerciseSummary>>(emptyList())
     val workoutOverview: StateFlow<List<WorkoutExerciseSummary>> = _workoutOverview
 
+    private val _currentPlanItem = MutableStateFlow<WorkoutPlanSummary?>(null)
+    val currentPlanItem: StateFlow<WorkoutPlanSummary?> = _currentPlanItem
+
     // Timer auto-start setting
     val timerAutoStart = userPreferencesRepository.timerAutoStart
 
@@ -252,56 +256,60 @@ class ExerciseLoggingViewModel @Inject constructor(
             _currentWorkout.value = workout
         }
 
-        // Initialize routine data reactively once workout is loaded
         viewModelScope.launch {
-            _currentWorkout.filterNotNull().flatMapLatest { workout ->
-                if (workout.routineDayId != null) {
-                    routineRepository.getRoutineDayWithExercises(workout.routineDayId)
+            _currentWorkout.filterNotNull().collectLatest { workout ->
+                if (workout.startedFromRoutine) {
+                    workoutRepository.ensureWorkoutPlanInstance(workout.id, exerciseId)
                 } else {
-                    flowOf(null)
-                }
-            }.collectLatest { dayWithExercises ->
-                val routineExercises = dayWithExercises?.exercises?.sortedBy { it.routineExercise.orderIndex }
-                val currentRoutineExercise = routineExercises?.find { it.routineExercise.exerciseId == exerciseId }
-                
-                // 1. Determine next exercise for navigation
-                val currentIndex = routineExercises?.indexOfFirst { it.routineExercise.exerciseId == exerciseId } ?: -1
-                val currentGroupId = currentRoutineExercise?.routineExercise?.supersetGroupId
-                
-                if (currentGroupId != null) {
-                    val group = routineExercises!!
-                        .filter { it.routineExercise.supersetGroupId == currentGroupId }
-                        .sortedBy { it.routineExercise.supersetOrderIndex }
-                    
-                    val indexInGroup = group.indexOfFirst { it.exercise.id == exerciseId }
-                    if (indexInGroup != -1) {
-                        val nextInRotation = (indexInGroup + 1) % group.size
-                        _nextExerciseId.value = group[nextInRotation].exercise.id
-                    }
-                } else if (currentIndex != -1 && currentIndex < (routineExercises?.size ?: 0) - 1) {
-                    _nextExerciseId.value = routineExercises!![currentIndex + 1].routineExercise.exerciseId
-                } else {
+                    _currentPlanItem.value = null
                     _nextExerciseId.value = null
                 }
-                
-                // 2. Initialize SupersetManager if part of a routine superset
-                currentGroupId?.let { groupId ->
-                    val groupExercises = routineExercises!!
-                        .filter { it.routineExercise.supersetGroupId == groupId }
-                        .sortedBy { it.routineExercise.supersetOrderIndex }
-                        .map { it.exercise }
-                    
+            }
+        }
+
+        viewModelScope.launch {
+            _currentWorkout.filterNotNull().flatMapLatest { workout ->
+                if (workout.startedFromRoutine) {
+                    workoutRepository.getWorkoutPlanSummaries(workout.id)
+                } else {
+                    flowOf(emptyList())
+                }
+            }.collectLatest { planItems ->
+                val currentItem = planItems.firstOrNull { it.exerciseId == exerciseId }
+                _currentPlanItem.value = currentItem
+
+                currentItem?.restSeconds?.let { _restTime.value = it }
+
+                val currentIndex = planItems.indexOfFirst { it.exerciseId == exerciseId }
+                val currentGroupId = currentItem?.supersetGroupId
+
+                if (currentGroupId != null) {
+                    val group = planItems
+                        .filter { it.supersetGroupId == currentGroupId }
+                        .sortedBy { it.supersetOrderIndex }
+
+                    val indexInGroup = group.indexOfFirst { it.exerciseId == exerciseId }
+                    if (indexInGroup != -1) {
+                        val nextInRotation = (indexInGroup + 1) % group.size
+                        _nextExerciseId.value = group[nextInRotation].exerciseId
+                    }
+
+                    val groupExercises = group.mapNotNull { workoutItem ->
+                        exerciseRepository.getExercise(workoutItem.exerciseId).first()
+                    }
                     if (groupExercises.size >= 2) {
-                        if (!supersetManager.isInSupersetMode.value || supersetManager.supersetGroupId.value != groupId) {
-                            supersetManager.startSuperset(groupExercises, groupId)
+                        if (!supersetManager.isInSupersetMode.value || supersetManager.supersetGroupId.value != currentGroupId) {
+                            supersetManager.startSuperset(groupExercises, currentGroupId)
                         }
-                        
-                        // Sync current index
                         val orderIndex = groupExercises.indexOfFirst { it.id == exerciseId }
                         if (orderIndex != -1) {
                             supersetManager.setCurrentExerciseIndex(orderIndex)
                         }
                     }
+                } else if (currentIndex != -1 && currentIndex < planItems.lastIndex) {
+                    _nextExerciseId.value = planItems[currentIndex + 1].exerciseId
+                } else if (!supersetManager.isInSupersetMode.value) {
+                    _nextExerciseId.value = null
                 }
             }
         }

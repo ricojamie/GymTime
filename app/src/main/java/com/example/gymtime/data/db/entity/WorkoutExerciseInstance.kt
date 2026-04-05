@@ -6,12 +6,12 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
-    tableName = "routine_exercises",
+    tableName = "workout_exercise_instances",
     foreignKeys = [
         ForeignKey(
-            entity = RoutineDay::class,
+            entity = Workout::class,
             parentColumns = ["id"],
-            childColumns = ["routineDayId"],
+            childColumns = ["workoutId"],
             onDelete = ForeignKey.CASCADE
         ),
         ForeignKey(
@@ -21,18 +21,21 @@ import androidx.room.PrimaryKey
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("routineDayId"), Index("exerciseId")]
+    indices = [Index("workoutId"), Index("exerciseId"), Index("routineExerciseId"), Index("supersetGroupId")]
 )
-data class RoutineExercise(
+data class WorkoutExerciseInstance(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val routineDayId: Long,
+    val workoutId: Long,
     val exerciseId: Long,
+    val routineExerciseId: Long? = null,
     val orderIndex: Int,
-    val targetSets: Int = 3,
-    val targetRepsMin: Int? = null,
-    val targetRepsMax: Int? = null,
-    val targetRestSeconds: Int? = null,
+    val plannedSets: Int? = null,
+    val repMin: Int? = null,
+    val repMax: Int? = null,
+    val restSeconds: Int? = null,
     val notes: String? = null,
-    val supersetGroupId: String? = null,  // UUID linking all exercises in a routine superset
-    val supersetOrderIndex: Int = 0       // Position in rotation (0, 1, etc.)
+    val supersetGroupId: String? = null,
+    val supersetOrderIndex: Int = 0,
+    val isSkipped: Boolean = false,
+    val addedDuringWorkout: Boolean = false
 )

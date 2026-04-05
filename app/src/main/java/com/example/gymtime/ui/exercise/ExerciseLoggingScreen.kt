@@ -129,6 +129,7 @@ fun ExerciseLoggingScreen(
     val timerVibrateEnabled by viewModel.timerVibrateEnabled.collectAsState(initial = true)
     val lastWorkoutSets by viewModel.lastWorkoutSets.collectAsState()
     val workoutOverview by viewModel.workoutOverview.collectAsState()
+    val currentPlanItem by viewModel.currentPlanItem.collectAsState()
     val personalBestsByReps by viewModel.personalBestsByReps.collectAsState()
     val volumeOrbState by viewModel.volumeOrbState.collectAsState()
 
@@ -375,6 +376,17 @@ fun ExerciseLoggingScreen(
                             )
                         }
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                currentPlanItem?.let { plan ->
+                    WorkoutPrescriptionCard(
+                        plannedSets = plan.plannedSets,
+                        repMin = plan.repMin,
+                        repMax = plan.repMax,
+                        restSeconds = plan.restSeconds,
+                        notes = plan.notes
+                    )
                     Spacer(modifier = Modifier.height(12.dp))
                 }
 
@@ -906,8 +918,10 @@ fun ExerciseLoggingScreen(
                         if (isInSupersetMode) {
                             // Exit superset mode before navigating to add exercise
                             viewModel.exitSupersetMode()
+                            navController.popBackStack()
+                        } else {
+                            navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
                         }
-                        navController.popBackStack()
                     },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.outlinedButtonColors(
@@ -1316,6 +1330,60 @@ fun ExerciseLoggingScreen(
                     personalRecords = personalRecords,
                     history = exerciseHistory,
                     onDismiss = { showExerciseHistory = false }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkoutPrescriptionCard(
+    plannedSets: Int?,
+    repMin: Int?,
+    repMax: Int?,
+    restSeconds: Int?,
+    notes: String?
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "PLANNED WORK",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            )
+            Text(
+                text = buildString {
+                    plannedSets?.let { append("$it sets") }
+                    if (repMin != null) {
+                        if (isNotEmpty()) append(" • ")
+                        append(repMin)
+                        if (repMax != null && repMax != repMin) append("-$repMax")
+                        append(" reps")
+                    }
+                    restSeconds?.let {
+                        if (isNotEmpty()) append(" • ")
+                        append("${it}s rest")
+                    }
+                }.ifBlank { "Session-only exercise" },
+                style = MaterialTheme.typography.bodyMedium,
+                color = LocalAppColors.current.textPrimary
+            )
+            notes?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalAppColors.current.textSecondary
                 )
             }
         }

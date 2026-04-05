@@ -68,7 +68,7 @@ fun HomeScreen(
     val ongoingWorkout by viewModel.ongoingWorkout.collectAsState()
     val hasActiveRoutine by viewModel.hasActiveRoutine.collectAsState()
     val activeRoutineName by viewModel.activeRoutineName.collectAsState()
-    val activeRoutineId by viewModel.activeRoutineId.collectAsState(initial = null)
+    val nextRoutineDayName by viewModel.nextRoutineDayName.collectAsState()
     val volumeOrbState by viewModel.volumeOrbState.collectAsState()
     val streakResult by viewModel.streakResult.collectAsState()
     val bestStreak by viewModel.bestStreak.collectAsState()
@@ -77,6 +77,7 @@ fun HomeScreen(
     val lastYearVolume by viewModel.lastYearVolume.collectAsState()
 
     var showStreakDetail by remember { mutableStateOf(false) }
+    var showWorkoutStartPicker by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
 
     val view = LocalView.current
@@ -91,6 +92,12 @@ fun HomeScreen(
     // Refresh data when screen becomes visible
     LaunchedEffect(Unit) {
         viewModel.refreshData()
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.startRoutineWorkoutEvent.collect { start ->
+            navController.navigate(Screen.ExerciseLogging.createRoute(start.firstExerciseId))
+        }
     }
 
     BoxWithConstraints(
@@ -145,10 +152,14 @@ fun HomeScreen(
             // Quick Start Card
             QuickStartCard(
                 isOngoing = ongoingWorkout != null,
+                hasActiveRoutine = hasActiveRoutine,
+                nextRoutineDayName = nextRoutineDayName,
                 height = quickStartHeight,
                 onClick = {
                     if (ongoingWorkout != null) {
                         navController.navigate(Screen.WorkoutResume.route)
+                    } else if (hasActiveRoutine) {
+                        showWorkoutStartPicker = true
                     } else {
                         navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
                     }
@@ -170,11 +181,7 @@ fun HomeScreen(
                     hasActiveRoutine = hasActiveRoutine,
                     routineName = activeRoutineName,
                     onClick = {
-                        if (hasActiveRoutine && activeRoutineId != null) {
-                            navController.navigate(Screen.RoutineDayStart.createRoute(activeRoutineId!!))
-                        } else {
-                            navController.navigate(Screen.RoutineList.route)
-                        }
+                        navController.navigate(Screen.RoutineList.route)
                     }
                 )
 
@@ -217,6 +224,27 @@ fun HomeScreen(
                 )
             }
         }
+
+        if (showWorkoutStartPicker) {
+            ModalBottomSheet(
+                onDismissRequest = { showWorkoutStartPicker = false },
+                sheetState = rememberModalBottomSheetState(),
+                containerColor = LocalAppColors.current.surfaceCards,
+                scrimColor = Color.Black.copy(alpha = 0.6f)
+            ) {
+                WorkoutStartPickerSheet(
+                    nextRoutineDayName = nextRoutineDayName,
+                    onStartRoutine = {
+                        showWorkoutStartPicker = false
+                        viewModel.startNextRoutineWorkout()
+                    },
+                    onStartBlank = {
+                        showWorkoutStartPicker = false
+                        navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
+                    }
+                )
+            }
+        }
     }
 }
 
@@ -226,6 +254,8 @@ fun HomeScreen(
 @Composable
 private fun QuickStartCard(
     isOngoing: Boolean,
+    hasActiveRoutine: Boolean,
+    nextRoutineDayName: String?,
     height: Dp,
     onClick: () -> Unit
 ) {
@@ -242,7 +272,11 @@ private fun QuickStartCard(
                 .padding(16.dp)
         ) {
             Text(
-                text = if (isOngoing) "IN PROGRESS" else "EMPTY SESSION",
+                text = when {
+                    isOngoing -> "IN PROGRESS"
+                    hasActiveRoutine -> "NEXT UP"
+                    else -> "EMPTY SESSION"
+                },
                 modifier = Modifier.align(Alignment.TopEnd),
                 style = MaterialTheme.typography.labelSmall,
                 color = accentColor,
@@ -264,16 +298,93 @@ private fun QuickStartCard(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = if (isOngoing) "Resume Workout" else "Start Workout",
+                    text = when {
+                        isOngoing -> "Resume Workout"
+                        hasActiveRoutine -> (nextRoutineDayName ?: "Start Next Workout")
+                        else -> "Start Workout"
+                    },
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = accentColor
                 )
 
                 Text(
-                    text = if (isOngoing) "Continue your session" else "Build as you go",
+                    text = when {
+                        isOngoing -> "Continue your session"
+                        hasActiveRoutine -> "Routine knows what is next"
+                        else -> "Build as you go"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = LocalAppColors.current.textTertiary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkoutStartPickerSheet(
+    nextRoutineDayName: String?,
+    onStartRoutine: () -> Unit,
+    onStartBlank: () -> Unit
+) {
+    val accentColor = MaterialTheme.colorScheme.primary
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            text = "Start Workout",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = LocalAppColors.current.textPrimary
+        )
+
+        Text(
+            text = "Choose the next routine day or start a blank session.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = LocalAppColors.current.textSecondary
+        )
+
+        GlowCard(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onStartRoutine
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Text(
+                    text = nextRoutineDayName ?: "Next Routine Workout",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = accentColor
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Continue your active routine in order.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalAppColors.current.textSecondary
+                )
+            }
+        }
+
+        GlowCard(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onStartBlank
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Text(
+                    text = "Blank Workout",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = LocalAppColors.current.textPrimary
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Log freely without advancing the routine.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalAppColors.current.textSecondary
                 )
             }
         }

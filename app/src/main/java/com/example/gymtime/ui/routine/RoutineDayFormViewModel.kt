@@ -37,6 +37,18 @@ class RoutineDayFormViewModel @Inject constructor(
     // Maintain exercise order
     private val _selectedExerciseOrder = MutableStateFlow<List<Long>>(emptyList())
 
+    private val _targetSets = MutableStateFlow<Map<Long, String>>(emptyMap())
+    val targetSets: StateFlow<Map<Long, String>> = _targetSets.asStateFlow()
+
+    private val _targetRepMin = MutableStateFlow<Map<Long, String>>(emptyMap())
+    val targetRepMin: StateFlow<Map<Long, String>> = _targetRepMin.asStateFlow()
+
+    private val _targetRepMax = MutableStateFlow<Map<Long, String>>(emptyMap())
+    val targetRepMax: StateFlow<Map<Long, String>> = _targetRepMax.asStateFlow()
+
+    private val _targetRestSeconds = MutableStateFlow<Map<Long, String>>(emptyMap())
+    val targetRestSeconds: StateFlow<Map<Long, String>> = _targetRestSeconds.asStateFlow()
+
     // Track which exercise index is linked as a superset with the next one
     // e.g., if set contains 0, index 0 and 1 are linked.
     private val _supersetLinks = MutableStateFlow<Set<Int>>(emptySet())
@@ -72,6 +84,19 @@ class RoutineDayFormViewModel @Inject constructor(
                         val exercises = it.exercises.sortedBy { it.routineExercise.orderIndex }
                         _selectedExerciseIds.value = exercises.map { it.exercise.id }.toSet()
                         _selectedExerciseOrder.value = exercises.map { it.exercise.id }
+                        _targetSets.value = exercises.associate { exercise ->
+                            exercise.exercise.id to exercise.routineExercise.targetSets.toString()
+                        }
+                        _targetRepMin.value = exercises.associate { exercise ->
+                            exercise.exercise.id to (exercise.routineExercise.targetRepsMin?.toString() ?: "")
+                        }
+                        _targetRepMax.value = exercises.associate { exercise ->
+                            exercise.exercise.id to (exercise.routineExercise.targetRepsMax?.toString() ?: "")
+                        }
+                        _targetRestSeconds.value = exercises.associate { exercise ->
+                            exercise.exercise.id to ((exercise.routineExercise.targetRestSeconds
+                                ?: exercise.exercise.defaultRestSeconds).toString())
+                        }
                         
                         // Reconstruct superset links
                         val links = mutableSetOf<Int>()
@@ -107,6 +132,13 @@ class RoutineDayFormViewModel @Inject constructor(
         if (!_selectedExerciseIds.value.contains(exerciseId)) {
             _selectedExerciseIds.value = _selectedExerciseIds.value + exerciseId
             _selectedExerciseOrder.value = _selectedExerciseOrder.value + exerciseId
+            _targetSets.value = _targetSets.value + (exerciseId to "3")
+            _targetRepMin.value = _targetRepMin.value + (exerciseId to "")
+            _targetRepMax.value = _targetRepMax.value + (exerciseId to "")
+            viewModelScope.launch {
+                val defaultRest = exerciseDao.getExerciseByIdSync(exerciseId)?.defaultRestSeconds ?: 90
+                _targetRestSeconds.value = _targetRestSeconds.value + (exerciseId to defaultRest.toString())
+            }
         }
     }
 
@@ -115,6 +147,10 @@ class RoutineDayFormViewModel @Inject constructor(
             val index = _selectedExerciseOrder.value.indexOf(exerciseId)
             _selectedExerciseIds.value = _selectedExerciseIds.value - exerciseId
             _selectedExerciseOrder.value = _selectedExerciseOrder.value - exerciseId
+            _targetSets.value = _targetSets.value - exerciseId
+            _targetRepMin.value = _targetRepMin.value - exerciseId
+            _targetRepMax.value = _targetRepMax.value - exerciseId
+            _targetRestSeconds.value = _targetRestSeconds.value - exerciseId
             
             // Re-adjust superset links when an exercise is removed
             val currentLinks = _supersetLinks.value.toMutableSet()
@@ -158,6 +194,22 @@ class RoutineDayFormViewModel @Inject constructor(
     
     fun isExerciseSelected(exerciseId: Long): Boolean {
         return _selectedExerciseIds.value.contains(exerciseId)
+    }
+
+    fun updateTargetSets(exerciseId: Long, value: String) {
+        _targetSets.value = _targetSets.value + (exerciseId to value.filter { it.isDigit() }.take(2))
+    }
+
+    fun updateTargetRepMin(exerciseId: Long, value: String) {
+        _targetRepMin.value = _targetRepMin.value + (exerciseId to value.filter { it.isDigit() }.take(3))
+    }
+
+    fun updateTargetRepMax(exerciseId: Long, value: String) {
+        _targetRepMax.value = _targetRepMax.value + (exerciseId to value.filter { it.isDigit() }.take(3))
+    }
+
+    fun updateTargetRestSeconds(exerciseId: Long, value: String) {
+        _targetRestSeconds.value = _targetRestSeconds.value + (exerciseId to value.filter { it.isDigit() }.take(4))
     }
 
     fun saveDay() {
@@ -217,13 +269,17 @@ class RoutineDayFormViewModel @Inject constructor(
             }
 
             routineRepository.insertRoutineExercise(
-                RoutineExercise(
-                    routineDayId = targetDayId,
-                    exerciseId = exerciseId,
-                    orderIndex = index,
-                    supersetGroupId = groupId,
-                    supersetOrderIndex = orderIndexInSuperset
-                )
+                    RoutineExercise(
+                        routineDayId = targetDayId,
+                        exerciseId = exerciseId,
+                        orderIndex = index,
+                        targetSets = _targetSets.value[exerciseId]?.toIntOrNull()?.coerceAtLeast(1) ?: 3,
+                        targetRepsMin = _targetRepMin.value[exerciseId]?.toIntOrNull(),
+                        targetRepsMax = _targetRepMax.value[exerciseId]?.toIntOrNull(),
+                        targetRestSeconds = _targetRestSeconds.value[exerciseId]?.toIntOrNull(),
+                        supersetGroupId = groupId,
+                        supersetOrderIndex = orderIndexInSuperset
+                    )
             )
         }
     }

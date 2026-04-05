@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -42,6 +43,10 @@ fun RoutineDayFormScreen(
     val selectedExercises by viewModel.selectedExercises.collectAsState(initial = emptyList())
     val availableExercises by viewModel.availableExercises.collectAsState(initial = emptyList())
     val selectedExerciseIds by viewModel.selectedExerciseIds.collectAsState()
+    val targetSets by viewModel.targetSets.collectAsState()
+    val targetRepMin by viewModel.targetRepMin.collectAsState()
+    val targetRepMax by viewModel.targetRepMax.collectAsState()
+    val targetRestSeconds by viewModel.targetRestSeconds.collectAsState()
     val isEditMode by viewModel.isEditMode.collectAsState()
     val isSaveEnabled by viewModel.isSaveEnabled.collectAsState()
     val supersetLinks by viewModel.supersetLinks.collectAsState()
@@ -165,6 +170,14 @@ fun RoutineDayFormScreen(
                         ExerciseListItem(
                             exercise = exercise,
                             onRemove = { viewModel.removeExercise(exercise.id) },
+                            targetSets = targetSets[exercise.id].orEmpty(),
+                            targetRepMin = targetRepMin[exercise.id].orEmpty(),
+                            targetRepMax = targetRepMax[exercise.id].orEmpty(),
+                            targetRestSeconds = targetRestSeconds[exercise.id].orEmpty(),
+                            onTargetSetsChange = { viewModel.updateTargetSets(exercise.id, it) },
+                            onTargetRepMinChange = { viewModel.updateTargetRepMin(exercise.id, it) },
+                            onTargetRepMaxChange = { viewModel.updateTargetRepMax(exercise.id, it) },
+                            onTargetRestSecondsChange = { viewModel.updateTargetRestSeconds(exercise.id, it) },
                             isLinkedToNext = isLinkedToNext,
                             isLinkedToPrev = isLinkedToPrev,
                             onToggleLink = { viewModel.toggleSupersetLink(index) },
@@ -193,6 +206,14 @@ fun RoutineDayFormScreen(
 fun ExerciseListItem(
     exercise: Exercise,
     onRemove: () -> Unit,
+    targetSets: String,
+    targetRepMin: String,
+    targetRepMax: String,
+    targetRestSeconds: String,
+    onTargetSetsChange: (String) -> Unit,
+    onTargetRepMinChange: (String) -> Unit,
+    onTargetRepMaxChange: (String) -> Unit,
+    onTargetRestSecondsChange: (String) -> Unit,
     isLinkedToNext: Boolean = false,
     isLinkedToPrev: Boolean = false,
     onToggleLink: () -> Unit = {},
@@ -248,6 +269,34 @@ fun ExerciseListItem(
                             color = LocalAppColors.current.textSecondary,
                             fontSize = 12.sp
                         )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PrescriptionField(
+                                label = "Sets",
+                                value = targetSets,
+                                onValueChange = onTargetSetsChange,
+                                modifier = Modifier.weight(1f)
+                            )
+                            PrescriptionField(
+                                label = "Rep Min",
+                                value = targetRepMin,
+                                onValueChange = onTargetRepMinChange,
+                                modifier = Modifier.weight(1f)
+                            )
+                            PrescriptionField(
+                                label = "Rep Max",
+                                value = targetRepMax,
+                                onValueChange = onTargetRepMaxChange,
+                                modifier = Modifier.weight(1f)
+                            )
+                            PrescriptionField(
+                                label = "Rest",
+                                value = targetRestSeconds,
+                                onValueChange = onTargetRestSecondsChange,
+                                suffix = "s",
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                     IconButton(onClick = onRemove) {
                         Icon(Icons.Default.Close, contentDescription = "Remove", tint = LocalAppColors.current.textTertiary)
@@ -300,6 +349,36 @@ fun ExerciseListItem(
             Spacer(modifier = Modifier.height(8.dp))
         }
     }
+}
+
+@Composable
+private fun PrescriptionField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    suffix: String? = null
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        textStyle = MaterialTheme.typography.bodySmall.copy(color = LocalAppColors.current.textPrimary),
+        singleLine = true,
+        label = {
+            Text(label, style = MaterialTheme.typography.labelSmall)
+        },
+        suffix = suffix?.let {
+            { Text(it, style = MaterialTheme.typography.labelSmall) }
+        },
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = LocalAppColors.current.textTertiary.copy(alpha = 0.4f),
+            focusedTextColor = LocalAppColors.current.textPrimary,
+            unfocusedTextColor = LocalAppColors.current.textPrimary
+        )
+    )
 }
 
 @Composable
