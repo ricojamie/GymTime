@@ -13,8 +13,16 @@ import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
 
-enum class TrendMetric {
-    VOLUME, E1RM, AVG_WEIGHT, DENSITY, REPS, DURATION, DISTANCE, CALORIES
+enum class TrendMetric(val displayName: String) {
+    VOLUME("Volume"),
+    SETS("Sets"),
+    E1RM("E1RM"),
+    AVG_WEIGHT("Avg Weight"),
+    DENSITY("Density"),
+    REPS("Reps"),
+    DURATION("Duration"),
+    DISTANCE("Distance"),
+    CALORIES("Calories")
 }
 
 enum class TimePeriod(val months: Int?) {
@@ -177,6 +185,9 @@ class TrendUseCase @Inject constructor(
                     val reps = setWithInfo.set.reps ?: return@sumOf 0.0
                     weight.toDouble() * reps
                 }.toFloat()
+            }
+            TrendMetric.SETS -> {
+                workingSets.size.toFloat()
             }
             TrendMetric.E1RM -> {
                 workingSets.maxOfOrNull {

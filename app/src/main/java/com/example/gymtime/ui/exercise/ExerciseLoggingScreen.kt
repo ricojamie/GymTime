@@ -1001,16 +1001,16 @@ fun ExerciseLoggingScreen(
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         OutlinedButton(
-                            onClick = { viewModel.updateRestTime(maxOf(0, restTime - 15)) },
+                            onClick = { viewModel.updateRestTime(maxOf(0, restTime - 10)) },
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = LocalAppColors.current.textTertiary)
                         ) {
-                            Text("-15s")
+                            Text("-10s")
                         }
                         OutlinedButton(
-                            onClick = { viewModel.updateRestTime(restTime + 15) },
+                            onClick = { viewModel.updateRestTime(restTime + 10) },
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = LocalAppColors.current.textTertiary)
                         ) {
-                            Text("+15s")
+                            Text("+10s")
                         }
                     }
 
@@ -1068,19 +1068,45 @@ fun ExerciseLoggingScreen(
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.startTimer()
-                        showTimerDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Text("Start Timer", color = Color.Black, fontWeight = FontWeight.Bold)
+                if (isTimerRunning) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { viewModel.stopTimer() },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("Stop")
+                        }
+                        Button(
+                            onClick = {
+                                viewModel.stopTimer()
+                                viewModel.startTimer()
+                                showTimerDialog = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("Restart", color = Color.Black, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            viewModel.startTimer()
+                            showTimerDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Start Timer", color = Color.Black, fontWeight = FontWeight.Bold)
+                    }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showTimerDialog = false }) {
-                    Text("Close", color = LocalAppColors.current.textTertiary)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = { viewModel.resetTimerToDefault() }) {
+                        Text("Reset", color = LocalAppColors.current.textTertiary)
+                    }
+                    TextButton(onClick = { showTimerDialog = false }) {
+                        Text("Close", color = LocalAppColors.current.textTertiary)
+                    }
                 }
             },
             containerColor = LocalAppColors.current.surfaceCards

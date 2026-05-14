@@ -1,484 +1,332 @@
-# IronLog - Project Context & Development Guide
-
-## 1. Project Identity & Current Status
-
-**Name:** IronLog
-**Type:** Offline-first, privacy-centric strength training tracker for serious lifters
-**Philosophy:** "Buy Once, Own Forever" - No ads, no subscriptions, no algorithm, no social bloat
-**Status:** MVP+ Complete - Ready for real-world usage
-
-### Core Values
-- **The Logging Loop is God**: Every decision prioritizes speed and frictionless set logging
-- **Privacy First**: All data stays local (Room DB, no cloud sync)
-- **Offline or Nothing**: No internet required, ever
-- **User Control**: Users own their data completely, can delete exercises and workouts permanently
-
----
-
-## 2. Architecture
-
-### Navigation Structure
-```
-MainActivity (Single Activity, No Fragments)
-├── Scaffold with BottomNavigationBar
-├── NavHost with 4 visible routes:
-│   ├── Home (Dashboard) - Welcome, quick stats, quick start
-│   ├── History - Workout history with calendar view
-│   ├── Library - Exercise library management
-│   └── Analytics - Volume trends and statistics
-│   └── (Hidden routes accessed from above)
-│       ├── ExerciseSelection - Browse/filter/select exercises
-│       ├── ExerciseLogging - Log sets for selected exercise
-│       ├── WorkoutResume - Resume ongoing workout
-│       ├── PostWorkoutSummary - End-of-workout stats
-│       ├── Settings - App configuration
-│       ├── RoutineList/Form/DayList/DayForm/DayStart - Routine management
-│       └── ExerciseForm - Create/edit exercises
-└── Gradient background (GradientStart → GradientEnd)
-```
-
-### MVVM + Clean Architecture
-- **Activity**: MainActivity (only UI entry point)
-- **ViewModels**: HomeViewModel, ExerciseSelectionViewModel, ExerciseLoggingViewModel, etc.
-- **Repositories**: UserPreferencesRepository (DataStore), VolumeOrbRepository
-- **DAOs**: ExerciseDao, WorkoutDao, SetDao, RoutineDao, MuscleGroupDao
-- **State Management**: Flow/StateFlow for reactive data, ViewModel for business logic
-- **Async**: Coroutines with Dispatchers.IO for database operations
-
-### Dependency Injection
-- **DI Framework**: Hilt
-- **Module**: DatabaseModule (provides all DAOs and Room instance)
-- **Scope**: Singletons for DB and DAOs to ensure single instance across app
-
----
-
-## 3. Tech Stack
-
-**Language:** Kotlin (2.0+, with Kapt fallback for Hilt)
-**UI Framework:** Jetpack Compose (no XML, no Fragments)
-**Architecture:** MVVM with coroutines
-**Database:** Room (SQLite) with TypeConverters for Date
-**Local Storage:** AndroidX DataStore (for user preferences)
-**Async:** Coroutines + Flow (not LiveData)
-**DI:** Hilt (requires kapt plugin in build.gradle)
-**Animations:** Compose animations (spring, fade, slide)
-**Haptics:** Android haptic feedback for set logging
-**Services:** Foreground service for rest timer with notifications
-
-**Constraints (Hard Rules):**
-- No Firebase
-- No XML layouts
-- No network calls in core logging features
-- No ads or tracking
-- Minimal dependencies
-
----
-
-## 4. Completed Features
-
-### Home Dashboard
-- Welcome header with user name + split-color "IronLog" branding
-- Quick Start card (responsive hero card) → starts workout or resumes
-- Routine card with icon and routine name display
-- Iron Streak card with current streak, best streak, and YTD workouts
-- Weekly Volume Orb at bottom with tap-to-show details
-- Fully responsive layout that adapts to device height (S24 Ultra to smaller phones)
-
-### Exercise Selection Flow
-- Search box with real-time filtering
-- Multi-select filter pills (muscle groups from database)
-- Exercise list (clean, minimal - name + muscle group)
-- Long-press context menu (Edit, Delete with confirmation)
-- Create custom exercises with ExerciseForm
-- Superset mode selection
-
-### Exercise Logging Flow
-- Exercise header (name + target muscle)
-- Foreground service rest timer with notification controls
-- Weight/Reps input cards (large, thumb-friendly)
-- RPE tracking
-- Warmup toggle
-- Log Set button (animated, haptic feedback)
-- Session log with edit/delete capabilities
-- Personal best indicators with timestamps
-- Exercise history bottom sheet
-- Plate calculator
-- Volume progress bar
-- Superset support with auto-rotation
-
-### Workout Management
-- WorkoutResume screen for continuing sessions
-- PostWorkoutSummary with stats and workout rating
-- Routine system with days and exercise ordering
-
-### Analytics
-- Weekly volume trends
-- Volume Orb per muscle group
-- Historical workout data
-
-### Iron Streak System
-- Sustainable consistency tracking (2 rest days per 7-day rolling window)
-- Three states: Active (fire emoji), Resting (snowflake), Broken (skull)
-- Best streak persistence (all-time record)
-- Year-to-date workout count
-- Algorithm in StreakCalculator.kt utility class
-
-### History Enhancements
-- Workout cards show total volume and working set count
-- Excludes warmup sets from metrics
-
-### Settings
-- Theme color selection (5 color schemes)
-- Timer auto-start toggle
-- Plate calculator configuration (bar weight, available plates, loading sides)
-- User name customization
-
-### Database Features
-- 25 pre-loaded exercises (across 8 muscle groups)
-- Exercise deletion confirmation dialog
-- Automatic seeding on first run
-- Muscle groups pre-seeded (Back, Biceps, Chest, Core, Legs, Shoulders, Triceps, Cardio)
-- Superset group tracking
-- Workout ratings and notes
-
----
-
-## 5. Database Schema (Room SQLite)
-
-### Entities
-
-**Exercise**
-```kotlin
-@Entity(tableName = "exercises")
-data class Exercise(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val name: String,
-    val targetMuscle: String,
-    val logType: LogType,  // WEIGHT_REPS, REPS_ONLY, DURATION, WEIGHT_DISTANCE, DISTANCE_TIME
-    val isCustom: Boolean,
-    val notes: String?,
-    val defaultRestSeconds: Int
-)
-```
-
-**Workout**
-```kotlin
-@Entity(tableName = "workouts")
-data class Workout(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val startTime: Date,
-    val endTime: Date?,
-    val name: String?,
-    val note: String?,
-    val rating: Int?,
-    val ratingNote: String?,
-    val routineDayId: Long?
-)
-```
-
-**Set**
-```kotlin
-@Entity(tableName = "sets")
-data class Set(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val workoutId: Long,
-    val exerciseId: Long,
-    val weight: Float?,
-    val reps: Int?,
-    val rpe: Float?,
-    val durationSeconds: Int?,
-    val distanceMeters: Float?,
-    val isWarmup: Boolean,
-    val isComplete: Boolean,
-    val timestamp: Date,
-    val note: String?,
-    val supersetGroupId: String?,
-    val supersetOrderIndex: Int
-)
-```
-
-**Routine / RoutineDay / RoutineExercise**
-- Full routine management with days and exercise ordering
-
-**MuscleGroup**
-- Pre-seeded muscle categories
-
-### Enums
-```kotlin
-enum class LogType {
-    WEIGHT_REPS,     // Barbell exercises
-    REPS_ONLY,       // Calisthenics
-    DURATION,        // Time-based (plank, etc)
-    WEIGHT_DISTANCE, // Weighted cardio (sled push)
-    DISTANCE_TIME    // Cardio with distance and time
-}
-```
-
----
-
-## 6. UI/UX Design
-
-### Color Palette
-```
-Primary Accent (Default - Lime Green):
-  - #A3E635 (Main)
-  - #84CC16 (Dark)
-  - #BEF264 (Light)
-
-Background:
-  - #121212 (Canvas)
-  - #0D0D0D (Surface)
-  - #0A1A0A (Gradient Start)
-  - #0A0A0A (Gradient End)
-
-Text:
-  - #FFFFFF (Primary)
-  - #E0E0E0 (Secondary)
-  - #9CA3AF (Tertiary)
-```
-
-### Theme Options
-- Lime Green (default)
-- Electric Blue
-- Cyber Purple
-- Hot Pink
-- Gold Amber
-
-### Component Library
-- **GlowCard**: Card with subtle gradient glow, supports onClick and onLongClick
-- **VolumeOrb**: Animated circular progress indicator
-- **VolumeProgressBar**: Horizontal progress bar for logging screen
-- **PlateCalculatorSheet**: Bottom sheet for plate breakdown
-
-### Layout Principles
-- Hero Cards for primary actions
-- One-handed use optimization
-- Minimal scrolling
-- Large touch targets
-
----
-
-## 7. Development Workflow
-
-### Code Standards
-- **Compose**: Stateless composables, hoist state to ViewModel
-- **Previews**: Include `@Preview(showBackground = true)` for UI components
-- **Error Handling**: Never block UI thread
-- **Logging**: Use `Log.d(TAG, "message")` for debugging
-- **Naming**: Clear, descriptive names
-- **Architecture**: Follow MVVM, never put DB calls in UI layer
-
-### Git Workflow
-- Feature branches merged to main
-- Commit messages: descriptive, start with verb (Feat:, Fix:, Refactor:, Docs:)
-- Always include Co-Authored-By footer with Codex credit
-
-### Known Build Notes
-- **Kapt Warning**: "Kapt currently doesn't support language version 2.0+" - Harmless, Hilt still works
-- Build is clean with no deprecation warnings
-
----
-
-## 8. Field Test Results (Historical Reference)
-
-**Completed:** December 2024
-**Overall Score:** 7.5/10
-
-### Strong Points
-1. **8-Second Logging Loop** - Fastest in market
-2. **Offline Persistence** - Bulletproof
-3. **Exercise History** - Excellent implementation
-4. **Visual Design** - Clean dark theme
-5. **Exercise Selection** - Real-time search, multi-select filters
-6. **Auto-populated Values** - Shows previous workout data
-
-### Areas Identified for Improvement
-- Workout context during exercise addition
-- Set editing discoverability
-- Timer adjustment UX
-- Analytics chart discoverability
-
----
-
-## 9. Instructions for Codex
-
-### Before Coding
-1. Check this file first - it's the source of truth
-2. Respect the philosophy: Speed and offline-first are non-negotiable
-3. Ask questions if anything is unclear
-
-### When Implementing
-1. Prioritize the logging loop - new features must not slow down set logging
-2. Keep it simple - no premature optimization
-3. Use existing patterns - look at ExerciseLogging/ExerciseSelection as examples
-4. Follow MVVM - UI ← ViewModel ← Repository/DAO ← Database
-
-### Code Style
-```kotlin
-// Good: Stateless composable, clear names
-@Composable
-fun ExerciseListItem(
-    exercise: Exercise,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    GlowCard(modifier = modifier.fillMaxWidth(), onClick = onClick) {
-        // Clear, single-responsibility UI
-    }
-}
-```
-
-### Common Pitfalls
-1. Don't call suspend functions without `viewModelScope.launch { }`
-2. Don't use LiveData - we use Flow/StateFlow
-3. Don't block the UI thread - database ops go to Dispatchers.IO
-4. Don't add screens without updating Screen.kt + MainActivity
-
----
-
-## 10. Project Stats
-
-### Codebase (Post-Refactor Dec 10, 2025)
-- ~3,700 lines of Kotlin (797 lines removed in cleanup)
-- 45+ Compose screens/components
-- 10+ ViewModels
-- 7 Database entities
-- Clean build with no warnings
-
-### Performance
-- App loads in <2 seconds
-- Exercise list renders instantly (lazy column)
-- Database queries <100ms
-- Set logging response immediate
-
----
-
-## 11. Contact & Collaboration
-
-- **Repo**: https://github.com/ricojamie/GymTime
-- **Main Branch**: Always deployable
-- **Latest Commit**: Always has working build
-
----
-
-## 12. Automated Testing
-
-### Running Tests
-
-**Unit Tests (JVM - Fast, No Emulator Required):**
+# IronLog Master Project Guide
+
+Last updated: May 14, 2026
+
+## 1. Project Identity
+
+IronLog is an offline-first, privacy-centric strength training tracker for serious lifters.
+
+Core product promise: buy once, own forever. No ads, no subscriptions, no algorithmic feed, no social bloat, and no cloud dependency.
+
+Non-negotiables:
+
+- The logging loop is the highest priority. Every feature must preserve fast, low-friction set logging.
+- All core workout data stays local in Room.
+- Core logging must work without internet.
+- No Firebase, ads, tracking SDKs, or required account system.
+- User-owned data matters: users can create, edit, import, export, and delete their training data.
+
+## 2. Technology
+
+- Language: Kotlin
+- UI: Jetpack Compose and Material 3
+- Architecture: Single Activity, MVVM, repositories, use cases, DAOs
+- Navigation: Compose Navigation
+- Database: Room over SQLite
+- Preferences: AndroidX DataStore
+- Async: Kotlin coroutines and Flow/StateFlow
+- Dependency injection: Hilt with kapt
+- Charts: Vico
+- Minimum SDK: 34
+- Compile/target SDK: 36
+
+## 3. Architecture Overview
+
+The app uses one Android activity and no fragments.
+
+Main layers:
+
+- `MainActivity`: creates the Compose app shell, theme, scaffold, bottom navigation, and NavHost.
+- `navigation`: route definitions and bottom navigation.
+- `ui`: Compose screens, components, and ViewModels.
+- `domain`: use cases for analytics and derived business calculations.
+- `data`: repositories, DataStore preferences, Room database, DAOs, and entities.
+- `service`: foreground rest timer service.
+- `util`: calculators, import/export utilities, date/time helpers, and formatting helpers.
+- `di`: Hilt module that provides the Room database and DAOs.
+
+The intended data flow is:
+
+UI event -> ViewModel -> Repository or UseCase -> DAO/DataStore -> Room or preferences -> Flow/StateFlow back to UI.
+
+Database work belongs off the UI thread. UI composables should stay mostly stateless and should not call DAOs directly.
+
+## 4. Navigation Map
+
+Visible bottom-nav routes:
+
+- Home: dashboard, quick start/resume, routine card, streak, weekly volume orb.
+- History: completed workouts, workout details, set groups, deletion flow.
+- Library: exercise library and routine management entry points.
+- Analytics: consistency, balance, and trend exploration.
+
+Hidden routes:
+
+- ExerciseSelection: browse, search, filter, create, edit, delete, and select exercises.
+- ExerciseLogging: fast set logging for a selected exercise.
+- WorkoutResume: resume an active workout.
+- PostWorkoutSummary: end-of-workout stats, rating, and notes.
+- Settings: preferences, timer, display, import/export, plate setup, and app configuration.
+- ThemeSettings: theme color and font controls.
+- MuscleGroupManagement: custom muscle group management.
+- RoutineList, RoutineForm, RoutineDayList, RoutineDayForm, RoutineDayStart: routine builder and routine workout flow.
+- ExerciseForm: create/edit exercise details.
+
+## 5. Core Data Model
+
+Primary Room entities:
+
+- `Exercise`: name, target muscle, log type, default distance unit, custom flag, notes, default rest time, starred flag.
+- `Workout`: start/end time, name, notes, rating, routine snapshots, and active routine metadata.
+- `Set`: workout/exercise links, weight, reps, RPE, duration, distance, calories, warmup flag, completion flag, timestamp, notes, and superset metadata.
+- `Routine`: routine name, active flag, and next day pointer.
+- `RoutineDay`: ordered routine day names.
+- `RoutineExercise`: ordered planned exercises with target sets, reps, rest, notes, and superset metadata.
+- `WorkoutExerciseInstance`: per-workout plan snapshot for routine-backed workouts.
+- `MuscleGroup`: user-visible muscle group names.
+
+Important enums:
+
+- `LogType`: `WEIGHT_REPS`, `REPS_ONLY`, `DURATION`, `WEIGHT_DISTANCE`, `DISTANCE_TIME`, `WEIGHT_TIME`, `CALORIES_TIME`.
+- `DistanceUnit`: meters, kilometers, yards, feet, miles, steps, floors.
+
+Database version: 12.
+
+Important migration themes:
+
+- Timestamp and superset indexes for fast workout and analytics queries.
+- Routine day and workout plan snapshot support.
+- Exercise starring for PR trophy tracking.
+- Cardio support with raw distance value/unit, normalized meters, duration, and calories.
+- Data is seeded locally on first database creation with default muscle groups and starter exercises.
+
+## 6. Feature Inventory
+
+Home:
+
+- Time-aware greeting and user name display.
+- Split-color IronLog branding.
+- Quick Start card that starts or resumes a workout.
+- Active routine card and routine shortcut.
+- Iron Streak card with current streak, all-time best, year-to-date workouts, and allowed rest days.
+- Weekly Volume Orb with progress against last week.
+- Responsive layout for varied phone heights.
+
+Exercise library and selection:
+
+- Searchable exercise list.
+- Muscle group filter chips.
+- Custom exercise creation and editing.
+- Exercise deletion confirmation.
+- Muscle group management.
+- Superset selection mode.
+
+Exercise logging:
+
+- Large thumb-friendly inputs.
+- Log-type-aware fields for weight, reps, RPE, time, distance, and calories.
+- Warmup toggle.
+- Set notes.
+- Fast Log Set action.
+- Session set list with edit/delete.
+- Previous workout prefill.
+- Personal best indicators by rep count.
+- Exercise history bottom sheet.
+- Plate calculator.
+- Volume progress bar.
+- Rest timer with foreground notification.
+- Superset auto-rotation.
+
+Workout management:
+
+- Ongoing workout detection and resume.
+- Workout summary after finish.
+- Workout rating and notes.
+- Routine-backed workouts with plan snapshots.
+- Reopen finished workout support.
+
+Routines:
+
+- Routine list/form screens.
+- Routine day list/form screens.
+- Planned exercises with order, sets, reps, rest, notes, and supersets.
+- Active routine flow advances to the next day after a started routine workout is completed.
+
+History:
+
+- Workout cards show muscles trained, working-set count, and volume.
+- Workout details sheet groups sets by exercise.
+- Warmup sets are excluded from headline metrics.
+- Workout deletion is supported.
+
+Analytics:
+
+- Consistency tab with year heatmap, streak stats, YTD stats, and PR trophy case.
+- Balance tab with date range filters, set distribution, radar chart, and current muscle freshness.
+- Trends tab with metric, period, interval, muscle, and exercise filters.
+- Trend metrics include volume, sets, E1RM, average weight, density, reps, duration, distance, and calories.
+- Starred exercises power the PR trophy case.
+
+Settings:
+
+- Theme color selection and custom theme support.
+- Font settings.
+- Dark mode.
+- User name.
+- Timer audio/vibration and auto-start.
+- Keep-screen-on option.
+- Plate calculator settings.
+- Import/export utilities.
+- Muscle group management.
+
+Import/export:
+
+- FitNotes import support.
+- IronLog import/export support.
+- Import logic should preserve user data and avoid duplicate sets where possible.
+
+## 7. Analytics Rules
+
+- Warmup sets are excluded from core analytics unless a feature explicitly says otherwise.
+- Volume means `weight * reps` for weighted strength sets.
+- Working set counts include non-warmup sets and support non-weighted activity.
+- E1RM uses the Epley-style estimate already present in the app.
+- Distance metrics normalize convertible units when needed and avoid mixing steps/floors with meter-convertible units.
+- Current muscle freshness is based on last trained date by target muscle.
+- Consistency heatmap currently uses working-set activity count, not raw pounds, so cardio and non-weighted sessions still register.
+
+## 8. Design System
+
+IronLog is a dark, high-contrast training app. It should feel fast, durable, and focused.
+
+Current theme direction:
+
+- Dark canvas and dark card surfaces.
+- User-selectable accent color schemes.
+- Lime green is the default accent.
+- Large readable type for logging fields.
+- Compact information density in repeated-use screens.
+- Cards should support the work, not become decorative clutter.
+
+Key reusable UI:
+
+- `GlowCard`
+- `VolumeOrb`
+- `VolumeProgressBar`
+- `WeeklyVolumeCard`
+- `RoutineCard`
+- `InputCard`
+- `TimeInputCard`
+- `PlateCalculatorSheet`
+- Analytics charts and cards
+
+## 9. Testing
+
+Fast unit tests:
+
 ```bash
 ./gradlew testDebugUnitTest
 ```
-- Runs all unit tests in `app/src/test/`
-- Results: `app/build/reports/tests/testDebugUnitTest/index.html`
 
-**Instrumented Tests (Requires Emulator/Device):**
+Instrumented tests:
+
 ```bash
 ./gradlew connectedDebugAndroidTest
 ```
-- Runs DAO integration tests with in-memory Room database
-- Results: `app/build/reports/androidTests/connected/index.html`
 
-**Run Specific Test Class:**
-```bash
-./gradlew testDebugUnitTest --tests "com.example.gymtime.util.PlateCalculatorTest"
-```
+Notable test areas:
 
-### Test Structure
+- `util`: streaks, plates, one-rep max, time, week calculations.
+- `domain/analytics`: balance, consistency, trends.
+- `ui/home`: home ViewModel.
+- `ui/exercise`: logging ViewModel and superset manager.
+- `ui/summary`: post-workout summary ViewModel.
+- `data`: repositories and volume orb behavior.
+- `androidTest/data/db/dao`: Room DAO integration tests.
 
-```
-app/src/
-├── test/java/com/example/gymtime/       # Unit tests (JVM)
-│   ├── util/
-│   │   ├── TestDispatcherRule.kt        # Coroutine test helper
-│   │   ├── StreakCalculatorTest.kt
-│   │   ├── PlateCalculatorTest.kt
-│   │   ├── OneRepMaxCalculatorTest.kt
-│   │   └── WeekUtilsTest.kt
-│   ├── ui/home/
-│   │   └── HomeViewModelTest.kt
-│   ├── ui/summary/
-│   │   └── PostWorkoutSummaryViewModelTest.kt
-│   └── data/
-│       └── VolumeOrbRepositoryTest.kt
-└── androidTest/java/com/example/gymtime/ # Instrumented tests
-    └── data/db/dao/
-        ├── SetDaoTest.kt
-        └── WorkoutDaoTest.kt
-```
+Testing notes:
 
-### Test Dependencies
-- **MockK** (1.13.8) - Kotlin mocking framework
-- **Turbine** (1.1.0) - Flow testing
-- **Coroutines Test** (1.8.0) - TestDispatcher for coroutine testing
-- **Room Testing** (2.6.1) - In-memory database for DAO tests
+- `testOptions { unitTests.isReturnDefaultValues = true }` is required because some code references Android logging APIs.
+- ViewModel tests should use `TestDispatcherRule`.
+- DAO tests should use in-memory Room.
+- If changing Room schema, update migrations and entity definitions together.
 
-### Writing New Tests
+## 10. Development Rules
 
-**ViewModel Test Pattern:**
-```kotlin
-@OptIn(ExperimentalCoroutinesApi::class)
-class MyViewModelTest {
-    @get:Rule
-    val dispatcherRule = TestDispatcherRule()
+Always protect the logging loop:
 
-    private lateinit var mockDao: MyDao
+- Do not add extra required taps before logging a set.
+- Do not block logging on analytics, recommendations, network, or account state.
+- Inputs should keep useful values between sets when that speeds up logging.
 
-    @Before
-    fun setup() {
-        mockDao = mockk(relaxed = true)
-        coEvery { mockDao.getData() } returns flowOf(testData)
-    }
+Respect architecture:
 
-    @Test
-    fun loadDataUpdatesState() = runTest {
-        val viewModel = MyViewModel(mockDao)
-        advanceUntilIdle()
-        assertEquals(expected, viewModel.state.value)
-    }
-}
-```
+- Keep database calls out of composables.
+- Prefer ViewModel state and repository/use-case boundaries.
+- Use Flow/StateFlow rather than LiveData.
+- Keep suspend calls inside coroutine scopes.
+- Run database work on IO-oriented paths.
 
-**DAO Integration Test Pattern:**
-```kotlin
-@RunWith(AndroidJUnit4::class)
-class MyDaoTest {
-    private lateinit var database: GymTimeDatabase
-    private lateinit var dao: MyDao
+Respect product values:
 
-    @Before
-    fun setup() {
-        database = Room.inMemoryDatabaseBuilder(
-            ApplicationProvider.getApplicationContext(),
-            GymTimeDatabase::class.java
-        ).allowMainThreadQueries().build()
-        dao = database.myDao()
-    }
+- No required network calls in core logging.
+- No ads, tracking, or cloud dependency.
+- Keep data local by default.
+- Avoid dependencies unless they clearly pay for themselves.
 
-    @After
-    fun teardown() { database.close() }
+When adding screens:
 
-    @Test
-    fun insertAndRetrieve() = runTest {
-        dao.insert(testEntity)
-        val result = dao.getAll().first()
-        assertEquals(testEntity, result)
-    }
-}
-```
+- Add route definitions in `Screen.kt`.
+- Wire navigation in `MainActivity`.
+- Keep bottom navigation limited to the main four routes unless the product direction changes.
 
-### Current Test Coverage
-- **63 unit tests** across utilities, ViewModels, and repositories
-- **DAO integration tests** for SetDao and WorkoutDao
-- Focus areas: Volume calculations, streak logic, workout stats
+When adding analytics:
 
-### Known Testing Considerations
-- `android.util.Log` calls require `testOptions { unitTests.isReturnDefaultValues = true }`
-- StreakCalculator has timezone-sensitive edge cases at week boundaries
-- ViewModel tests need `TestDispatcherRule` for proper coroutine handling
+- Start with derived local data from sets/workouts/exercises.
+- Make formulas explainable.
+- Exclude warmups from main effort metrics.
+- Prefer use cases over putting calculation logic directly in ViewModels.
 
----
+When changing schema:
 
-**Last Updated**: December 26, 2025
-**Current Phase**: MVP+ Complete - In active use with automated testing
-**Codebase Status**: Production-ready with test suite
+- Add a migration.
+- Keep entity annotations and migration SQL aligned.
+- Add or update DAO tests when behavior is data-critical.
+
+## 11. Future Roadmap Notes
+
+Fitbod-inspired Muscle Readiness and Strength Balance is a proposed future direction, not currently implemented.
+
+Suggested v1 direction:
+
+- Replace simple last-trained freshness with an offline `0-100` muscle readiness score.
+- Base readiness on recent local working sets, recency, volume, log type, and optional RPE.
+- Keep the model honest: IronLog currently has one primary target muscle per exercise, so a full anatomical avatar should wait until multi-muscle exercise mappings exist.
+- Add a Balance tab toggle between set distribution and strength balance.
+- Use user-relative strength scoring from local E1RM and history, not population comparisons.
+- Do not auto-generate workouts in the first version. Surface insights first, then consider routine suggestions later.
+
+Other future opportunities:
+
+- Multi-muscle exercise contribution mappings.
+- Better chart touch markers.
+- More discoverable set editing.
+- Timer adjustment polish.
+- Expanded import/export validation.
+- More instrumented DAO coverage for routines and import flows.
+
+## 12. Repository Hygiene
+
+This file is the master project summary and future-agent guide.
+
+Avoid recreating duplicate project summaries, session logs, or assistant-specific planning files unless the user explicitly asks for them. Keep planning in the conversation or in issue/PR systems, not scattered project markdown.
+
+Docs-only cleanup should not touch:
+
+- `app/src/`
+- Gradle config
+- resource assets
+- tests
+- sample images
+
+Source changes should be deliberate, tested, and scoped to the requested feature or fix.

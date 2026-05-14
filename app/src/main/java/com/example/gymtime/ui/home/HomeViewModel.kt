@@ -10,6 +10,8 @@ import com.example.gymtime.data.VolumeOrbState
 import com.example.gymtime.data.repository.WorkoutRepository
 import com.example.gymtime.data.repository.WorkoutStartResult
 import com.example.gymtime.data.db.entity.Workout
+import com.example.gymtime.domain.analytics.StrengthMomentumState
+import com.example.gymtime.domain.analytics.StrengthMomentumUseCase
 import com.example.gymtime.util.StreakCalculator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -33,7 +35,8 @@ class HomeViewModel @Inject constructor(
     private val userPreferencesRepository: UserPreferencesRepository,
     private val workoutRepository: WorkoutRepository,
     private val routineRepository: RoutineRepository,
-    private val volumeOrbRepository: VolumeOrbRepository
+    private val volumeOrbRepository: VolumeOrbRepository,
+    private val strengthMomentumUseCase: StrengthMomentumUseCase
 ) : ViewModel() {
     val userName: Flow<String> = userPreferencesRepository.userName
     val ongoingWorkout: StateFlow<Workout?> = workoutRepository.getOngoingWorkoutFlow().stateIn(
@@ -86,9 +89,13 @@ class HomeViewModel @Inject constructor(
     private val _lastYearVolume = MutableStateFlow(0f)
     val lastYearVolume: StateFlow<Float> = _lastYearVolume.asStateFlow()
 
+    private val _strengthMomentum = MutableStateFlow(StrengthMomentumState())
+    val strengthMomentum: StateFlow<StrengthMomentumState> = _strengthMomentum.asStateFlow()
+
     init {
         loadWeeklyVolume()
         refreshVolumeOrb()
+        loadStrengthMomentum()
         loadStreakData()
         loadYtdWorkouts()
         loadYtdVolume()
@@ -124,6 +131,16 @@ class HomeViewModel @Inject constructor(
             val startOfYear = cal.timeInMillis
             val endOfToday = System.currentTimeMillis()
             _ytdVolume.value = workoutRepository.getTotalVolume(startOfYear, endOfToday)
+        }
+    }
+
+    private fun loadStrengthMomentum() {
+        viewModelScope.launch {
+            try {
+                _strengthMomentum.value = strengthMomentumUseCase.getStrengthMomentum()
+            } catch (_: Exception) {
+                _strengthMomentum.value = StrengthMomentumState()
+            }
         }
     }
 
@@ -214,6 +231,7 @@ class HomeViewModel @Inject constructor(
     fun refreshData() {
         loadWeeklyVolume()
         refreshVolumeOrb()
+        loadStrengthMomentum()
         loadStreakData()
         loadYtdWorkouts()
         loadYtdVolume()

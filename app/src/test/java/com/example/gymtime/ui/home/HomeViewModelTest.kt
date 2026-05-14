@@ -5,6 +5,8 @@ import com.example.gymtime.data.VolumeOrbRepository
 import com.example.gymtime.data.VolumeOrbState
 import com.example.gymtime.data.RoutineRepository
 import com.example.gymtime.data.repository.WorkoutRepository
+import com.example.gymtime.domain.analytics.StrengthMomentumState
+import com.example.gymtime.domain.analytics.StrengthMomentumUseCase
 import com.example.gymtime.util.StreakCalculator
 import com.example.gymtime.util.TestDispatcherRule
 import io.mockk.*
@@ -28,6 +30,7 @@ class HomeViewModelTest {
     private lateinit var workoutRepository: WorkoutRepository
     private lateinit var routineRepository: RoutineRepository
     private lateinit var volumeOrbRepository: VolumeOrbRepository
+    private lateinit var strengthMomentumUseCase: StrengthMomentumUseCase
 
     @Before
     fun setup() {
@@ -35,6 +38,7 @@ class HomeViewModelTest {
         workoutRepository = mockk(relaxed = true)
         routineRepository = mockk(relaxed = true)
         volumeOrbRepository = mockk(relaxed = true)
+        strengthMomentumUseCase = mockk(relaxed = true)
 
         every { userPreferencesRepository.userName } returns flowOf("Test User")
         every { userPreferencesRepository.bestStreak } returns flowOf(0)
@@ -47,10 +51,17 @@ class HomeViewModelTest {
         coEvery { workoutRepository.getWorkoutDatesWithWorkingSets() } returns emptyList()
         coEvery { workoutRepository.getYearToDateWorkoutCount() } returns 0
         coEvery { volumeOrbRepository.refresh() } just Runs
+        coEvery { strengthMomentumUseCase.getStrengthMomentum(any()) } returns StrengthMomentumState()
     }
 
     private fun createViewModel(): HomeViewModel {
-        return HomeViewModel(userPreferencesRepository, workoutRepository, routineRepository, volumeOrbRepository)
+        return HomeViewModel(
+            userPreferencesRepository,
+            workoutRepository,
+            routineRepository,
+            volumeOrbRepository,
+            strengthMomentumUseCase
+        )
     }
 
     @Test
@@ -62,6 +73,7 @@ class HomeViewModelTest {
         coVerify { workoutRepository.getWorkoutDatesWithWorkingSets() }
         coVerify { workoutRepository.getYearToDateWorkoutCount() }
         coVerify { volumeOrbRepository.refresh() }
+        coVerify { strengthMomentumUseCase.getStrengthMomentum(any()) }
     }
 
     @Test
@@ -94,6 +106,7 @@ class HomeViewModelTest {
         val viewModel = createViewModel()
         advanceUntilIdle()
         clearMocks(workoutRepository, volumeOrbRepository, answers = false)
+        clearMocks(strengthMomentumUseCase, answers = false)
 
         viewModel.refreshData()
         advanceUntilIdle()
@@ -102,6 +115,7 @@ class HomeViewModelTest {
         coVerify { workoutRepository.getWorkoutDatesWithWorkingSets() }
         coVerify { workoutRepository.getYearToDateWorkoutCount() }
         coVerify { volumeOrbRepository.refresh() }
+        coVerify { strengthMomentumUseCase.getStrengthMomentum(any()) }
     }
 
     @Test

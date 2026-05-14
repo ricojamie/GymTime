@@ -117,36 +117,41 @@ fun ExerciseSelectionContent(
 
     Scaffold(
         floatingActionButton = {
-            if (isSupersetMode && canStartSuperset) {
-                // Show "Start Superset" button when 2+ exercises selected
-                ExtendedFloatingActionButton(
-                    modifier = Modifier.padding(bottom = 100.dp),
-                    onClick = {
-                        val firstExerciseId = viewModel.startSuperset()
-                        navController.navigate(Screen.ExerciseLogging.createRoute(firstExerciseId))
-                    },
-                    containerColor = accentColor,
-                    contentColor = Color.Black,
-                    shape = RoundedCornerShape(16.dp),
-                    text = {
-                        Text(
-                            text = "Start Superset",
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = null
-                        )
-                    }
-                )
-            } else if (!isSupersetMode) {
-                // Normal "Add Exercise" FAB
+            Column(
+                modifier = Modifier.padding(bottom = 100.dp),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (isSupersetMode && canStartSuperset) {
+                    ExtendedFloatingActionButton(
+                        onClick = {
+                            val firstExerciseId = viewModel.startSuperset()
+                            navController.navigate(Screen.ExerciseLogging.createRoute(firstExerciseId))
+                        },
+                        containerColor = accentColor,
+                        contentColor = Color.Black,
+                        shape = RoundedCornerShape(16.dp),
+                        text = {
+                            Text(
+                                text = "Start Superset",
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null
+                            )
+                        }
+                    )
+                }
+                // "Add Exercise" FAB always available (including during superset selection)
                 FloatingActionButton(
-                    modifier = Modifier.padding(bottom = 100.dp),
                     onClick = {
-                        navController.navigate(Screen.ExerciseForm.createRoute(fromWorkout = isWorkoutMode))
+                        // In superset selection, pop back so selection state is preserved.
+                        // Otherwise honor workout-mode behavior (jump straight to logger).
+                        val fromWorkout = isWorkoutMode && !isSupersetMode && !viewModel.isAddToSupersetMode
+                        navController.navigate(Screen.ExerciseForm.createRoute(fromWorkout = fromWorkout))
                     },
                     containerColor = accentColor,
                     contentColor = Color.Black,
@@ -158,7 +163,6 @@ fun ExerciseSelectionContent(
                     )
                 }
             }
-            // When in superset mode but <2 selected, no FAB shown
         },
         containerColor = Color.Transparent
     ) { innerPadding ->

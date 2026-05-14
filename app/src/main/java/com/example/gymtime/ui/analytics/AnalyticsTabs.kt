@@ -238,9 +238,13 @@ private fun TrendsFilters(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterDropdown(
                 label = "Metric",
-                current = selectedMetric.name.replace("_", " ").lowercase().replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
-                options = TrendMetric.values().map { it.name.replace("_", " ").lowercase().replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() } },
-                onSelect = { onMetricChange(TrendMetric.valueOf(it.replace(" ", "_").uppercase())) },
+                current = selectedMetric.displayName,
+                options = TrendMetric.values().map { it.displayName },
+                onSelect = { selected ->
+                    TrendMetric.values()
+                        .firstOrNull { it.displayName == selected }
+                        ?.let(onMetricChange)
+                },
                 modifier = Modifier.weight(1f)
             )
             FilterDropdown(

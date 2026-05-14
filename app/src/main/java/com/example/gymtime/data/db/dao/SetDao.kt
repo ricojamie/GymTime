@@ -6,6 +6,7 @@ import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
+import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
 import kotlinx.coroutines.flow.Flow
 
@@ -25,6 +26,14 @@ data class SetWithExerciseInfo(
     @Embedded val set: Set,
     val exerciseName: String,
     val targetMuscle: String
+)
+
+// Data class for momentum analytics where log type is needed for comparable performance.
+data class SetWithExercisePerformanceInfo(
+    @Embedded val set: Set,
+    val exerciseName: String,
+    val targetMuscle: String,
+    val logType: LogType
 )
 
 // Data class for personal records (analytics)
@@ -325,6 +334,23 @@ interface SetDao {
         muscleGroup: String? = null,
         exerciseId: Long? = null
     ): List<SetWithExerciseInfo>
+
+    @Query("""
+        SELECT
+            s.*,
+            e.name as exerciseName,
+            e.targetMuscle as targetMuscle,
+            e.logType as logType
+        FROM sets s
+        INNER JOIN exercises e ON s.exerciseId = e.id
+        WHERE s.timestamp BETWEEN :startDate AND :endDate
+          AND s.isWarmup = 0
+        ORDER BY s.timestamp ASC
+    """)
+    suspend fun getPerformanceSetsWithExerciseInRange(
+        startDate: Long,
+        endDate: Long
+    ): List<SetWithExercisePerformanceInfo>
 
     // ===== VOLUME ORB QUERIES =====
 

@@ -1,10 +1,8 @@
 package com.example.gymtime.ui.home
 
-import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,7 +12,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,7 +37,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -47,12 +46,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.GlowCard
-import com.example.gymtime.ui.components.OrbSize
 import com.example.gymtime.ui.components.RoutineCard
-import com.example.gymtime.ui.components.VolumeOrb
 import com.example.gymtime.ui.theme.LocalAppColors
 import com.example.gymtime.util.StreakCalculator
-import kotlinx.coroutines.delay
 import java.text.NumberFormat
 import java.util.Calendar
 import java.util.Locale
@@ -75,19 +71,12 @@ fun HomeScreen(
     val ytdWorkouts by viewModel.ytdWorkouts.collectAsState()
     val ytdVolume by viewModel.ytdVolume.collectAsState()
     val lastYearVolume by viewModel.lastYearVolume.collectAsState()
+    val strengthMomentum by viewModel.strengthMomentum.collectAsState()
 
     var showStreakDetail by remember { mutableStateOf(false) }
+    var showMomentumDetail by remember { mutableStateOf(false) }
     var showWorkoutStartPicker by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
-
-    val view = LocalView.current
-
-    // Haptic feedback on overflow
-    LaunchedEffect(volumeOrbState.justOverflowed) {
-        if (volumeOrbState.justOverflowed) {
-            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-        }
-    }
 
     // Refresh data when screen becomes visible
     LaunchedEffect(Unit) {
@@ -100,150 +89,129 @@ fun HomeScreen(
         }
     }
 
-    BoxWithConstraints(
+    Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(top = 16.dp, start = 16.dp, end = 16.dp, bottom = 100.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(top = 16.dp, start = 16.dp, end = 16.dp, bottom = 100.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        val availableHeight = maxHeight
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            HomeHeader(userName = userName, modifier = Modifier.weight(1f))
+            IconButton(onClick = { navController.navigate(Screen.Settings.route) }) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Settings",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
 
-        // Estimate fixed content heights
-        val headerHeight = 90.dp  // Header section
-        val spacingTotal = 40.dp  // Total spacing between elements
-        val orbLabelHeight = 40.dp // "WEEKLY VOLUME" + percentage text
-
-        // Calculate remaining height for flexible components
-        val fixedHeight = headerHeight + spacingTotal + orbLabelHeight
-        val flexibleHeight = availableHeight - fixedHeight
-
-        // Distribute flexible space: QuickStart (30%), MiddleRow (30%), Orb (40%)
-        val quickStartHeight = (flexibleHeight * 0.28f).coerceIn(100.dp, 180.dp)
-        val middleRowHeight = (flexibleHeight * 0.28f).coerceIn(100.dp, 160.dp)
-        val orbAreaHeight = (flexibleHeight * 0.44f).coerceIn(120.dp, 220.dp)
-
-        // Calculate orb size from its area (leave room for label)
-        val orbSize = (orbAreaHeight - 30.dp).coerceIn(90.dp, 180.dp)
-
-        // Responsive spacers based on available height
-        val scale = (availableHeight / 700.dp).coerceIn(0.85f, 1.2f)
-        val spacerS = (8.dp * scale).coerceIn(6.dp, 14.dp)
-        val spacerM = (12.dp * scale).coerceIn(8.dp, 18.dp)
-        val spacerL = (16.dp * scale).coerceIn(10.dp, 24.dp)
-
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                HomeHeader(userName = userName, modifier = Modifier.weight(1f))
-                IconButton(onClick = { navController.navigate(Screen.Settings.route) }) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Settings",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+        QuickStartCard(
+            isOngoing = ongoingWorkout != null,
+            hasActiveRoutine = hasActiveRoutine,
+            nextRoutineDayName = nextRoutineDayName,
+            height = 140.dp,
+            onClick = {
+                if (ongoingWorkout != null) {
+                    navController.navigate(Screen.WorkoutResume.route)
+                } else if (hasActiveRoutine) {
+                    showWorkoutStartPicker = true
+                } else {
+                    navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
                 }
             }
+        )
 
-            Spacer(modifier = Modifier.height(spacerL))
-
-            // Quick Start Card
-            QuickStartCard(
-                isOngoing = ongoingWorkout != null,
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(132.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            RoutineCard(
+                modifier = Modifier.weight(1f),
                 hasActiveRoutine = hasActiveRoutine,
-                nextRoutineDayName = nextRoutineDayName,
-                height = quickStartHeight,
+                routineName = activeRoutineName,
                 onClick = {
-                    if (ongoingWorkout != null) {
-                        navController.navigate(Screen.WorkoutResume.route)
-                    } else if (hasActiveRoutine) {
-                        showWorkoutStartPicker = true
-                    } else {
-                        navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
-                    }
+                    navController.navigate(Screen.RoutineList.route)
                 }
             )
 
-            Spacer(modifier = Modifier.height(spacerM))
-
-            // Middle row: Routines + Streak
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(middleRowHeight),
-                horizontalArrangement = Arrangement.spacedBy(spacerM)
-            ) {
-                // Routines card
-                RoutineCard(
-                    modifier = Modifier.weight(1f),
-                    hasActiveRoutine = hasActiveRoutine,
-                    routineName = activeRoutineName,
-                    onClick = {
-                        navController.navigate(Screen.RoutineList.route)
-                    }
-                )
-
-                // Streak card
-                StreakCardCompact(
-                    streakResult = streakResult,
-                    bestStreak = bestStreak,
-                    modifier = Modifier.weight(1f),
-                    onClick = { showStreakDetail = true }
-                )
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Volume Orb at bottom
-            VolumeOrbSection(
-                volumeOrbState = volumeOrbState,
-                orbSize = orbSize,
-                onOverflowComplete = { viewModel.clearOrbOverflowAnimation() }
+            StreakCardCompact(
+                streakResult = streakResult,
+                bestStreak = bestStreak,
+                modifier = Modifier.weight(1f),
+                onClick = { showStreakDetail = true }
             )
-
-            Spacer(modifier = Modifier.height(spacerS))
         }
 
-        // Streak Detail Modal
-        if (showStreakDetail) {
-            ModalBottomSheet(
-                onDismissRequest = { showStreakDetail = false },
-                sheetState = sheetState,
-                containerColor = LocalAppColors.current.surfaceCards,
-                scrimColor = Color.Black.copy(alpha = 0.6f)
-            ) {
-                StreakDetailContent(
-                    streakResult = streakResult,
-                    bestStreak = bestStreak,
-                    ytdWorkouts = ytdWorkouts,
-                    ytdVolume = ytdVolume,
-                    lastYearVolume = lastYearVolume,
-                    onClose = { showStreakDetail = false }
-                )
-            }
-        }
+        StrengthMomentumMapCard(
+            state = strengthMomentum,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = { showMomentumDetail = true }
+        )
 
-        if (showWorkoutStartPicker) {
-            ModalBottomSheet(
-                onDismissRequest = { showWorkoutStartPicker = false },
-                sheetState = rememberModalBottomSheetState(),
-                containerColor = LocalAppColors.current.surfaceCards,
-                scrimColor = Color.Black.copy(alpha = 0.6f)
-            ) {
-                WorkoutStartPickerSheet(
-                    nextRoutineDayName = nextRoutineDayName,
-                    onStartRoutine = {
-                        showWorkoutStartPicker = false
-                        viewModel.startNextRoutineWorkout()
-                    },
-                    onStartBlank = {
-                        showWorkoutStartPicker = false
-                        navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
-                    }
-                )
-            }
+        WeeklyLoadBar(
+            state = volumeOrbState,
+            modifier = Modifier.height(54.dp)
+        )
+    }
+
+    if (showStreakDetail) {
+        ModalBottomSheet(
+            onDismissRequest = { showStreakDetail = false },
+            sheetState = sheetState,
+            containerColor = LocalAppColors.current.surfaceCards,
+            scrimColor = Color.Black.copy(alpha = 0.6f)
+        ) {
+            StreakDetailContent(
+                streakResult = streakResult,
+                bestStreak = bestStreak,
+                ytdWorkouts = ytdWorkouts,
+                ytdVolume = ytdVolume,
+                lastYearVolume = lastYearVolume,
+                onClose = { showStreakDetail = false }
+            )
+        }
+    }
+
+    if (showMomentumDetail) {
+        ModalBottomSheet(
+            onDismissRequest = { showMomentumDetail = false },
+            sheetState = rememberModalBottomSheetState(),
+            containerColor = LocalAppColors.current.surfaceCards,
+            scrimColor = Color.Black.copy(alpha = 0.6f)
+        ) {
+            StrengthMomentumDetailSheet(
+                state = strengthMomentum,
+                onClose = { showMomentumDetail = false }
+            )
+        }
+    }
+
+    if (showWorkoutStartPicker) {
+        ModalBottomSheet(
+            onDismissRequest = { showWorkoutStartPicker = false },
+            sheetState = rememberModalBottomSheetState(),
+            containerColor = LocalAppColors.current.surfaceCards,
+            scrimColor = Color.Black.copy(alpha = 0.6f)
+        ) {
+            WorkoutStartPickerSheet(
+                nextRoutineDayName = nextRoutineDayName,
+                onStartRoutine = {
+                    showWorkoutStartPicker = false
+                    viewModel.startNextRoutineWorkout()
+                },
+                onStartBlank = {
+                    showWorkoutStartPicker = false
+                    navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
+                }
+            )
         }
     }
 }
@@ -422,7 +390,7 @@ private fun StreakCardCompact(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp),
+                .padding(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
@@ -431,46 +399,45 @@ private fun StreakCardCompact(
                 text = "IRON STREAK",
                 style = MaterialTheme.typography.labelSmall,
                 color = LocalAppColors.current.textTertiary,
-                letterSpacing = 1.sp,
+                letterSpacing = 0.8.sp,
                 fontWeight = FontWeight.Bold
             )
 
-            // Icon (Larger)
+            // Icon
             Text(
                 text = stateIcon,
-                fontSize = 38.sp,
-                modifier = Modifier.padding(vertical = 4.dp)
+                fontSize = 26.sp
             )
 
             // Streak count
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = if (isFreshStart) "NEW" else "${streakResult.streakDays}",
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold,
                     color = stateColor,
-                    lineHeight = 28.sp
+                    lineHeight = 22.sp
                 )
                 if (!isFreshStart) {
                     Text(
                         text = "DAYS",
                         style = MaterialTheme.typography.labelSmall,
                         color = LocalAppColors.current.textTertiary,
-                        letterSpacing = 1.sp
+                        letterSpacing = 0.8.sp
                     )
                 }
             }
 
             // Skip Indicators (Blue circles)
             Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 repeat(2) { index ->
                     val isLit = index < streakResult.skipsRemaining
                     Box(
                         modifier = Modifier
-                            .size(8.dp)
+                            .size(7.dp)
                             .background(
                                 color = if (isLit) Color(0xFF64B5F6) else Color.DarkGray,
                                 shape = androidx.compose.foundation.shape.CircleShape
@@ -697,95 +664,3 @@ private fun StatItem(
     }
 }
 
-/**
- * Volume Orb Section at bottom - dynamic orb size with tap-to-show details
- */
-@Composable
-private fun VolumeOrbSection(
-    volumeOrbState: com.example.gymtime.data.VolumeOrbState,
-    orbSize: Dp,
-    onOverflowComplete: () -> Unit
-) {
-    var showTooltip by remember { mutableStateOf(false) }
-
-    // Auto-dismiss tooltip
-    LaunchedEffect(showTooltip) {
-        if (showTooltip) {
-            delay(2500)
-            showTooltip = false
-        }
-    }
-
-    // Pick the appropriate OrbSize enum based on calculated size
-    val orbSizeEnum = when {
-        orbSize < 100.dp -> OrbSize.SMALL
-        orbSize < 150.dp -> OrbSize.MEDIUM
-        else -> OrbSize.LARGE
-    }
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "WEEKLY VOLUME",
-            style = MaterialTheme.typography.labelSmall,
-            color = LocalAppColors.current.textTertiary,
-            letterSpacing = 1.5.sp,
-            fontWeight = FontWeight.Medium
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Box(
-            modifier = Modifier.size(orbSize),
-            contentAlignment = Alignment.Center
-        ) {
-            VolumeOrb(
-                state = volumeOrbState,
-                size = orbSizeEnum,
-                onClick = { showTooltip = !showTooltip },
-                onOverflowAnimationComplete = onOverflowComplete
-            )
-
-            // Tooltip overlay when tapped
-            if (showTooltip && !volumeOrbState.isFirstWeek) {
-                Box(
-                    modifier = Modifier
-                        .size(orbSize)
-                        .background(Color.Black.copy(alpha = 0.85f), shape = androidx.compose.foundation.shape.CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "${java.text.NumberFormat.getNumberInstance().format(volumeOrbState.currentWeekVolume.toLong())}",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = LocalAppColors.current.textPrimary
-                        )
-                        Text(
-                            text = "of ${java.text.NumberFormat.getNumberInstance().format(volumeOrbState.lastWeekVolume.toLong())} lbs",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = LocalAppColors.current.textSecondary
-                        )
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // Percentage below orb
-        val percentText = if (volumeOrbState.isFirstWeek) {
-            "Building baseline..."
-        } else {
-            "${(volumeOrbState.progressPercent * 100).toInt()}% of last week"
-        }
-        Text(
-            text = percentText,
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = if (!volumeOrbState.isFirstWeek) FontWeight.Bold else FontWeight.Normal,
-            color = if (volumeOrbState.hasOverflowed) MaterialTheme.colorScheme.primary else LocalAppColors.current.textSecondary
-        )
-    }
-}

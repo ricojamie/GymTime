@@ -91,6 +91,73 @@ class TrendUseCaseTest {
     }
 
     @Test
+    fun `getTrendData counts working sets and excludes warmups`() = runTest {
+        val now = Date()
+        val sets = listOf(
+            SetWithExerciseInfo(
+                set = Set(
+                    workoutId = 1L,
+                    exerciseId = 1L,
+                    weight = 45f,
+                    reps = 12,
+                    timestamp = now,
+                    rpe = null,
+                    durationSeconds = null,
+                    distanceMeters = null,
+                    isWarmup = true,
+                    isComplete = true
+                ),
+                exerciseName = "Bench Press",
+                targetMuscle = "Chest"
+            ),
+            SetWithExerciseInfo(
+                set = Set(
+                    workoutId = 1L,
+                    exerciseId = 1L,
+                    weight = 100f,
+                    reps = 10,
+                    timestamp = now,
+                    rpe = null,
+                    durationSeconds = null,
+                    distanceMeters = null,
+                    isWarmup = false,
+                    isComplete = true
+                ),
+                exerciseName = "Bench Press",
+                targetMuscle = "Chest"
+            ),
+            SetWithExerciseInfo(
+                set = Set(
+                    workoutId = 1L,
+                    exerciseId = 1L,
+                    weight = 105f,
+                    reps = 8,
+                    timestamp = now,
+                    rpe = null,
+                    durationSeconds = null,
+                    distanceMeters = null,
+                    isWarmup = false,
+                    isComplete = true
+                ),
+                exerciseName = "Bench Press",
+                targetMuscle = "Chest"
+            )
+        )
+
+        coEvery { setDao.getSetsWithExerciseInRange(any(), any(), any(), any()) } returns sets
+
+        val result = trendUseCase.getTrendData(
+            metric = TrendMetric.SETS,
+            period = TimePeriod.ONE_MONTH,
+            interval = AggregateInterval.BY_WORKOUT,
+            exerciseId = 1L
+        )
+
+        assertEquals(1, result.size)
+        assertEquals(2f, result[0].value)
+    }
+
+    @Test
     fun `getTrendData returns empty for no sets`() = runTest {
         coEvery { setDao.getSetsWithExerciseInRange(any(), any(), any(), any()) } returns emptyList()
 

@@ -45,7 +45,15 @@
       "Bash(git reset:*)",
       "Bash(git pull:*)",
       "Bash(xargs grep:*)",
-      "Bash(grep -l \"VolumeProgressBar\\\\|VolumeOrb\" D:/AI_Stuff/Coding_Projects/Gym_App/app/src/main/java/com/example/gymtime/ui/**/*.kt 2>/dev/null)"
+      "Bash(grep -l \"VolumeProgressBar\\\\|VolumeOrb\" D:/AI_Stuff/Coding_Projects/Gym_App/app/src/main/java/com/example/gymtime/ui/**/*.kt 2>/dev/null)",
+      "Bash(git rm:*)",
+      "Bash(git stash:*)",
+      "Bash(git remote:*)",
+      "Bash(./gradlew compileDebugKotlin)",
+      "PowerShell($ErrorActionPreference='Stop'; New-Item -ItemType Directory -Force -Path \"$env:TEMP\\\\rnbh\" | Out-Null; Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/HichamELBSI/react-native-body-highlighter/main/assets/bodyFront.ts' -OutFile \"$env:TEMP\\\\rnbh\\\\bodyFront.ts\"; Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/HichamELBSI/react-native-body-highlighter/main/assets/bodyBack.ts' -OutFile \"$env:TEMP\\\\rnbh\\\\bodyBack.ts\"; Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/HichamELBSI/react-native-body-highlighter/main/LICENSE' -OutFile \"$env:TEMP\\\\rnbh\\\\LICENSE\"; Get-ChildItem \"$env:TEMP\\\\rnbh\" | Select-Object Name, Length)",
+      "PowerShell($dir = Join-Path $env:TEMP 'rnbh'; if \\(Test-Path $dir\\) { Write-Output \"Dir exists: $dir\"; Get-ChildItem $dir | ForEach-Object { Write-Output \"$\\($_.Name\\) - $\\($_.Length\\) bytes\" } } else { Write-Output \"Dir not found at $dir\" })",
+      "PowerShell(.\\\\gradlew.bat :app:assembleDebug --no-daemon 2>&1)",
+      "PowerShell(Write-Output 'Probing JDK locations:'; foreach \\($p in @\\('C:\\\\Program Files\\\\Java', 'C:\\\\Program Files\\\\Eclipse Adoptium', 'C:\\\\Program Files\\\\Microsoft', 'C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr', 'C:\\\\Program Files\\\\JetBrains', 'C:\\\\Program Files \\(x86\\)\\\\Java', \"$env:LOCALAPPDATA\\\\Programs\\\\Eclipse Adoptium\"\\)\\) { if \\(Test-Path $p\\) { Write-Output \"FOUND: $p\"; Get-ChildItem $p -ErrorAction SilentlyContinue | Select-Object FullName | Format-Table -HideTableHeaders } else { Write-Output \"MISS:  $p\" } })"
     ],
     "deny": [],
     "ask": []
