@@ -1,6 +1,7 @@
 package com.example.gymtime.ui.summary
 
 import androidx.compose.animation.core.*
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -8,6 +9,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -42,6 +46,7 @@ fun PostWorkoutSummaryScreen(
     val sessionContribution by viewModel.sessionContribution.collectAsState()
     val accentColor = MaterialTheme.colorScheme.primary
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.US) }
+    val context = LocalContext.current
 
     // Observe navigation event
     LaunchedEffect(Unit) {
@@ -49,6 +54,17 @@ fun PostWorkoutSummaryScreen(
             navController.navigate(Screen.Home.route) {
                 popUpTo(navController.graph.id) { inclusive = true }
             }
+        }
+    }
+
+    // Launch system share sheet when the ViewModel emits share text.
+    LaunchedEffect(Unit) {
+        viewModel.shareEvent.collect { text ->
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+            }
+            context.startActivity(Intent.createChooser(send, "Share workout"))
         }
     }
 
@@ -64,6 +80,20 @@ fun PostWorkoutSummaryScreen(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Share action — top right
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(onClick = { viewModel.onShareClicked() }) {
+                    Icon(
+                        imageVector = Icons.Filled.Share,
+                        contentDescription = "Share workout",
+                        tint = accentColor
+                    )
+                }
+            }
+
             // Celebration Header
             Text(
                 text = "Workout Complete!",

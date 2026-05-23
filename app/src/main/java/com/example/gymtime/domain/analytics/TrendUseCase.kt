@@ -3,6 +3,7 @@ package com.example.gymtime.domain.analytics
 import com.example.gymtime.data.db.dao.SetWithExerciseInfo
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.ExerciseDao
+import com.example.gymtime.data.db.dao.RatedWorkoutSetInfo
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.Exercise
@@ -22,7 +23,9 @@ enum class TrendMetric(val displayName: String) {
     REPS("Reps"),
     DURATION("Duration"),
     DISTANCE("Distance"),
-    CALORIES("Calories")
+    CALORIES("Calories"),
+    RATING("Rating"),
+    RATED_VOLUME("Rated Volume")
 }
 
 enum class TimePeriod(val months: Int?) {
@@ -94,6 +97,17 @@ class TrendUseCase @Inject constructor(
             calendar.add(Calendar.MONTH, -it)
             calendar.timeInMillis
         } ?: 0L
+
+        if (metric == TrendMetric.RATING || metric == TrendMetric.RATED_VOLUME) {
+            return getRatedTrendData(
+                metric = metric,
+                startDate = startDate,
+                endDate = endDate,
+                interval = interval,
+                muscleGroup = muscleGroup,
+                exerciseId = exerciseId
+            )
+        }
 
         val sets = setDao.getSetsWithExerciseInRange(
             startDate = startDate,
@@ -229,7 +243,84 @@ class TrendUseCase @Inject constructor(
             TrendMetric.CALORIES -> {
                 workingSets.sumOf { it.set.calories?.toDouble() ?: 0.0 }.toFloat()
             }
+            TrendMetric.RATING,
+            TrendMetric.RATED_VOLUME -> 0f
         }
+    }
+
+    private suspend fun getRatedTrendData(
+        metric: TrendMetric,
+        startDate: Long,
+        endDate: Long,
+        interval: AggregateInterval,
+        muscleGroup: String?,
+        exerciseId: Long?
+    ): List<TrendPoint> {
+        val snapshots = workoutDao.getRatedWorkoutSetInfo(startDate, endDate)
+            .toRatedSnapshots()
+            .mapNotNull { snapshot ->
+                val filteredRows = snapshot.filteredWorkingRows(muscleGroup, exerciseId)
+                val hasFilter = (muscleGroup != null && muscleGroup != "All") || exerciseId != null
+                if (hasFilter && filteredRows.isEmpty()) return@mapNotNull null
+                snapshot.copy(rows = if (hasFilter) filteredRows else snapshot.rows)
+            }
+
+        if (snapshots.isEmpty()) return emptyList()
+
+        return when (interval) {
+            AggregateInterval.BY_WORKOUT -> aggregateRatedByWorkout(snapshots, metric)
+            AggregateInterval.WEEKLY -> aggregateRatedByInterval(snapshots, metric, Calendar.WEEK_OF_YEAR)
+            AggregateInterval.MONTHLY -> aggregateRatedByInterval(snapshots, metric, Calendar.MONTH)
+        }
+    }
+
+    private fun aggregateRatedByWorkout(
+        snapshots: List<TrendRatedSnapshot>,
+        metric: TrendMetric
+    ): List<TrendPoint> {
+        val sdf = SimpleDateFormat("MMM d", Locale.getDefault())
+        return snapshots.mapNotNull { snapshot ->
+            val value = snapshot.ratedMetric(metric)
+            if (value == 0f) return@mapNotNull null
+            TrendPoint(
+                label = sdf.format(snapshot.startTime),
+                value = value,
+                date = snapshot.startTime,
+                workoutId = snapshot.workoutId
+            )
+        }.sortedBy { it.date }
+    }
+
+    private fun aggregateRatedByInterval(
+        snapshots: List<TrendRatedSnapshot>,
+        metric: TrendMetric,
+        calendarField: Int
+    ): List<TrendPoint> {
+        val sdf = if (calendarField == Calendar.WEEK_OF_YEAR) {
+            SimpleDateFormat("'W'w", Locale.getDefault())
+        } else {
+            SimpleDateFormat("MMM yy", Locale.getDefault())
+        }
+
+        return snapshots.groupBy {
+            val cal = Calendar.getInstance().apply { time = it.startTime }
+            val year = cal.get(Calendar.YEAR)
+            val period = cal.get(calendarField)
+            "$year-$period"
+        }.mapNotNull { (_, bucket) ->
+            val first = bucket.minByOrNull { it.startTime.time } ?: return@mapNotNull null
+            val value = when (metric) {
+                TrendMetric.RATING -> bucket.map { it.rating }.average().toFloat()
+                TrendMetric.RATED_VOLUME -> bucket.sumOf { it.ratedVolume().toDouble() }.toFloat()
+                else -> 0f
+            }
+            if (value == 0f) return@mapNotNull null
+            TrendPoint(
+                label = sdf.format(first.startTime),
+                value = value,
+                date = first.startTime
+            )
+        }.sortedBy { it.date }
     }
 
     /**
@@ -262,4 +353,55 @@ class TrendUseCase @Inject constructor(
 
         return 0f
     }
+}
+
+private data class TrendRatedSnapshot(
+    val workoutId: Long,
+    val startTime: Date,
+    val rating: Int,
+    val rows: List<RatedWorkoutSetInfo>
+) {
+    fun filteredWorkingRows(muscleGroup: String?, exerciseId: Long?): List<RatedWorkoutSetInfo> {
+        return workingRows().filter { row ->
+            val muscleMatches = muscleGroup == null || muscleGroup == "All" || row.targetMuscle == muscleGroup
+            val exerciseMatches = exerciseId == null || row.exerciseId == exerciseId
+            muscleMatches && exerciseMatches
+        }
+    }
+
+    fun ratedMetric(metric: TrendMetric): Float {
+        return when (metric) {
+            TrendMetric.RATING -> rating.toFloat()
+            TrendMetric.RATED_VOLUME -> ratedVolume()
+            else -> 0f
+        }
+    }
+
+    fun ratedVolume(): Float = volume() * (rating / 5f)
+
+    private fun workingRows(): List<RatedWorkoutSetInfo> {
+        return rows.filter { it.setId != null && it.isWarmup != true }
+    }
+
+    private fun volume(): Float {
+        return workingRows().sumOf { row ->
+            val weight = row.weight ?: return@sumOf 0.0
+            val reps = row.reps ?: return@sumOf 0.0
+            weight.toDouble() * reps
+        }.toFloat()
+    }
+}
+
+private fun List<RatedWorkoutSetInfo>.toRatedSnapshots(): List<TrendRatedSnapshot> {
+    return groupBy { it.workoutId }
+        .mapNotNull { (_, rows) ->
+            val first = rows.firstOrNull() ?: return@mapNotNull null
+            TrendRatedSnapshot(
+                workoutId = first.workoutId,
+                startTime = first.startTime,
+                rating = first.rating,
+                rows = rows
+            )
+        }
+        .sortedBy { it.startTime }
 }

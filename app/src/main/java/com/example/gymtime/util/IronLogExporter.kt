@@ -48,7 +48,7 @@ class IronLogExporter @Inject constructor(
             // exercises.csv
             zip.putNextEntry(ZipEntry("exercises.csv"))
             zip.write(buildCsv(
-                header = "id,name,targetMuscle,logType,defaultDistanceUnit,isCustom,notes,defaultRestSeconds,isStarred",
+                header = "id,name,targetMuscle,logType,defaultDistanceUnit,isCustom,notes,defaultRestSeconds,isStarred,repTarget",
                 rows = exercises.map { e ->
                     listOf(
                         e.id.toString(),
@@ -59,7 +59,8 @@ class IronLogExporter @Inject constructor(
                         e.isCustom.toString(),
                         e.notes ?: "",
                         e.defaultRestSeconds.toString(),
-                        e.isStarred.toString()
+                        e.isStarred.toString(),
+                        e.repTarget?.toString() ?: ""
                     )
                 }
             ))

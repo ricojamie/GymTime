@@ -38,7 +38,8 @@ import java.util.Locale
 fun ConsistencyTabContent(
     heatMapData: List<HeatMapDay>,
     stats: com.example.gymtime.domain.analytics.ConsistencyStats?,
-    trophyCasePRs: List<TrophyPR>
+    trophyCasePRs: List<TrophyPR>,
+    ratingStats: WorkoutRatingStats?
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Spacer(modifier = Modifier.height(16.dp))
@@ -52,6 +53,10 @@ fun ConsistencyTabContent(
         if (stats != null) {
             ConsistencyStatsCard(stats = stats)
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        WorkoutQualityCard(stats = ratingStats)
 
         Spacer(modifier = Modifier.height(32.dp))
 
@@ -93,6 +98,179 @@ fun ConsistencyTabContent(
             )
         }
     }
+}
+
+@Composable
+private fun WorkoutQualityCard(stats: WorkoutRatingStats?) {
+    val numberFormat = remember { java.text.NumberFormat.getNumberInstance(Locale.US) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text(
+                text = "Workout Quality",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+
+            if (stats == null || stats.ratedWorkoutCount == 0) {
+                Text(
+                    text = "Rate a few completed workouts to unlock flame trends and quality volume.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = LocalAppColors.current.textTertiary
+                )
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    QualityStat(
+                        label = "THIS WEEK",
+                        value = formatRating(stats.weekAverageRating),
+                        modifier = Modifier.weight(1f)
+                    )
+                    QualityStat(
+                        label = "THIS MONTH",
+                        value = formatRating(stats.monthAverageRating),
+                        modifier = Modifier.weight(1f)
+                    )
+                    QualityStat(
+                        label = "QUALITY VOL",
+                        value = numberFormat.format(stats.monthRatedVolume.toLong()),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                if (stats.weeklyTrend.isNotEmpty()) {
+                    WeeklyRatingStrip(points = stats.weeklyTrend)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    MuscleQualityList(
+                        title = "Best Rated",
+                        muscles = stats.topMuscles,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MuscleQualityList(
+                        title = "Watch",
+                        muscles = stats.lowMuscles,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QualityStat(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .background(Color(0xFF0D0D0D), RoundedCornerShape(10.dp))
+            .padding(10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = LocalAppColors.current.textTertiary,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun WeeklyRatingStrip(points: List<RatedVolumePoint>) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        points.forEach { point ->
+            val height = (12 + point.averageRating.coerceIn(1f, 5f) * 8).dp
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(height)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.75f), RoundedCornerShape(4.dp))
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = point.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = LocalAppColors.current.textTertiary,
+                    fontSize = 9.sp,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MuscleQualityList(
+    title: String,
+    muscles: List<MuscleRatingSummary>,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = title.uppercase(Locale.US),
+            style = MaterialTheme.typography.labelSmall,
+            color = LocalAppColors.current.textTertiary,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        if (muscles.isEmpty()) {
+            Text(
+                text = "Building",
+                style = MaterialTheme.typography.bodySmall,
+                color = LocalAppColors.current.textTertiary
+            )
+        } else {
+            muscles.forEach { muscle ->
+                Text(
+                    text = "${muscle.muscle} ${formatRating(muscle.averageRating)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalAppColors.current.textPrimary,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+private fun formatRating(value: Float?): String {
+    return value?.let { String.format(Locale.US, "%.1f/5", it) } ?: "--"
 }
 
 @Composable

@@ -11,6 +11,7 @@ import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.repository.ExerciseRepository
 import com.example.gymtime.data.repository.WorkoutRepository
+import com.example.gymtime.domain.recommendation.ExerciseAttemptRecommendationUseCase
 import com.example.gymtime.util.TestDispatcherRule
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -39,6 +40,7 @@ class ExerciseLoggingViewModelTest {
     private val volumeOrbRepository: VolumeOrbRepository = mockk(relaxed = true)
     private val supersetManager: SupersetManager = SupersetManager() // Use real one for interaction test
     private val routineRepository: RoutineRepository = mockk()
+    private val recommendationUseCase: ExerciseAttemptRecommendationUseCase = mockk()
 
     private lateinit var viewModel: ExerciseLoggingViewModel
 
@@ -69,6 +71,7 @@ class ExerciseLoggingViewModelTest {
         coEvery { workoutRepository.getSetsForWorkout(1L) } returns flowOf(emptyList())
         coEvery { workoutRepository.getLastWorkoutSetsForExercise(1L, any()) } returns emptyList()
         coEvery { routineRepository.getRoutineDayWithExercises(any()) } returns flowOf(null)
+        coEvery { recommendationUseCase.getRecommendation(any()) } returns null
         
         every { volumeOrbRepository.orbState } returns MutableStateFlow(mockk(relaxed = true))
 
@@ -80,7 +83,8 @@ class ExerciseLoggingViewModelTest {
             userPreferencesRepository,
             volumeOrbRepository,
             supersetManager,
-            routineRepository
+            routineRepository,
+            recommendationUseCase
         )
     }
 

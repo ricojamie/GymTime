@@ -20,7 +20,8 @@ class AnalyticsViewModel @Inject constructor(
     private val muscleGroupDao: com.example.gymtime.data.db.dao.MuscleGroupDao,
     private val consistencyUseCase: com.example.gymtime.domain.analytics.ConsistencyUseCase,
     private val balanceUseCase: com.example.gymtime.domain.analytics.BalanceUseCase,
-    private val trendUseCase: com.example.gymtime.domain.analytics.TrendUseCase
+    private val trendUseCase: com.example.gymtime.domain.analytics.TrendUseCase,
+    private val workoutRatingUseCase: com.example.gymtime.domain.analytics.WorkoutRatingUseCase
 ) : ViewModel() {
 
     // --- State ---
@@ -69,6 +70,9 @@ class AnalyticsViewModel @Inject constructor(
     private val _trophyCasePRs = MutableStateFlow<List<com.example.gymtime.domain.analytics.TrophyPR>>(emptyList())
     val trophyCasePRs = _trophyCasePRs.asStateFlow()
 
+    private val _workoutRatingStats = MutableStateFlow<com.example.gymtime.domain.analytics.WorkoutRatingStats?>(null)
+    val workoutRatingStats = _workoutRatingStats.asStateFlow()
+
     val allExercises = exerciseDao.getAllExercises()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -90,6 +94,7 @@ class AnalyticsViewModel @Inject constructor(
             refreshBalanceData()
             refreshTrendData()
             refreshTrophyCase()
+            refreshWorkoutRatings()
 
             _isLoading.value = false
         }
@@ -175,6 +180,16 @@ class AnalyticsViewModel @Inject constructor(
                 _trophyCasePRs.value = trendUseCase.getTrophyCasePRs()
             } catch (e: Exception) {
                 _trophyCasePRs.value = emptyList()
+            }
+        }
+    }
+
+    private fun refreshWorkoutRatings() {
+        viewModelScope.launch {
+            try {
+                _workoutRatingStats.value = workoutRatingUseCase.getRatingStats()
+            } catch (e: Exception) {
+                _workoutRatingStats.value = null
             }
         }
     }

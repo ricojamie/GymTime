@@ -233,6 +233,14 @@ object DatabaseModule {
         }
     }
 
+    // Migration from version 12 to 13: Add optional rep target to exercises
+    private val MIGRATION_12_13 = object : Migration(12, 13) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            Log.d(TAG, "Running migration 12 -> 13: Adding exercise rep targets")
+            database.execSQL("ALTER TABLE exercises ADD COLUMN repTarget INTEGER DEFAULT NULL")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): GymTimeDatabase {
@@ -252,7 +260,8 @@ object DatabaseModule {
             MIGRATION_8_9,
             MIGRATION_9_10,
             MIGRATION_10_11,
-            MIGRATION_11_12
+            MIGRATION_11_12,
+            MIGRATION_12_13
         )
         .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
         .addCallback(object : RoomDatabase.Callback() {

@@ -93,6 +93,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.LogType
+import com.example.gymtime.domain.recommendation.ExerciseAttemptRecommendation
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.PlateCalculatorSheet
 import com.example.gymtime.ui.components.VolumeProgressBar
@@ -131,6 +132,7 @@ fun ExerciseLoggingScreen(
     val workoutOverview by viewModel.workoutOverview.collectAsState()
     val currentPlanItem by viewModel.currentPlanItem.collectAsState()
     val personalBestsByReps by viewModel.personalBestsByReps.collectAsState()
+    val attemptRecommendation by viewModel.attemptRecommendation.collectAsState()
     val volumeOrbState by viewModel.volumeOrbState.collectAsState()
 
 
@@ -387,6 +389,19 @@ fun ExerciseLoggingScreen(
                         restSeconds = plan.restSeconds,
                         notes = plan.notes
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                if (exercise?.logType.supportsRepTarget && exercise?.repTarget != null) {
+                    if (attemptRecommendation != null) {
+                        AttemptRecommendationCard(
+                            recommendation = attemptRecommendation!!,
+                            repTarget = exercise!!.repTarget!!,
+                            onUse = { viewModel.applyAttemptRecommendation() }
+                        )
+                    } else {
+                        RepTargetHintCard(repTarget = exercise!!.repTarget!!)
+                    }
                     Spacer(modifier = Modifier.height(12.dp))
                 }
 
@@ -1001,16 +1016,16 @@ fun ExerciseLoggingScreen(
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         OutlinedButton(
-                            onClick = { viewModel.updateRestTime(maxOf(0, restTime - 10)) },
+                            onClick = { viewModel.adjustRestTime(-5) },
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = LocalAppColors.current.textTertiary)
                         ) {
-                            Text("-10s")
+                            Text("-5s")
                         }
                         OutlinedButton(
-                            onClick = { viewModel.updateRestTime(restTime + 10) },
+                            onClick = { viewModel.adjustRestTime(5) },
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = LocalAppColors.current.textTertiary)
                         ) {
-                            Text("+10s")
+                            Text("+5s")
                         }
                     }
 
@@ -1416,6 +1431,89 @@ private fun WorkoutPrescriptionCard(
     }
 }
 
+@Composable
+private fun AttemptRecommendationCard(
+    recommendation: ExerciseAttemptRecommendation,
+    repTarget: Int,
+    onUse: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = recommendation.title.uppercase(java.util.Locale.US),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = recommendation.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalAppColors.current.textPrimary
+                )
+                Text(
+                    text = "Rep target: $repTarget",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = LocalAppColors.current.textTertiary
+                )
+            }
+
+            if (recommendation.canApply) {
+                TextButton(onClick = onUse) {
+                    Text(
+                        text = "Use",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RepTargetHintCard(repTarget: Int) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "REP TARGET",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LocalAppColors.current.textTertiary,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "$repTarget reps before increasing weight",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalAppColors.current.textPrimary
+                )
+            }
+        }
+    }
+}
+
 
 
 
@@ -1463,6 +1561,9 @@ private val DistanceUnit.loggingDescription: String
 
 private val LogType?.usesDistanceUnit: Boolean
     get() = this == LogType.WEIGHT_DISTANCE || this == LogType.DISTANCE_TIME
+
+private val LogType?.supportsRepTarget: Boolean
+    get() = this == LogType.WEIGHT_REPS || this == LogType.REPS_ONLY
 
 private fun buildSetSummary(
     set: com.example.gymtime.data.db.entity.Set,

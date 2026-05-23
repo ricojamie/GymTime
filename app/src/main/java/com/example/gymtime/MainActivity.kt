@@ -1,5 +1,6 @@
 package com.example.gymtime
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -21,8 +22,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -36,8 +41,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.navigation.BottomNavigationBar
 import com.example.gymtime.navigation.Screen
+import com.example.gymtime.notifications.MonthlyReportNotifier
 import com.example.gymtime.ui.history.HistoryScreen
 import com.example.gymtime.ui.home.HomeScreen
+import com.example.gymtime.ui.report.MonthlyReportScreen
 import com.example.gymtime.ui.theme.IronLogTheme
 import com.example.gymtime.ui.theme.ThemeColors
 import dagger.hilt.android.AndroidEntryPoint
@@ -50,6 +57,11 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var userPreferencesRepository: UserPreferencesRepository
 
+    // Holds a deep-link destination delivered via Intent extra (e.g. from a
+    // notification tap). Compose collects this to navigate after the NavHost
+    // is set up. Cleared once consumed.
+    private val pendingDestination = androidx.compose.runtime.mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Install splash screen before super.onCreate()
         installSplashScreen()
@@ -61,6 +73,9 @@ class MainActivity : ComponentActivity() {
 
         // Request notification permission for Android 13+
         requestNotificationPermission()
+
+        // Capture any deep-link destination from the launching intent.
+        consumeDestinationExtra(intent)
 
         enableEdgeToEdge()
         setContent {
@@ -97,6 +112,19 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentRoute = navBackStackEntry?.destination?.route
+
+                    // Handle deep-link destination delivered via Intent extras
+                    // (e.g. notification tap). The state holder is updated from
+                    // onCreate / onNewIntent; we consume and clear it here.
+                    val pending = pendingDestination.value
+                    LaunchedEffect(pending) {
+                        if (pending == MonthlyReportNotifier.DESTINATION_MONTHLY_REPORT) {
+                            navController.navigate(Screen.MonthlyReport.route) {
+                                launchSingleTop = true
+                            }
+                            pendingDestination.value = null
+                        }
+                    }
 
                     // Define which screens should show the bottom bar
                     val bottomBarScreens = listOf(
@@ -206,6 +234,9 @@ class MainActivity : ComponentActivity() {
                                 ) {
                                     com.example.gymtime.ui.summary.PostWorkoutSummaryScreen(navController = navController)
                                 }
+                                composable(Screen.MonthlyReport.route) {
+                                    MonthlyReportScreen(navController = navController)
+                                }
                                 composable(Screen.Settings.route) {
                                     com.example.gymtime.ui.settings.SettingsScreen(navController = navController)
                                 }
@@ -303,5 +334,19 @@ class MainActivity : ComponentActivity() {
         ) {
             requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeDestinationExtra(intent)
+    }
+
+    private fun consumeDestinationExtra(intent: Intent?) {
+        val destination = intent?.getStringExtra(MonthlyReportNotifier.EXTRA_DESTINATION)
+            ?: return
+        pendingDestination.value = destination
+        // Strip the extra so back navigation / config changes don't re-fire.
+        intent.removeExtra(MonthlyReportNotifier.EXTRA_DESTINATION)
     }
 }

@@ -13,5 +13,6 @@ data class Exercise(
     val isCustom: Boolean,
     val notes: String?,
     val defaultRestSeconds: Int,
-    val isStarred: Boolean = false
+    val isStarred: Boolean = false,
+    val repTarget: Int? = null
 )

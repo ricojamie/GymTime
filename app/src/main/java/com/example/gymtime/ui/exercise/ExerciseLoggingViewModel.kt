@@ -23,6 +23,8 @@ import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.repository.ExerciseRepository
 import com.example.gymtime.data.repository.WorkoutRepository
+import com.example.gymtime.domain.recommendation.ExerciseAttemptRecommendation
+import com.example.gymtime.domain.recommendation.ExerciseAttemptRecommendationUseCase
 import com.example.gymtime.service.RestTimerService
 import com.example.gymtime.util.PlateCalculator
 import com.example.gymtime.util.PlateLoadout
@@ -65,7 +67,8 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val userPreferencesRepository: UserPreferencesRepository,
     private val volumeOrbRepository: VolumeOrbRepository,
     private val supersetManager: SupersetManager,
-    private val routineRepository: RoutineRepository
+    private val routineRepository: RoutineRepository,
+    private val recommendationUseCase: ExerciseAttemptRecommendationUseCase
 ) : ViewModel() {
 
     private val exerciseId: Long = checkNotNull(savedStateHandle["exerciseId"])
@@ -185,6 +188,9 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _bestReps = MutableStateFlow<String?>(null)
     val bestReps: StateFlow<String?> = _bestReps
 
+    private val _attemptRecommendation = MutableStateFlow<ExerciseAttemptRecommendation?>(null)
+    val attemptRecommendation: StateFlow<ExerciseAttemptRecommendation?> = _attemptRecommendation
+
     // Workout overview data
     private val _workoutOverview = MutableStateFlow<List<WorkoutExerciseSummary>>(emptyList())
     val workoutOverview: StateFlow<List<WorkoutExerciseSummary>> = _workoutOverview
@@ -225,6 +231,9 @@ class ExerciseLoggingViewModel @Inject constructor(
                     exerciseDefaultRestSeconds = it.defaultRestSeconds
                     _restTime.value = it.defaultRestSeconds
                     _selectedDistanceUnit.value = it.defaultDistanceUnit
+                    _attemptRecommendation.value = runCatching {
+                        recommendationUseCase.getRecommendation(it)
+                    }.getOrNull()
                     
                     // Initial sync with SupersetManager if already in a superset (e.g. from blank workout)
                     if (supersetManager.isInSupersetMode.value) {
@@ -389,6 +398,26 @@ class ExerciseLoggingViewModel @Inject constructor(
 
     fun updateRestTime(seconds: Int) {
         _restTime.value = seconds
+    }
+
+    fun adjustRestTime(deltaSeconds: Int) {
+        if (_isTimerRunning.value) {
+            val serviceIntent = Intent(context, RestTimerService::class.java).apply {
+                action = RestTimerService.ACTION_ADJUST_TIME
+                putExtra(RestTimerService.EXTRA_DELTA_SECONDS, deltaSeconds)
+            }
+            context.startService(serviceIntent)
+        } else {
+            _restTime.value = (_restTime.value + deltaSeconds).coerceAtLeast(0)
+        }
+    }
+
+    fun applyAttemptRecommendation() {
+        val recommendation = _attemptRecommendation.value ?: return
+        if (!recommendation.canApply) return
+
+        recommendation.targetWeight?.let { _weight.value = formatWeightForInput(it) }
+        recommendation.targetReps?.let { _reps.value = it.toString() }
     }
 
     fun toggleWarmup() {
@@ -767,6 +796,10 @@ class ExerciseLoggingViewModel @Inject constructor(
         viewModelScope.launch {
             userPreferencesRepository.setTimerAudioEnabled(enabled)
         }
+    }
+
+    private fun formatWeightForInput(weight: Float): String {
+        return if (weight % 1f == 0f) weight.toInt().toString() else weight.toString()
     }
 
     private fun formatDistanceForEditing(set: Set, fallbackUnit: DistanceUnit): String {

@@ -31,6 +31,11 @@ android {
             )
         }
     }
+    splits {
+        abi {
+            isEnable = false
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -66,10 +71,13 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     kapt(libs.room.compiler)
     kapt(libs.hilt.compiler)
+    kapt(libs.androidx.hilt.compiler)
 
     // Vico charting library for Analytics
     implementation(libs.vico.compose)

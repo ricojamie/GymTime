@@ -3,6 +3,7 @@ package com.example.gymtime.navigation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.ShowChart
+import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
@@ -40,6 +41,8 @@ sealed class Screen(val route: String, val icon: ImageVector) {
     object PostWorkoutSummary : Screen("post_workout_summary/{workoutId}", Icons.Filled.Home) { // Post-workout summary
         fun createRoute(workoutId: Long) = "post_workout_summary/$workoutId"
     }
+
+    object MonthlyReport : Screen("monthly_report", Icons.Filled.Assessment)
 
     object Settings : Screen("settings", Icons.Filled.Settings) // Settings screen
     object ThemeSettings : Screen("theme_settings", Icons.Filled.Settings)

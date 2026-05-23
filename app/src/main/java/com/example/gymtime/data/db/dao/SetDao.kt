@@ -172,6 +172,20 @@ interface SetDao {
     """)
     suspend fun getPersonalBest(exerciseId: Long): Set?
 
+    // Get personal best from sets BEFORE the given timestamp. Used to detect
+    // whether sets within a given workout established a new PR, by excluding
+    // that workout's own sets from the baseline.
+    @Query("""
+        SELECT * FROM sets
+        WHERE exerciseId = :exerciseId
+          AND weight IS NOT NULL
+          AND isWarmup = 0
+          AND timestamp < :beforeTimestamp
+        ORDER BY weight DESC, reps DESC
+        LIMIT 1
+    """)
+    suspend fun getPersonalBestBefore(exerciseId: Long, beforeTimestamp: Long): Set?
+
     // Get personal bests by rep count (best weight for each rep count)
     @Query("""
         SELECT reps, MAX(weight) as maxWeight FROM sets

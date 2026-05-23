@@ -74,6 +74,36 @@ class StrengthMomentumUseCaseTest {
     }
 
     @Test
+    fun `positive momentum never maps to declining direction when history was stronger`() {
+        val direction = directionFor(
+            percent = 7.6f,
+            history = listOf(18f, 20f, 22f, 24f, 26f)
+        )
+
+        assertEquals(MomentumDirection.STRONG_UP, direction)
+    }
+
+    @Test
+    fun `positive momentum never maps to flat direction when history is similar`() {
+        val direction = directionFor(
+            percent = 4.7f,
+            history = listOf(2f, 4f, 5f, 6f, 6.5f)
+        )
+
+        assertEquals(MomentumDirection.UP, direction)
+    }
+
+    @Test
+    fun `negative momentum never maps to improving direction when history was worse`() {
+        val direction = directionFor(
+            percent = -3f,
+            history = listOf(-20f, -22f, -24f, -26f, -28f)
+        )
+
+        assertEquals(MomentumDirection.DOWN, direction)
+    }
+
+    @Test
     fun `warmup sets are ignored`() = runTest {
         coEvery { setDao.getPerformanceSetsWithExerciseInRange(any(), any()) } returns listOf(
             strengthSet(weight = 100f, reps = 10, daysAgo = 40, muscle = "Chest", isWarmup = true),
@@ -129,7 +159,7 @@ class StrengthMomentumUseCaseTest {
     }
 
     @Test
-    fun `cardio log types do not color body muscles`() = runTest {
+    fun `cardio log types are excluded from strength momentum`() = runTest {
         coEvery { setDao.getPerformanceSetsWithExerciseInRange(any(), any()) } returns listOf(
             performanceSet(
                 exerciseId = 3L,
@@ -151,10 +181,81 @@ class StrengthMomentumUseCaseTest {
 
         val result = useCase.getStrengthMomentum(now)
         val legs = result.muscles.first { it.muscle == "Legs" }
-        val cardio = result.muscles.first { it.muscle == "Cardio" }
 
         assertNull(legs.percentChange)
-        assertTrue(cardio.percentChange!! > 0f)
+        assertTrue(result.muscles.none { it.muscle == "Cardio" })
+    }
+
+    @Test
+    fun `cardio target muscle is excluded from strength momentum`() = runTest {
+        coEvery { setDao.getPerformanceSetsWithExerciseInRange(any(), any()) } returns listOf(
+            performanceSet(
+                exerciseId = 4L,
+                exerciseName = "Stair Climber",
+                logType = LogType.DURATION,
+                daysAgo = 40,
+                muscle = "Cardio",
+                durationSeconds = 600
+            ),
+            performanceSet(
+                exerciseId = 4L,
+                exerciseName = "Stair Climber",
+                logType = LogType.DURATION,
+                daysAgo = 7,
+                muscle = "Cardio",
+                durationSeconds = 900
+            )
+        )
+
+        val result = useCase.getStrengthMomentum(now)
+
+        assertTrue(result.muscles.none { it.muscle == "Cardio" })
+        assertTrue(result.topImproving.none { it.muscle == "Cardio" })
+    }
+
+    @Test
+    fun `mixed exercise changes expose improving and declining contributors`() = runTest {
+        coEvery { setDao.getPerformanceSetsWithExerciseInRange(any(), any()) } returns listOf(
+            strengthSet(
+                exerciseId = 1L,
+                exerciseName = "Bench Press",
+                weight = 100f,
+                reps = 10,
+                daysAgo = 40,
+                muscle = "Chest"
+            ),
+            strengthSet(
+                exerciseId = 1L,
+                exerciseName = "Bench Press",
+                weight = 120f,
+                reps = 10,
+                daysAgo = 7,
+                muscle = "Chest"
+            ),
+            strengthSet(
+                exerciseId = 2L,
+                exerciseName = "Incline Press",
+                weight = 100f,
+                reps = 10,
+                daysAgo = 40,
+                muscle = "Chest"
+            ),
+            strengthSet(
+                exerciseId = 2L,
+                exerciseName = "Incline Press",
+                weight = 90f,
+                reps = 10,
+                daysAgo = 7,
+                muscle = "Chest"
+            )
+        )
+
+        val result = useCase.getStrengthMomentum(now)
+        val chest = result.muscles.first { it.muscle == "Chest" }
+
+        assertTrue(chest.hasMixedContributors)
+        assertEquals("Bench Press", chest.improvingContributors.first().exerciseName)
+        assertEquals("Incline Press", chest.decliningContributors.first().exerciseName)
     }
 
     private fun strengthSet(
@@ -186,6 +287,7 @@ class StrengthMomentumUseCaseTest {
         muscle: String,
         weight: Float? = null,
         reps: Int? = null,
+        durationSeconds: Int? = null,
         distanceMeters: Float? = null,
         isWarmup: Boolean = false
     ): SetWithExercisePerformanceInfo {
@@ -196,7 +298,7 @@ class StrengthMomentumUseCaseTest {
                 weight = weight,
                 reps = reps,
                 rpe = null,
-                durationSeconds = null,
+                durationSeconds = durationSeconds,
                 distanceMeters = distanceMeters,
                 isWarmup = isWarmup,
                 isComplete = true,
@@ -206,5 +308,15 @@ class StrengthMomentumUseCaseTest {
             targetMuscle = muscle,
             logType = logType
         )
+    }
+
+    private fun directionFor(percent: Float, history: List<Float>): MomentumDirection {
+        val method = StrengthMomentumUseCase::class.java.getDeclaredMethod(
+            "directionFor",
+            Float::class.javaPrimitiveType,
+            List::class.java
+        )
+        method.isAccessible = true
+        return method.invoke(useCase, percent, history) as MomentumDirection
     }
 }

@@ -18,6 +18,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -75,6 +77,7 @@ fun HomeScreen(
 
     var showStreakDetail by remember { mutableStateOf(false) }
     var showMomentumDetail by remember { mutableStateOf(false) }
+    var showMomentumInfo by remember { mutableStateOf(false) }
     var showWorkoutStartPicker by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
 
@@ -153,7 +156,8 @@ fun HomeScreen(
         StrengthMomentumMapCard(
             state = strengthMomentum,
             modifier = Modifier.fillMaxWidth(),
-            onClick = { showMomentumDetail = true }
+            onClick = { showMomentumDetail = true },
+            onInfoClick = { showMomentumInfo = true }
         )
 
         WeeklyLoadBar(
@@ -192,6 +196,32 @@ fun HomeScreen(
                 onClose = { showMomentumDetail = false }
             )
         }
+    }
+
+    if (showMomentumInfo) {
+        AlertDialog(
+            onDismissRequest = { showMomentumInfo = false },
+            title = {
+                Text(
+                    text = "Strength Momentum",
+                    fontWeight = FontWeight.Bold,
+                    color = LocalAppColors.current.textPrimary
+                )
+            },
+            text = {
+                Text(
+                    text = "Compares your best recent performances from the last 28 days against the previous 28 days for exercises with data in both windows. Warmups and cardio-style exercises are excluded. Weighted lifts use estimated strength and reps-only uses reps. Muscle scores are weighted by exercise workout count, and mixed means at least one exercise improved while another declined.",
+                    color = LocalAppColors.current.textSecondary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showMomentumInfo = false }) {
+                    Text("Got it", color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            containerColor = LocalAppColors.current.surfaceCards
+        )
     }
 
     if (showWorkoutStartPicker) {
@@ -663,4 +693,3 @@ private fun StatItem(
         )
     }
 }
-

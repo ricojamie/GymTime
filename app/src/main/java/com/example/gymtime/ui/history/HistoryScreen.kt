@@ -1,5 +1,6 @@
 package com.example.gymtime.ui.history
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -7,12 +8,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -40,11 +43,23 @@ fun HistoryScreen(
     val selectedWorkoutDetails by viewModel.selectedWorkoutDetails.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val accentColor = MaterialTheme.colorScheme.primary
+    val context = LocalContext.current
 
     // Handle resume workout navigation
     LaunchedEffect(Unit) {
         viewModel.resumeWorkoutEvent.collect { workoutId ->
             navController.navigate("workout_resume")
+        }
+    }
+
+    // Launch system share sheet when the ViewModel emits share text.
+    LaunchedEffect(Unit) {
+        viewModel.shareEvent.collect { text ->
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+            }
+            context.startActivity(Intent.createChooser(send, "Share workout"))
         }
     }
 
@@ -109,7 +124,8 @@ fun HistoryScreen(
                 workout = selectedWorkout!!,
                 sets = selectedWorkoutDetails!!,
                 onDismiss = { viewModel.clearSelection() },
-                onResumeWorkout = { viewModel.resumeWorkout(selectedWorkout!!.workout.id) }
+                onResumeWorkout = { viewModel.resumeWorkout(selectedWorkout!!.workout.id) },
+                onShareWorkout = { viewModel.shareWorkout(selectedWorkout!!.workout.id) }
             )
         }
     }
@@ -272,6 +288,7 @@ fun WorkoutDetailsSheet(
     sets: List<SetWithExerciseInfo>,
     onDismiss: () -> Unit,
     onResumeWorkout: () -> Unit = {},
+    onShareWorkout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val accentColor = MaterialTheme.colorScheme.primary
@@ -332,21 +349,39 @@ fun WorkoutDetailsSheet(
                 )
             }
 
-            // Resume Workout button
+            // Resume + Share row
             Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = onResumeWorkout,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = accentColor
-                ),
-                shape = RoundedCornerShape(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    "Resume This Workout",
-                    color = Color.Black,
-                    fontWeight = FontWeight.Bold
-                )
+                Button(
+                    onClick = onResumeWorkout,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = accentColor
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        "Resume This Workout",
+                        color = Color.Black,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                OutlinedIconButton(
+                    onClick = onShareWorkout,
+                    modifier = Modifier.size(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, accentColor)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Share,
+                        contentDescription = "Share workout",
+                        tint = accentColor
+                    )
+                }
             }
         }
 

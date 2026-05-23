@@ -41,6 +41,7 @@ fun ExerciseFormScreen(
     val defaultDistanceUnit by viewModel.defaultDistanceUnit.collectAsState()
     val notes by viewModel.notes.collectAsState()
     val defaultRestSeconds by viewModel.defaultRestSeconds.collectAsState()
+    val repTarget by viewModel.repTarget.collectAsState()
     val availableMuscles by viewModel.availableMuscles.collectAsState(initial = emptyList())
     val isEditMode by viewModel.isEditMode.collectAsState()
     val isSaveEnabled by viewModel.isSaveEnabled.collectAsState()
@@ -393,6 +394,49 @@ fun ExerciseFormScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            if (logType.usesRepTarget) {
+                Text(
+                    text = "REP TARGET (OPTIONAL)",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.2.sp,
+                    color = LocalAppColors.current.textTertiary
+                )
+
+                GlowCard(
+                    onClick = {},
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    BasicTextField(
+                        value = repTarget,
+                        onValueChange = { value ->
+                            viewModel.updateRepTarget(value.filter { it.isDigit() }.take(3))
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            color = LocalAppColors.current.textPrimary,
+                            fontSize = 18.sp
+                        ),
+                        decorationBox = { innerTextField ->
+                            if (repTarget.isEmpty()) {
+                                Text(
+                                    text = "Example: 10",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = LocalAppColors.current.textTertiary
+                                )
+                            }
+                            innerTextField()
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
             // Notes Input (Optional)
             Text(
                 text = "NOTES (OPTIONAL)",
@@ -460,6 +504,9 @@ private val LogType.description: String
 
 private val LogType.usesDistanceUnit: Boolean
     get() = this == LogType.WEIGHT_DISTANCE || this == LogType.DISTANCE_TIME
+
+private val LogType.usesRepTarget: Boolean
+    get() = this == LogType.WEIGHT_REPS || this == LogType.REPS_ONLY
 
 private val DistanceUnit.displayName: String
     get() = when (this) {

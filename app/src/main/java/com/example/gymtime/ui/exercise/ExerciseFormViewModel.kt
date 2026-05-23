@@ -44,6 +44,11 @@ class ExerciseFormViewModel @Inject constructor(
     private val _defaultRestSeconds = MutableStateFlow("90")
     val defaultRestSeconds: StateFlow<String> = _defaultRestSeconds
 
+    private val _repTarget = MutableStateFlow("")
+    val repTarget: StateFlow<String> = _repTarget
+
+    private var existingIsStarred: Boolean = false
+
     val availableMuscles: Flow<List<String>> = muscleGroupDao.getAllMuscleGroups().map { groups ->
         groups.map { it.name }.sorted()
     }
@@ -55,9 +60,19 @@ class ExerciseFormViewModel @Inject constructor(
     val isSaveEnabled: StateFlow<Boolean> = combine(
         _exerciseName,
         _targetMuscle,
-        _defaultRestSeconds
-    ) { name, muscle, rest ->
-        name.isNotBlank() && muscle.isNotBlank() && rest.toIntOrNull() != null && (rest.toIntOrNull() ?: 0) > 0
+        _defaultRestSeconds,
+        _logType,
+        _repTarget
+    ) { name, muscle, rest, logType, repTarget ->
+        val validRepTarget = repTarget.isBlank() ||
+            ((logType == LogType.WEIGHT_REPS || logType == LogType.REPS_ONLY) &&
+                (repTarget.toIntOrNull() ?: 0) > 0)
+
+        name.isNotBlank() &&
+            muscle.isNotBlank() &&
+            rest.toIntOrNull() != null &&
+            (rest.toIntOrNull() ?: 0) > 0 &&
+            validRepTarget
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     // Returns new exercise ID for create, null for edit
@@ -75,6 +90,8 @@ class ExerciseFormViewModel @Inject constructor(
                     _defaultDistanceUnit.value = exercise.defaultDistanceUnit
                     _notes.value = exercise.notes ?: ""
                     _defaultRestSeconds.value = exercise.defaultRestSeconds.toString()
+                    _repTarget.value = exercise.repTarget?.toString() ?: ""
+                    existingIsStarred = exercise.isStarred
                 }
             }
         }
@@ -104,17 +121,27 @@ class ExerciseFormViewModel @Inject constructor(
         _defaultRestSeconds.value = seconds
     }
 
+    fun updateRepTarget(target: String) {
+        _repTarget.value = target
+    }
+
     fun saveExercise() {
         viewModelScope.launch {
+            val selectedLogType = _logType.value
+            val target = _repTarget.value.toIntOrNull()
+                ?.takeIf { selectedLogType == LogType.WEIGHT_REPS || selectedLogType == LogType.REPS_ONLY }
+
             val exercise = Exercise(
                 id = exerciseId ?: 0,
                 name = _exerciseName.value.trim(),
                 targetMuscle = _targetMuscle.value,
-                logType = _logType.value,
+                logType = selectedLogType,
                 defaultDistanceUnit = _defaultDistanceUnit.value,
                 isCustom = true,
                 notes = _notes.value.takeIf { it.isNotBlank() },
-                defaultRestSeconds = _defaultRestSeconds.value.toIntOrNull() ?: 90
+                defaultRestSeconds = _defaultRestSeconds.value.toIntOrNull() ?: 90,
+                isStarred = existingIsStarred,
+                repTarget = target
             )
 
             val resultId = if (exerciseId == null) {

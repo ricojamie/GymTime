@@ -40,6 +40,7 @@ fun SettingsScreen(
     val timerAutoStart by viewModel.timerAutoStart.collectAsState(initial = true)
     val timerAudioEnabled by viewModel.timerAudioEnabled.collectAsState(initial = true)
     val timerVibrateEnabled by viewModel.timerVibrateEnabled.collectAsState(initial = true)
+    val monthlyReportEnabled by viewModel.monthlyReportEnabled.collectAsState(initial = true)
     val keepScreenOn by viewModel.keepScreenOn.collectAsState(initial = false)
     val darkMode by viewModel.darkMode.collectAsState(initial = true)
     val restDaysPerWeek by viewModel.restDaysPerWeek.collectAsState(initial = 2)
@@ -245,6 +246,70 @@ fun SettingsScreen(
                                 checkedThumbColor = MaterialTheme.colorScheme.primary,
                                 checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
                             )
+                        )
+                    }
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Notifications Section
+                SectionHeader("Notifications")
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Monthly Report", fontSize = 16.sp, color = LocalAppColors.current.textPrimary)
+                            Text(
+                                "Get a summary of last month on the 1st",
+                                fontSize = 12.sp,
+                                color = LocalAppColors.current.textTertiary
+                            )
+                        }
+
+                        Switch(
+                            checked = monthlyReportEnabled,
+                            onCheckedChange = { viewModel.setMonthlyReportEnabled(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                            )
+                        )
+                    }
+
+                    HorizontalDivider(color = LocalAppColors.current.textTertiary.copy(alpha = 0.1f), modifier = Modifier.padding(horizontal = 16.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { navController.navigate(com.example.gymtime.navigation.Screen.MonthlyReport.route) }
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("View Last Month's Report", fontSize = 16.sp, color = LocalAppColors.current.textPrimary)
+                            Text(
+                                "See the summary right now",
+                                fontSize = 12.sp,
+                                color = LocalAppColors.current.textTertiary
+                            )
+                        }
+                        Text(
+                            text = "Open",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }

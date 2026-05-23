@@ -9,6 +9,7 @@ import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.VolumeOrbRepository
 import com.example.gymtime.data.VolumeOrbState
+import com.example.gymtime.domain.share.ShareWorkoutUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
@@ -29,7 +30,8 @@ class PostWorkoutSummaryViewModel @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val setDao: SetDao,
     private val exerciseDao: ExerciseDao,
-    private val volumeOrbRepository: VolumeOrbRepository
+    private val volumeOrbRepository: VolumeOrbRepository,
+    private val shareWorkoutUseCase: ShareWorkoutUseCase
 ) : ViewModel() {
 
     private val workoutId: Long = checkNotNull(savedStateHandle["workoutId"])
@@ -48,6 +50,9 @@ class PostWorkoutSummaryViewModel @Inject constructor(
 
     private val _navigationEvent = Channel<Unit>(Channel.BUFFERED)
     val navigationEvent = _navigationEvent.receiveAsFlow()
+
+    private val _shareEvent = Channel<String>(Channel.BUFFERED)
+    val shareEvent = _shareEvent.receiveAsFlow()
 
     // Volume Orb state
     val volumeOrbState: StateFlow<VolumeOrbState> = volumeOrbRepository.orbState
@@ -146,6 +151,16 @@ class PostWorkoutSummaryViewModel @Inject constructor(
     fun skipAndFinish() {
         viewModelScope.launch {
             _navigationEvent.send(Unit)
+        }
+    }
+
+    fun onShareClicked() {
+        viewModelScope.launch {
+            try {
+                shareWorkoutUseCase(workoutId)?.let { _shareEvent.send(it) }
+            } catch (e: Exception) {
+                Log.e("PostWorkoutSummaryVM", "Error building share text", e)
+            }
         }
     }
 }

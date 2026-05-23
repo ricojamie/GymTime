@@ -3,6 +3,7 @@ package com.example.gymtime.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.UserPreferencesRepository
+import com.example.gymtime.notifications.MonthlyReportScheduler
 import com.example.gymtime.util.FitNotesImporter
 import com.example.gymtime.util.IronLogExporter
 import com.example.gymtime.util.IronLogImporter
@@ -21,7 +22,8 @@ class SettingsViewModel @Inject constructor(
     private val userPreferencesRepository: UserPreferencesRepository,
     private val fitNotesImporter: FitNotesImporter,
     private val ironLogExporter: IronLogExporter,
-    private val ironLogImporter: IronLogImporter
+    private val ironLogImporter: IronLogImporter,
+    private val monthlyReportScheduler: MonthlyReportScheduler
 ) : ViewModel() {
 
     val userName = userPreferencesRepository.userName
@@ -37,6 +39,7 @@ class SettingsViewModel @Inject constructor(
     val keepScreenOn = userPreferencesRepository.keepScreenOn
     val darkMode = userPreferencesRepository.darkMode
     val restDaysPerWeek = userPreferencesRepository.restDaysPerWeek
+    val monthlyReportEnabled = userPreferencesRepository.monthlyReportEnabled
 
     // Plate calculator settings
     val barWeight = userPreferencesRepository.barWeight
@@ -118,6 +121,13 @@ class SettingsViewModel @Inject constructor(
     fun setRestDaysPerWeek(days: Int) {
         viewModelScope.launch {
             userPreferencesRepository.setRestDaysPerWeek(days)
+        }
+    }
+
+    fun setMonthlyReportEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setMonthlyReportEnabled(enabled)
+            if (enabled) monthlyReportScheduler.scheduleNext() else monthlyReportScheduler.cancel()
         }
     }
 

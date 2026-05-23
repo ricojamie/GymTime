@@ -3,6 +3,7 @@ package com.example.gymtime.domain.analytics
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.WorkoutDao
+import com.example.gymtime.data.db.dao.RatedWorkoutSetInfo
 import com.example.gymtime.data.db.dao.SetWithExerciseInfo
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.util.TestDispatcherRule
@@ -168,5 +169,62 @@ class TrendUseCaseTest {
         )
 
         assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `getTrendData calculates rating by workout`() = runTest {
+        coEvery { workoutDao.getRatedWorkoutSetInfo(any(), any()) } returns listOf(
+            ratedRow(workoutId = 1L, rating = 5),
+            ratedRow(workoutId = 2L, rating = 3)
+        )
+
+        val result = trendUseCase.getTrendData(
+            metric = TrendMetric.RATING,
+            period = TimePeriod.ONE_MONTH,
+            interval = AggregateInterval.BY_WORKOUT
+        )
+
+        assertEquals(2, result.size)
+        assertEquals(5f, result[0].value)
+        assertEquals(3f, result[1].value)
+    }
+
+    @Test
+    fun `getTrendData calculates rated volume and excludes warmups`() = runTest {
+        coEvery { workoutDao.getRatedWorkoutSetInfo(any(), any()) } returns listOf(
+            ratedRow(workoutId = 1L, setId = 1L, rating = 3, isWarmup = false, weight = 100f, reps = 10),
+            ratedRow(workoutId = 1L, setId = 2L, rating = 3, isWarmup = true, weight = 100f, reps = 10)
+        )
+
+        val result = trendUseCase.getTrendData(
+            metric = TrendMetric.RATED_VOLUME,
+            period = TimePeriod.ONE_MONTH,
+            interval = AggregateInterval.BY_WORKOUT
+        )
+
+        assertEquals(1, result.size)
+        assertEquals(600f, result[0].value)
+    }
+
+    private fun ratedRow(
+        workoutId: Long,
+        setId: Long = workoutId,
+        rating: Int,
+        isWarmup: Boolean = false,
+        weight: Float = 100f,
+        reps: Int = 10
+    ): RatedWorkoutSetInfo {
+        return RatedWorkoutSetInfo(
+            workoutId = workoutId,
+            startTime = Date(1_700_000_000_000L + workoutId * 1000L),
+            endTime = Date(1_700_000_000_000L + workoutId * 1000L + 60_000L),
+            rating = rating,
+            setId = setId,
+            exerciseId = 1L,
+            targetMuscle = "Chest",
+            weight = weight,
+            reps = reps,
+            isWarmup = isWarmup
+        )
     }
 }

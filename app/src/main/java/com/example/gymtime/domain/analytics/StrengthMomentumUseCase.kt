@@ -35,7 +35,10 @@ data class MuscleMomentum(
     val muscle: String,
     val percentChange: Float?,
     val direction: MomentumDirection,
-    val contributingExercises: List<ExerciseMomentum>
+    val contributingExercises: List<ExerciseMomentum>,
+    val improvingContributors: List<ExerciseMomentum> = emptyList(),
+    val decliningContributors: List<ExerciseMomentum> = emptyList(),
+    val hasMixedContributors: Boolean = false
 )
 
 data class StrengthMomentumState(
@@ -82,6 +85,12 @@ class StrengthMomentumUseCase @Inject constructor(
                 val contributions = currentExerciseMomentum
                     .filter { it.muscle.equals(muscle, ignoreCase = true) }
                     .sortedByDescending { kotlin.math.abs(it.percentChange) }
+                val improving = contributions
+                    .filter { it.percentChange >= NOISE_FLOOR }
+                    .sortedByDescending { it.percentChange }
+                val declining = contributions
+                    .filter { it.percentChange <= -NOISE_FLOOR }
+                    .sortedBy { it.percentChange }
 
                 if (contributions.isEmpty()) {
                     MuscleMomentum(
@@ -99,7 +108,10 @@ class StrengthMomentumUseCase @Inject constructor(
                         muscle = muscle,
                         percentChange = percent,
                         direction = directionFor(percent, series),
-                        contributingExercises = contributions
+                        contributingExercises = contributions,
+                        improvingContributors = improving,
+                        decliningContributors = declining,
+                        hasMixedContributors = improving.isNotEmpty() && declining.isNotEmpty()
                     )
                 }
             }
@@ -121,6 +133,7 @@ class StrengthMomentumUseCase @Inject constructor(
         val storedMuscles = muscleGroupDao.getAllMuscleGroupNames().map { canonicalMuscleName(it) }
         val calculatedMuscles = exerciseMomentum.map { canonicalMuscleName(it.muscle) }
         return (storedMuscles + calculatedMuscles + DEFAULT_MUSCLES)
+            .filterNot { it.equals(CARDIO_MUSCLE, ignoreCase = true) }
             .distinctBy { it.lowercase() }
             .sortedWith(compareBy({ preferredMuscleIndex(it) }, { it }))
     }
@@ -137,6 +150,8 @@ class StrengthMomentumUseCase @Inject constructor(
             if (baselineExerciseSets.isEmpty()) return@mapNotNull null
 
             val sample = recentExerciseSets.firstOrNull() ?: return@mapNotNull null
+            if (isCardio(sample)) return@mapNotNull null
+
             val recentTop = topWorkoutValues(recentExerciseSets)
             val baselineTop = topWorkoutValues(baselineExerciseSets)
             if (recentTop.isEmpty() || baselineTop.isEmpty()) return@mapNotNull null
@@ -196,8 +211,7 @@ class StrengthMomentumUseCase @Inject constructor(
     }
 
     private fun displayMuscleFor(setInfo: SetWithExercisePerformanceInfo): String {
-        val raw = if (isCardio(setInfo)) CARDIO_MUSCLE else setInfo.targetMuscle
-        return canonicalMuscleName(raw)
+        return canonicalMuscleName(setInfo.targetMuscle)
     }
 
     private fun canonicalMuscleName(raw: String): String =
@@ -290,12 +304,32 @@ class StrengthMomentumUseCase @Inject constructor(
             else -> MomentumDirection.FLAT
         }
 
-        // Cap: if the absolute reading says it's a real slump, never report rosier than that.
+        // Historical context can upgrade intensity, but it should never contradict or erase
+        // the absolute sign shown next to the muscle.
+        return signConsistentDirection(percent, absoluteFallback, zClassified)
+    }
+
+    private fun signConsistentDirection(
+        percent: Float,
+        absoluteDirection: MomentumDirection,
+        historicalDirection: MomentumDirection
+    ): MomentumDirection {
         return when {
-            absoluteFallback == MomentumDirection.STRONG_DOWN -> MomentumDirection.STRONG_DOWN
-            absoluteFallback == MomentumDirection.DOWN && zClassified == MomentumDirection.FLAT ->
-                MomentumDirection.DOWN
-            else -> zClassified
+            percent > 0f -> when {
+                absoluteDirection == MomentumDirection.STRONG_UP ||
+                    historicalDirection == MomentumDirection.STRONG_UP -> MomentumDirection.STRONG_UP
+                absoluteDirection == MomentumDirection.UP ||
+                    historicalDirection == MomentumDirection.UP -> MomentumDirection.UP
+                else -> MomentumDirection.FLAT
+            }
+            percent < 0f -> when {
+                absoluteDirection == MomentumDirection.STRONG_DOWN ||
+                    historicalDirection == MomentumDirection.STRONG_DOWN -> MomentumDirection.STRONG_DOWN
+                absoluteDirection == MomentumDirection.DOWN ||
+                    historicalDirection == MomentumDirection.DOWN -> MomentumDirection.DOWN
+                else -> MomentumDirection.FLAT
+            }
+            else -> MomentumDirection.FLAT
         }
     }
 
@@ -333,8 +367,7 @@ class StrengthMomentumUseCase @Inject constructor(
             "Biceps",
             "Triceps",
             "Abs",
-            "Legs",
-            CARDIO_MUSCLE
+            "Legs"
         )
     }
 }

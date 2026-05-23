@@ -10,8 +10,22 @@ import com.example.gymtime.data.db.entity.DailyVolume
 import com.example.gymtime.data.db.entity.MuscleDistribution
 import com.example.gymtime.data.db.entity.MuscleFreshness
 import kotlinx.coroutines.flow.Flow
+import java.util.Date
 
 import androidx.room.Delete
+
+data class RatedWorkoutSetInfo(
+    val workoutId: Long,
+    val startTime: Date,
+    val endTime: Date?,
+    val rating: Int,
+    val setId: Long?,
+    val exerciseId: Long?,
+    val targetMuscle: String?,
+    val weight: Float?,
+    val reps: Int?,
+    val isWarmup: Boolean?
+)
 
 @Dao
 interface WorkoutDao {
@@ -131,4 +145,29 @@ interface WorkoutDao {
         GROUP BY e.targetMuscle
     """)
     suspend fun getMuscleLastTrainedDates(): List<MuscleFreshness>
+
+    @Query("""
+        SELECT
+            w.id as workoutId,
+            w.startTime as startTime,
+            w.endTime as endTime,
+            w.rating as rating,
+            s.id as setId,
+            s.exerciseId as exerciseId,
+            e.targetMuscle as targetMuscle,
+            s.weight as weight,
+            s.reps as reps,
+            s.isWarmup as isWarmup
+        FROM workouts w
+        LEFT JOIN sets s ON w.id = s.workoutId
+        LEFT JOIN exercises e ON s.exerciseId = e.id
+        WHERE w.endTime IS NOT NULL
+          AND w.rating IS NOT NULL
+          AND w.startTime BETWEEN :startTime AND :endTime
+        ORDER BY w.startTime ASC, s.timestamp ASC
+    """)
+    suspend fun getRatedWorkoutSetInfo(
+        startTime: Long,
+        endTime: Long
+    ): List<RatedWorkoutSetInfo>
 }

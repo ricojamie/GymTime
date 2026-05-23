@@ -10,6 +10,7 @@ import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.db.entity.WorkoutWithMuscles
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.repository.WorkoutRepository
+import com.example.gymtime.domain.share.ShareWorkoutUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,12 +26,16 @@ private const val TAG = "HistoryViewModel"
 class HistoryViewModel @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val setDao: SetDao,
-    private val workoutRepository: WorkoutRepository
+    private val workoutRepository: WorkoutRepository,
+    private val shareWorkoutUseCase: ShareWorkoutUseCase
 ) : ViewModel() {
 
     // Navigation event for resuming workout
     private val _resumeWorkoutEvent = Channel<Long>(Channel.BUFFERED)
     val resumeWorkoutEvent = _resumeWorkoutEvent.receiveAsFlow()
+
+    private val _shareEvent = Channel<String>(Channel.BUFFERED)
+    val shareEvent = _shareEvent.receiveAsFlow()
 
     private val _allWorkouts = MutableStateFlow<List<WorkoutWithMuscles>>(emptyList())
     val allWorkouts: StateFlow<List<WorkoutWithMuscles>> = _allWorkouts.asStateFlow()
@@ -107,6 +112,16 @@ class HistoryViewModel @Inject constructor(
                 Log.d(TAG, "Reopened workout $workoutId for resume")
             } catch (e: Exception) {
                 Log.e(TAG, "Error reopening workout", e)
+            }
+        }
+    }
+
+    fun shareWorkout(workoutId: Long) {
+        viewModelScope.launch {
+            try {
+                shareWorkoutUseCase(workoutId)?.let { _shareEvent.send(it) }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error building share text", e)
             }
         }
     }

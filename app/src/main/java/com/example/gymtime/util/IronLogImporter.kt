@@ -101,7 +101,8 @@ class IronLogImporter @Inject constructor(
                     isCustom = row["isCustom"]?.toBooleanStrictOrNull() ?: true,
                     notes = row["notes"]?.takeIf { it.isNotEmpty() },
                     defaultRestSeconds = row["defaultRestSeconds"]?.toIntOrNull() ?: 90,
-                    isStarred = row["isStarred"]?.toBooleanStrictOrNull() ?: false
+                    isStarred = row["isStarred"]?.toBooleanStrictOrNull() ?: false,
+                    repTarget = row["repTarget"]?.toIntOrNull()
                 )
                 val newId = exerciseDao.insertExercise(exercise)
                 exerciseIdMap[oldId] = newId

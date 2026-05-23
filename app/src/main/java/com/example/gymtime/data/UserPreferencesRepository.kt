@@ -46,6 +46,9 @@ class UserPreferencesRepository @Inject constructor(
         // Streak tracking
         val BEST_STREAK = intPreferencesKey("best_streak")
         val REST_DAYS_PER_WEEK = intPreferencesKey("rest_days_per_week")
+
+        // Monthly report
+        val MONTHLY_REPORT_ENABLED = booleanPreferencesKey("monthly_report_enabled")
     }
 
     val userName: Flow<String> = context.dataStore.data
@@ -136,6 +139,11 @@ class UserPreferencesRepository @Inject constructor(
     val restDaysPerWeek: Flow<Int> = context.dataStore.data
         .map { preferences ->
             preferences[PreferencesKeys.REST_DAYS_PER_WEEK] ?: 2
+        }
+
+    val monthlyReportEnabled: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.MONTHLY_REPORT_ENABLED] ?: true
         }
 
     suspend fun setUserName(name: String) {
@@ -262,6 +270,12 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun setRestDaysPerWeek(days: Int) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.REST_DAYS_PER_WEEK] = days.coerceIn(0, 7)
+        }
+    }
+
+    suspend fun setMonthlyReportEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MONTHLY_REPORT_ENABLED] = enabled
         }
     }
 }

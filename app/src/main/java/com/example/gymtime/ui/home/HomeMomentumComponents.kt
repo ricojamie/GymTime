@@ -14,11 +14,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -47,7 +49,8 @@ import kotlin.math.min
 fun StrengthMomentumMapCard(
     state: StrengthMomentumState,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onInfoClick: () -> Unit
 ) {
     val improvingCount = remember(state) {
         state.muscles.count { (it.percentChange ?: 0f) >= 2f }
@@ -71,13 +74,26 @@ fun StrengthMomentumMapCard(
                 verticalAlignment = Alignment.Top
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "STRENGTH MOMENTUM",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = LocalAppColors.current.textTertiary,
-                        letterSpacing = 1.4.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "STRENGTH MOMENTUM",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = LocalAppColors.current.textTertiary,
+                            letterSpacing = 1.4.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        IconButton(
+                            onClick = onInfoClick,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Strength momentum info",
+                                tint = LocalAppColors.current.textTertiary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
                     Text(
                         text = "Last ${state.recentWindowDays}d vs previous ${state.baselineWindowDays}d",
                         style = MaterialTheme.typography.labelSmall,
@@ -87,12 +103,17 @@ fun StrengthMomentumMapCard(
 
                 Text(
                     text = when {
+                        state.muscles.any { it.hasMixedContributors } -> "mixed"
                         improvingCount > 0 -> "$improvingCount up"
                         decliningCount > 0 -> "$decliningCount down"
                         else -> "baseline"
                     },
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (improvingCount > 0) Color(0xFF22C55E) else LocalAppColors.current.textTertiary,
+                    color = when {
+                        state.muscles.any { it.hasMixedContributors } -> Color(0xFFF59E0B)
+                        improvingCount > 0 -> Color(0xFF22C55E)
+                        else -> LocalAppColors.current.textTertiary
+                    },
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -203,7 +224,6 @@ private fun MomentumStatsRow(
 ) {
     val best = state.topImproving.firstOrNull()
     val worst = state.topDeclining.firstOrNull()
-    val cardio = state.muscles.firstOrNull { it.muscle.equals("Cardio", ignoreCase = true) }
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -218,10 +238,6 @@ private fun MomentumStatsRow(
         MomentumStatColumn(
             label = "Watch",
             item = worst,
-            modifier = Modifier.weight(1f)
-        )
-        CardioStatColumn(
-            item = cardio,
             modifier = Modifier.weight(1f)
         )
     }
@@ -249,47 +265,6 @@ private fun MomentumStatColumn(
             fontWeight = FontWeight.SemiBold,
             maxLines = 1
         )
-        Text(
-            text = formatPercent(item?.percentChange),
-            style = MaterialTheme.typography.labelMedium,
-            color = colorForDirection(item?.direction ?: MomentumDirection.NO_BASELINE),
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-private fun CardioStatColumn(
-    item: MuscleMomentum?,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier) {
-        Text(
-            text = "CARDIO",
-            style = MaterialTheme.typography.labelSmall,
-            color = LocalAppColors.current.textTertiary,
-            letterSpacing = 1.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .background(
-                        color = colorForDirection(item?.direction ?: MomentumDirection.NO_BASELINE),
-                        shape = CircleShape
-                    )
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = item?.muscle ?: "Building",
-                style = MaterialTheme.typography.bodySmall,
-                color = LocalAppColors.current.textPrimary,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1
-            )
-        }
         Text(
             text = formatPercent(item?.percentChange),
             style = MaterialTheme.typography.labelMedium,
@@ -392,9 +367,17 @@ private fun MomentumDetailRow(muscle: MuscleMomentum) {
             )
         }
 
-        val contributors = muscle.contributingExercises.take(2).joinToString { exercise ->
+        val improving = muscle.improvingContributors.take(2).joinToString { exercise ->
             "${exercise.exerciseName} ${formatPercent(exercise.percentChange)}"
         }
+        val declining = muscle.decliningContributors.take(2).joinToString { exercise ->
+            "${exercise.exerciseName} ${formatPercent(exercise.percentChange)}"
+        }
+        val contributors = listOfNotNull(
+            improving.takeIf { it.isNotBlank() }?.let { "Up: $it" },
+            declining.takeIf { it.isNotBlank() }?.let { "Down: $it" }
+        ).joinToString("  ")
+
         if (contributors.isNotBlank()) {
             Text(
                 text = contributors,

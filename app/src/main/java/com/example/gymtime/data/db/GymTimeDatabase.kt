@@ -29,7 +29,7 @@ import com.example.gymtime.data.db.entity.WorkoutExerciseInstance
         WorkoutExerciseInstance::class,
         MuscleGroup::class
     ],
-    version = 12, // Routine overhaul with workout plan snapshots
+    version = 13, // Exercise rep targets
     exportSchema = false
 )
 @TypeConverters(Converters::class)
