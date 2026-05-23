@@ -9,6 +9,7 @@ import com.example.gymtime.data.db.dao.WorkoutPlanSummary
 import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
 import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.repository.WorkoutRepository
+import com.example.gymtime.wear.ActiveWearSessionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,7 +40,8 @@ data class ResumeExerciseItem(
 class WorkoutResumeViewModel @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val setDao: SetDao,
-    private val workoutRepository: WorkoutRepository
+    private val workoutRepository: WorkoutRepository,
+    private val activeWearSessionRepository: ActiveWearSessionRepository
 ) : ViewModel() {
 
     private val _currentWorkout = MutableStateFlow<Workout?>(null)
@@ -86,6 +88,7 @@ class WorkoutResumeViewModel @Inject constructor(
         viewModelScope.launch {
             val workout = _currentWorkout.value ?: return@launch
             workoutRepository.finishWorkout(workout.id)
+            activeWearSessionRepository.clear()
             Log.d("WorkoutResumeVM", "Workout finished: ${workout.id}")
             _finishWorkoutEvent.send(workout.id)
         }

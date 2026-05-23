@@ -44,6 +44,15 @@
                 android:value="Rest timer for workout sets" />
         </service>
 
+        <service
+            android:name=".wear.WearCommandListenerService"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.BIND_LISTENER" />
+            </intent-filter>
+        </service>
+
         <!-- Disable WorkManager's default initializer so Hilt's worker factory can take over. -->
         <provider
             android:name="androidx.startup.InitializationProvider"

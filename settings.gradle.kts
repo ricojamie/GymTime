@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "GymTime"
 include(":app")
+include(":wear")

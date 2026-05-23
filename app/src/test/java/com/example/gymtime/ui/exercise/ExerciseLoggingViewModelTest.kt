@@ -13,8 +13,11 @@ import com.example.gymtime.data.repository.ExerciseRepository
 import com.example.gymtime.data.repository.WorkoutRepository
 import com.example.gymtime.domain.recommendation.ExerciseAttemptRecommendationUseCase
 import com.example.gymtime.util.TestDispatcherRule
+import com.example.gymtime.wear.ActiveWearSessionRepository
+import com.example.gymtime.wear.WearDraftPatch
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -41,6 +44,9 @@ class ExerciseLoggingViewModelTest {
     private val supersetManager: SupersetManager = SupersetManager() // Use real one for interaction test
     private val routineRepository: RoutineRepository = mockk()
     private val recommendationUseCase: ExerciseAttemptRecommendationUseCase = mockk()
+    private val activeWearSessionRepository: ActiveWearSessionRepository = mockk(relaxed = true)
+    private val wearDraftPatches = MutableSharedFlow<WearDraftPatch>()
+    private val wearLogRequests = MutableSharedFlow<WearDraftPatch?>()
 
     private lateinit var viewModel: ExerciseLoggingViewModel
 
@@ -74,6 +80,10 @@ class ExerciseLoggingViewModelTest {
         coEvery { recommendationUseCase.getRecommendation(any()) } returns null
         
         every { volumeOrbRepository.orbState } returns MutableStateFlow(mockk(relaxed = true))
+        every { activeWearSessionRepository.draftPatches } returns wearDraftPatches
+        every { activeWearSessionRepository.logRequests } returns wearLogRequests
+        every { activeWearSessionRepository.publish(any()) } just Runs
+        every { activeWearSessionRepository.clear() } just Runs
 
         viewModel = ExerciseLoggingViewModel(
             context,
@@ -84,7 +94,8 @@ class ExerciseLoggingViewModelTest {
             volumeOrbRepository,
             supersetManager,
             routineRepository,
-            recommendationUseCase
+            recommendationUseCase,
+            activeWearSessionRepository
         )
     }
 

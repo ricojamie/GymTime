@@ -29,11 +29,15 @@ import com.example.gymtime.service.RestTimerService
 import com.example.gymtime.util.PlateCalculator
 import com.example.gymtime.util.PlateLoadout
 import com.example.gymtime.util.TimeUtils
+import com.example.gymtime.wear.ActiveWearSessionRepository
+import com.example.gymtime.wear.WearDraftPatch
+import com.example.gymtime.wear.WearSessionSnapshot
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
@@ -68,7 +72,8 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val volumeOrbRepository: VolumeOrbRepository,
     private val supersetManager: SupersetManager,
     private val routineRepository: RoutineRepository,
-    private val recommendationUseCase: ExerciseAttemptRecommendationUseCase
+    private val recommendationUseCase: ExerciseAttemptRecommendationUseCase,
+    private val activeWearSessionRepository: ActiveWearSessionRepository
 ) : ViewModel() {
 
     private val exerciseId: Long = checkNotNull(savedStateHandle["exerciseId"])
@@ -221,6 +226,9 @@ class ExerciseLoggingViewModel @Inject constructor(
         val serviceIntent = Intent(context, RestTimerService::class.java)
         context.bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
         Log.d("ExerciseLoggingVM", "Binding to RestTimerService")
+
+        observeWearCommands()
+        publishWearSnapshots()
 
         viewModelScope.launch {
             // Load exercise via Repository
@@ -715,6 +723,7 @@ class ExerciseLoggingViewModel @Inject constructor(
             val workout = _currentWorkout.value ?: return@launch
             // Finish via Repository
             workoutRepository.finishWorkout(workout.id)
+            activeWearSessionRepository.clear()
 
             // Exit superset mode when finishing workout
             supersetManager.exitSupersetMode()
@@ -810,6 +819,95 @@ class ExerciseLoggingViewModel @Inject constructor(
                 TimeUtils.formatDistance(TimeUtils.metersToDistance(set.distanceMeters, unit), unit)
             }
             else -> ""
+        }
+    }
+
+    private fun observeWearCommands() {
+        viewModelScope.launch {
+            activeWearSessionRepository.draftPatches.collectLatest { patch ->
+                applyWearDraftPatch(patch)
+            }
+        }
+
+        viewModelScope.launch {
+            activeWearSessionRepository.logRequests.collectLatest { patch ->
+                if (patch != null && !applyWearDraftPatch(patch)) return@collectLatest
+                if (!isCurrentDraftLoggable()) return@collectLatest
+
+                logSet()
+                if (timerAutoStart.first()) {
+                    startTimer()
+                }
+                resetTimerToDefault()
+            }
+        }
+    }
+
+    private fun applyWearDraftPatch(patch: WearDraftPatch): Boolean {
+        val workout = _currentWorkout.value ?: return false
+        if (patch.workoutId != workout.id || patch.exerciseId != exerciseId) return false
+
+        patch.weight?.let { _weight.value = it }
+        patch.reps?.let { _reps.value = it }
+        patch.rpe?.let { _rpe.value = it }
+        patch.duration?.let { _duration.value = it }
+        patch.distance?.let { _distance.value = it }
+        patch.calories?.let { _calories.value = it }
+        patch.isWarmup?.let { _isWarmup.value = it }
+        return true
+    }
+
+    private fun publishWearSnapshots() {
+        viewModelScope.launch {
+            combine(
+                _currentWorkout,
+                _exercise,
+                _loggedSets,
+                _weight,
+                _reps,
+                _rpe,
+                _duration,
+                _distance,
+                _calories,
+                _isWarmup,
+                _selectedDistanceUnit,
+                _restTime,
+                _countdownTimer,
+                _isTimerRunning
+            ) { values ->
+                @Suppress("UNCHECKED_CAST")
+                WearSessionSnapshot.fromLogger(
+                    workoutId = (values[0] as Workout?)?.id,
+                    exercise = values[1] as Exercise?,
+                    loggedSets = values[2] as List<Set>,
+                    weight = values[3] as String,
+                    reps = values[4] as String,
+                    rpe = values[5] as String,
+                    duration = values[6] as String,
+                    distance = values[7] as String,
+                    calories = values[8] as String,
+                    isWarmup = values[9] as Boolean,
+                    selectedDistanceUnit = values[10] as DistanceUnit,
+                    restSeconds = values[11] as Int,
+                    timerRemainingSeconds = values[12] as Int,
+                    timerRunning = values[13] as Boolean
+                )
+            }.collectLatest { snapshot ->
+                activeWearSessionRepository.publish(snapshot)
+            }
+        }
+    }
+
+    private fun isCurrentDraftLoggable(): Boolean {
+        return when (_exercise.value?.logType) {
+            LogType.WEIGHT_REPS -> _weight.value.isNotBlank() && _reps.value.isNotBlank()
+            LogType.REPS_ONLY -> _reps.value.isNotBlank()
+            LogType.DURATION -> _duration.value.isNotBlank()
+            LogType.WEIGHT_DISTANCE -> _weight.value.isNotBlank() && _distance.value.isNotBlank()
+            LogType.DISTANCE_TIME -> _distance.value.isNotBlank() && _duration.value.isNotBlank()
+            LogType.WEIGHT_TIME -> _weight.value.isNotBlank() && _duration.value.isNotBlank()
+            LogType.CALORIES_TIME -> _calories.value.isNotBlank() && _duration.value.isNotBlank()
+            null -> false
         }
     }
 }
