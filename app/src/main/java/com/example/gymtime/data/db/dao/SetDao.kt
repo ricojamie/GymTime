@@ -234,7 +234,7 @@ interface SetDao {
 
     // Get past workouts for exercise history (grouped by workout)
     @Query("""
-        SELECT s.*, w.startTime as workoutDate
+        SELECT s.*
         FROM sets s
         INNER JOIN workouts w ON s.workoutId = w.id
         WHERE s.exerciseId = :exerciseId

@@ -92,12 +92,12 @@ interface WorkoutDao {
     """)
     suspend fun getYearToDateWorkoutCount(): Int
 
-    // Get daily activity for the heat map (last 365 days).
-    // Uses working-set count so cardio and time-based workouts still register as activity.
+    // Get daily weighted volume for the heat map (last 365 days).
     @Query("""
         SELECT 
-            CAST(COUNT(s.id) AS REAL) as dailyVol,
-            w.startTime as date
+            COALESCE(SUM(CASE WHEN s.weight IS NOT NULL AND s.reps IS NOT NULL THEN s.weight * s.reps ELSE 0 END), 0) as dailyVol,
+            COUNT(s.id) as workingSetCount,
+            MIN(w.startTime) as date
         FROM workouts w
         INNER JOIN sets s ON w.id = s.workoutId
         WHERE s.isWarmup = 0

@@ -3,10 +3,10 @@ package com.example.gymtime.wear
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.VibratorManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.core.app.ActivityCompat
@@ -51,6 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
+import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
@@ -63,7 +64,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
         ) {
@@ -91,6 +91,13 @@ private fun IronLogWearApp() {
     LaunchedEffect(session.timerCompletionId) {
         if (session.timerCompletionId > 0) {
             vibrateWatch(context)
+        }
+    }
+
+    LaunchedEffect(client) {
+        client.setSavedEvents.collectLatest {
+            Toast.makeText(context, "Set saved", Toast.LENGTH_SHORT).show()
+            vibrateWatch(context, durationMillis = 120)
         }
     }
 
@@ -469,7 +476,7 @@ private fun formatSeconds(seconds: Int): String {
     return String.format(Locale.US, "%02d:%02d", minutes, remainder)
 }
 
-private fun vibrateWatch(context: Context) {
+private fun vibrateWatch(context: Context, durationMillis: Long = 500) {
     val vibrator = context.getSystemService(VibratorManager::class.java).defaultVibrator
-    vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
+    vibrator.vibrate(VibrationEffect.createOneShot(durationMillis, VibrationEffect.DEFAULT_AMPLITUDE))
 }

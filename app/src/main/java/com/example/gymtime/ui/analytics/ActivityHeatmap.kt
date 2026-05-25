@@ -26,12 +26,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gymtime.domain.analytics.HeatMapDay
+import com.example.gymtime.ui.theme.LocalAppColors
 import java.util.Calendar
+import java.util.Locale
 
 @Composable
 fun ActivityHeatmap(
@@ -40,11 +41,12 @@ fun ActivityHeatmap(
 ) {
     val scrollState = rememberScrollState()
     var selectedDay by remember { mutableStateOf<HeatMapDay?>(null) }
+    val appColors = LocalAppColors.current
 
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF161616) // Slightly lighter than background
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         shape = RoundedCornerShape(16.dp)
     ) {
@@ -60,14 +62,14 @@ fun ActivityHeatmap(
                     text = "Activity",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = appColors.textPrimary
                 )
                 
                 // Legend or status
                 Text(
                     text = "${Calendar.getInstance().get(Calendar.YEAR)}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+                    color = appColors.textTertiary
                 )
             }
             
@@ -86,7 +88,7 @@ fun ActivityHeatmap(
                         .height(100.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("No activity data", color = Color.Gray)
+                    Text("No activity data", color = appColors.textTertiary)
                 }
             } else {
                 val weeks = data.chunked(7)
@@ -129,11 +131,12 @@ fun ActivityHeatmap(
                         Text(
                             text = when {
                                 day.level == -1 -> "Future"
-                                day.volume > 0 -> String.format(java.util.Locale.US, "%,.0f lbs", day.volume)
+                                day.volume > 0 -> String.format(Locale.US, "%,.0f lbs", day.volume)
+                                day.workingSetCount > 0 -> "No weighted volume"
                                 else -> "Rest Day"
                             },
                             style = MaterialTheme.typography.bodyMedium,
-                            color = if (day.level == -1) Color.Gray else Color.White,
+                            color = if (day.level == -1) appColors.textTertiary else appColors.textPrimary,
                             fontWeight = if (day.volume > 0) FontWeight.Bold else FontWeight.Normal
                         )
                     }
@@ -143,7 +146,7 @@ fun ActivityHeatmap(
                     Text(
                         text = "Tap a square for details",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
+                        color = appColors.textTertiary
                     )
                 }
             }
@@ -158,20 +161,17 @@ fun HeatMapSquare(
     onClick: () -> Unit
 ) {
     val baseColor = MaterialTheme.colorScheme.primary
+    val appColors = LocalAppColors.current
 
     val color = when (day.level) {
-        -1 -> Color(0xFF0F0F0F) // Future day - darker
-        0 -> Color(0xFF1E1E1E) // Empty/rest day
+        -1 -> MaterialTheme.colorScheme.surface.copy(alpha = 0.45f)
+        0 -> appColors.inputBackground
         1 -> baseColor.copy(alpha = 0.3f)
         2 -> baseColor.copy(alpha = 0.6f)
         3 -> baseColor.copy(alpha = 1.0f)
-        else -> Color(0xFF1E1E1E)
+        else -> appColors.inputBackground
     }
-    
-    // Highlight selected day
-    val borderColor = if (isSelected) Color.White else Color.Transparent
-    val borderWidth = if (isSelected) 2.dp else 0.dp
-    
+
     Box(
         modifier = Modifier
             .size(12.dp)
@@ -179,11 +179,7 @@ fun HeatMapSquare(
             .background(color)
             .clickable { onClick() }
             .then(
-                if (isSelected) Modifier.background(Color.White.copy(alpha = 0.2f)) else Modifier
+                if (isSelected) Modifier.background(appColors.textPrimary.copy(alpha = 0.2f)) else Modifier
             )
-            // Note: Simple border for selection might be better or handled via alpha overlay
-            // Detailed border implementation ommitted for simplicity/performance in grid, 
-            // using alpha overlay logic instead roughly. 
-            // Actually, let's keep it simple.
     )
 }

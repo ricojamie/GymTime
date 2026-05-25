@@ -4,5 +4,6 @@ import androidx.room.ColumnInfo
 
 data class DailyVolume(
     @ColumnInfo(name = "dailyVol") val dailyVol: Float,
-    @ColumnInfo(name = "date") val date: Long
+    @ColumnInfo(name = "date") val date: Long,
+    @ColumnInfo(name = "workingSetCount") val workingSetCount: Int = 0
 )

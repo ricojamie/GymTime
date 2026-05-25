@@ -27,6 +27,7 @@ object WearContract {
     const val KEY_TIMER_REMAINING_SECONDS = "timerRemainingSeconds"
     const val KEY_TIMER_RUNNING = "timerRunning"
     const val KEY_TIMER_COMPLETION_ID = "timerCompletionId"
+    const val KEY_SET_SAVE_CONFIRMATION_ID = "setSaveConfirmationId"
     const val KEY_UPDATED_AT = "updatedAt"
     const val KEY_DELTA_SECONDS = "deltaSeconds"
 }

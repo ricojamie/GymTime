@@ -119,8 +119,10 @@ class ActiveWearSessionRepository @Inject constructor(
     private val appContext = context.applicationContext
     private val dataClient by lazy { Wearable.getDataClient(appContext) }
     private val completionCounter = AtomicLong(0)
+    private val saveConfirmationCounter = AtomicLong(0)
     private var lastSnapshot: WearSessionSnapshot = WearSessionSnapshot.inactive()
     private var lastCompletionId: Long = 0
+    private var lastSaveConfirmationId: Long = 0
 
     val draftPatches = MutableSharedFlow<WearDraftPatch>(
         extraBufferCapacity = 8,
@@ -146,8 +148,17 @@ class ActiveWearSessionRepository @Inject constructor(
         lastSnapshot = snapshot
         lastCompletionId = completionId
 
+        publishSnapshot(snapshot, completionId)
+    }
+
+    fun confirmSetSaved() {
+        lastSaveConfirmationId = saveConfirmationCounter.incrementAndGet()
+        publishSnapshot(lastSnapshot, lastCompletionId)
+    }
+
+    private fun publishSnapshot(snapshot: WearSessionSnapshot, completionId: Long) {
         val request = PutDataMapRequest.create(WearContract.DATA_ACTIVE_SESSION).apply {
-            dataMap.putSnapshot(snapshot, completionId)
+            dataMap.putSnapshot(snapshot, completionId, lastSaveConfirmationId)
         }.asPutDataRequest().setUrgent()
 
         dataClient.putDataItem(request)
@@ -168,7 +179,11 @@ class ActiveWearSessionRepository @Inject constructor(
         logRequests.tryEmit(patch)
     }
 
-    private fun DataMap.putSnapshot(snapshot: WearSessionSnapshot, completionId: Long) {
+    private fun DataMap.putSnapshot(
+        snapshot: WearSessionSnapshot,
+        completionId: Long,
+        saveConfirmationId: Long
+    ) {
         putBoolean(WearContract.KEY_ACTIVE, snapshot.active)
         putLong(WearContract.KEY_WORKOUT_ID, snapshot.workoutId ?: -1L)
         putLong(WearContract.KEY_EXERCISE_ID, snapshot.exerciseId ?: -1L)
@@ -188,6 +203,7 @@ class ActiveWearSessionRepository @Inject constructor(
         putInt(WearContract.KEY_TIMER_REMAINING_SECONDS, snapshot.timerRemainingSeconds)
         putBoolean(WearContract.KEY_TIMER_RUNNING, snapshot.timerRunning)
         putLong(WearContract.KEY_TIMER_COMPLETION_ID, completionId)
+        putLong(WearContract.KEY_SET_SAVE_CONFIRMATION_ID, saveConfirmationId)
         putLong(WearContract.KEY_UPDATED_AT, System.currentTimeMillis())
     }
 

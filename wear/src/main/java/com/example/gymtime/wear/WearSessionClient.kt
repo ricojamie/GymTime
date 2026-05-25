@@ -1,7 +1,6 @@
 package com.example.gymtime.wear
 
 import android.content.Context
-import android.net.Uri
 import android.util.Log
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataEvent
@@ -9,7 +8,9 @@ import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.Wearable
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
 class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
@@ -20,6 +21,10 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
 
     private val _session = MutableStateFlow(WearSession())
     val session: StateFlow<WearSession> = _session
+    private val _setSavedEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val setSavedEvents: SharedFlow<Unit> = _setSavedEvents
+
+    private var lastSeenSaveConfirmationId = 0L
 
     fun start() {
         dataClient.addListener(this)
@@ -28,7 +33,10 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
                 try {
                     for (item in items) {
                         if (item.uri.path == WearContract.DATA_ACTIVE_SESSION) {
-                            _session.value = WearSession.fromDataMap(DataMapItem.fromDataItem(item).dataMap)
+                            handleSessionSnapshot(
+                                session = WearSession.fromDataMap(DataMapItem.fromDataItem(item).dataMap),
+                                emitSaveConfirmation = false
+                            )
                         }
                     }
                 } finally {
@@ -47,7 +55,10 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
             if (event.type == DataEvent.TYPE_CHANGED &&
                 event.dataItem.uri.path == WearContract.DATA_ACTIVE_SESSION
             ) {
-                _session.value = WearSession.fromDataMap(DataMapItem.fromDataItem(event.dataItem).dataMap)
+                handleSessionSnapshot(
+                    session = WearSession.fromDataMap(DataMapItem.fromDataItem(event.dataItem).dataMap),
+                    emitSaveConfirmation = true
+                )
             }
         }
     }
@@ -70,6 +81,17 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
 
     fun stopTimer() {
         sendMessage(WearContract.MESSAGE_STOP_TIMER, DataMap())
+    }
+
+    private fun handleSessionSnapshot(session: WearSession, emitSaveConfirmation: Boolean) {
+        _session.value = session
+        val confirmationId = session.setSaveConfirmationId
+        if (confirmationId > 0 && confirmationId != lastSeenSaveConfirmationId) {
+            if (emitSaveConfirmation) {
+                _setSavedEvents.tryEmit(Unit)
+            }
+            lastSeenSaveConfirmationId = confirmationId
+        }
     }
 
     private fun sendMessage(path: String, dataMap: DataMap) {

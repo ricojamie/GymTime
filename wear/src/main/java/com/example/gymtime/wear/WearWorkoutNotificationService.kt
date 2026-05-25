@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -32,11 +31,15 @@ class WearWorkoutNotificationService : WearableListenerService() {
     }
 
     private fun showWorkoutNotification(session: WearSession) {
-        if (!canPostNotifications()) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
 
         createChannel()
         val launchIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         val launchPendingIntent = PendingIntent.getActivity(
             this,
@@ -63,7 +66,11 @@ class WearWorkoutNotificationService : WearableListenerService() {
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .build()
 
-        NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
+        try {
+            NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
+        } catch (_: SecurityException) {
+            // Permission can still be revoked between the check and notify call.
+        }
     }
 
     private fun createChannel() {
@@ -79,12 +86,6 @@ class WearWorkoutNotificationService : WearableListenerService() {
 
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)
-    }
-
-    private fun canPostNotifications(): Boolean {
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
     }
 
     companion object {

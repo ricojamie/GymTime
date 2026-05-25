@@ -35,7 +35,7 @@ class ConsistencyUseCaseTest {
     }
 
     @Test
-    fun `getHeatMapData calculates levels correctly based on percentiles`() = runTest {
+    fun `getHeatMapData calculates levels correctly from weighted volume percentiles`() = runTest {
         val today = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -67,10 +67,32 @@ class ConsistencyUseCaseTest {
         val todayData = result.find { it.date == today }
         assertEquals(today, todayData?.date)
         assertEquals(100f, todayData?.volume)
+        assertEquals(0, todayData?.workingSetCount)
         assertEquals(1, todayData?.level) // <= 200
 
         val level3Data = result.find { it.volume == 600f }
         assertEquals(3, level3Data?.level) // > 400
+    }
+
+    @Test
+    fun `getHeatMapData keeps non-weighted activity at zero volume`() = runTest {
+        val today = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        coEvery { workoutDao.getDailyVolumeForHeatMap() } returns listOf(
+            DailyVolume(dailyVol = 0f, date = today, workingSetCount = 3)
+        )
+
+        val result = consistencyUseCase.getHeatMapData()
+
+        val todayData = result.find { it.date == today }
+        assertEquals(0f, todayData?.volume)
+        assertEquals(3, todayData?.workingSetCount)
+        assertEquals(0, todayData?.level)
     }
 
     @Test

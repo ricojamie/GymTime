@@ -18,6 +18,7 @@ import javax.inject.Inject
 data class HeatMapDay(
     val date: Long, // Start of day timestamp
     val volume: Float,
+    val workingSetCount: Int,
     val level: Int, // -1 = Future, 0 = Empty, 1 = Low, 2 = Medium, 3 = High
     val formattedDate: String // e.g. "Oct 12"
 )
@@ -76,6 +77,7 @@ class ConsistencyUseCase @Inject constructor(
             val isFuture = calendar.after(today)
             val item = map[dateMs]
             val volume = if (isFuture) 0f else (item?.dailyVol ?: 0f)
+            val workingSetCount = if (isFuture) 0 else (item?.workingSetCount ?: 0)
 
             val level = when {
                 isFuture -> -1  // Future day marker
@@ -88,6 +90,7 @@ class ConsistencyUseCase @Inject constructor(
             days.add(HeatMapDay(
                 date = dateMs,
                 volume = volume,
+                workingSetCount = workingSetCount,
                 level = level,
                 formattedDate = formatDate(dateMs)
             ))

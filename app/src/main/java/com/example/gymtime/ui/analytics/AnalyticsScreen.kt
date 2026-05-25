@@ -1,7 +1,6 @@
 package com.example.gymtime.ui.analytics
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,11 +10,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.SecondaryIndicator
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -30,8 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.gymtime.ui.theme.GradientEnd
-import com.example.gymtime.ui.theme.GradientStart
+import com.example.gymtime.ui.theme.LocalAppColors
 
 @Composable
 fun AnalyticsScreen(
@@ -52,6 +47,7 @@ fun AnalyticsScreen(
     val tabs = listOf("Consistency", "Balance", "Trends")
 
     val gradientColors = com.example.gymtime.ui.theme.LocalGradientColors.current
+    val appColors = LocalAppColors.current
 
     // Refresh data when screen becomes visible
     LaunchedEffect(Unit) {
@@ -76,23 +72,17 @@ fun AnalyticsScreen(
             text = "Analytics",
             style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = appColors.textPrimary
         )
 
         Spacer(modifier = Modifier.height(16.dp))
         
         // Tabs
-        TabRow(
+        SecondaryTabRow(
             selectedTabIndex = selectedTabIndex,
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.primary,
-            indicator = { tabPositions ->
-                SecondaryIndicator(
-                    Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            },
-            divider = { HorizontalDivider(color = Color.DarkGray) }
+            divider = { HorizontalDivider(color = appColors.textTertiary.copy(alpha = 0.35f)) }
         ) {
             tabs.forEachIndexed { index, title ->
                 Tab(
@@ -101,7 +91,7 @@ fun AnalyticsScreen(
                     text = { 
                         Text(
                             text = title, 
-                            color = if (selectedTabIndex == index) MaterialTheme.colorScheme.primary else Color.Gray,
+                            color = if (selectedTabIndex == index) MaterialTheme.colorScheme.primary else appColors.textTertiary,
                             fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal
                         ) 
                     }

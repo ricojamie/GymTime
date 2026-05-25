@@ -64,7 +64,7 @@ data class PersonalRecords(
 @HiltViewModel
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ExerciseLoggingViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val savedStateHandle: SavedStateHandle,
     private val exerciseRepository: ExerciseRepository,
     private val workoutRepository: WorkoutRepository,
@@ -572,6 +572,7 @@ class ExerciseLoggingViewModel @Inject constructor(
 
             // Log set via Repository
             workoutRepository.logSet(newSet)
+            activeWearSessionRepository.confirmSetSaved()
 
             // Update personal bests if this is a new record for this rep count (only for WEIGHT_REPS)
             if (exercise.logType == LogType.WEIGHT_REPS) {
