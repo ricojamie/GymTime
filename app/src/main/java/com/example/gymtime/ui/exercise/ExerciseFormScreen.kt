@@ -26,6 +26,7 @@ import androidx.navigation.NavController
 import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.navigation.Screen
+import com.example.gymtime.navigation.navigateHomeAndClearStack
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.*
 
@@ -77,7 +78,7 @@ fun ExerciseFormScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navController.navigateHomeAndClearStack() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",

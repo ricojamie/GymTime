@@ -18,6 +18,7 @@ import androidx.navigation.NavController
 import com.example.gymtime.domain.report.MonthlyPR
 import com.example.gymtime.domain.report.MonthlyReport
 import com.example.gymtime.domain.report.MuscleTotal
+import com.example.gymtime.navigation.navigateHomeAndClearStack
 import com.example.gymtime.ui.theme.LocalAppColors
 import java.text.NumberFormat
 import java.util.Locale
@@ -41,7 +42,7 @@ fun MonthlyReportScreen(navController: NavController) {
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
+                    IconButton(onClick = { navController.navigateHomeAndClearStack() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",

@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.gymtime.BuildConfig
+import com.example.gymtime.navigation.navigateHomeAndClearStack
 import com.example.gymtime.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -99,7 +100,7 @@ fun SettingsScreen(
             TopAppBar(
                 title = { Text("Settings", color = LocalAppColors.current.textPrimary) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
+                    IconButton(onClick = { navController.navigateHomeAndClearStack() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",

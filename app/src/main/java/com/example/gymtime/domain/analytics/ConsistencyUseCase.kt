@@ -1,6 +1,5 @@
 package com.example.gymtime.domain.analytics
 
-import androidx.compose.ui.graphics.Color
 import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.WorkoutDao

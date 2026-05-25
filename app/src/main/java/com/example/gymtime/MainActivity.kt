@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import android.util.Log
 import androidx.activity.viewModels
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +42,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.navigation.BottomNavigationBar
 import com.example.gymtime.navigation.Screen
+import com.example.gymtime.navigation.navigateHomeAndClearStack
 import com.example.gymtime.notifications.MonthlyReportNotifier
 import com.example.gymtime.ui.history.HistoryScreen
 import com.example.gymtime.ui.home.HomeScreen
@@ -309,6 +311,10 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 BottomNavigationBar(navController = navController)
                             }
+                        }
+
+                        BackHandler {
+                            navController.navigateHomeAndClearStack()
                         }
                     }
                 }

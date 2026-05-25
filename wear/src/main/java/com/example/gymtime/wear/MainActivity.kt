@@ -273,24 +273,15 @@ private fun LogTypeFields(
             NumberStepper("Reps", session.reps, "", 1f, wholeNumber = true) {
                 onSessionChange(session.copy(reps = it))
             }
-            NumberStepper("RPE", session.rpe, "", 0.5f) {
-                onSessionChange(session.copy(rpe = it))
-            }
         }
         "REPS_ONLY" -> {
             NumberStepper("Reps", session.reps, "", 1f, wholeNumber = true) {
                 onSessionChange(session.copy(reps = it))
             }
-            NumberStepper("RPE", session.rpe, "", 0.5f) {
-                onSessionChange(session.copy(rpe = it))
-            }
         }
         "DURATION" -> {
             DurationStepper("Time", session.duration) {
                 onSessionChange(session.copy(duration = it))
-            }
-            NumberStepper("RPE", session.rpe, "", 0.5f) {
-                onSessionChange(session.copy(rpe = it))
             }
         }
         "WEIGHT_DISTANCE" -> {

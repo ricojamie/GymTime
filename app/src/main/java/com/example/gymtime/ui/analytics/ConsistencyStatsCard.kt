@@ -36,8 +36,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gymtime.domain.analytics.ConsistencyStats
+import com.example.gymtime.ui.theme.DialogSurface
+import com.example.gymtime.ui.theme.ElevatedCardSurface
+import com.example.gymtime.ui.theme.RecoveryFatigued
+import com.example.gymtime.ui.theme.StreakResting
+import com.example.gymtime.ui.theme.SurfaceCards
 import com.example.gymtime.util.StreakCalculator
-import java.text.NumberFormat
 import java.util.Calendar
 import java.util.Locale
 
@@ -51,7 +55,7 @@ fun ConsistencyStatsCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF161616))
+            .background(ElevatedCardSurface)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -80,7 +84,7 @@ fun ConsistencyStatsCard(
                     Text("Got it")
                 }
             },
-            containerColor = Color(0xFF222222),
+            containerColor = DialogSurface,
             titleContentColor = Color.White,
             textContentColor = Color.LightGray
         )
@@ -94,8 +98,8 @@ private fun StreakSection(stats: ConsistencyStats) {
     
     val (stateIcon, stateColor) = when (result.state) {
         StreakCalculator.StreakState.ACTIVE -> Pair("\uD83D\uDD25", accentColor) // Fire
-        StreakCalculator.StreakState.RESTING -> Pair("\u2744\uFE0F", Color(0xFF64B5F6)) // Snowflake
-        StreakCalculator.StreakState.BROKEN -> Pair("\uD83D\uDC80", Color(0xFFEF5350)) // Skull
+        StreakCalculator.StreakState.RESTING -> Pair("\u2744\uFE0F", StreakResting) // Snowflake
+        StreakCalculator.StreakState.BROKEN -> Pair("\uD83D\uDC80", RecoveryFatigued) // Skull
     }
 
     Row(
@@ -152,13 +156,13 @@ private fun StreakSection(stats: ConsistencyStats) {
                             .size(10.dp)
                             .background(
                                 brush = if (isLit) Brush.radialGradient(
-                                    colors = listOf(Color(0xFF64B5F6), Color.Transparent)
+                                    colors = listOf(StreakResting, Color.Transparent)
                                 ) else Brush.linearGradient(listOf(Color.DarkGray, Color.DarkGray)),
                                 shape = CircleShape
                             )
                             .alpha(if (isLit) 1f else 0.3f)
                             .then(
-                                if (isLit) Modifier.background(Color(0xFF64B5F6), CircleShape) else Modifier
+                                if (isLit) Modifier.background(StreakResting, CircleShape) else Modifier
                             )
                     )
                 }
@@ -169,13 +173,12 @@ private fun StreakSection(stats: ConsistencyStats) {
 
 @Composable
 private fun StatsGridSection(stats: ConsistencyStats) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.US)
     val currentYear = Calendar.getInstance().get(Calendar.YEAR)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF0D0D0D), RoundedCornerShape(12.dp))
+            .background(SurfaceCards, RoundedCornerShape(12.dp))
             .padding(12.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {

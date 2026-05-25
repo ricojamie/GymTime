@@ -26,7 +26,13 @@ val LightTextSecondary = Color(0xFF4A4A4A)
 val LightTextTertiary = Color(0xFF7A7A7A)
 val LightInputBackground = Color(0xFFEEEEEE)
 val DarkInputBackground = Color(0xFF1A1A1A)
+val ElevatedCardSurface = Color(0xFF161616)
+val DialogSurface = Color(0xFF222222)
 
 // Status Colors
 val SuccessFresh = Color(0xFF2ECC71) // Emerald Green
 val WarningFatigued = Color(0xFFE74C3C) // Alizarin Red
+val RecoveryFresh = PrimaryAccent
+val RecoveryRecovering = Color(0xFFF59E0B)
+val RecoveryFatigued = Color(0xFFEF4444)
+val StreakResting = Color(0xFF64B5F6)

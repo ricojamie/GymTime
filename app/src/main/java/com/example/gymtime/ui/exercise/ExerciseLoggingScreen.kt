@@ -95,6 +95,7 @@ import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.domain.recommendation.ExerciseAttemptRecommendation
 import com.example.gymtime.navigation.Screen
+import com.example.gymtime.navigation.navigateHomeAndClearStack
 import com.example.gymtime.ui.components.PlateCalculatorSheet
 import com.example.gymtime.ui.components.VolumeProgressBar
 import com.example.gymtime.ui.theme.IronLogTheme
@@ -155,7 +156,6 @@ fun ExerciseLoggingScreen(
     var showWorkoutOverview by remember { mutableStateOf(false) }
     var showExerciseHistory by remember { mutableStateOf(false) }
     var showPlateCalculator by remember { mutableStateOf(false) }
-    var showExitSupersetDialog by remember { mutableStateOf(false) }
 
     var personalRecords by remember { mutableStateOf<PersonalRecords?>(null) }
     var exerciseHistory by remember { mutableStateOf<Map<Long, List<com.example.gymtime.data.db.entity.Set>>>(emptyMap()) }
@@ -190,9 +190,9 @@ fun ExerciseLoggingScreen(
         }
     }
 
-    // Handle back button in superset mode - show confirmation
+    // Keep system back behavior consistent even while superset mode is active.
     BackHandler(enabled = isInSupersetMode) {
-        showExitSupersetDialog = true
+        navController.navigateHomeAndClearStack()
     }
 
     val scope = rememberCoroutineScope()
@@ -247,7 +247,7 @@ fun ExerciseLoggingScreen(
                     },
                     navigationIcon = {
                         IconButton(onClick = {
-                            navController.popBackStack()
+                            navController.navigateHomeAndClearStack()
                         }) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -1265,46 +1265,6 @@ fun ExerciseLoggingScreen(
             dismissButton = {
                 TextButton(onClick = { showFinishDialog = false }) {
                     Text("Cancel", color = LocalAppColors.current.textTertiary)
-                }
-            },
-            containerColor = LocalAppColors.current.surfaceCards
-        )
-    }
-
-    // Exit Superset Confirmation Dialog
-    if (showExitSupersetDialog) {
-        AlertDialog(
-            onDismissRequest = { showExitSupersetDialog = false },
-            title = {
-                Text(
-                    text = "Exit Superset?",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = LocalAppColors.current.textPrimary
-                )
-            },
-            text = {
-                Text(
-                    text = "Are you sure you want to exit superset mode? You can continue logging exercises individually.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = LocalAppColors.current.textTertiary
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.exitSupersetMode()
-                        showExitSupersetDialog = false
-                        navController.navigateUp()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Text("Exit Superset", color = Color.Black, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showExitSupersetDialog = false }) {
-                    Text("Continue Superset", color = MaterialTheme.colorScheme.primary)
                 }
             },
             containerColor = LocalAppColors.current.surfaceCards

@@ -3,7 +3,22 @@ package com.example.gymtime.ui.analytics
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.db.dao.ExerciseDao
-import com.example.gymtime.data.db.dao.SetDao
+import com.example.gymtime.data.db.dao.MuscleGroupDao
+import com.example.gymtime.data.db.entity.MuscleDistribution
+import com.example.gymtime.domain.analytics.AggregateInterval
+import com.example.gymtime.domain.analytics.BalanceTimeRange
+import com.example.gymtime.domain.analytics.BalanceUseCase
+import com.example.gymtime.domain.analytics.ConsistencyStats
+import com.example.gymtime.domain.analytics.ConsistencyUseCase
+import com.example.gymtime.domain.analytics.HeatMapDay
+import com.example.gymtime.domain.analytics.MuscleFreshnessStatus
+import com.example.gymtime.domain.analytics.TimePeriod
+import com.example.gymtime.domain.analytics.TrendMetric
+import com.example.gymtime.domain.analytics.TrendPoint
+import com.example.gymtime.domain.analytics.TrendUseCase
+import com.example.gymtime.domain.analytics.TrophyPR
+import com.example.gymtime.domain.analytics.WorkoutRatingStats
+import com.example.gymtime.domain.analytics.WorkoutRatingUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,13 +30,12 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AnalyticsViewModel @Inject constructor(
-    private val setDao: SetDao,
     private val exerciseDao: ExerciseDao,
-    private val muscleGroupDao: com.example.gymtime.data.db.dao.MuscleGroupDao,
-    private val consistencyUseCase: com.example.gymtime.domain.analytics.ConsistencyUseCase,
-    private val balanceUseCase: com.example.gymtime.domain.analytics.BalanceUseCase,
-    private val trendUseCase: com.example.gymtime.domain.analytics.TrendUseCase,
-    private val workoutRatingUseCase: com.example.gymtime.domain.analytics.WorkoutRatingUseCase
+    private val muscleGroupDao: MuscleGroupDao,
+    private val consistencyUseCase: ConsistencyUseCase,
+    private val balanceUseCase: BalanceUseCase,
+    private val trendUseCase: TrendUseCase,
+    private val workoutRatingUseCase: WorkoutRatingUseCase
 ) : ViewModel() {
 
     // --- State ---
@@ -29,33 +43,33 @@ class AnalyticsViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _heatMapData = MutableStateFlow<List<com.example.gymtime.domain.analytics.HeatMapDay>>(emptyList())
-    val heatMapData: StateFlow<List<com.example.gymtime.domain.analytics.HeatMapDay>> = _heatMapData.asStateFlow()
+    private val _heatMapData = MutableStateFlow<List<HeatMapDay>>(emptyList())
+    val heatMapData: StateFlow<List<HeatMapDay>> = _heatMapData.asStateFlow()
 
-    private val _consistencyStats = MutableStateFlow<com.example.gymtime.domain.analytics.ConsistencyStats?>(null)
-    val consistencyStats: StateFlow<com.example.gymtime.domain.analytics.ConsistencyStats?> = _consistencyStats.asStateFlow()
+    private val _consistencyStats = MutableStateFlow<ConsistencyStats?>(null)
+    val consistencyStats: StateFlow<ConsistencyStats?> = _consistencyStats.asStateFlow()
 
-    private val _muscleDistribution = MutableStateFlow<List<com.example.gymtime.data.db.entity.MuscleDistribution>>(emptyList())
-    val muscleDistribution: StateFlow<List<com.example.gymtime.data.db.entity.MuscleDistribution>> = _muscleDistribution.asStateFlow()
+    private val _muscleDistribution = MutableStateFlow<List<MuscleDistribution>>(emptyList())
+    val muscleDistribution: StateFlow<List<MuscleDistribution>> = _muscleDistribution.asStateFlow()
 
-    private val _radarDistribution = MutableStateFlow<List<com.example.gymtime.data.db.entity.MuscleDistribution>>(emptyList())
-    val radarDistribution: StateFlow<List<com.example.gymtime.data.db.entity.MuscleDistribution>> = _radarDistribution.asStateFlow()
+    private val _radarDistribution = MutableStateFlow<List<MuscleDistribution>>(emptyList())
+    val radarDistribution: StateFlow<List<MuscleDistribution>> = _radarDistribution.asStateFlow()
 
-    private val _selectedBalanceRange = MutableStateFlow(com.example.gymtime.domain.analytics.BalanceTimeRange.THIRTY_DAYS)
+    private val _selectedBalanceRange = MutableStateFlow(BalanceTimeRange.THIRTY_DAYS)
     val selectedBalanceRange = _selectedBalanceRange.asStateFlow()
 
-    private val _muscleFreshness = MutableStateFlow<List<com.example.gymtime.domain.analytics.MuscleFreshnessStatus>>(emptyList())
-    val muscleFreshness: StateFlow<List<com.example.gymtime.domain.analytics.MuscleFreshnessStatus>> = _muscleFreshness.asStateFlow()
+    private val _muscleFreshness = MutableStateFlow<List<MuscleFreshnessStatus>>(emptyList())
+    val muscleFreshness: StateFlow<List<MuscleFreshnessStatus>> = _muscleFreshness.asStateFlow()
 
     // --- Trend State ---
     
-    private val _selectedMetric = MutableStateFlow(com.example.gymtime.domain.analytics.TrendMetric.VOLUME)
+    private val _selectedMetric = MutableStateFlow(TrendMetric.VOLUME)
     val selectedMetric = _selectedMetric.asStateFlow()
 
-    private val _selectedPeriod = MutableStateFlow(com.example.gymtime.domain.analytics.TimePeriod.THREE_MONTHS)
+    private val _selectedPeriod = MutableStateFlow(TimePeriod.THREE_MONTHS)
     val selectedPeriod = _selectedPeriod.asStateFlow()
 
-    private val _selectedInterval = MutableStateFlow(com.example.gymtime.domain.analytics.AggregateInterval.WEEKLY)
+    private val _selectedInterval = MutableStateFlow(AggregateInterval.WEEKLY)
     val selectedInterval = _selectedInterval.asStateFlow()
 
     private val _selectedMuscleFilter = MutableStateFlow<String?>("All")
@@ -64,13 +78,13 @@ class AnalyticsViewModel @Inject constructor(
     private val _selectedExerciseFilterId = MutableStateFlow<Long?>(null)
     val selectedExerciseFilterId = _selectedExerciseFilterId.asStateFlow()
 
-    private val _trendData = MutableStateFlow<List<com.example.gymtime.domain.analytics.TrendPoint>>(emptyList())
+    private val _trendData = MutableStateFlow<List<TrendPoint>>(emptyList())
     val trendData = _trendData.asStateFlow()
 
-    private val _trophyCasePRs = MutableStateFlow<List<com.example.gymtime.domain.analytics.TrophyPR>>(emptyList())
+    private val _trophyCasePRs = MutableStateFlow<List<TrophyPR>>(emptyList())
     val trophyCasePRs = _trophyCasePRs.asStateFlow()
 
-    private val _workoutRatingStats = MutableStateFlow<com.example.gymtime.domain.analytics.WorkoutRatingStats?>(null)
+    private val _workoutRatingStats = MutableStateFlow<WorkoutRatingStats?>(null)
     val workoutRatingStats = _workoutRatingStats.asStateFlow()
 
     val allExercises = exerciseDao.getAllExercises()
@@ -100,17 +114,17 @@ class AnalyticsViewModel @Inject constructor(
         }
     }
 
-    fun updateMetric(metric: com.example.gymtime.domain.analytics.TrendMetric) {
+    fun updateMetric(metric: TrendMetric) {
         _selectedMetric.value = metric
         refreshTrendData()
     }
 
-    fun updatePeriod(period: com.example.gymtime.domain.analytics.TimePeriod) {
+    fun updatePeriod(period: TimePeriod) {
         _selectedPeriod.value = period
         refreshTrendData()
     }
 
-    fun updateInterval(interval: com.example.gymtime.domain.analytics.AggregateInterval) {
+    fun updateInterval(interval: AggregateInterval) {
         _selectedInterval.value = interval
         refreshTrendData()
     }
@@ -129,7 +143,7 @@ class AnalyticsViewModel @Inject constructor(
         refreshTrendData()
     }
 
-    fun updateBalanceRange(range: com.example.gymtime.domain.analytics.BalanceTimeRange) {
+    fun updateBalanceRange(range: BalanceTimeRange) {
         _selectedBalanceRange.value = range
         refreshBalanceData()
     }

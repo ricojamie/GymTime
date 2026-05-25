@@ -27,6 +27,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.gymtime.domain.analytics.MuscleFreshnessStatus
 import com.example.gymtime.domain.analytics.RecoveryStatus
+import com.example.gymtime.ui.theme.ElevatedCardSurface
+import com.example.gymtime.ui.theme.RecoveryFatigued
+import com.example.gymtime.ui.theme.RecoveryFresh
+import com.example.gymtime.ui.theme.RecoveryRecovering
+import com.example.gymtime.ui.theme.SurfaceCards
 
 @Composable
 fun MuscleFreshnessList(
@@ -36,7 +41,7 @@ fun MuscleFreshnessList(
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF161616)
+            containerColor = ElevatedCardSurface
         ),
         shape = RoundedCornerShape(16.dp)
     ) {
@@ -85,7 +90,7 @@ fun FreshnessGridItem(
 ) {
     Row(
         modifier = modifier
-            .background(Color(0xFF0D0D0D), RoundedCornerShape(8.dp))
+            .background(SurfaceCards, RoundedCornerShape(8.dp))
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -94,7 +99,7 @@ fun FreshnessGridItem(
             modifier = Modifier
                 .size(8.dp)
                 .clip(CircleShape)
-                .background(item.color)
+                .background(item.status.recoveryColor())
         )
         
         Spacer(modifier = Modifier.width(12.dp))
@@ -115,3 +120,8 @@ fun FreshnessGridItem(
     }
 }
 
+private fun RecoveryStatus.recoveryColor(): Color = when (this) {
+    RecoveryStatus.FRESH -> RecoveryFresh
+    RecoveryStatus.RECOVERING -> RecoveryRecovering
+    RecoveryStatus.FATIGUED -> RecoveryFatigued
+}

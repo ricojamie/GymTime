@@ -61,6 +61,33 @@ data class PersonalRecords(
     val bestE10RM: Pair<Set, Float>?  // Set and calculated E10RM (premium feature)
 )
 
+private data class WearWorkoutState(
+    val workoutId: Long?,
+    val exercise: Exercise?,
+    val loggedSets: List<Set>
+)
+
+private data class WearPrimaryFields(
+    val weight: String,
+    val reps: String,
+    val rpe: String,
+    val duration: String,
+    val distance: String
+)
+
+private data class WearFormState(
+    val primaryFields: WearPrimaryFields,
+    val calories: String,
+    val isWarmup: Boolean,
+    val selectedDistanceUnit: DistanceUnit
+)
+
+private data class WearTimerState(
+    val restSeconds: Int,
+    val timerRemainingSeconds: Int,
+    val timerRunning: Boolean
+)
+
 @HiltViewModel
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ExerciseLoggingViewModel @Inject constructor(
@@ -860,38 +887,58 @@ class ExerciseLoggingViewModel @Inject constructor(
 
     private fun publishWearSnapshots() {
         viewModelScope.launch {
+            val workoutState = combine(_currentWorkout, _exercise, _loggedSets) { workout, exercise, loggedSets ->
+                WearWorkoutState(
+                    workoutId = workout?.id,
+                    exercise = exercise,
+                    loggedSets = loggedSets
+                )
+            }
+            val primaryFields = combine(_weight, _reps, _rpe, _duration, _distance) { weight, reps, rpe, duration, distance ->
+                WearPrimaryFields(
+                    weight = weight,
+                    reps = reps,
+                    rpe = rpe,
+                    duration = duration,
+                    distance = distance
+                )
+            }
+            val formState = combine(primaryFields, _calories, _isWarmup, _selectedDistanceUnit) { fields, calories, isWarmup, unit ->
+                WearFormState(
+                    primaryFields = fields,
+                    calories = calories,
+                    isWarmup = isWarmup,
+                    selectedDistanceUnit = unit
+                )
+            }
+            val timerState = combine(_restTime, _countdownTimer, _isTimerRunning) { restTime, countdownTimer, isTimerRunning ->
+                WearTimerState(
+                    restSeconds = restTime,
+                    timerRemainingSeconds = countdownTimer,
+                    timerRunning = isTimerRunning
+                )
+            }
+
             combine(
-                _currentWorkout,
-                _exercise,
-                _loggedSets,
-                _weight,
-                _reps,
-                _rpe,
-                _duration,
-                _distance,
-                _calories,
-                _isWarmup,
-                _selectedDistanceUnit,
-                _restTime,
-                _countdownTimer,
-                _isTimerRunning
-            ) { values ->
-                @Suppress("UNCHECKED_CAST")
+                workoutState,
+                formState,
+                timerState
+            ) { workout, form, timer ->
                 WearSessionSnapshot.fromLogger(
-                    workoutId = (values[0] as Workout?)?.id,
-                    exercise = values[1] as Exercise?,
-                    loggedSets = values[2] as List<Set>,
-                    weight = values[3] as String,
-                    reps = values[4] as String,
-                    rpe = values[5] as String,
-                    duration = values[6] as String,
-                    distance = values[7] as String,
-                    calories = values[8] as String,
-                    isWarmup = values[9] as Boolean,
-                    selectedDistanceUnit = values[10] as DistanceUnit,
-                    restSeconds = values[11] as Int,
-                    timerRemainingSeconds = values[12] as Int,
-                    timerRunning = values[13] as Boolean
+                    workoutId = workout.workoutId,
+                    exercise = workout.exercise,
+                    loggedSets = workout.loggedSets,
+                    weight = form.primaryFields.weight,
+                    reps = form.primaryFields.reps,
+                    rpe = form.primaryFields.rpe,
+                    duration = form.primaryFields.duration,
+                    distance = form.primaryFields.distance,
+                    calories = form.calories,
+                    isWarmup = form.isWarmup,
+                    selectedDistanceUnit = form.selectedDistanceUnit,
+                    restSeconds = timer.restSeconds,
+                    timerRemainingSeconds = timer.timerRemainingSeconds,
+                    timerRunning = timer.timerRunning
                 )
             }.collectLatest { snapshot ->
                 activeWearSessionRepository.publish(snapshot)

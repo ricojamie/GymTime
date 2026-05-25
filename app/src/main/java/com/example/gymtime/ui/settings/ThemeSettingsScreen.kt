@@ -72,6 +72,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.gymtime.R
+import com.example.gymtime.navigation.navigateHomeAndClearStack
 import com.example.gymtime.ui.theme.LocalAppColors
 import com.example.gymtime.ui.theme.ThemeColors
 import com.example.gymtime.ui.theme.ThemeFontOption
@@ -110,7 +111,7 @@ fun ThemeSettingsScreen(
             TopAppBar(
                 title = { Text("Theme", color = LocalAppColors.current.textPrimary) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
+                    IconButton(onClick = { navController.navigateHomeAndClearStack() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
