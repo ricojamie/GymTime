@@ -7,10 +7,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,6 +23,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gymtime.data.db.entity.DistanceUnit
@@ -411,27 +415,54 @@ fun WorkoutOverviewContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 16.dp)
     ) {
-        // Header
-        Text(
-            text = "Current Workout",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = LocalAppColors.current.textPrimary
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "Current Workout",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = LocalAppColors.current.textPrimary
+                )
+                Text(
+                    text = "${workoutStats.exerciseCount} exercises",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalAppColors.current.textTertiary
+                )
+            }
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+            ) {
+                Text(
+                    text = workoutStats.duration,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                )
+            }
+        }
 
-        // Stats row
+        Spacer(modifier = Modifier.height(16.dp))
+
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = "Duration: ${workoutStats.duration}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = LocalAppColors.current.textTertiary
+            WorkoutOverviewPanelStat(
+                label = "Sets",
+                value = workoutStats.totalSets.toString(),
+                modifier = Modifier.weight(1f)
             )
             Text(
                 text = "·",
@@ -608,6 +639,376 @@ fun WorkoutOverviewContent(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+fun WorkoutOverviewCommandPanel(
+    exercises: List<WorkoutExerciseSummary>,
+    currentExerciseId: Long?,
+    workoutStats: WorkoutStats,
+    onExerciseClick: (Long) -> Unit,
+    onAddExercise: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Current Workout",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = LocalAppColors.current.textPrimary,
+                    maxLines = 1
+                )
+                Text(
+                    text = "${workoutStats.exerciseCount} exercises",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalAppColors.current.textTertiary,
+                    maxLines = 1
+                )
+            }
+
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+            ) {
+                Text(
+                    text = workoutStats.duration,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    maxLines = 1
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            WorkoutOverviewPanelStat(
+                label = "Sets",
+                value = workoutStats.totalSets.toString(),
+                modifier = Modifier.weight(1f)
+            )
+            WorkoutOverviewPanelStat(
+                label = "Exercises",
+                value = workoutStats.exerciseCount.toString(),
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        if (exercises.isEmpty()) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                color = LocalAppColors.current.inputBackground
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "No exercises yet",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = LocalAppColors.current.textPrimary
+                    )
+                    Text(
+                        text = "Add an exercise to start logging.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = LocalAppColors.current.textTertiary,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                itemsIndexed(exercises) { index, summary ->
+                    val prevSummary = exercises.getOrNull(index - 1)
+                    val nextSummary = exercises.getOrNull(index + 1)
+
+                    WorkoutOverviewPanelRow(
+                        summary = summary,
+                        isActive = summary.exerciseId == currentExerciseId,
+                        isConnectedTop = summary.supersetGroupId != null &&
+                            prevSummary?.supersetGroupId == summary.supersetGroupId,
+                        isConnectedBottom = summary.supersetGroupId != null &&
+                            nextSummary?.supersetGroupId == summary.supersetGroupId,
+                        onClick = { onExerciseClick(summary.exerciseId) }
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        OutlinedButton(
+            onClick = onAddExercise,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = MaterialTheme.colorScheme.primary
+            ),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Add Exercise", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun WorkoutOverviewPanelStat(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.height(58.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = LocalAppColors.current.inputBackground
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = label.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = LocalAppColors.current.textTertiary,
+                letterSpacing = 0.8.sp,
+                maxLines = 1
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = LocalAppColors.current.textPrimary,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun WorkoutOverviewPanelRow(
+    summary: WorkoutExerciseSummary,
+    isActive: Boolean,
+    isConnectedTop: Boolean,
+    isConnectedBottom: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        WorkoutOverviewSupersetConnector(
+            isSuperset = summary.supersetGroupId != null,
+            isConnectedTop = isConnectedTop,
+            isConnectedBottom = isConnectedBottom
+        )
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+                .heightIn(min = 76.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isActive) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                } else {
+                    Color(0xFF0D0D0D)
+                }
+            ),
+            border = if (isActive) {
+                androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+            } else {
+                null
+            },
+            shape = RoundedCornerShape(8.dp),
+            onClick = onClick
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(
+                            if (isActive) {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                            } else {
+                                LocalAppColors.current.inputBackground
+                            },
+                            RoundedCornerShape(8.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = ExerciseIcons.getIconForMuscle(summary.targetMuscle),
+                        contentDescription = summary.targetMuscle,
+                        tint = if (isActive) MaterialTheme.colorScheme.primary else LocalAppColors.current.textTertiary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = summary.exerciseName,
+                            modifier = Modifier.weight(1f, fill = false),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isActive) MaterialTheme.colorScheme.primary else LocalAppColors.current.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (isActive) {
+                            Text(
+                                text = "Active",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black,
+                                modifier = Modifier
+                                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        text = summary.targetMuscle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = LocalAppColors.current.textTertiary,
+                        fontSize = 12.sp,
+                        maxLines = 1
+                    )
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = if (summary.setCount == 0) "Not started" else "${summary.setCount} sets",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (summary.setCount == 0) LocalAppColors.current.textTertiary else MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                    summary.bestWeight?.let { weight ->
+                        Text(
+                            text = "Best ${weight.toInt()} lbs",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = LocalAppColors.current.textTertiary,
+                            fontSize = 11.sp,
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = if (isActive) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        LocalAppColors.current.textTertiary.copy(alpha = 0.65f)
+                    },
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkoutOverviewSupersetConnector(
+    isSuperset: Boolean,
+    isConnectedTop: Boolean,
+    isConnectedBottom: Boolean
+) {
+    if (!isSuperset) {
+        Spacer(modifier = Modifier.width(18.dp))
+        return
+    }
+
+    Column(
+        modifier = Modifier
+            .width(18.dp)
+            .fillMaxHeight(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        if (isConnectedTop) {
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .weight(1f)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.55f))
+            )
+        } else {
+            Spacer(modifier = Modifier.weight(1f))
+        }
+
+        Icon(
+            painter = androidx.compose.ui.res.painterResource(id = com.example.gymtime.R.drawable.ic_sync),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(12.dp)
+        )
+
+        if (isConnectedBottom) {
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .weight(1f)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.55f))
+            )
+        } else {
+            Spacer(modifier = Modifier.weight(1f))
+        }
     }
 }
 
