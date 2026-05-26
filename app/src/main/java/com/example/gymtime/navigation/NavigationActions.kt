@@ -5,7 +5,7 @@ import androidx.navigation.NavController
 fun NavController.navigateHomeAndClearStack() {
     navigate(Screen.Home.route) {
         popUpTo(Screen.Home.route) {
-            inclusive = false
+            inclusive = true
             saveState = false
         }
         launchSingleTop = true

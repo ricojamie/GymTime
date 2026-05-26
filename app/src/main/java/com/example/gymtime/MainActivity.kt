@@ -313,8 +313,12 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
-                        BackHandler {
-                            navController.navigateHomeAndClearStack()
+                        // Re-key on currentRoute so this callback is re-added to the
+                        // dispatcher on every nav, winning LIFO over NavController's.
+                        androidx.compose.runtime.key(currentRoute) {
+                            BackHandler(enabled = currentRoute != null && currentRoute != Screen.Home.route) {
+                                navController.navigateHomeAndClearStack()
+                            }
                         }
                     }
                 }

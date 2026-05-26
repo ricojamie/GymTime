@@ -81,21 +81,15 @@ fun BottomNavigationBar(navController: NavController) {
                                 indication = null 
                             ) {
                                 if (screen == Screen.Home) {
+                                    navController.navigateHomeAndClearStack()
+                                } else {
                                     navController.navigate(screen.route) {
-                                        popUpTo(navController.graph.startDestinationId) {
-                                            inclusive = true
+                                        popUpTo(Screen.Home.route) {
+                                            inclusive = false
                                             saveState = false
                                         }
                                         launchSingleTop = true
                                         restoreState = false
-                                    }
-                                } else {
-                                    navController.navigate(screen.route) {
-                                        popUpTo(navController.graph.startDestinationId) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
                                     }
                                 }
                             }
