@@ -1297,7 +1297,7 @@ fun ExerciseLoggingScreen(
             containerColor = LocalAppColors.current.surfaceCards,
             scrimColor = Color.Black.copy(alpha = 0.5f)
         ) {
-            WorkoutOverviewContent(
+            WorkoutOverviewCommandPanel(
                 exercises = workoutOverview,
                 currentExerciseId = exercise?.id,
                 workoutStats = viewModel.getWorkoutStats(),
@@ -1305,7 +1305,9 @@ fun ExerciseLoggingScreen(
                     showWorkoutOverview = false
                     if (exerciseId != exercise?.id) {
                         navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId)) {
-                            popUpTo("exercise_logging/{exerciseId}") { inclusive = true }
+                            popUpTo(navController.currentBackStackEntry?.destination?.route ?: Screen.ExerciseLogging.route) {
+                                inclusive = true
+                            }
                             launchSingleTop = true
                         }
                     }
