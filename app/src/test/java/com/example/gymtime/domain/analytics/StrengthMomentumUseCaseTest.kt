@@ -214,6 +214,28 @@ class StrengthMomentumUseCaseTest {
     }
 
     @Test
+    fun `extra reps on secondary sets at same weight register as progress`() = runTest {
+        coEvery { setDao.getPerformanceSetsWithExerciseInRange(any(), any()) } returns listOf(
+            strengthSet(weight = 60f, reps = 9, daysAgo = 40, muscle = "Shoulders"),
+            strengthSet(weight = 60f, reps = 8, daysAgo = 40, muscle = "Shoulders"),
+            strengthSet(weight = 60f, reps = 8, daysAgo = 40, muscle = "Shoulders"),
+            strengthSet(weight = 60f, reps = 9, daysAgo = 7, muscle = "Shoulders"),
+            strengthSet(weight = 60f, reps = 9, daysAgo = 7, muscle = "Shoulders"),
+            strengthSet(weight = 60f, reps = 9, daysAgo = 7, muscle = "Shoulders")
+        )
+
+        val result = useCase.getStrengthMomentum(now)
+        val shoulders = result.muscles.first { it.muscle == "Shoulders" }
+
+        assertNotNull(shoulders.percentChange)
+        assertTrue(
+            "Expected positive momentum, was ${shoulders.percentChange}",
+            shoulders.percentChange!! > 0f
+        )
+        assertEquals(MomentumDirection.UP, shoulders.direction)
+    }
+
+    @Test
     fun `mixed exercise changes expose improving and declining contributors`() = runTest {
         coEvery { setDao.getPerformanceSetsWithExerciseInRange(any(), any()) } returns listOf(
             strengthSet(
