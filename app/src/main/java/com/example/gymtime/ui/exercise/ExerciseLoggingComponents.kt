@@ -3,7 +3,9 @@ package com.example.gymtime.ui.exercise
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,11 +19,18 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -32,6 +41,7 @@ import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
 import com.example.gymtime.ui.components.ExerciseIcons
 import com.example.gymtime.ui.theme.LocalAppColors
+import com.example.gymtime.util.OneRepMaxCalculator
 import com.example.gymtime.util.TimeUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -1012,6 +1022,64 @@ private fun WorkoutOverviewSupersetConnector(
     }
 }
 
+private data class SessionSummary(
+    val workoutId: Long,
+    val date: java.util.Date,
+    val sets: List<Set>,
+    val workingSets: List<Set>,
+    val topSet: Set?,
+    val topE1RM: Float?,
+    val volume: Float,
+    val warmupCount: Int,
+    val isPR: Boolean
+)
+
+private fun buildSessionSummaries(history: Map<Long, List<Set>>): List<SessionSummary> {
+    // history entries arrive newest-first; flip to chronological to detect PRs as the running max grows.
+    val chronological = history.entries.toList().reversed()
+    var runningMaxE1RM = 0f
+    val byOldest = chronological.map { (workoutId, sets) ->
+        val working = sets.filter { !it.isWarmup }
+        val topSet = working
+            .filter { it.weight != null && it.reps != null }
+            .maxByOrNull { (it.weight ?: 0f) * (1 + (it.reps ?: 0) / 30f) }
+        val topE1RM = topSet?.let { s ->
+            val w = s.weight ?: return@let null
+            val r = s.reps ?: return@let null
+            OneRepMaxCalculator.calculateE1RM(w, r)
+        }
+        val isPR = topE1RM != null && topE1RM > runningMaxE1RM
+        if (topE1RM != null && topE1RM > runningMaxE1RM) runningMaxE1RM = topE1RM
+        val volume = working.sumOf { ((it.weight ?: 0f) * (it.reps ?: 0)).toDouble() }.toFloat()
+        SessionSummary(
+            workoutId = workoutId,
+            date = sets.firstOrNull()?.timestamp ?: java.util.Date(0),
+            sets = sets,
+            workingSets = working,
+            topSet = topSet,
+            topE1RM = topE1RM,
+            volume = volume,
+            warmupCount = sets.count { it.isWarmup },
+            isPR = isPR
+        )
+    }
+    return byOldest.reversed() // back to newest-first for display
+}
+
+private fun relativeDay(date: java.util.Date): String {
+    val now = System.currentTimeMillis()
+    val diffMs = now - date.time
+    val days = (diffMs / (1000L * 60 * 60 * 24)).toInt()
+    return when {
+        days <= 0 -> "today"
+        days == 1 -> "1d ago"
+        days < 7 -> "${days}d ago"
+        days < 30 -> "${days / 7}w ago"
+        days < 365 -> "${days / 30}mo ago"
+        else -> "${days / 365}y ago"
+    }
+}
+
 @Composable
 fun ExerciseHistoryContent(
     exerciseName: String,
@@ -1019,197 +1087,589 @@ fun ExerciseHistoryContent(
     history: Map<Long, List<Set>>,
     onDismiss: () -> Unit
 ) {
-    Column(
+    val colors = LocalAppColors.current
+    val sessions = remember(history) { buildSessionSummaries(history) }
+    val lastSession = sessions.firstOrNull()
+    val bestE1RMValue = personalRecords?.bestE1RM?.second
+
+    // Group max-weight per rep count (working sets only) — answers "what have I done for X reps?"
+    val bestByReps: List<Pair<Int, Float>> = remember(history) {
+        history.values.flatten()
+            .filter { !it.isWarmup && it.weight != null && it.reps != null }
+            .groupBy { it.reps!! }
+            .mapValues { entry -> entry.value.maxOf { it.weight!! } }
+            .toList()
+            .sortedBy { it.first }
+    }
+
+    var expandedWorkoutId by rememberSaveable { mutableStateOf<Long?>(null) }
+
+    LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)
+            .padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
-        // Header
+        item {
+            HistorySheetHeader(
+                exerciseName = exerciseName,
+                sessionCount = sessions.size,
+                lastDate = lastSession?.date
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        if (sessions.isEmpty()) {
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "No history yet — your sets will show up here once you log a workout.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.textTertiary,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+            return@LazyColumn
+        }
+
+        item {
+            StatRow(
+                personalRecords = personalRecords,
+                lastSession = lastSession
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+        }
+
+        // Sparkline only if we have at least 2 data points
+        val sparklinePoints = sessions
+            .mapNotNull { it.topE1RM }
+            .reversed() // chronological for left→right
+        if (sparklinePoints.size >= 2) {
+            item {
+                E1RMSparkline(
+                    points = sparklinePoints,
+                    prCeiling = bestE1RMValue
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+        }
+
+        if (bestByReps.isNotEmpty()) {
+            item {
+                RepMaxChipsRow(bestByReps = bestByReps)
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+        }
+
+        item {
+            Text(
+                text = "SESSIONS",
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.textTertiary,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.5.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        itemsIndexed(sessions.take(15)) { _, session ->
+            SessionRow(
+                session = session,
+                expanded = expandedWorkoutId == session.workoutId,
+                onToggle = {
+                    expandedWorkoutId = if (expandedWorkoutId == session.workoutId) null else session.workoutId
+                }
+            )
+            HorizontalDivider(
+                color = colors.textTertiary.copy(alpha = 0.10f),
+                thickness = 1.dp
+            )
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun HistorySheetHeader(
+    exerciseName: String,
+    sessionCount: Int,
+    lastDate: java.util.Date?
+) {
+    val colors = LocalAppColors.current
+    Column {
         Text(
             text = exerciseName,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            color = LocalAppColors.current.textPrimary
+            color = colors.textPrimary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
         )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "PERSONAL RECORDS",
-            style = MaterialTheme.typography.labelMedium,
-            color = LocalAppColors.current.textTertiary,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // PR Badges
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Heaviest Weight PR
-            personalRecords?.heaviestWeight?.let { set ->
-                PRBadge(
-                    title = "Heaviest Weight",
-                    value = "${set.weight?.toInt()} lbs",
-                    subtitle = "×${set.reps} reps",
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            // Best E1RM PR
-            personalRecords?.bestE1RM?.let { (set, e1rm) ->
-                PRBadge(
-                    title = "Best E1RM",
-                    value = "${e1rm.toInt()} lbs",
-                    subtitle = "from ${set.weight?.toInt()}×${set.reps}",
-                    modifier = Modifier.weight(1f)
-                )
-            }
+        Spacer(modifier = Modifier.height(4.dp))
+        val subtitle = if (sessionCount == 0) {
+            "No sessions yet"
+        } else {
+            val label = if (sessionCount == 1) "session" else "sessions"
+            val tail = lastDate?.let { " · last ${relativeDay(it)}" } ?: ""
+            "$sessionCount $label$tail"
         }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
         Text(
-            text = "RECENT HISTORY",
-            style = MaterialTheme.typography.labelMedium,
-            color = LocalAppColors.current.textTertiary,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
+            text = subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.textTertiary
         )
-
         Spacer(modifier = Modifier.height(12.dp))
-
-        // History list
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 300.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            history.entries.take(10).forEach { (workoutId, sets) ->
-                item {
-                    WorkoutHistoryCard(sets = sets)
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Close button
-        TextButton(
-            onClick = onDismiss,
-            modifier = Modifier.align(Alignment.CenterHorizontally)
-        ) {
-            Text("Close", color = LocalAppColors.current.textTertiary)
-        }
+        HorizontalDivider(
+            color = colors.textTertiary.copy(alpha = 0.15f),
+            thickness = 1.dp
+        )
     }
 }
 
 @Composable
-fun PRBadge(
-    title: String,
+private fun StatRow(
+    personalRecords: PersonalRecords?,
+    lastSession: SessionSummary?
+) {
+    val colors = LocalAppColors.current
+    val primary = MaterialTheme.colorScheme.primary
+
+    val heaviest = personalRecords?.heaviestWeight
+    val bestE1RM = personalRecords?.bestE1RM
+    val lastTop = lastSession?.topSet
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        StatBlock(
+            label = "HEAVIEST",
+            value = heaviest?.weight?.let { "${it.toInt()}" } ?: "—",
+            valueSuffix = if (heaviest?.weight != null) "lb" else null,
+            subtitle = heaviest?.reps?.let { "× $it reps" } ?: " ",
+            valueColor = colors.textPrimary,
+            modifier = Modifier.weight(1f)
+        )
+        StatDivider()
+        StatBlock(
+            label = "BEST E1RM",
+            value = bestE1RM?.second?.toInt()?.toString() ?: "—",
+            valueSuffix = if (bestE1RM != null) "lb" else null,
+            subtitle = bestE1RM?.let { (s, _) ->
+                val w = s.weight?.toInt() ?: return@let " "
+                val r = s.reps ?: return@let " "
+                "from $w × $r"
+            } ?: " ",
+            valueColor = primary,
+            modifier = Modifier.weight(1f)
+        )
+        StatDivider()
+        StatBlock(
+            label = "LAST SESSION",
+            value = lastTop?.let { s ->
+                val w = s.weight?.toInt() ?: return@let "—"
+                val r = s.reps ?: return@let "—"
+                "$w × $r"
+            } ?: "—",
+            valueSuffix = null,
+            subtitle = lastSession?.date?.let { relativeDay(it) } ?: " ",
+            valueColor = colors.textPrimary,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun StatBlock(
+    label: String,
     value: String,
+    valueSuffix: String?,
     subtitle: String,
+    valueColor: Color,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-        ),
-        shape = RoundedCornerShape(12.dp)
+    val colors = LocalAppColors.current
+    Column(
+        modifier = modifier.padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "🏆",
-                style = MaterialTheme.typography.headlineMedium
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelSmall,
-                color = LocalAppColors.current.textTertiary,
-                fontSize = 10.sp
-            )
-            Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.textTertiary,
+            fontSize = 10.sp,
+            letterSpacing = 1.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 text = value,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = valueColor,
+                fontSize = 22.sp
             )
+            if (valueSuffix != null) {
+                Text(
+                    text = " $valueSuffix",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.textTertiary,
+                    modifier = Modifier.padding(bottom = 3.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.textTertiary,
+            fontSize = 11.sp,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun StatDivider() {
+    Box(
+        modifier = Modifier
+            .width(1.dp)
+            .height(36.dp)
+            .background(LocalAppColors.current.textTertiary.copy(alpha = 0.15f))
+    )
+}
+
+@Composable
+private fun E1RMSparkline(
+    points: List<Float>,
+    prCeiling: Float?
+) {
+    if (points.size < 2) return
+    val primary = MaterialTheme.colorScheme.primary
+    val colors = LocalAppColors.current
+
+    val minVal = points.min()
+    val maxVal = (listOf(points.max()) + listOfNotNull(prCeiling)).max()
+    val span = (maxVal - minVal).coerceAtLeast(1f)
+
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = LocalAppColors.current.textTertiary,
-                fontSize = 11.sp
+                text = "E1RM TREND",
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.textTertiary,
+                fontSize = 10.sp,
+                letterSpacing = 1.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            val first = points.first()
+            val last = points.last()
+            val deltaPct = if (first > 0f) ((last - first) / first) * 100f else 0f
+            val deltaText = when {
+                deltaPct >= 0.5f -> "↑ ${"%.0f".format(deltaPct)}%"
+                deltaPct <= -0.5f -> "↓ ${"%.0f".format(-deltaPct)}%"
+                else -> "flat"
+            }
+            val deltaColor = when {
+                deltaPct >= 0.5f -> primary
+                deltaPct <= -0.5f -> colors.textSecondary
+                else -> colors.textTertiary
+            }
+            Text(
+                text = deltaText,
+                style = MaterialTheme.typography.labelSmall,
+                color = deltaColor,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+        ) {
+            val w = size.width
+            val h = size.height
+            val padY = 6f
+            val usableH = h - 2 * padY
+            val stepX = if (points.size > 1) w / (points.size - 1) else w
+
+            fun yFor(value: Float): Float {
+                val norm = (value - minVal) / span
+                return h - padY - norm * usableH
+            }
+
+            val linePath = Path()
+            val fillPath = Path()
+            points.forEachIndexed { index, value ->
+                val x = index * stepX
+                val y = yFor(value)
+                if (index == 0) {
+                    linePath.moveTo(x, y)
+                    fillPath.moveTo(x, h)
+                    fillPath.lineTo(x, y)
+                } else {
+                    linePath.lineTo(x, y)
+                    fillPath.lineTo(x, y)
+                }
+            }
+            fillPath.lineTo(w, h)
+            fillPath.close()
+
+            drawPath(
+                path = fillPath,
+                color = primary.copy(alpha = 0.10f)
+            )
+
+            // PR ceiling dashed line
+            if (prCeiling != null && prCeiling in minVal..maxVal) {
+                val ceilingY = yFor(prCeiling)
+                drawLine(
+                    color = primary.copy(alpha = 0.35f),
+                    start = Offset(0f, ceilingY),
+                    end = Offset(w, ceilingY),
+                    strokeWidth = 1f,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
+                )
+            }
+
+            drawPath(
+                path = linePath,
+                color = primary,
+                style = Stroke(width = 2.5f, cap = StrokeCap.Round)
+            )
+
+            // Highlight the latest point
+            val lastX = (points.size - 1) * stepX
+            val lastY = yFor(points.last())
+            drawCircle(
+                color = primary,
+                radius = 4f,
+                center = Offset(lastX, lastY)
+            )
+            drawCircle(
+                color = primary.copy(alpha = 0.25f),
+                radius = 8f,
+                center = Offset(lastX, lastY)
             )
         }
     }
 }
 
 @Composable
-fun WorkoutHistoryCard(
-    sets: List<Set>
-) {
-    val firstSet = sets.firstOrNull()
-    val dateStr = firstSet?.timestamp?.let {
-        val formatter = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.US)
-        formatter.format(it)
-    } ?: "Unknown date"
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF0D0D0D)
-        ),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(
+private fun RepMaxChipsRow(bestByReps: List<Pair<Int, Float>>) {
+    val colors = LocalAppColors.current
+    val primary = MaterialTheme.colorScheme.primary
+    Column {
+        Text(
+            text = "BEST AT EACH REP COUNT",
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.textTertiary,
+            fontSize = 10.sp,
+            letterSpacing = 1.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp)
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = dateStr,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = LocalAppColors.current.textPrimary
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            sets.forEachIndexed { index, set ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+            bestByReps.forEach { (reps, weight) ->
+                Box(
+                    modifier = Modifier
+                        .background(
+                            color = colors.surfaceCards,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
-                    Text(
-                        text = "Set ${index + 1}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = LocalAppColors.current.textTertiary
-                    )
-                    Text(
-                        text = buildString {
-                            set.weight?.let { append("${it.toInt()} lbs") }
-                            append(" × ")
-                            set.reps?.let { append("$it reps") }
-                            if (set.isWarmup) append(" (WU)")
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = LocalAppColors.current.textPrimary
-                    )
-                }
-                if (index < sets.size - 1) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "${weight.toInt()}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = primary,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = " × $reps",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.textSecondary,
+                            fontSize = 13.sp
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SessionRow(
+    session: SessionSummary,
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    val colors = LocalAppColors.current
+    val primary = MaterialTheme.colorScheme.primary
+    val dateFormatter = remember { java.text.SimpleDateFormat("MMM d", java.util.Locale.US) }
+    val noteSet = session.workingSets.firstOrNull { !it.note.isNullOrBlank() }
+        ?: session.sets.firstOrNull { !it.note.isNullOrBlank() }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggle() }
+            .padding(vertical = 12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Left rail: date
+            Column(modifier = Modifier.width(60.dp)) {
+                Text(
+                    text = dateFormatter.format(session.date),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.textSecondary,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp
+                )
+                Text(
+                    text = relativeDay(session.date),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.textTertiary,
+                    fontSize = 11.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Center: top set + summary
+            Column(modifier = Modifier.weight(1f)) {
+                val topSet = session.topSet
+                val topText = if (topSet?.weight != null && topSet.reps != null) {
+                    "${topSet.weight.toInt()} × ${topSet.reps}"
+                } else if (topSet?.reps != null) {
+                    "${topSet.reps} reps"
+                } else {
+                    "—"
+                }
+                Text(
+                    text = topText,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = colors.textPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                val workingCount = session.workingSets.size
+                val setLabel = if (workingCount == 1) "set" else "sets"
+                val warmupSuffix = if (session.warmupCount > 0) " (+${session.warmupCount} WU)" else ""
+                val volumeStr = if (session.volume > 0f) {
+                    " · ${formatVolume(session.volume)} vol"
+                } else ""
+                val e1rmStr = session.topE1RM?.let { " · E1RM ${it.toInt()}" } ?: ""
+                Text(
+                    text = "$workingCount $setLabel$warmupSuffix$volumeStr$e1rmStr",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.textTertiary,
+                    fontSize = 12.sp
+                )
+                if (noteSet != null) {
+                    Text(
+                        text = "“${noteSet.note}”",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.textSecondary,
+                        fontStyle = FontStyle.Italic,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+            }
+
+            // PR pill
+            if (session.isPR) {
+                Box(
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .background(
+                            color = primary.copy(alpha = 0.18f),
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 7.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = "PR",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = primary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+            }
+        }
+
+        if (expanded) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Column(
+                modifier = Modifier
+                    .padding(start = 72.dp, end = 4.dp)
+            ) {
+                session.sets.forEachIndexed { index, set ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = if (set.isWarmup) "WU" else "Set ${index + 1 - session.warmupCount.coerceAtMost(index)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.textTertiary,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            text = buildString {
+                                set.weight?.let { append("${it.toInt()} lb") }
+                                set.reps?.let {
+                                    if (set.weight != null) append(" × ") else if (isNotEmpty()) append(" ")
+                                    append("$it")
+                                }
+                                set.rpe?.let { append(" @ RPE ${"%.1f".format(it)}") }
+                            }.ifBlank { "—" },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (set.isWarmup) colors.textTertiary else colors.textPrimary,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatVolume(v: Float): String {
+    val i = v.toInt()
+    return if (i >= 1000) {
+        val k = i / 1000.0
+        "${"%.1f".format(k).trimEnd('0').trimEnd('.')}k lb"
+    } else {
+        "$i lb"
     }
 }
