@@ -152,12 +152,12 @@ class StrengthMomentumUseCase @Inject constructor(
             val sample = recentExerciseSets.firstOrNull() ?: return@mapNotNull null
             if (isCardio(sample)) return@mapNotNull null
 
-            val recentTop = topWorkoutValues(recentExerciseSets)
-            val baselineTop = topWorkoutValues(baselineExerciseSets)
-            if (recentTop.isEmpty() || baselineTop.isEmpty()) return@mapNotNull null
+            val recentScores = topSessionScores(recentExerciseSets)
+            val baselineScores = topSessionScores(baselineExerciseSets)
+            if (recentScores.isEmpty() || baselineScores.isEmpty()) return@mapNotNull null
 
-            val recentValue = recentTop.average().toFloat()
-            val baselineValue = baselineTop.average().toFloat()
+            val recentValue = recentScores.average().toFloat()
+            val baselineValue = baselineScores.average().toFloat()
             if (baselineValue <= 0f) return@mapNotNull null
 
             val percentChange = (((recentValue - baselineValue) / baselineValue) * 100f)
@@ -170,16 +170,17 @@ class StrengthMomentumUseCase @Inject constructor(
                 percentChange = percentChange,
                 recentValue = recentValue,
                 baselineValue = baselineValue,
-                workoutCount = recentTop.size + baselineTop.size
+                workoutCount = recentScores.size + baselineScores.size
             )
         }
     }
 
-    private fun topWorkoutValues(sets: List<SetWithExercisePerformanceInfo>): List<Float> {
+    private fun topSessionScores(sets: List<SetWithExercisePerformanceInfo>): List<Float> {
         return sets.groupBy { it.set.workoutId }
             .mapNotNull { (_, workoutSets) ->
-                workoutSets.maxOfOrNull { performanceValue(it) }
-                    ?.takeIf { it > 0f }
+                workoutSets.sumOf { performanceValue(it).toDouble() }
+                    .toFloat()
+                    .takeIf { it > 0f }
             }
             .sortedDescending()
             .take(TOP_WORKOUT_COUNT)
@@ -336,9 +337,9 @@ class StrengthMomentumUseCase @Inject constructor(
     private fun absoluteDirection(percent: Float): MomentumDirection {
         return when {
             percent >= 5f -> MomentumDirection.STRONG_UP
-            percent >= 2f -> MomentumDirection.UP
+            percent >= NOISE_FLOOR -> MomentumDirection.UP
             percent <= -5f -> MomentumDirection.STRONG_DOWN
-            percent <= -2f -> MomentumDirection.DOWN
+            percent <= -NOISE_FLOOR -> MomentumDirection.DOWN
             else -> MomentumDirection.FLAT
         }
     }
