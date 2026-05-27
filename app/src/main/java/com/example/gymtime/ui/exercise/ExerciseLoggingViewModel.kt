@@ -55,6 +55,19 @@ data class WorkoutStats(
     val duration: String
 )
 
+data class MuscleBreakdown(
+    val muscle: String,
+    val setCount: Int,
+    val volume: Float
+)
+
+data class WorkoutPanelData(
+    val exercises: List<WorkoutExerciseSummary> = emptyList(),
+    val setPreviews: Map<Long, List<String>> = emptyMap(),
+    val muscleBreakdown: List<MuscleBreakdown> = emptyList(),
+    val stats: WorkoutStats = WorkoutStats(0, 0f, 0, "0m")
+)
+
 data class PersonalRecords(
     val heaviestWeight: Set?,
     val bestE1RM: Pair<Set, Float>?, // Set and calculated E1RM
@@ -226,6 +239,9 @@ class ExerciseLoggingViewModel @Inject constructor(
     // Workout overview data
     private val _workoutOverview = MutableStateFlow<List<WorkoutExerciseSummary>>(emptyList())
     val workoutOverview: StateFlow<List<WorkoutExerciseSummary>> = _workoutOverview
+
+    private val _workoutPanelData = MutableStateFlow(WorkoutPanelData())
+    val workoutPanelData: StateFlow<WorkoutPanelData> = _workoutPanelData
 
     private val _currentPlanItem = MutableStateFlow<WorkoutPlanSummary?>(null)
     val currentPlanItem: StateFlow<WorkoutPlanSummary?> = _currentPlanItem
@@ -769,14 +785,92 @@ class ExerciseLoggingViewModel @Inject constructor(
     fun loadWorkoutOverview() {
         viewModelScope.launch {
             _currentWorkout.value?.let { workout ->
-                // Load overview via Repository
-                workoutRepository.getWorkoutOverview(workout.id, workout.routineDayId)
-                    .collectLatest { overview ->
-                        _workoutOverview.value = overview
-                        Log.d("ExerciseLoggingVM", "Workout overview loaded: ${overview.size} exercises")
-                    }
+                combine(
+                    workoutRepository.getWorkoutOverview(workout.id, workout.routineDayId),
+                    workoutRepository.getSetsForWorkout(workout.id)
+                ) { overview, sets ->
+                    overview to sets
+                }.collectLatest { (overview, sets) ->
+                    _workoutOverview.value = overview
+                    _workoutPanelData.value = buildWorkoutPanelData(workout, overview, sets)
+                    Log.d("ExerciseLoggingVM", "Workout overview loaded: ${overview.size} exercises, ${sets.size} sets")
+                }
             }
         }
+    }
+
+    private fun buildWorkoutPanelData(
+        workout: Workout,
+        overview: List<WorkoutExerciseSummary>,
+        allSets: List<Set>
+    ): WorkoutPanelData {
+        val workingSets = allSets.filter { !it.isWarmup }
+        val setPreviews = workingSets
+            .groupBy { it.exerciseId }
+            .mapValues { (_, sets) ->
+                sets.sortedBy { it.timestamp }.map { formatSetPreview(it) }
+            }
+
+        val muscleByExerciseId = overview.associate { it.exerciseId to it.targetMuscle }
+        val muscleBreakdown = workingSets
+            .mapNotNull { set ->
+                val muscle = muscleByExerciseId[set.exerciseId] ?: return@mapNotNull null
+                val volume = (set.weight ?: 0f) * (set.reps ?: 0)
+                Triple(muscle, 1, volume)
+            }
+            .groupBy { it.first }
+            .map { (muscle, entries) ->
+                MuscleBreakdown(
+                    muscle = muscle,
+                    setCount = entries.sumOf { it.second },
+                    volume = entries.sumOf { it.third.toDouble() }.toFloat()
+                )
+            }
+            .sortedByDescending { it.volume }
+
+        val totalVolume = workingSets.sumOf { ((it.weight ?: 0f) * (it.reps ?: 0)).toDouble() }.toFloat()
+        val durationMs = Date().time - workout.startTime.time
+        val minutes = durationMs / 1000 / 60
+        val hours = minutes / 60
+        val remainingMinutes = minutes % 60
+        val duration = if (hours > 0) "${hours}h ${remainingMinutes}m" else "${minutes}m"
+
+        val stats = WorkoutStats(
+            totalSets = workingSets.size,
+            totalVolume = totalVolume,
+            exerciseCount = overview.size,
+            duration = duration
+        )
+
+        return WorkoutPanelData(
+            exercises = overview,
+            setPreviews = setPreviews,
+            muscleBreakdown = muscleBreakdown,
+            stats = stats
+        )
+    }
+
+    private fun formatSetPreview(set: Set): String {
+        val w = set.weight
+        val r = set.reps
+        val dur = set.durationSeconds
+        val dist = set.distanceMeters
+        return when {
+            w != null && w > 0f && r != null && r > 0 -> "${w.toInt()}×$r"
+            r != null && r > 0 -> "${r}r"
+            w != null && w > 0f && dur != null && dur > 0 -> "${w.toInt()}×${formatDurationShort(dur)}"
+            w != null && w > 0f && dist != null && dist > 0f -> "${w.toInt()}×${dist.toInt()}m"
+            dur != null && dur > 0 -> formatDurationShort(dur)
+            dist != null && dist > 0f -> "${dist.toInt()}m"
+            else -> "—"
+        }
+    }
+
+    private fun formatDurationShort(seconds: Int): String {
+        if (seconds < 60) return "${seconds}s"
+        val m = seconds / 60
+        val s = seconds % 60
+        return if (s == 0) "${m}m" else "${m}m${s}s"
     }
 
     // Calculate personal records for the current exercise
