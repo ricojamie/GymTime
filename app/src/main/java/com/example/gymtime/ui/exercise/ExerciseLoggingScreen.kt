@@ -30,10 +30,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Summarize
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
@@ -131,6 +131,7 @@ fun ExerciseLoggingScreen(
     val timerVibrateEnabled by viewModel.timerVibrateEnabled.collectAsState(initial = true)
     val lastWorkoutSets by viewModel.lastWorkoutSets.collectAsState()
     val workoutOverview by viewModel.workoutOverview.collectAsState()
+    val workoutPanelData by viewModel.workoutPanelData.collectAsState()
     val currentPlanItem by viewModel.currentPlanItem.collectAsState()
     val personalBestsByReps by viewModel.personalBestsByReps.collectAsState()
     val attemptRecommendation by viewModel.attemptRecommendation.collectAsState()
@@ -319,7 +320,7 @@ fun ExerciseLoggingScreen(
                         // Workout overview icon
                         IconButton(onClick = { showWorkoutOverview = true }) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.List,
+                                imageVector = Icons.Default.Summarize,
                                 contentDescription = "Workout Overview",
                                 tint = MaterialTheme.colorScheme.primary
                             )
@@ -328,7 +329,7 @@ fun ExerciseLoggingScreen(
                         // Exercise history icon
                         IconButton(onClick = { showExerciseHistory = true }) {
                             Icon(
-                                imageVector = Icons.Default.Info,
+                                imageVector = Icons.Default.History,
                                 contentDescription = "Exercise History",
                                 tint = MaterialTheme.colorScheme.primary
                             )
@@ -1298,9 +1299,8 @@ fun ExerciseLoggingScreen(
             scrimColor = Color.Black.copy(alpha = 0.5f)
         ) {
             WorkoutOverviewCommandPanel(
-                exercises = workoutOverview,
+                panelData = workoutPanelData,
                 currentExerciseId = exercise?.id,
-                workoutStats = viewModel.getWorkoutStats(),
                 onExerciseClick = { exerciseId ->
                     showWorkoutOverview = false
                     if (exerciseId != exercise?.id) {
