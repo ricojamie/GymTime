@@ -62,6 +62,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
 import com.example.gymtime.R
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -169,6 +170,13 @@ fun ExerciseLoggingScreen(
     var noteText by remember { mutableStateOf("") }
 
     val view = LocalView.current
+
+    DisposableEffect(viewModel) {
+        viewModel.startWearPublishing()
+        onDispose {
+            viewModel.stopWearPublishing()
+        }
+    }
     
     // Observe navigation events from ViewModel
     LaunchedEffect(Unit) {

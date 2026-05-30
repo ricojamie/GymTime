@@ -16,6 +16,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -167,27 +168,27 @@ private fun ActiveSessionScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = session.exerciseName,
             color = Color.White,
-            fontSize = 17.sp,
+            fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
-            lineHeight = 19.sp
+            lineHeight = 17.sp
         )
         Text(
             text = "SET ${session.setNumber}  ${session.targetMuscle.uppercase(Locale.US)}",
             color = MaterialTheme.colorScheme.primary,
-            fontSize = 10.sp,
+            fontSize = 9.sp,
             fontWeight = FontWeight.Bold
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         TimerControls(
             session = session,
@@ -195,7 +196,7 @@ private fun ActiveSessionScreen(
             onStopTimer = onStopTimer
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         LogTypeFields(
             session = session,
@@ -212,17 +213,17 @@ private fun ActiveSessionScreen(
             enabled = session.canLog,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp),
+                .height(42.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = Color.Black
             ),
-            shape = RoundedCornerShape(24.dp)
+            shape = RoundedCornerShape(21.dp)
         ) {
-            Text("LOG SET", fontWeight = FontWeight.Black, fontSize = 15.sp)
+            Text("LOG SET", fontWeight = FontWeight.Black, fontSize = 14.sp)
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
     }
 }
 
@@ -235,8 +236,8 @@ private fun TimerControls(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-            .padding(8.dp),
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+            .padding(horizontal = 7.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -246,12 +247,12 @@ private fun TimerControls(
                 else -> formatSeconds(session.restSeconds)
             },
             color = MaterialTheme.colorScheme.primary,
-            fontSize = 22.sp,
+            fontSize = 20.sp,
             fontWeight = FontWeight.Black
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)
+            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally)
         ) {
             SmallPill(text = "-30") { onAdjustTimer(-30) }
             SmallPill(text = "+30") { onAdjustTimer(30) }
@@ -371,20 +372,20 @@ private fun FieldRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp),
+            .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         SmallRoundButton("-") { onMinus() }
         Column(
             modifier = Modifier.weight(1f),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(label, color = Color.White.copy(alpha = 0.64f), fontSize = 10.sp)
+            Text(label, color = Color.White.copy(alpha = 0.64f), fontSize = 9.sp)
             Text(
                 value,
                 color = Color.White,
-                fontSize = 16.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -402,6 +403,7 @@ private fun WarmupToggle(
     TextButton(
         onClick = { onCheckedChange(!checked) },
         modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(vertical = 2.dp),
         colors = ButtonDefaults.textButtonColors(
             contentColor = if (checked) MaterialTheme.colorScheme.primary else Color.White
         )
@@ -409,7 +411,7 @@ private fun WarmupToggle(
         Text(
             text = if (checked) "WARMUP ON" else "WARMUP OFF",
             fontWeight = FontWeight.Bold,
-            fontSize = 12.sp
+            fontSize = 11.sp
         )
     }
 }
@@ -418,12 +420,12 @@ private fun WarmupToggle(
 private fun SmallRoundButton(text: String, onClick: () -> Unit) {
     OutlinedButton(
         onClick = onClick,
-        modifier = Modifier.size(38.dp),
-        contentPadding = ButtonDefaults.ContentPadding,
+        modifier = Modifier.size(34.dp),
+        contentPadding = PaddingValues(0.dp),
         shape = CircleShape,
         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
     ) {
-        Text(text, fontWeight = FontWeight.Black)
+        Text(text, fontWeight = FontWeight.Black, fontSize = 14.sp)
     }
 }
 
@@ -431,11 +433,12 @@ private fun SmallRoundButton(text: String, onClick: () -> Unit) {
 private fun SmallPill(text: String, onClick: () -> Unit) {
     OutlinedButton(
         onClick = onClick,
-        modifier = Modifier.height(32.dp),
-        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.height(28.dp),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
     ) {
-        Text(text, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text(text, fontSize = 10.sp, fontWeight = FontWeight.Bold)
     }
 }
 

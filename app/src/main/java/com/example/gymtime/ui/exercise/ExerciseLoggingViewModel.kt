@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.Date
 import javax.inject.Inject
@@ -260,6 +261,9 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _navigationEvents = Channel<Long>(Channel.BUFFERED)
     val navigationEvents = _navigationEvents.receiveAsFlow()
 
+    private var wearPublisherId: Long? = null
+    private var wearPublishJob: Job? = null
+
     // Next exercise in routine
     private val _nextExerciseId = MutableStateFlow<Long?>(null)
     val nextExerciseId: StateFlow<Long?> = _nextExerciseId
@@ -271,7 +275,6 @@ class ExerciseLoggingViewModel @Inject constructor(
         Log.d("ExerciseLoggingVM", "Binding to RestTimerService")
 
         observeWearCommands()
-        publishWearSnapshots()
 
         viewModelScope.launch {
             // Load exercise via Repository
@@ -421,6 +424,23 @@ class ExerciseLoggingViewModel @Inject constructor(
 
     fun updateWeight(value: String) {
         _weight.value = value
+    }
+
+    fun startWearPublishing() {
+        if (wearPublishJob != null) return
+        val publisherId = activeWearSessionRepository.beginPublishing()
+        wearPublisherId = publisherId
+        wearPublishJob = publishWearSnapshots(publisherId)
+    }
+
+    fun stopWearPublishing() {
+        val publisherId = wearPublisherId
+        wearPublishJob?.cancel()
+        wearPublishJob = null
+        wearPublisherId = null
+        if (publisherId != null) {
+            activeWearSessionRepository.stopPublishing(publisherId)
+        }
     }
 
     fun updateCalories(value: String) {
@@ -908,6 +928,7 @@ class ExerciseLoggingViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        stopWearPublishing()
         super.onCleared()
         // Unbind service
         if (serviceBound) {
@@ -979,8 +1000,8 @@ class ExerciseLoggingViewModel @Inject constructor(
         return true
     }
 
-    private fun publishWearSnapshots() {
-        viewModelScope.launch {
+    private fun publishWearSnapshots(publisherId: Long): Job {
+        return viewModelScope.launch {
             val workoutState = combine(_currentWorkout, _exercise, _loggedSets) { workout, exercise, loggedSets ->
                 WearWorkoutState(
                     workoutId = workout?.id,
@@ -1035,7 +1056,7 @@ class ExerciseLoggingViewModel @Inject constructor(
                     timerRunning = timer.timerRunning
                 )
             }.collectLatest { snapshot ->
-                activeWearSessionRepository.publish(snapshot)
+                activeWearSessionRepository.publish(publisherId, snapshot)
             }
         }
     }
