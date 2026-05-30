@@ -58,7 +58,11 @@
       "Bash(awk 'NR<417 || NR>654' \"D:/Jamie/AI_Stuff/Coding_Projects/Gym_App/app/src/main/java/com/example/gymtime/ui/exercise/ExerciseLoggingComponents.kt\")",
       "Bash(mv \"D:/Jamie/AI_Stuff/Coding_Projects/Gym_App/app/src/main/java/com/example/gymtime/ui/exercise/ExerciseLoggingComponents.kt.tmp\" \"D:/Jamie/AI_Stuff/Coding_Projects/Gym_App/app/src/main/java/com/example/gymtime/ui/exercise/ExerciseLoggingComponents.kt\")",
       "Bash(./gradlew :app:compileDebugKotlin)",
-      "Bash(./gradlew :app:testDebugUnitTest)"
+      "Bash(./gradlew :app:testDebugUnitTest)",
+      "Bash(git -C \"D:/Jamie/AI_Stuff/Coding_Projects/Gym_App\" log --all --oneline --grep=\"version\\\\|bump\\\\|release\")",
+      "Bash(git -C \"D:/Jamie/AI_Stuff/Coding_Projects/Gym_App\" show 22cc110:app/build.gradle.kts)",
+      "Bash(git -C \"D:/Jamie/AI_Stuff/Coding_Projects/Gym_App\" log --all --oneline)",
+      "Bash(git -C \"D:/Jamie/AI_Stuff/Coding_Projects/Gym_App\" show HEAD:app/build.gradle.kts)"
     ],
     "deny": [],
     "ask": []

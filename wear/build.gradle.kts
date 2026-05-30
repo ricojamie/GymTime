@@ -14,8 +14,8 @@ android {
         applicationId = "com.example.gymtime"
         minSdk = 34
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = (project.property("gymVersionCode") as String).toInt()
+        versionName = project.property("gymVersionName") as String
     }
 
     buildTypes {

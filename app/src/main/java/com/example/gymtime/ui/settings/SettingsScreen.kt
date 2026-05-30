@@ -883,7 +883,11 @@ fun SettingsScreen(
                         "🔥 Smarter streaks\n" +
                         "Set your own rest days per week so Iron Streak matches how you actually train.\n\n" +
                         "📊 Analytics glow-up\n" +
-                        "Radar chart, range filters, better cardio-aware stats, and a much cleaner balance view.",
+                        "Radar chart, range filters, better cardio-aware stats, and a much cleaner balance view.\n\n" +
+                        "🔧 Smoother updates\n" +
+                        "Fixed an issue where the app could occasionally revert to an older version after updating.\n\n" +
+                        "Watch logging polish\n" +
+                        "Reduced the Wear OS logger size and fixed brief stale exercise flashes when switching exercises.",
                         color = LocalAppColors.current.textPrimary
                     )
                 }

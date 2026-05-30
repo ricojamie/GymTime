@@ -16,8 +16,8 @@ android {
         applicationId = "com.example.gymtime"
         minSdk = 34
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.6.0"
+        versionCode = (project.property("gymVersionCode") as String).toInt()
+        versionName = project.property("gymVersionName") as String
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

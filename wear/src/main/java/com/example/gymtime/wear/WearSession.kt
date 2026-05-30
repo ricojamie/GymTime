@@ -22,7 +22,8 @@ data class WearSession(
     val timerRemainingSeconds: Int = 0,
     val timerRunning: Boolean = false,
     val timerCompletionId: Long = 0,
-    val setSaveConfirmationId: Long = 0
+    val setSaveConfirmationId: Long = 0,
+    val updatedAt: Long = 0
 ) {
     val canLog: Boolean
         get() = when (logType) {
@@ -69,7 +70,8 @@ data class WearSession(
             timerRemainingSeconds = dataMap.getInt(WearContract.KEY_TIMER_REMAINING_SECONDS, 0),
             timerRunning = dataMap.getBoolean(WearContract.KEY_TIMER_RUNNING, false),
             timerCompletionId = dataMap.getLong(WearContract.KEY_TIMER_COMPLETION_ID, 0),
-            setSaveConfirmationId = dataMap.getLong(WearContract.KEY_SET_SAVE_CONFIRMATION_ID, 0)
+            setSaveConfirmationId = dataMap.getLong(WearContract.KEY_SET_SAVE_CONFIRMATION_ID, 0),
+            updatedAt = dataMap.getLong(WearContract.KEY_UPDATED_AT, 0)
         )
     }
 }

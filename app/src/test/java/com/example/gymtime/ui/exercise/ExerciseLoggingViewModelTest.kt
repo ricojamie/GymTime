@@ -82,7 +82,9 @@ class ExerciseLoggingViewModelTest {
         every { volumeOrbRepository.orbState } returns MutableStateFlow(mockk(relaxed = true))
         every { activeWearSessionRepository.draftPatches } returns wearDraftPatches
         every { activeWearSessionRepository.logRequests } returns wearLogRequests
-        every { activeWearSessionRepository.publish(any()) } just Runs
+        every { activeWearSessionRepository.beginPublishing() } returns 42L
+        every { activeWearSessionRepository.publish(42L, any()) } just Runs
+        every { activeWearSessionRepository.stopPublishing(42L) } just Runs
         every { activeWearSessionRepository.clear() } just Runs
 
         viewModel = ExerciseLoggingViewModel(
@@ -104,6 +106,29 @@ class ExerciseLoggingViewModelTest {
         advanceUntilIdle()
         assertEquals(testExercise, viewModel.exercise.value)
         assertEquals(testWorkout, viewModel.currentWorkout.value)
+    }
+
+    @Test
+    fun `wear publishing starts only when requested and stops with active owner`() = runTest {
+        advanceUntilIdle()
+
+        verify(exactly = 0) { activeWearSessionRepository.beginPublishing() }
+        verify(exactly = 0) { activeWearSessionRepository.publish(any<Long>(), any()) }
+
+        viewModel.startWearPublishing()
+        advanceUntilIdle()
+
+        verify(exactly = 1) { activeWearSessionRepository.beginPublishing() }
+        verify(atLeast = 1) {
+            activeWearSessionRepository.publish(
+                42L,
+                match { it.exerciseId == 1L && it.exerciseName == "Bench Press" }
+            )
+        }
+
+        viewModel.stopWearPublishing()
+
+        verify(exactly = 1) { activeWearSessionRepository.stopPublishing(42L) }
     }
 
     @Test

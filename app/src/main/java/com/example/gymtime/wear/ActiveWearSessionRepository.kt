@@ -118,8 +118,10 @@ class ActiveWearSessionRepository @Inject constructor(
 ) {
     private val appContext = context.applicationContext
     private val dataClient by lazy { Wearable.getDataClient(appContext) }
+    private val publisherCounter = AtomicLong(0)
     private val completionCounter = AtomicLong(0)
     private val saveConfirmationCounter = AtomicLong(0)
+    private var activePublisherId: Long? = null
     private var lastSnapshot: WearSessionSnapshot = WearSessionSnapshot.inactive()
     private var lastCompletionId: Long = 0
     private var lastSaveConfirmationId: Long = 0
@@ -133,7 +135,33 @@ class ActiveWearSessionRepository @Inject constructor(
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
 
-    fun publish(snapshot: WearSessionSnapshot) {
+    @Synchronized
+    fun beginPublishing(): Long {
+        val publisherId = publisherCounter.incrementAndGet()
+        activePublisherId = publisherId
+        return publisherId
+    }
+
+    @Synchronized
+    fun publish(publisherId: Long, snapshot: WearSessionSnapshot) {
+        if (activePublisherId != publisherId) return
+        publishSnapshotState(snapshot)
+    }
+
+    @Synchronized
+    fun stopPublishing(publisherId: Long) {
+        if (activePublisherId != publisherId) return
+        activePublisherId = null
+        publishSnapshotState(WearSessionSnapshot.inactive())
+    }
+
+    @Synchronized
+    fun clear() {
+        activePublisherId = null
+        publishSnapshotState(WearSessionSnapshot.inactive())
+    }
+
+    private fun publishSnapshotState(snapshot: WearSessionSnapshot) {
         val completionId = if (
             lastSnapshot.timerRunning &&
             !snapshot.timerRunning &&
@@ -151,6 +179,7 @@ class ActiveWearSessionRepository @Inject constructor(
         publishSnapshot(snapshot, completionId)
     }
 
+    @Synchronized
     fun confirmSetSaved() {
         lastSaveConfirmationId = saveConfirmationCounter.incrementAndGet()
         publishSnapshot(lastSnapshot, lastCompletionId)
@@ -165,10 +194,6 @@ class ActiveWearSessionRepository @Inject constructor(
             .addOnFailureListener { error ->
                 Log.w(TAG, "Unable to publish Wear session", error)
             }
-    }
-
-    fun clear() {
-        publish(WearSessionSnapshot.inactive())
     }
 
     fun applyDraftPatch(patch: WearDraftPatch) {

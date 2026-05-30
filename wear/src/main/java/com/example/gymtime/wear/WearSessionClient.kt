@@ -25,6 +25,7 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
     val setSavedEvents: SharedFlow<Unit> = _setSavedEvents
 
     private var lastSeenSaveConfirmationId = 0L
+    private var lastSeenUpdatedAt = 0L
 
     fun start() {
         dataClient.addListener(this)
@@ -84,6 +85,11 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
     }
 
     private fun handleSessionSnapshot(session: WearSession, emitSaveConfirmation: Boolean) {
+        if (session.updatedAt > 0 && session.updatedAt < lastSeenUpdatedAt) return
+        if (session.updatedAt > lastSeenUpdatedAt) {
+            lastSeenUpdatedAt = session.updatedAt
+        }
+
         _session.value = session
         val confirmationId = session.setSaveConfirmationId
         if (confirmationId > 0 && confirmationId != lastSeenSaveConfirmationId) {
