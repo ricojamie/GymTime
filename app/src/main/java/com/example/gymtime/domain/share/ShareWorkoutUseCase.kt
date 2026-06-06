@@ -17,6 +17,10 @@ class ShareWorkoutUseCase @Inject constructor(
      * the workout has no sets (nothing meaningful to share).
      */
     suspend operator fun invoke(workoutId: Long): String? {
+        return buildShareableWorkout(workoutId)?.let { WorkoutShareFormatter.format(it) }
+    }
+
+    suspend fun buildShareableWorkout(workoutId: Long): ShareableWorkout? {
         val workout = workoutDao.getWorkoutById(workoutId).first()
         val rawSets = setDao.getWorkoutSetsWithExercises(workoutId)
         if (rawSets.isEmpty()) return null
@@ -40,15 +44,13 @@ class ShareWorkoutUseCase @Inject constructor(
             buildExercise(exerciseId, workoutStartMs, infos)
         }
 
-        val shareable = ShareableWorkout(
+        return ShareableWorkout(
             date = workout.startTime,
             durationMinutes = durationMinutes,
             totalVolume = totalVolume,
             totalWorkingSets = workingSets.size,
             exercises = exercises
         )
-
-        return WorkoutShareFormatter.format(shareable)
     }
 
     private suspend fun buildExercise(
@@ -56,20 +58,9 @@ class ShareWorkoutUseCase @Inject constructor(
         workoutStartMs: Long,
         infos: List<SetWithExerciseInfo>
     ): ShareableExercise {
-        // Pre-workout baseline: heaviest non-warmup set strictly before this workout.
-        val priorBest = setDao.getPersonalBestBefore(exerciseId, workoutStartMs)?.weight
         val name = infos.firstOrNull()?.exerciseName.orEmpty()
         val muscle = infos.firstOrNull()?.targetMuscle.orEmpty()
-
-        // Mark only the single heaviest working set as the PR (if it beats prior best).
-        val heaviestWorkingSetId = infos
-            .filter { !it.set.isWarmup && it.set.weight != null }
-            .maxByOrNull { it.set.weight ?: 0f }
-            ?.takeIf { winner ->
-                val w = winner.set.weight ?: return@takeIf false
-                priorBest == null || w > priorBest
-            }
-            ?.set?.id
+        val personalRecordSetIds = detectRepPersonalRecords(exerciseId, workoutStartMs, infos)
 
         val sets = infos.map { info ->
             val s = info.set
@@ -77,9 +68,64 @@ class ShareWorkoutUseCase @Inject constructor(
                 weight = s.weight,
                 reps = s.reps,
                 isWarmup = s.isWarmup,
-                isPersonalRecord = s.id == heaviestWorkingSetId
+                isPersonalRecord = s.id in personalRecordSetIds,
+                durationSeconds = s.durationSeconds,
+                distanceMeters = s.distanceMeters,
+                calories = s.calories
             )
         }
         return ShareableExercise(name = name, targetMuscle = muscle, sets = sets)
+    }
+
+    private suspend fun detectRepPersonalRecords(
+        exerciseId: Long,
+        workoutStartMs: Long,
+        infos: List<SetWithExerciseInfo>
+    ): Set<Long> {
+        val runningBestByReps = setDao
+            .getPersonalBestsWithTimestampsBefore(exerciseId, workoutStartMs)
+            .associate { it.reps to it.maxWeight }
+            .toMutableMap()
+        val personalRecordSetIds = mutableSetOf<Long>()
+
+        infos.sortedBy { it.set.timestamp.time }.forEach { info ->
+            val set = info.set
+            val reps = set.reps ?: return@forEach
+            val weight = set.weight ?: return@forEach
+            if (set.isWarmup) return@forEach
+
+            val priorBest = runningBestByReps[reps]
+            if (priorBest == null || weight > priorBest) {
+                personalRecordSetIds += set.id
+                runningBestByReps[reps] = weight
+            }
+        }
+
+        return removeDominatedPersonalRecords(infos, personalRecordSetIds)
+    }
+
+    private fun removeDominatedPersonalRecords(
+        infos: List<SetWithExerciseInfo>,
+        personalRecordSetIds: Set<Long>
+    ): Set<Long> {
+        val recordSets = infos
+            .map { it.set }
+            .filter { it.id in personalRecordSetIds && it.weight != null && it.reps != null }
+
+        return recordSets
+            .filterNot { candidate ->
+                recordSets.any { challenger ->
+                    if (candidate.id == challenger.id) return@any false
+                    val candidateWeight = candidate.weight ?: return@any false
+                    val candidateReps = candidate.reps ?: return@any false
+                    val challengerWeight = challenger.weight ?: return@any false
+                    val challengerReps = challenger.reps ?: return@any false
+                    val atLeastAsGood = challengerWeight >= candidateWeight && challengerReps >= candidateReps
+                    val strictlyBetter = challengerWeight > candidateWeight || challengerReps > candidateReps
+                    atLeastAsGood && strictlyBetter
+                }
+            }
+            .map { it.id }
+            .toSet()
     }
 }

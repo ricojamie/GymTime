@@ -11,6 +11,10 @@ import com.example.gymtime.data.db.entity.WorkoutWithMuscles
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.repository.WorkoutRepository
 import com.example.gymtime.domain.share.ShareWorkoutUseCase
+import com.example.gymtime.util.ShareImagePalette
+import com.example.gymtime.util.WorkoutShareFormatter
+import com.example.gymtime.util.WorkoutShareImageGenerator
+import com.example.gymtime.util.WorkoutSharePayload
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,15 +31,19 @@ class HistoryViewModel @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val setDao: SetDao,
     private val workoutRepository: WorkoutRepository,
-    private val shareWorkoutUseCase: ShareWorkoutUseCase
+    private val shareWorkoutUseCase: ShareWorkoutUseCase,
+    private val workoutShareImageGenerator: WorkoutShareImageGenerator
 ) : ViewModel() {
 
     // Navigation event for resuming workout
     private val _resumeWorkoutEvent = Channel<Long>(Channel.BUFFERED)
     val resumeWorkoutEvent = _resumeWorkoutEvent.receiveAsFlow()
 
-    private val _shareEvent = Channel<String>(Channel.BUFFERED)
+    private val _shareEvent = Channel<WorkoutSharePayload>(Channel.BUFFERED)
     val shareEvent = _shareEvent.receiveAsFlow()
+
+    private val _copyEvent = Channel<String>(Channel.BUFFERED)
+    val copyEvent = _copyEvent.receiveAsFlow()
 
     private val _allWorkouts = MutableStateFlow<List<WorkoutWithMuscles>>(emptyList())
     val allWorkouts: StateFlow<List<WorkoutWithMuscles>> = _allWorkouts.asStateFlow()
@@ -116,10 +124,28 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
-    fun shareWorkout(workoutId: Long) {
+    fun shareWorkout(workoutId: Long, palette: ShareImagePalette) {
         viewModelScope.launch {
             try {
-                shareWorkoutUseCase(workoutId)?.let { _shareEvent.send(it) }
+                shareWorkoutUseCase.buildShareableWorkout(workoutId)?.let { workout ->
+                    _shareEvent.send(
+                        WorkoutSharePayload(
+                            imageUri = workoutShareImageGenerator.generate(workout, palette)
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error building share text", e)
+            }
+        }
+    }
+
+    fun copyWorkout(workoutId: Long) {
+        viewModelScope.launch {
+            try {
+                shareWorkoutUseCase.buildShareableWorkout(workoutId)?.let { workout ->
+                    _copyEvent.send(WorkoutShareFormatter.format(workout))
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error building share text", e)
             }

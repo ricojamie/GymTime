@@ -868,26 +868,18 @@ fun SettingsScreen(
             text = {
                 Column {
                     Text(
-                        "Summer Shred Update 💪",
+                        "Share & Sort Update 📸",
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "⏱️ New ways to log work\n" +
-                        "Track Weight x Time and Calories x Time alongside the classic strength flows.\n\n" +
-                        "🏃 Distance your way\n" +
-                        "Cardio now supports meters, kilometers, yards, feet, miles, steps, and floors, with live distance-type switching while you log.\n\n" +
-                        "🎨 Theme lab unlocked\n" +
-                        "Pick from 3 polished presets, spin up a custom accent color, choose from 5 fonts, or upload your own font file.\n\n" +
-                        "🔥 Smarter streaks\n" +
-                        "Set your own rest days per week so Iron Streak matches how you actually train.\n\n" +
-                        "📊 Analytics glow-up\n" +
-                        "Radar chart, range filters, better cardio-aware stats, and a much cleaner balance view.\n\n" +
-                        "🔧 Smoother updates\n" +
-                        "Fixed an issue where the app could occasionally revert to an older version after updating.\n\n" +
-                        "Watch logging polish\n" +
-                        "Reduced the Wear OS logger size and fixed brief stale exercise flashes when switching exercises.",
+                        "Share Your Wins 📸\n" +
+                        "Turn any finished workout into a clean shareable image — sets, volume, and PRs ready to post to your story.\n\n" +
+                        "🔀 Find exercises faster\n" +
+                        "New sort options on the exercise picker: A-Z, all-time sets, last 90 days, and Recently used — so your go-to lifts surface first. Works alongside body-part filters.\n\n" +
+                        "📊 Exercise metrics\n" +
+                        "Each exercise now shows usage stats so you can see what you're really training.",
                         color = LocalAppColors.current.textPrimary
                     )
                 }

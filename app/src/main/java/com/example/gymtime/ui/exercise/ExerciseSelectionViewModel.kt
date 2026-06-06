@@ -3,6 +3,7 @@ package com.example.gymtime.ui.exercise
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.gymtime.data.db.dao.ExerciseUsageRow
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.repository.ExerciseRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,7 +16,15 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import java.util.Calendar
 import javax.inject.Inject
+
+enum class ExerciseSortMode(val label: String) {
+    ALPHABETICAL("A-Z"),
+    ALL_TIME_SETS("All-time sets"),
+    RECENT_SETS("90d sets"),
+    RECENTLY_USED("Recently used")
+}
 
 @HiltViewModel
 class ExerciseSelectionViewModel @Inject constructor(
@@ -38,6 +47,9 @@ class ExerciseSelectionViewModel @Inject constructor(
     private val _selectedMuscles = MutableStateFlow<Set<String>>(emptySet())
     val selectedMuscles: StateFlow<Set<String>> = _selectedMuscles
 
+    private val _sortMode = MutableStateFlow(ExerciseSortMode.ALPHABETICAL)
+    val sortMode: StateFlow<ExerciseSortMode> = _sortMode
+
     // Superset selection mode state
     private val _isSupersetModeEnabled = MutableStateFlow(supersetMode)
     val isSupersetModeEnabled: StateFlow<Boolean> = _isSupersetModeEnabled
@@ -58,24 +70,49 @@ class ExerciseSelectionViewModel @Inject constructor(
     // Maximum exercises allowed in a superset
     val maxSupersetExercises = 10
 
-    private val allExercises: Flow<List<Exercise>> = exerciseRepository.getAllExercises()
+    private val recentUsageStartMs: Long = Calendar.getInstance().apply {
+        add(Calendar.DAY_OF_YEAR, -90)
+    }.timeInMillis
+
+    private val allExercises: Flow<List<ExerciseUsageRow>> =
+        exerciseRepository.getExercisesWithUsageStats(recentUsageStartMs)
 
     // Get muscle groups from database
     val availableMuscles: Flow<List<String>> = exerciseRepository.getAllMuscleGroups().map { groups ->
         groups.map { it.name }.sorted()
     }
 
-    // Filtered exercises based on search query and selected muscles, sorted alphabetically
-    val filteredExercises: Flow<List<Exercise>> = combine(
+    // Filtered exercises based on search query and selected muscles.
+    val filteredExercises: Flow<List<ExerciseUsageRow>> = combine(
         allExercises,
         _searchQuery,
-        _selectedMuscles
-    ) { exercises, query, selectedMuscles ->
-        exercises.filter { exercise ->
+        _selectedMuscles,
+        _sortMode
+    ) { rows, query, selectedMuscles, sortMode ->
+        val filtered = rows.filter { row ->
+            val exercise = row.exercise
             val matchesSearch = exercise.name.contains(query, ignoreCase = true)
             val matchesMuscle = selectedMuscles.isEmpty() || exercise.targetMuscle in selectedMuscles
             matchesSearch && matchesMuscle
-        }.sortedBy { it.name.lowercase() }
+        }
+
+        when (sortMode) {
+            ExerciseSortMode.ALPHABETICAL -> filtered.sortedBy { it.exercise.name.lowercase() }
+            ExerciseSortMode.ALL_TIME_SETS -> filtered.sortedWith(
+                compareByDescending<ExerciseUsageRow> { it.allTimeSetCount }
+                    .thenBy { it.exercise.name.lowercase() }
+            )
+            ExerciseSortMode.RECENT_SETS -> filtered.sortedWith(
+                compareByDescending<ExerciseUsageRow> { it.recentSetCount }
+                    .thenBy { it.exercise.name.lowercase() }
+            )
+            // Most recently used first; exercises that have never been used (null
+            // lastUsedMs) sort to the bottom, then alphabetically as a tiebreaker.
+            ExerciseSortMode.RECENTLY_USED -> filtered.sortedWith(
+                compareByDescending<ExerciseUsageRow> { it.lastUsedMs ?: Long.MIN_VALUE }
+                    .thenBy { it.exercise.name.lowercase() }
+            )
+        }
     }
 
     fun updateSearchQuery(query: String) {
@@ -94,6 +131,10 @@ class ExerciseSelectionViewModel @Inject constructor(
 
     fun clearMuscleFilters() {
         _selectedMuscles.value = emptySet()
+    }
+
+    fun updateSortMode(mode: ExerciseSortMode) {
+        _sortMode.value = mode
     }
 
     fun deleteExercise(exerciseId: Long) {

@@ -392,7 +392,32 @@ private fun MomentumDetailRow(muscle: MuscleMomentum) {
                 color = LocalAppColors.current.textTertiary
             )
         }
+
+        val weeklyVolume = weeklyVolumeText(muscle)
+        if (weeklyVolume.isNotBlank()) {
+            Text(
+                text = weeklyVolume,
+                style = MaterialTheme.typography.labelSmall,
+                color = LocalAppColors.current.textSecondary,
+                maxLines = 1
+            )
+        }
     }
+}
+
+private fun weeklyVolumeText(muscle: MuscleMomentum): String {
+    if (muscle.currentWeekVolume <= 0f && muscle.previousWeekVolume <= 0f) return ""
+    val numberFormat = NumberFormat.getNumberInstance(Locale.US)
+    val current = numberFormat.format(muscle.currentWeekVolume.toLong())
+    val previous = numberFormat.format(muscle.previousWeekVolume.toLong())
+    val delta = if (muscle.previousWeekVolume > 0f) {
+        val pct = ((muscle.currentWeekVolume - muscle.previousWeekVolume) / muscle.previousWeekVolume) * 100f
+        val sign = if (pct > 0f) "+" else ""
+        " ($sign${String.format(Locale.US, "%.0f", pct)}%)"
+    } else {
+        ""
+    }
+    return "Week volume: $current lbs vs $previous lbs$delta"
 }
 
 @Composable

@@ -2,11 +2,19 @@ package com.example.gymtime.data.db.dao
 
 import androidx.room.Dao
 import androidx.room.Delete
+import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
 import com.example.gymtime.data.db.entity.Exercise
 import kotlinx.coroutines.flow.Flow
+
+data class ExerciseUsageRow(
+    @Embedded val exercise: Exercise,
+    val allTimeSetCount: Int,
+    val recentSetCount: Int,
+    val lastUsedMs: Long?
+)
 
 @Dao
 interface ExerciseDao {
@@ -24,6 +32,18 @@ interface ExerciseDao {
 
     @Query("SELECT * FROM exercises")
     fun getAllExercises(): Flow<List<Exercise>>
+
+    @Query("""
+        SELECT
+            e.*,
+            COUNT(CASE WHEN s.isWarmup = 0 AND s.isComplete = 1 THEN s.id END) as allTimeSetCount,
+            COUNT(CASE WHEN s.isWarmup = 0 AND s.isComplete = 1 AND s.timestamp >= :recentStartMs THEN s.id END) as recentSetCount,
+            MAX(CASE WHEN s.isWarmup = 0 AND s.isComplete = 1 THEN s.timestamp END) as lastUsedMs
+        FROM exercises e
+        LEFT JOIN sets s ON e.id = s.exerciseId
+        GROUP BY e.id
+    """)
+    fun getExercisesWithUsageStats(recentStartMs: Long): Flow<List<ExerciseUsageRow>>
 
     @Query("SELECT * FROM exercises WHERE id = :id")
     fun getExerciseById(id: Long): Flow<Exercise>

@@ -167,6 +167,55 @@ class SetDaoTest {
     }
 
     @Test
+    fun exerciseUsageStatsCountsCompletedWorkingSetsOnly() = runTest {
+        val workoutId = createTestWorkout()
+        exerciseDao.insertExercise(testExercise.copy(id = 2L, name = "Squat", targetMuscle = "Legs"))
+        val now = System.currentTimeMillis()
+        val dayMs = 24L * 60L * 60L * 1000L
+        val recentStart = now - (90L * dayMs)
+
+        setDao.insertSet(testSet(workoutId, exerciseId = 1L, weight = 100f, reps = 10, timestamp = now - dayMs))
+        setDao.insertSet(testSet(workoutId, exerciseId = 1L, weight = 90f, reps = 10, timestamp = now - (120L * dayMs)))
+        setDao.insertSet(testSet(workoutId, exerciseId = 1L, weight = 50f, reps = 10, isWarmup = true, timestamp = now))
+        setDao.insertSet(testSet(workoutId, exerciseId = 1L, weight = 110f, reps = 10, isComplete = false, timestamp = now))
+        setDao.insertSet(testSet(workoutId, exerciseId = 2L, weight = 200f, reps = 5, timestamp = now))
+
+        val rows = exerciseDao.getExercisesWithUsageStats(recentStart).first().associateBy { it.exercise.id }
+
+        assertEquals(2, rows[1L]?.allTimeSetCount)
+        assertEquals(1, rows[1L]?.recentSetCount)
+        assertEquals(1, rows[2L]?.allTimeSetCount)
+        assertEquals(1, rows[2L]?.recentSetCount)
+        // lastUsedMs reflects the most recent completed working set, ignoring the
+        // warmup and incomplete sets logged at `now` for exercise 1.
+        assertEquals(now - dayMs, rows[1L]?.lastUsedMs)
+        assertEquals(now, rows[2L]?.lastUsedMs)
+    }
+
+    @Test
+    fun muscleWeeklyVolumeComparisonExcludesWarmups() = runTest {
+        val workoutId = createTestWorkout()
+        val now = System.currentTimeMillis()
+        val dayMs = 24L * 60L * 60L * 1000L
+        val currentWeekStart = now - (7L * dayMs)
+        val previousWeekStart = now - (14L * dayMs)
+
+        setDao.insertSet(testSet(workoutId, exerciseId = 1L, weight = 100f, reps = 10, timestamp = now - dayMs))
+        setDao.insertSet(testSet(workoutId, exerciseId = 1L, weight = 50f, reps = 10, timestamp = now - (10L * dayMs)))
+        setDao.insertSet(testSet(workoutId, exerciseId = 1L, weight = 500f, reps = 10, isWarmup = true, timestamp = now - (10L * dayMs)))
+
+        val rows = setDao.getMuscleWeeklyVolumeComparison(
+            previousWeekStartMs = previousWeekStart,
+            currentWeekStartMs = currentWeekStart,
+            nowMs = now + 1L
+        )
+
+        val chest = rows.single { it.muscle == "Chest" }
+        assertEquals(1000f, chest.currentWeekVolume, 0.1f)
+        assertEquals(500f, chest.previousWeekVolume, 0.1f)
+    }
+
+    @Test
     fun deleteSetRemovesFromDatabase() = runTest {
         val workoutId = createTestWorkout()
         val testSet = Set(
@@ -181,5 +230,31 @@ class SetDaoTest {
 
         val sets = setDao.getSetsForWorkout(workoutId).first()
         assertTrue(sets.isEmpty())
+    }
+
+    private fun testSet(
+        workoutId: Long,
+        exerciseId: Long,
+        weight: Float,
+        reps: Int,
+        isWarmup: Boolean = false,
+        isComplete: Boolean = true,
+        timestamp: Long
+    ): Set {
+        return Set(
+            workoutId = workoutId,
+            exerciseId = exerciseId,
+            weight = weight,
+            reps = reps,
+            rpe = null,
+            durationSeconds = null,
+            distanceMeters = null,
+            isWarmup = isWarmup,
+            isComplete = isComplete,
+            timestamp = Date(timestamp),
+            note = null,
+            supersetGroupId = null,
+            supersetOrderIndex = 0
+        )
     }
 }

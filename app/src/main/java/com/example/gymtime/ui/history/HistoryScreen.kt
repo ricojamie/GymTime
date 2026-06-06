@@ -1,12 +1,17 @@
 package com.example.gymtime.ui.history
 
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
@@ -15,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -29,6 +35,7 @@ import com.example.gymtime.data.db.dao.SetWithExerciseInfo
 import com.example.gymtime.ui.components.ExerciseIcons
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.*
+import com.example.gymtime.util.ShareImagePalette
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -43,7 +50,19 @@ fun HistoryScreen(
     val selectedWorkoutDetails by viewModel.selectedWorkoutDetails.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val accentColor = MaterialTheme.colorScheme.primary
+    val appColors = LocalAppColors.current
     val context = LocalContext.current
+    val sharePalette = remember(accentColor, appColors) {
+        ShareImagePalette(
+            background = appColors.backgroundCanvas.toArgb(),
+            card = appColors.surfaceCards.toArgb(),
+            accent = accentColor.toArgb(),
+            accentSoft = accentColor.copy(alpha = 0.18f).toArgb(),
+            textPrimary = appColors.textPrimary.toArgb(),
+            textMuted = appColors.textTertiary.toArgb(),
+            onAccent = Color.Black.toArgb()
+        )
+    }
 
     // Handle resume workout navigation
     LaunchedEffect(Unit) {
@@ -52,14 +71,24 @@ fun HistoryScreen(
         }
     }
 
-    // Launch system share sheet when the ViewModel emits share text.
+    // Launch system share sheet when the ViewModel emits a generated image.
     LaunchedEffect(Unit) {
-        viewModel.shareEvent.collect { text ->
+        viewModel.shareEvent.collect { payload ->
             val send = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, text)
+                type = "image/png"
+                putExtra(Intent.EXTRA_STREAM, payload.imageUri)
+                clipData = ClipData.newUri(context.contentResolver, "Workout summary", payload.imageUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             context.startActivity(Intent.createChooser(send, "Share workout"))
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.copyEvent.collect { text ->
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("Workout summary", text))
+            Toast.makeText(context, "Workout copied", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -125,7 +154,8 @@ fun HistoryScreen(
                 sets = selectedWorkoutDetails!!,
                 onDismiss = { viewModel.clearSelection() },
                 onResumeWorkout = { viewModel.resumeWorkout(selectedWorkout!!.workout.id) },
-                onShareWorkout = { viewModel.shareWorkout(selectedWorkout!!.workout.id) }
+                onCopyWorkout = { viewModel.copyWorkout(selectedWorkout!!.workout.id) },
+                onShareWorkout = { viewModel.shareWorkout(selectedWorkout!!.workout.id, sharePalette) }
             )
         }
     }
@@ -288,6 +318,7 @@ fun WorkoutDetailsSheet(
     sets: List<SetWithExerciseInfo>,
     onDismiss: () -> Unit,
     onResumeWorkout: () -> Unit = {},
+    onCopyWorkout: () -> Unit = {},
     onShareWorkout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -368,6 +399,18 @@ fun WorkoutDetailsSheet(
                         "Resume This Workout",
                         color = Color.Black,
                         fontWeight = FontWeight.Bold
+                    )
+                }
+                OutlinedIconButton(
+                    onClick = onCopyWorkout,
+                    modifier = Modifier.size(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, accentColor)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.ContentCopy,
+                        contentDescription = "Copy workout text",
+                        tint = accentColor
                     )
                 }
                 OutlinedIconButton(

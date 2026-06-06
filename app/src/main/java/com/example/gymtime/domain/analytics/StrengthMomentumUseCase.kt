@@ -4,6 +4,7 @@ import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.SetWithExercisePerformanceInfo
 import com.example.gymtime.data.db.entity.LogType
+import com.example.gymtime.util.WeekUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -38,7 +39,9 @@ data class MuscleMomentum(
     val contributingExercises: List<ExerciseMomentum>,
     val improvingContributors: List<ExerciseMomentum> = emptyList(),
     val decliningContributors: List<ExerciseMomentum> = emptyList(),
-    val hasMixedContributors: Boolean = false
+    val hasMixedContributors: Boolean = false,
+    val currentWeekVolume: Float = 0f,
+    val previousWeekVolume: Float = 0f
 )
 
 data class StrengthMomentumState(
@@ -74,6 +77,11 @@ class StrengthMomentumUseCase @Inject constructor(
             }
             val currentExerciseMomentum = buildExerciseMomentum(recentSets, baselineSets)
             val currentMuscleChanges = aggregatePercentChangeByMuscle(currentExerciseMomentum)
+            val weeklyVolumeByMuscle = setDao.getMuscleWeeklyVolumeComparison(
+                previousWeekStartMs = WeekUtils.getLastWeekStartMs(),
+                currentWeekStartMs = WeekUtils.getCurrentWeekStartMs(),
+                nowMs = nowMs
+            ).associateBy { it.muscle.lowercase(Locale.US) }
 
             // Historical comparison points: slide 28d-vs-prior-28d backward in 7-day steps,
             // skipping the most recent window (that's "current"). Build per-muscle series.
@@ -93,16 +101,20 @@ class StrengthMomentumUseCase @Inject constructor(
                     .sortedBy { it.percentChange }
 
                 if (contributions.isEmpty()) {
+                    val weeklyVolume = weeklyVolumeByMuscle[muscle.lowercase(Locale.US)]
                     MuscleMomentum(
                         muscle = muscle,
                         percentChange = null,
                         direction = MomentumDirection.NO_BASELINE,
-                        contributingExercises = emptyList()
+                        contributingExercises = emptyList(),
+                        currentWeekVolume = weeklyVolume?.currentWeekVolume ?: 0f,
+                        previousWeekVolume = weeklyVolume?.previousWeekVolume ?: 0f
                     )
                 } else {
                     val percent = currentMuscleChanges[muscle.lowercase(Locale.US)]
                         ?: weightedPercent(contributions)
                     val series = historyPerMuscle[muscle.lowercase(Locale.US)].orEmpty()
+                    val weeklyVolume = weeklyVolumeByMuscle[muscle.lowercase(Locale.US)]
 
                     MuscleMomentum(
                         muscle = muscle,
@@ -111,7 +123,9 @@ class StrengthMomentumUseCase @Inject constructor(
                         contributingExercises = contributions,
                         improvingContributors = improving,
                         decliningContributors = declining,
-                        hasMixedContributors = improving.isNotEmpty() && declining.isNotEmpty()
+                        hasMixedContributors = improving.isNotEmpty() && declining.isNotEmpty(),
+                        currentWeekVolume = weeklyVolume?.currentWeekVolume ?: 0f,
+                        previousWeekVolume = weeklyVolume?.previousWeekVolume ?: 0f
                     )
                 }
             }

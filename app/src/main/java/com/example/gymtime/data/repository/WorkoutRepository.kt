@@ -115,6 +115,7 @@ class WorkoutRepository @Inject constructor(
                         targetMuscle = item.targetMuscle,
                         setCount = item.setCount,
                         bestWeight = item.bestWeight,
+                        totalVolume = item.totalVolume,
                         firstSetTimestamp = item.orderIndex.toLong(),
                         supersetGroupId = item.supersetGroupId
                     )
@@ -152,9 +153,7 @@ class WorkoutRepository @Inject constructor(
 
     fun calculateWorkoutStats(workout: Workout?, overview: List<WorkoutExerciseSummary>): WorkoutStats {
         val totalSets = overview.sumOf { it.setCount }
-        val totalVolume = overview.sumOf { summary ->
-            ((summary.bestWeight ?: 0f) * summary.setCount).toDouble()
-        }.toFloat()
+        val totalVolume = overview.sumOf { it.totalVolume.toDouble() }.toFloat()
 
         val duration = workout?.let {
             val durationMs = Date().time - it.startTime.time

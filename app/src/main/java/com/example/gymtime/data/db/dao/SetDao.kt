@@ -17,6 +17,7 @@ data class WorkoutExerciseSummary(
     val targetMuscle: String,
     val setCount: Int,
     val bestWeight: Float?,
+    val totalVolume: Float,
     val firstSetTimestamp: Long,
     val supersetGroupId: String?
 )
@@ -50,6 +51,12 @@ data class MuscleVolumeData(
     val muscle: String,
     val week: String,
     val volume: Float
+)
+
+data class MuscleWeeklyVolumeComparison(
+    val muscle: String,
+    val currentWeekVolume: Float,
+    val previousWeekVolume: Float
 )
 
 @Dao
@@ -96,8 +103,9 @@ interface SetDao {
             e.id as exerciseId,
             e.name as exerciseName,
             e.targetMuscle as targetMuscle,
-            COUNT(s.id) as setCount,
-            MAX(s.weight) as bestWeight,
+            COUNT(CASE WHEN s.isWarmup = 0 AND s.isComplete = 1 THEN s.id END) as setCount,
+            MAX(CASE WHEN s.isWarmup = 0 AND s.isComplete = 1 THEN s.weight END) as bestWeight,
+            COALESCE(SUM(CASE WHEN s.isWarmup = 0 AND s.isComplete = 1 AND s.weight IS NOT NULL AND s.reps IS NOT NULL THEN s.weight * s.reps ELSE 0 END), 0) as totalVolume,
             MIN(s.timestamp) as firstSetTimestamp,
             MAX(s.supersetGroupId) as supersetGroupId
         FROM exercises e
@@ -113,14 +121,15 @@ interface SetDao {
     // Get workout overview including routine exercises (for routine-based workouts)
     // Shows logged exercises + unstarted routine exercises
     @Query("""
-        SELECT exerciseId, exerciseName, targetMuscle, setCount, bestWeight, firstSetTimestamp, supersetGroupId
+        SELECT exerciseId, exerciseName, targetMuscle, setCount, bestWeight, totalVolume, firstSetTimestamp, supersetGroupId
         FROM (
             SELECT
                 e.id as exerciseId,
                 e.name as exerciseName,
                 e.targetMuscle as targetMuscle,
-                COUNT(s.id) as setCount,
-                MAX(s.weight) as bestWeight,
+                COUNT(CASE WHEN s.isWarmup = 0 AND s.isComplete = 1 THEN s.id END) as setCount,
+                MAX(CASE WHEN s.isWarmup = 0 AND s.isComplete = 1 THEN s.weight END) as bestWeight,
+                COALESCE(SUM(CASE WHEN s.isWarmup = 0 AND s.isComplete = 1 AND s.weight IS NOT NULL AND s.reps IS NOT NULL THEN s.weight * s.reps ELSE 0 END), 0) as totalVolume,
                 MIN(s.timestamp) as firstSetTimestamp,
                 MAX(s.supersetGroupId) as supersetGroupId
             FROM exercises e
@@ -135,6 +144,7 @@ interface SetDao {
                 e.targetMuscle as targetMuscle,
                 0 as setCount,
                 NULL as bestWeight,
+                0 as totalVolume,
                 9223372036854775807 as firstSetTimestamp,
                 re.supersetGroupId as supersetGroupId
             FROM routine_exercises re
@@ -219,6 +229,33 @@ interface SetDao {
         HAVING s1.timestamp = MIN(s1.timestamp)
     """)
     suspend fun getPersonalBestsWithTimestamps(exerciseId: Long): List<PBWithTimestamp>
+
+    @Query("""
+        SELECT
+            s1.reps as reps,
+            s1.weight as maxWeight,
+            s1.timestamp as firstAchievedAt
+        FROM sets s1
+        INNER JOIN (
+            SELECT reps, MAX(weight) as maxWeight
+            FROM sets
+            WHERE exerciseId = :exerciseId
+              AND weight IS NOT NULL
+              AND reps IS NOT NULL
+              AND isWarmup = 0
+              AND timestamp < :beforeTimestamp
+            GROUP BY reps
+        ) s2 ON s1.reps = s2.reps AND s1.weight = s2.maxWeight
+        WHERE s1.exerciseId = :exerciseId
+          AND s1.isWarmup = 0
+          AND s1.timestamp < :beforeTimestamp
+        GROUP BY s1.reps, s1.weight
+        HAVING s1.timestamp = MIN(s1.timestamp)
+    """)
+    suspend fun getPersonalBestsWithTimestampsBefore(
+        exerciseId: Long,
+        beforeTimestamp: Long
+    ): List<PBWithTimestamp>
 
     // Get all working sets for an exercise (for E1RM/E10RM calculation)
     @Query("""
@@ -332,6 +369,27 @@ interface SetDao {
         ORDER BY week ASC
     """)
     suspend fun getVolumeByMuscleAndWeek(startDate: Long, endDate: Long): List<MuscleVolumeData>
+
+    @Query("""
+        SELECT
+            e.targetMuscle as muscle,
+            COALESCE(SUM(CASE WHEN s.timestamp >= :currentWeekStartMs AND s.timestamp < :nowMs THEN s.weight * s.reps ELSE 0 END), 0) as currentWeekVolume,
+            COALESCE(SUM(CASE WHEN s.timestamp >= :previousWeekStartMs AND s.timestamp < :currentWeekStartMs THEN s.weight * s.reps ELSE 0 END), 0) as previousWeekVolume
+        FROM sets s
+        INNER JOIN exercises e ON s.exerciseId = e.id
+        WHERE s.weight IS NOT NULL
+          AND s.reps IS NOT NULL
+          AND s.isWarmup = 0
+          AND s.isComplete = 1
+          AND s.timestamp >= :previousWeekStartMs
+          AND s.timestamp < :nowMs
+        GROUP BY e.targetMuscle
+    """)
+    suspend fun getMuscleWeeklyVolumeComparison(
+        previousWeekStartMs: Long,
+        currentWeekStartMs: Long,
+        nowMs: Long
+    ): List<MuscleWeeklyVolumeComparison>
 
     @Query("""
         SELECT s.*, e.name as exerciseName, e.targetMuscle as targetMuscle
