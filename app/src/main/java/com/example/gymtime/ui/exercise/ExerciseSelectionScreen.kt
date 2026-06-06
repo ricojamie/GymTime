@@ -100,8 +100,9 @@ fun ExerciseSelectionContent(
     val accentColor = MaterialTheme.colorScheme.primary
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedMuscles by viewModel.selectedMuscles.collectAsState()
+    val sortMode by viewModel.sortMode.collectAsState()
     val availableMuscles by viewModel.availableMuscles.collectAsState(initial = emptyList<String>())
-    val filteredExercises by viewModel.filteredExercises.collectAsState(initial = emptyList<com.example.gymtime.data.db.entity.Exercise>())
+    val filteredExercises by viewModel.filteredExercises.collectAsState(initial = emptyList())
 
     // Superset mode state
     val isSupersetMode by viewModel.isSupersetModeEnabled.collectAsState()
@@ -189,6 +190,13 @@ fun ExerciseSelectionContent(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            ExerciseSortChips(
+                selectedMode = sortMode,
+                onModeSelected = { viewModel.updateSortMode(it) }
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             // Filter Pills
             if (availableMuscles.isNotEmpty()) {
                 ExerciseFilterPills(
@@ -218,12 +226,17 @@ fun ExerciseSelectionContent(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 100.dp)
                 ) {
-                    items(filteredExercises) { exercise ->
+                    items(filteredExercises) { row ->
+                        val exercise = row.exercise
                         val isSelected = selectedForSuperset.any { it.id == exercise.id }
                         val selectionOrder = selectedForSuperset.indexOfFirst { it.id == exercise.id }.let { if (it >= 0) it + 1 else null }
 
                         ExerciseListItem(
                             exercise = exercise,
+                            sortMode = sortMode,
+                            allTimeSetCount = row.allTimeSetCount,
+                            recentSetCount = row.recentSetCount,
+                            lastUsedMs = row.lastUsedMs,
                             isSupersetMode = isSupersetMode || viewModel.isAddToSupersetMode,
                             isSelected = isSelected,
                             selectionOrder = selectionOrder,
@@ -330,6 +343,44 @@ private fun ExerciseSearchBox(
 }
 
 @Composable
+private fun ExerciseSortChips(
+    selectedMode: ExerciseSortMode,
+    onModeSelected: (ExerciseSortMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(ExerciseSortMode.values().toList()) { mode ->
+            FilterChip(
+                selected = mode == selectedMode,
+                onClick = { onModeSelected(mode) },
+                label = {
+                    Text(
+                        text = mode.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                    selectedLabelColor = Color.Black,
+                    containerColor = LocalAppColors.current.surfaceCards,
+                    labelColor = LocalAppColors.current.textPrimary
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    enabled = true,
+                    selected = mode == selectedMode,
+                    borderColor = if (mode == selectedMode) MaterialTheme.colorScheme.primary else LocalAppColors.current.textTertiary,
+                    selectedBorderColor = MaterialTheme.colorScheme.primary
+                )
+            )
+        }
+    }
+}
+
+@Composable
 private fun ExerciseFilterPills(
     muscles: List<String>,
     selectedMuscles: Set<String>,
@@ -424,6 +475,10 @@ private fun SupersetModeToggle(
 @Composable
 private fun ExerciseListItem(
     exercise: Exercise,
+    sortMode: ExerciseSortMode,
+    allTimeSetCount: Int,
+    recentSetCount: Int,
+    lastUsedMs: Long?,
     onClick: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -478,7 +533,13 @@ private fun ExerciseListItem(
                         color = if (isSelected) accentColor else LocalAppColors.current.textPrimary
                     )
                     Text(
-                        text = exercise.targetMuscle,
+                        text = exerciseSubtitle(
+                            muscle = exercise.targetMuscle,
+                            sortMode = sortMode,
+                            allTimeSetCount = allTimeSetCount,
+                            recentSetCount = recentSetCount,
+                            lastUsedMs = lastUsedMs
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = LocalAppColors.current.textTertiary
                     )
@@ -540,6 +601,36 @@ private fun ExerciseListItem(
                 }
             }
         }
+    }
+}
+
+private fun exerciseSubtitle(
+    muscle: String,
+    sortMode: ExerciseSortMode,
+    allTimeSetCount: Int,
+    recentSetCount: Int,
+    lastUsedMs: Long?
+): String {
+    val usage = when (sortMode) {
+        ExerciseSortMode.ALPHABETICAL -> null
+        ExerciseSortMode.ALL_TIME_SETS -> "$allTimeSetCount all-time sets"
+        ExerciseSortMode.RECENT_SETS -> "$recentSetCount sets in 90d"
+        ExerciseSortMode.RECENTLY_USED -> formatLastUsed(lastUsedMs)
+    }
+    return listOfNotNull(muscle, usage).joinToString(" - ")
+}
+
+private fun formatLastUsed(lastUsedMs: Long?, nowMs: Long = System.currentTimeMillis()): String {
+    if (lastUsedMs == null) return "never used"
+    val dayMs = 24L * 60L * 60L * 1000L
+    val days = ((nowMs - lastUsedMs) / dayMs).toInt()
+    return when {
+        days <= 0 -> "used today"
+        days == 1 -> "used yesterday"
+        days < 7 -> "used ${days}d ago"
+        days < 30 -> "used ${days / 7}w ago"
+        days < 365 -> "used ${days / 30}mo ago"
+        else -> "used ${days / 365}y ago"
     }
 }
 

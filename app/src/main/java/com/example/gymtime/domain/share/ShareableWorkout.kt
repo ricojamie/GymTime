@@ -20,5 +20,8 @@ data class ShareableSet(
     val weight: Float?,
     val reps: Int?,
     val isWarmup: Boolean,
-    val isPersonalRecord: Boolean
+    val isPersonalRecord: Boolean,
+    val durationSeconds: Int? = null,
+    val distanceMeters: Float? = null,
+    val calories: Float? = null
 )

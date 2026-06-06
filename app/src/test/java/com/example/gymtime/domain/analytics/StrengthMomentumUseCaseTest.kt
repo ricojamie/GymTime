@@ -40,6 +40,7 @@ class StrengthMomentumUseCaseTest {
             "Legs",
             "Cardio"
         )
+        coEvery { setDao.getMuscleWeeklyVolumeComparison(any(), any(), any()) } returns emptyList()
         useCase = StrengthMomentumUseCase(setDao, muscleGroupDao)
     }
 

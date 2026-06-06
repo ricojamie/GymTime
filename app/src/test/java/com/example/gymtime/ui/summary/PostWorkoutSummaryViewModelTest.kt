@@ -13,6 +13,7 @@ import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.domain.share.ShareWorkoutUseCase
 import com.example.gymtime.util.TestDispatcherRule
+import com.example.gymtime.util.WorkoutShareImageGenerator
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +38,7 @@ class PostWorkoutSummaryViewModelTest {
     private lateinit var exerciseDao: ExerciseDao
     private lateinit var volumeOrbRepository: VolumeOrbRepository
     private lateinit var shareWorkoutUseCase: ShareWorkoutUseCase
+    private lateinit var workoutShareImageGenerator: WorkoutShareImageGenerator
 
     private val testWorkoutId = 1L
     private val testWorkout = Workout(
@@ -83,6 +85,7 @@ class PostWorkoutSummaryViewModelTest {
         exerciseDao = mockk(relaxed = true)
         volumeOrbRepository = mockk(relaxed = true)
         shareWorkoutUseCase = mockk(relaxed = true)
+        workoutShareImageGenerator = mockk(relaxed = true)
 
         every { workoutDao.getWorkoutById(testWorkoutId) } returns flowOf(testWorkout)
         every { setDao.getSetsForWorkout(testWorkoutId) } returns flowOf(testSets)
@@ -95,7 +98,15 @@ class PostWorkoutSummaryViewModelTest {
     }
 
     private fun createViewModel(): PostWorkoutSummaryViewModel {
-        return PostWorkoutSummaryViewModel(savedStateHandle, workoutDao, setDao, exerciseDao, volumeOrbRepository, shareWorkoutUseCase)
+        return PostWorkoutSummaryViewModel(
+            savedStateHandle,
+            workoutDao,
+            setDao,
+            exerciseDao,
+            volumeOrbRepository,
+            shareWorkoutUseCase,
+            workoutShareImageGenerator
+        )
     }
 
     @Test

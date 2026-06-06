@@ -62,7 +62,14 @@
       "Bash(git -C \"D:/Jamie/AI_Stuff/Coding_Projects/Gym_App\" log --all --oneline --grep=\"version\\\\|bump\\\\|release\")",
       "Bash(git -C \"D:/Jamie/AI_Stuff/Coding_Projects/Gym_App\" show 22cc110:app/build.gradle.kts)",
       "Bash(git -C \"D:/Jamie/AI_Stuff/Coding_Projects/Gym_App\" log --all --oneline)",
-      "Bash(git -C \"D:/Jamie/AI_Stuff/Coding_Projects/Gym_App\" show HEAD:app/build.gradle.kts)"
+      "Bash(git -C \"D:/Jamie/AI_Stuff/Coding_Projects/Gym_App\" show HEAD:app/build.gradle.kts)",
+      "Bash(./gradlew :app:compileDebugKotlin --console=plain -q)",
+      "Bash(./gradlew :app:compileDebugKotlin --console=plain)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(./gradlew :app:compileDebugUnitTestKotlin :app:compileDebugAndroidTestKotlin --console=plain)",
+      "Bash(./gradlew :app:testDebugUnitTest --console=plain)",
+      "PowerShell(Get-Process git,git-bash,gitk -ErrorAction SilentlyContinue)",
+      "Bash(git fetch *)"
     ],
     "deny": [],
     "ask": []

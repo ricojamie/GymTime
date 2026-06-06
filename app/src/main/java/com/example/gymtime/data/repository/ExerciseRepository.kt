@@ -1,6 +1,7 @@
 package com.example.gymtime.data.repository
 
 import com.example.gymtime.data.db.dao.ExerciseDao
+import com.example.gymtime.data.db.dao.ExerciseUsageRow
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.Set
@@ -22,6 +23,10 @@ class ExerciseRepository @Inject constructor(
 
     fun getAllExercises(): Flow<List<Exercise>> {
         return exerciseDao.getAllExercises()
+    }
+
+    fun getExercisesWithUsageStats(recentStartMs: Long): Flow<List<ExerciseUsageRow>> {
+        return exerciseDao.getExercisesWithUsageStats(recentStartMs)
     }
 
     fun getAllMuscleGroups(): Flow<List<MuscleGroup>> {

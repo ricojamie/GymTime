@@ -210,7 +210,7 @@ fun HomeScreen(
             },
             text = {
                 Text(
-                    text = "Compares your best recent performances from the last 28 days against the previous 28 days for exercises with data in both windows. Warmups and cardio-style exercises are excluded. Weighted lifts use estimated strength and reps-only uses reps. Muscle scores are weighted by exercise workout count, and mixed means at least one exercise improved while another declined.",
+                    text = "Compares your best recent performances from the last 28 days against the previous 28 days for exercises with data in both windows. Warmups and cardio-style exercises are excluded. Weighted lifts use estimated strength and reps-only uses reps. Muscle scores are weighted by exercise workout count, and mixed means at least one exercise improved while another declined. Weekly muscle volume is shown as context in the detail sheet, but it does not drive the body chart color by itself.",
                     color = LocalAppColors.current.textSecondary,
                     style = MaterialTheme.typography.bodyMedium
                 )
