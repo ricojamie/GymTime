@@ -2,6 +2,7 @@ package com.example.gymtime.ui.routine
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -103,6 +104,7 @@ fun RoutineFormScreen(
                         color = LocalAppColors.current.textPrimary,
                         fontSize = 18.sp
                     ),
+                    cursorBrush = SolidColor(LocalAppColors.current.cursor),
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Words
                     ),

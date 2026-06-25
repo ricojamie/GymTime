@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -123,6 +124,7 @@ fun RoutineDayFormScreen(
                         color = LocalAppColors.current.textPrimary,
                         fontSize = 18.sp
                     ),
+                    cursorBrush = SolidColor(LocalAppColors.current.cursor),
                     decorationBox = { innerTextField ->
                         if (dayName.isEmpty()) {
                             Text(
@@ -450,6 +452,7 @@ fun ExercisePickerDialog(
                             onValueChange = { searchQuery = it },
                             modifier = Modifier.weight(1f),
                             textStyle = MaterialTheme.typography.bodyLarge.copy(color = LocalAppColors.current.textPrimary),
+                            cursorBrush = SolidColor(LocalAppColors.current.cursor),
                             decorationBox = { innerTextField ->
                                 if (searchQuery.isEmpty()) {
                                     Text("Search exercises...", color = LocalAppColors.current.textTertiary)
