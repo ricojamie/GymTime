@@ -147,7 +147,7 @@ fun SettingsScreen(
                                 color = LocalAppColors.current.textPrimary,
                                 fontWeight = FontWeight.Medium
                             ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            cursorBrush = SolidColor(LocalAppColors.current.cursor),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(LocalAppColors.current.inputBackground, RoundedCornerShape(8.dp))
@@ -868,18 +868,20 @@ fun SettingsScreen(
             text = {
                 Column {
                     Text(
-                        "Share & Sort Update 📸",
+                        "Slider Logger & Cleaner Setup 🎚️",
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "Share Your Wins 📸\n" +
-                        "Turn any finished workout into a clean shareable image — sets, volume, and PRs ready to post to your story.\n\n" +
-                        "🔀 Find exercises faster\n" +
-                        "New sort options on the exercise picker: A-Z, all-time sets, last 90 days, and Recently used — so your go-to lifts surface first. Works alongside body-part filters.\n\n" +
-                        "📊 Exercise metrics\n" +
-                        "Each exercise now shows usage stats so you can see what you're really training.",
+                        "🎚️ Slide to log\n" +
+                        "Log weight & reps by dragging a ruler — with markers for what you did last time and your goal, so progressive overload is a glance away. Tap the number to type an exact value, or nudge with +/−.\n\n" +
+                        "📝 Rebuilt exercise creator\n" +
+                        "The Create Exercise screen is reorganized into Essentials + More options, and the keyboard no longer covers the field you're typing in.\n\n" +
+                        "✅ Log Type is now required\n" +
+                        "New exercises no longer default to Weight + Reps — pick the right type up front so you don't have to re-edit later.\n\n" +
+                        "👁️ Dark mode cursor fix\n" +
+                        "The text cursor is finally visible while you type in dark mode.",
                         color = LocalAppColors.current.textPrimary
                     )
                 }

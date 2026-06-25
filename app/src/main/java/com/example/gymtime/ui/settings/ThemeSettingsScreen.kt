@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -464,6 +465,7 @@ private fun CustomColorDialog(
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium
                     ),
+                    cursorBrush = SolidColor(LocalAppColors.current.cursor),
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(LocalAppColors.current.inputBackground, RoundedCornerShape(12.dp))

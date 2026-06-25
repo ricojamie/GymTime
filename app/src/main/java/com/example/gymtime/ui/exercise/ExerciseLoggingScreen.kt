@@ -9,6 +9,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Summarize
 import androidx.compose.material.icons.filled.Vibration
@@ -104,7 +107,9 @@ import com.example.gymtime.ui.theme.LocalAppColors
 import com.example.gymtime.util.TimeUtils
 import com.example.gymtime.util.TimeFormatter
 import com.example.gymtime.ui.components.InputCard
+import com.example.gymtime.ui.components.RulerSliderInput
 import com.example.gymtime.ui.components.TimeInputCard
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -158,6 +163,8 @@ fun ExerciseLoggingScreen(
     var showWorkoutOverview by remember { mutableStateOf(false) }
     var showExerciseHistory by remember { mutableStateOf(false) }
     var showPlateCalculator by remember { mutableStateOf(false) }
+    var showExerciseNotes by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
 
     var personalRecords by remember { mutableStateOf<PersonalRecords?>(null) }
     var exerciseHistory by remember { mutableStateOf<Map<Long, List<com.example.gymtime.data.db.entity.Set>>>(emptyMap()) }
@@ -225,6 +232,9 @@ fun ExerciseLoggingScreen(
     // Get best set data for inline "Best:" display
     val bestWeight by viewModel.bestWeight.collectAsState()
     val bestReps by viewModel.bestReps.collectAsState()
+    // "Last time" values for the slider markers
+    val lastWeight by viewModel.lastWeight.collectAsState()
+    val lastReps by viewModel.lastReps.collectAsState()
 
     // Track if timer just finished for animation
     var timerJustFinished by remember { mutableStateOf(false) }
@@ -325,6 +335,17 @@ fun ExerciseLoggingScreen(
                             color = LocalAppColors.current.textTertiary.copy(alpha = 0.3f)
                         )
 
+                        // Exercise notes icon (only when the exercise has notes)
+                        if (exercise?.notes?.isNotBlank() == true) {
+                            IconButton(onClick = { showExerciseNotes = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Exercise notes",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+
                         // Workout overview icon
                         IconButton(onClick = { showWorkoutOverview = true }) {
                             Icon(
@@ -363,33 +384,13 @@ fun ExerciseLoggingScreen(
                 .padding(16.dp)
         ) {
             exercise?.let { ex ->
-                // Show exercise notes if available
-                ex.notes?.takeIf { it.isNotBlank() }?.let { notes ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.Top,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = "📝",
-                                fontSize = 14.sp
-                            )
-                            Text(
-                                text = notes,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = LocalAppColors.current.textPrimary,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
+                // Inputs + session log scroll together; nav buttons stay pinned below.
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(scrollState)
+                ) {
                 currentPlanItem?.let { plan ->
                     WorkoutPrescriptionCard(
                         plannedSets = plan.plannedSets,
@@ -398,7 +399,7 @@ fun ExerciseLoggingScreen(
                         restSeconds = plan.restSeconds,
                         notes = plan.notes
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
                 if (exercise?.logType.supportsRepTarget && exercise?.repTarget != null) {
@@ -411,12 +412,8 @@ fun ExerciseLoggingScreen(
                     } else {
                         RepTargetHintCard(repTarget = exercise!!.repTarget!!)
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
-
-            // Removed dedicated Timer Row (Moved to TopAppBar)
-
-            Spacer(modifier = Modifier.height(8.dp))
 
             // Volume Progress Bar - shows weekly progress (compact horizontal bar)
             VolumeProgressBar(
@@ -424,7 +421,7 @@ fun ExerciseLoggingScreen(
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Superset Indicator Pills (only shown when in superset mode)
             if (isInSupersetMode && supersetExercises.isNotEmpty()) {
@@ -441,116 +438,99 @@ fun ExerciseLoggingScreen(
                         }
                     }
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // Current Set Label
-            Text(
-                text = "CURRENT SET: ${loggedSets.size + 1}",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.5.sp,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Input Fields - Dynamic based on exercise LogType
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                when (exercise?.logType) {
-                    LogType.WEIGHT_REPS -> {
-                        // Weight Input
-                        InputCard(
+            // Input Fields - Dynamic based on exercise LogType.
+            // Weight & reps use the drag-to-set RulerSliderInput; other types keep card inputs.
+            when (exercise?.logType) {
+                LogType.WEIGHT_REPS -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        RulerSliderInput(
                             label = "WEIGHT",
                             value = weight,
                             onValueChange = { viewModel.updateWeight(it) },
-                            modifier = Modifier.weight(1f),
-                            lastValue = bestWeight?.let { "$it lbs" },
-                            lastLabel = "BEST"
+                            modifier = Modifier.fillMaxWidth(),
+                            step = 5,
+                            unitSuffix = "lbs",
+                            centered = true,
+                            lastValue = lastWeight,
+                            bestValue = bestWeight?.toFloatOrNull()?.roundToInt()
                         )
-                        // Reps Input
-                        InputCard(
+                        RulerSliderInput(
                             label = "REPS",
                             value = reps,
                             onValueChange = { viewModel.updateReps(it) },
-                            modifier = Modifier.weight(1f),
-                            lastValue = bestReps?.let { "$it reps" },
-                            lastLabel = "BEST"
+                            modifier = Modifier.fillMaxWidth(),
+                            step = 1,
+                            unitSuffix = "reps",
+                            lastValue = lastReps,
+                            goalValue = exercise?.repTarget
                         )
                     }
-                    LogType.REPS_ONLY -> {
-                        // Just Reps Input (centered, wider)
+                }
+                LogType.REPS_ONLY -> {
+                    RulerSliderInput(
+                        label = "REPS",
+                        value = reps,
+                        onValueChange = { viewModel.updateReps(it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        step = 1,
+                        unitSuffix = "reps",
+                        lastValue = lastReps,
+                        goalValue = exercise?.repTarget
+                    )
+                }
+                LogType.DURATION -> {
+                    TimeInputCard(
+                        label = "DURATION (HH:MM:SS)",
+                        value = duration,
+                        onValueChange = { viewModel.updateDuration(it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        lastValue = null,
+                        lastLabel = "BEST"
+                    )
+                }
+                LogType.WEIGHT_DISTANCE -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        RulerSliderInput(
+                            label = "WEIGHT",
+                            value = weight,
+                            onValueChange = { viewModel.updateWeight(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            step = 5,
+                            unitSuffix = "lbs",
+                            centered = true,
+                            lastValue = lastWeight,
+                            bestValue = bestWeight?.toFloatOrNull()?.roundToInt()
+                        )
                         InputCard(
-                            label = "REPS",
-                            value = reps,
-                            onValueChange = { viewModel.updateReps(it) },
-                            modifier = Modifier.weight(1f),
-                            lastValue = bestReps?.let { "$it reps" },
-                            lastLabel = "BEST"
-                        )
-                    }
-                    LogType.DURATION -> {
-                        // Duration Input (in seconds)
-                        TimeInputCard(
-                            label = "DURATION (HH:MM:SS)",
-                            value = duration,
-                            onValueChange = { viewModel.updateDuration(it) },
-                            modifier = Modifier.weight(1f),
+                            label = "DISTANCE (${selectedDistanceUnit.shortLabel})",
+                            value = distance,
+                            onValueChange = { viewModel.updateDistance(it) },
+                            modifier = Modifier.fillMaxWidth(),
                             lastValue = null,
                             lastLabel = "BEST"
                         )
                     }
-                    LogType.WEIGHT_DISTANCE -> {
-                        // Weight Input
-                        InputCard(
-                            label = "WEIGHT",
-                            value = weight,
-                            onValueChange = { viewModel.updateWeight(it) },
-                            modifier = Modifier.weight(1f),
-                            lastValue = bestWeight?.let { "$it lbs" },
-                            lastLabel = "BEST"
-                        )
-                        // Distance Input
+                }
+                LogType.DISTANCE_TIME -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                         InputCard(
                             label = "DISTANCE (${selectedDistanceUnit.shortLabel})",
                             value = distance,
                             onValueChange = { viewModel.updateDistance(it) },
                             modifier = Modifier.weight(1f),
                             lastValue = null,
-                            lastLabel = "BEST"
-                        )
-                    }
-                    LogType.DISTANCE_TIME -> {
-                        // Distance Input
-                        InputCard(
-                            label = "DISTANCE (${selectedDistanceUnit.shortLabel})",
-                            value = distance,
-                            onValueChange = { viewModel.updateDistance(it) },
-                            modifier = Modifier.weight(1f),
-                            lastValue = null,
-                            lastLabel = "BEST"
-                        )
-                        // Time Input
-                        TimeInputCard(
-                            label = "TIME (HH:MM:SS)",
-                            value = duration,
-                            onValueChange = { viewModel.updateDuration(it) },
-                            modifier = Modifier.weight(1f),
-                            lastValue = null,
-                            lastLabel = "BEST"
-                        )
-                    }
-                    LogType.WEIGHT_TIME -> {
-                        InputCard(
-                            label = "WEIGHT",
-                            value = weight,
-                            onValueChange = { viewModel.updateWeight(it) },
-                            modifier = Modifier.weight(1f),
-                            lastValue = bestWeight?.let { "$it lbs" },
                             lastLabel = "BEST"
                         )
                         TimeInputCard(
@@ -562,7 +542,38 @@ fun ExerciseLoggingScreen(
                             lastLabel = "BEST"
                         )
                     }
-                    LogType.CALORIES_TIME -> {
+                }
+                LogType.WEIGHT_TIME -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        RulerSliderInput(
+                            label = "WEIGHT",
+                            value = weight,
+                            onValueChange = { viewModel.updateWeight(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            step = 5,
+                            unitSuffix = "lbs",
+                            centered = true,
+                            lastValue = lastWeight,
+                            bestValue = bestWeight?.toFloatOrNull()?.roundToInt()
+                        )
+                        TimeInputCard(
+                            label = "TIME (HH:MM:SS)",
+                            value = duration,
+                            onValueChange = { viewModel.updateDuration(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            lastValue = null,
+                            lastLabel = "BEST"
+                        )
+                    }
+                }
+                LogType.CALORIES_TIME -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                         InputCard(
                             label = "CALORIES",
                             value = calories,
@@ -580,23 +591,32 @@ fun ExerciseLoggingScreen(
                             lastLabel = "BEST"
                         )
                     }
-                    null -> {
-                        // Default fallback - Weight + Reps
-                        InputCard(
+                }
+                null -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        RulerSliderInput(
                             label = "WEIGHT",
                             value = weight,
                             onValueChange = { viewModel.updateWeight(it) },
-                            modifier = Modifier.weight(1f),
-                            lastValue = bestWeight?.let { "$it lbs" },
-                            lastLabel = "BEST"
+                            modifier = Modifier.fillMaxWidth(),
+                            step = 5,
+                            unitSuffix = "lbs",
+                            centered = true,
+                            lastValue = lastWeight,
+                            bestValue = bestWeight?.toFloatOrNull()?.roundToInt()
                         )
-                        InputCard(
+                        RulerSliderInput(
                             label = "REPS",
                             value = reps,
                             onValueChange = { viewModel.updateReps(it) },
-                            modifier = Modifier.weight(1f),
-                            lastValue = bestReps?.let { "$it reps" },
-                            lastLabel = "BEST"
+                            modifier = Modifier.fillMaxWidth(),
+                            step = 1,
+                            unitSuffix = "reps",
+                            lastValue = lastReps,
+                            goalValue = exercise?.repTarget
                         )
                     }
                 }
@@ -861,7 +881,7 @@ fun ExerciseLoggingScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Session Log Header
             Row(
@@ -886,24 +906,8 @@ fun ExerciseLoggingScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Logged Sets List
-            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-            
-            // Auto-scroll to bottom when a new set is added
-            LaunchedEffect(loggedSets.size) {
-                if (loggedSets.isNotEmpty()) {
-                    listState.animateScrollToItem(loggedSets.size - 1)
-                }
-            }
-
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1.5f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                itemsIndexed(
-                    items = loggedSets,
-                    key = { _, item -> item.id }
-                ) { index, set ->
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                loggedSets.forEachIndexed { index, set ->
                     // Check if this set is a PB for its rep count (must be first occurrence)
                     val isPB = !set.isWarmup &&
                         set.weight != null &&
@@ -928,6 +932,7 @@ fun ExerciseLoggingScreen(
                         }
                     )
                 }
+            }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -1211,7 +1216,7 @@ fun ExerciseLoggingScreen(
                             unfocusedBorderColor = LocalAppColors.current.textTertiary,
                             focusedTextColor = LocalAppColors.current.textPrimary,
                             unfocusedTextColor = LocalAppColors.current.textPrimary,
-                            cursorColor = MaterialTheme.colorScheme.primary
+                            cursorColor = LocalAppColors.current.cursor
                         ),
                         maxLines = 3
                     )
@@ -1344,6 +1349,26 @@ fun ExerciseLoggingScreen(
                 )
             }
         }
+    }
+
+    if (showExerciseNotes) {
+        AlertDialog(
+            onDismissRequest = { showExerciseNotes = false },
+            title = { Text("Exercise Notes", color = LocalAppColors.current.textPrimary) },
+            text = {
+                Text(
+                    text = exercise?.notes ?: "",
+                    color = LocalAppColors.current.textPrimary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showExerciseNotes = false }) {
+                    Text("Close", color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            containerColor = LocalAppColors.current.surfaceCards
+        )
     }
 }
 

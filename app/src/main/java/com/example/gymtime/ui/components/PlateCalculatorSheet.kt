@@ -101,7 +101,7 @@ fun PlateCalculatorSheet(
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                     focusedLabelColor = MaterialTheme.colorScheme.primary,
-                    cursorColor = MaterialTheme.colorScheme.primary
+                    cursorColor = LocalAppColors.current.cursor
                 )
             )
 

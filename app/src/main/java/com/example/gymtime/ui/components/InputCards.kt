@@ -100,7 +100,7 @@ fun InputCard(
                         color = LocalAppColors.current.textPrimary
                     ),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    cursorBrush = SolidColor(LocalAppColors.current.cursor),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -258,7 +258,7 @@ fun TimeSegmentField(
                 color = LocalAppColors.current.textPrimary
             ),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            cursorBrush = SolidColor(LocalAppColors.current.cursor),
             singleLine = true,
             modifier = Modifier.focusRequester(focusRequester)
         )

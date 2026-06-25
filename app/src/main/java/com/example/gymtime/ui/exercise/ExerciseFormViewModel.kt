@@ -32,8 +32,10 @@ class ExerciseFormViewModel @Inject constructor(
     private val _targetMuscle = MutableStateFlow("")
     val targetMuscle: StateFlow<String> = _targetMuscle
 
-    private val _logType = MutableStateFlow(LogType.WEIGHT_REPS)
-    val logType: StateFlow<LogType> = _logType
+    // Null until the user explicitly picks a type — Log Type is a required field
+    // so we don't silently create exercises with the wrong (default) type.
+    private val _logType = MutableStateFlow<LogType?>(null)
+    val logType: StateFlow<LogType?> = _logType
 
     private val _defaultDistanceUnit = MutableStateFlow(DistanceUnit.MILES)
     val defaultDistanceUnit: StateFlow<DistanceUnit> = _defaultDistanceUnit
@@ -70,6 +72,7 @@ class ExerciseFormViewModel @Inject constructor(
 
         name.isNotBlank() &&
             muscle.isNotBlank() &&
+            logType != null &&
             rest.toIntOrNull() != null &&
             (rest.toIntOrNull() ?: 0) > 0 &&
             validRepTarget
@@ -127,7 +130,7 @@ class ExerciseFormViewModel @Inject constructor(
 
     fun saveExercise() {
         viewModelScope.launch {
-            val selectedLogType = _logType.value
+            val selectedLogType = _logType.value ?: return@launch
             val target = _repTarget.value.toIntOrNull()
                 ?.takeIf { selectedLogType == LogType.WEIGHT_REPS || selectedLogType == LogType.REPS_ONLY }
 

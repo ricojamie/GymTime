@@ -48,6 +48,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.Date
 import javax.inject.Inject
+import kotlin.math.roundToInt
 
 data class WorkoutStats(
     val totalSets: Int,
@@ -224,6 +225,13 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _lastWorkoutSets = MutableStateFlow<List<Set>>(emptyList())
     val lastWorkoutSets: StateFlow<List<Set>> = _lastWorkoutSets
 
+    // Previous-session reps/weight, surfaced as "last time" markers on the slider inputs
+    private val _lastReps = MutableStateFlow<Int?>(null)
+    val lastReps: StateFlow<Int?> = _lastReps
+
+    private val _lastWeight = MutableStateFlow<Int?>(null)
+    val lastWeight: StateFlow<Int?> = _lastWeight
+
     // Personal bests by rep count - Map of reps -> PB with timestamp
     private val _personalBestsByReps = MutableStateFlow<Map<Int, com.example.gymtime.data.db.dao.PBWithTimestamp>>(emptyMap())
     val personalBestsByReps: StateFlow<Map<Int, com.example.gymtime.data.db.dao.PBWithTimestamp>> = _personalBestsByReps
@@ -391,6 +399,11 @@ class ExerciseLoggingViewModel @Inject constructor(
             _currentWorkout.filterNotNull().collectLatest { workout ->
                 val previousSets = workoutRepository.getLastWorkoutSetsForExercise(exerciseId, workout.id)
                 _lastWorkoutSets.value = previousSets
+
+                // "Last time" markers for the slider inputs (prefer a working set over a warmup)
+                val lastWorkingSet = previousSets.firstOrNull { !it.isWarmup } ?: previousSets.firstOrNull()
+                _lastReps.value = lastWorkingSet?.reps
+                _lastWeight.value = lastWorkingSet?.weight?.roundToInt()
 
                 // Prefill weight/reps (only once per ViewModel instance)
                 if (!hasPrefilled) {

@@ -7,6 +7,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import kotlin.math.max
+import kotlin.math.min
 
 /**
  * Holds all custom app colors that vary between light and dark mode.
@@ -17,8 +20,25 @@ data class AppColors(
     val textTertiary: Color,
     val surfaceCards: Color,
     val backgroundCanvas: Color,
-    val inputBackground: Color
+    val inputBackground: Color,
+    // Text-field caret color. Resolved per-theme in IronLogTheme so it is always
+    // visible against the background (the accent can be too dim on dark themes).
+    val cursor: Color = PrimaryAccent
 )
+
+/** WCAG contrast ratio between two colors (>= 1, higher is more contrast). */
+private fun contrastRatio(a: Color, b: Color): Float {
+    val lighter = max(a.luminance(), b.luminance())
+    val darker = min(a.luminance(), b.luminance())
+    return (lighter + 0.05f) / (darker + 0.05f)
+}
+
+/**
+ * Picks a caret color that is actually visible: the theme accent when it has
+ * enough contrast with the background, otherwise the primary text color.
+ */
+private fun resolveCursorColor(accent: Color, background: Color, textPrimary: Color): Color =
+    if (contrastRatio(accent, background) >= 3f) accent else textPrimary
 
 val DarkAppColors = AppColors(
     textPrimary = TextPrimary,
@@ -54,7 +74,14 @@ fun IronLogTheme(
     customFontUri: String? = null,
     content: @Composable () -> Unit
 ) {
-    val appColors = if (darkMode) DarkAppColors else LightAppColors
+    val baseColors = if (darkMode) DarkAppColors else LightAppColors
+    val appColors = baseColors.copy(
+        cursor = resolveCursorColor(
+            accent = appColorScheme.primaryAccent,
+            background = baseColors.backgroundCanvas,
+            textPrimary = baseColors.textPrimary
+        )
+    )
     val typography = rememberAppTypography(
         themeFontKey = themeFontKey,
         customFontUri = customFontUri

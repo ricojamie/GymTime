@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -325,6 +326,7 @@ private fun ExerciseSearchBox(
                     .weight(1f)
                     .align(Alignment.CenterVertically),
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = LocalAppColors.current.textPrimary),
+                cursorBrush = SolidColor(LocalAppColors.current.cursor),
                 decorationBox = { innerTextField ->
                     if (query.isEmpty()) {
                         Text(

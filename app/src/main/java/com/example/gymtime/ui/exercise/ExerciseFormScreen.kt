@@ -1,6 +1,9 @@
 package com.example.gymtime.ui.exercise
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,7 +19,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -51,7 +56,13 @@ fun ExerciseFormScreen(
     var showMuscleDropdown by remember { mutableStateOf(false) }
     var showLogTypeDropdown by remember { mutableStateOf(false) }
     var showDistanceUnitDropdown by remember { mutableStateOf(false) }
+    var showMoreOptions by remember { mutableStateOf(false) }
     val accentColor = MaterialTheme.colorScheme.primary
+
+    // When editing, start with the advanced section open so nothing is hidden.
+    LaunchedEffect(isEditMode) {
+        if (isEditMode) showMoreOptions = true
+    }
 
     // Observe save success event and navigate accordingly
     LaunchedEffect(Unit) {
@@ -110,60 +121,89 @@ fun ExerciseFormScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 16.dp)
+                .imePadding()
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Exercise Name Input
-            Text(
-                text = "EXERCISE NAME",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.2.sp,
-                color = LocalAppColors.current.textTertiary
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // ---------- Essentials ----------
+            FieldLabel("EXERCISE NAME")
+            FormTextFieldCard(
+                value = exerciseName,
+                onValueChange = { viewModel.updateExerciseName(it.titleCase()) },
+                placeholder = "Enter exercise name...",
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words)
             )
 
-            GlowCard(
-                onClick = {},
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                BasicTextField(
-                    value = exerciseName,
-                    onValueChange = { viewModel.updateExerciseName(it.titleCase()) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = LocalAppColors.current.textPrimary,
-                        fontSize = 18.sp
-                    ),
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Words
-                    ),
-                    decorationBox = { innerTextField ->
-                        if (exerciseName.isEmpty()) {
+            FieldLabel("LOG TYPE")
+            Box {
+                GlowCard(
+                    onClick = { showLogTypeDropdown = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val selectedType = logType
+                        if (selectedType == null) {
                             Text(
-                                text = "Enter exercise name...",
-                                style = MaterialTheme.typography.bodyLarge,
+                                text = "Select log type...",
+                                fontSize = 18.sp,
                                 color = LocalAppColors.current.textTertiary
                             )
+                        } else {
+                            Column {
+                                Text(
+                                    text = selectedType.displayName,
+                                    fontSize = 18.sp,
+                                    color = LocalAppColors.current.textPrimary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = selectedType.description,
+                                    fontSize = 12.sp,
+                                    color = LocalAppColors.current.textSecondary
+                                )
+                            }
                         }
-                        innerTextField()
-                    },
-                    singleLine = true
-                )
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Dropdown",
+                            tint = LocalAppColors.current.textTertiary
+                        )
+                    }
+                }
+
+                DropdownMenu(
+                    expanded = showLogTypeDropdown,
+                    onDismissRequest = { showLogTypeDropdown = false },
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .background(LocalAppColors.current.surfaceCards)
+                ) {
+                    LogType.entries.forEach { type ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(type.displayName, color = LocalAppColors.current.textPrimary, fontWeight = FontWeight.Medium)
+                                    Text(type.description, color = LocalAppColors.current.textSecondary, fontSize = 12.sp)
+                                }
+                            },
+                            onClick = {
+                                viewModel.updateLogType(type)
+                                showLogTypeDropdown = false
+                            }
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Target Muscle Dropdown
-            Text(
-                text = "TARGET MUSCLE",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.2.sp,
-                color = LocalAppColors.current.textTertiary
-            )
-
+            FieldLabel("TARGET MUSCLE")
             Box {
                 GlowCard(
                     onClick = { showMuscleDropdown = true },
@@ -208,275 +248,192 @@ fun ExerciseFormScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Log Type Dropdown
-            Text(
-                text = "LOG TYPE",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.2.sp,
-                color = LocalAppColors.current.textTertiary
+            // ---------- More options (collapsible) ----------
+            val chevronRotation by animateFloatAsState(
+                targetValue = if (showMoreOptions) 180f else 0f,
+                label = "moreOptionsChevron"
             )
-
-            Box {
-                GlowCard(
-                    onClick = { showLogTypeDropdown = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = logType.displayName,
-                                fontSize = 18.sp,
-                                color = LocalAppColors.current.textPrimary,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = logType.description,
-                                fontSize = 12.sp,
-                                color = LocalAppColors.current.textSecondary
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Dropdown",
-                            tint = LocalAppColors.current.textTertiary
-                        )
-                    }
-                }
-
-                DropdownMenu(
-                    expanded = showLogTypeDropdown,
-                    onDismissRequest = { showLogTypeDropdown = false },
-                    modifier = Modifier
-                        .fillMaxWidth(0.9f)
-                        .background(LocalAppColors.current.surfaceCards)
-                ) {
-                    LogType.entries.forEach { type ->
-                        DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text(type.displayName, color = LocalAppColors.current.textPrimary, fontWeight = FontWeight.Medium)
-                                    Text(type.description, color = LocalAppColors.current.textSecondary, fontSize = 12.sp)
-                                }
-                            },
-                            onClick = {
-                                viewModel.updateLogType(type)
-                                showLogTypeDropdown = false
-                            }
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (logType.usesDistanceUnit) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showMoreOptions = !showMoreOptions }
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
-                    text = "DISTANCE TYPE",
+                    text = "MORE OPTIONS",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.2.sp,
                     color = LocalAppColors.current.textTertiary
                 )
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (showMoreOptions) "Collapse" else "Expand",
+                    tint = LocalAppColors.current.textTertiary,
+                    modifier = Modifier.rotate(chevronRotation)
+                )
+            }
 
-                Box {
-                    GlowCard(
-                        onClick = { showDistanceUnitDropdown = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    text = defaultDistanceUnit.displayName,
-                                    fontSize = 18.sp,
-                                    color = LocalAppColors.current.textPrimary,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    text = defaultDistanceUnit.description,
-                                    fontSize = 12.sp,
-                                    color = LocalAppColors.current.textSecondary
-                                )
-                            }
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowDown,
-                                contentDescription = "Dropdown",
-                                tint = LocalAppColors.current.textTertiary
-                            )
-                        }
+            AnimatedVisibility(visible = showMoreOptions) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    FieldLabel("DEFAULT REST TIME (SECONDS)")
+                    FormTextFieldCard(
+                        value = defaultRestSeconds,
+                        onValueChange = { viewModel.updateDefaultRestSeconds(it) },
+                        placeholder = "90",
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+
+                    if (logType?.usesRepTarget == true) {
+                        FieldLabel("REP TARGET (OPTIONAL)")
+                        FormTextFieldCard(
+                            value = repTarget,
+                            onValueChange = { value ->
+                                viewModel.updateRepTarget(value.filter { it.isDigit() }.take(3))
+                            },
+                            placeholder = "Example: 10",
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
                     }
 
-                    DropdownMenu(
-                        expanded = showDistanceUnitDropdown,
-                        onDismissRequest = { showDistanceUnitDropdown = false },
-                        modifier = Modifier
-                            .fillMaxWidth(0.9f)
-                            .background(LocalAppColors.current.surfaceCards)
-                    ) {
-                        DistanceUnit.entries.forEach { unit ->
-                            DropdownMenuItem(
-                                text = {
+                    if (logType?.usesDistanceUnit == true) {
+                        FieldLabel("DISTANCE TYPE")
+                        Box {
+                            GlowCard(
+                                onClick = { showDistanceUnitDropdown = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Column {
                                         Text(
-                                            unit.displayName,
+                                            text = defaultDistanceUnit.displayName,
+                                            fontSize = 18.sp,
                                             color = LocalAppColors.current.textPrimary,
                                             fontWeight = FontWeight.Medium
                                         )
                                         Text(
-                                            unit.description,
-                                            color = LocalAppColors.current.textSecondary,
-                                            fontSize = 12.sp
+                                            text = defaultDistanceUnit.description,
+                                            fontSize = 12.sp,
+                                            color = LocalAppColors.current.textSecondary
                                         )
                                     }
-                                },
-                                onClick = {
-                                    viewModel.updateDefaultDistanceUnit(unit)
-                                    showDistanceUnitDropdown = false
+                                    Icon(
+                                        imageVector = Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "Dropdown",
+                                        tint = LocalAppColors.current.textTertiary
+                                    )
                                 }
-                            )
+                            }
+
+                            DropdownMenu(
+                                expanded = showDistanceUnitDropdown,
+                                onDismissRequest = { showDistanceUnitDropdown = false },
+                                modifier = Modifier
+                                    .fillMaxWidth(0.9f)
+                                    .background(LocalAppColors.current.surfaceCards)
+                            ) {
+                                DistanceUnit.entries.forEach { unit ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(
+                                                    unit.displayName,
+                                                    color = LocalAppColors.current.textPrimary,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                                Text(
+                                                    unit.description,
+                                                    color = LocalAppColors.current.textSecondary,
+                                                    fontSize = 12.sp
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            viewModel.updateDefaultDistanceUnit(unit)
+                                            showDistanceUnitDropdown = false
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
-                }
 
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            // Default Rest Time Input
-            Text(
-                text = "DEFAULT REST TIME (SECONDS)",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.2.sp,
-                color = LocalAppColors.current.textTertiary
-            )
-
-            GlowCard(
-                onClick = {},
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                BasicTextField(
-                    value = defaultRestSeconds,
-                    onValueChange = { viewModel.updateDefaultRestSeconds(it) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = LocalAppColors.current.textPrimary,
-                        fontSize = 18.sp
-                    ),
-                    decorationBox = { innerTextField ->
-                        if (defaultRestSeconds.isEmpty()) {
-                            Text(
-                                text = "90",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = LocalAppColors.current.textTertiary
-                            )
-                        }
-                        innerTextField()
-                    },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (logType.usesRepTarget) {
-                Text(
-                    text = "REP TARGET (OPTIONAL)",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.2.sp,
-                    color = LocalAppColors.current.textTertiary
-                )
-
-                GlowCard(
-                    onClick = {},
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    BasicTextField(
-                        value = repTarget,
-                        onValueChange = { value ->
-                            viewModel.updateRepTarget(value.filter { it.isDigit() }.take(3))
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(
-                            color = LocalAppColors.current.textPrimary,
-                            fontSize = 18.sp
-                        ),
-                        decorationBox = { innerTextField ->
-                            if (repTarget.isEmpty()) {
-                                Text(
-                                    text = "Example: 10",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = LocalAppColors.current.textTertiary
-                                )
-                            }
-                            innerTextField()
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
+                    FieldLabel("NOTES (OPTIONAL)")
+                    FormTextFieldCard(
+                        value = notes,
+                        onValueChange = { viewModel.updateNotes(it) },
+                        placeholder = "Add form cues, equipment notes, etc...",
+                        singleLine = false,
+                        maxLines = 5,
+                        fieldModifier = Modifier.height(120.dp)
                     )
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            // Notes Input (Optional)
-            Text(
-                text = "NOTES (OPTIONAL)",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.2.sp,
-                color = LocalAppColors.current.textTertiary
-            )
-
-            GlowCard(
-                onClick = {},
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                BasicTextField(
-                    value = notes,
-                    onValueChange = { viewModel.updateNotes(it) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp)
-                        .padding(16.dp),
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(
-                        color = LocalAppColors.current.textPrimary
-                    ),
-                    decorationBox = { innerTextField ->
-                        if (notes.isEmpty()) {
-                            Text(
-                                text = "Add form cues, equipment notes, etc...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = LocalAppColors.current.textTertiary
-                            )
-                        }
-                        innerTextField()
-                    },
-                    maxLines = 5
-                )
             }
 
             Spacer(modifier = Modifier.height(40.dp))
         }
+    }
+}
+
+@Composable
+private fun FieldLabel(text: String) {
+    Text(
+        text = text,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 1.2.sp,
+        color = LocalAppColors.current.textTertiary
+    )
+}
+
+@Composable
+private fun FormTextFieldCard(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    singleLine: Boolean = true,
+    maxLines: Int = 1,
+    fieldModifier: Modifier = Modifier
+) {
+    GlowCard(
+        onClick = {},
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = fieldModifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                color = LocalAppColors.current.textPrimary,
+                fontSize = 18.sp
+            ),
+            keyboardOptions = keyboardOptions,
+            cursorBrush = SolidColor(LocalAppColors.current.cursor),
+            decorationBox = { innerTextField ->
+                if (value.isEmpty()) {
+                    Text(
+                        text = placeholder,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = LocalAppColors.current.textTertiary,
+                        fontSize = 18.sp
+                    )
+                }
+                innerTextField()
+            },
+            singleLine = singleLine,
+            maxLines = if (singleLine) 1 else maxLines
+        )
     }
 }
 

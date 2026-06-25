@@ -153,7 +153,7 @@ fun MuscleGroupManagementScreen(
                             color = LocalAppColors.current.textPrimary,
                             fontWeight = FontWeight.Medium
                         ),
-                        cursorBrush = SolidColor(accentColor),
+                        cursorBrush = SolidColor(LocalAppColors.current.cursor),
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(LocalAppColors.current.inputBackground, RoundedCornerShape(8.dp))
