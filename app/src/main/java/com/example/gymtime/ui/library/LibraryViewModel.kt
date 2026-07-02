@@ -19,7 +19,7 @@ class LibraryViewModel @Inject constructor(
     val activeRoutineId: Flow<Long?> = routineRepository.getActiveRoutineStatus().map { it?.routine?.id }
 
     val canCreateMoreRoutines: StateFlow<Boolean> = routineRepository.getAllRoutines()
-        .map { routines -> routines.size < 3 }
+        .map { routines -> routines.size < RoutineRepository.MAX_ROUTINES }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     fun deleteRoutine(routine: Routine) {

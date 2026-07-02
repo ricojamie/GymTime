@@ -67,6 +67,7 @@ fun HomeScreen(
     val hasActiveRoutine by viewModel.hasActiveRoutine.collectAsState()
     val activeRoutineName by viewModel.activeRoutineName.collectAsState()
     val nextRoutineDayName by viewModel.nextRoutineDayName.collectAsState()
+    val routineCardState by viewModel.routineCardState.collectAsState()
     val volumeOrbState by viewModel.volumeOrbState.collectAsState()
     val streakResult by viewModel.streakResult.collectAsState()
     val bestStreak by viewModel.bestStreak.collectAsState()
@@ -140,8 +141,17 @@ fun HomeScreen(
                 modifier = Modifier.weight(1f),
                 hasActiveRoutine = hasActiveRoutine,
                 routineName = activeRoutineName,
+                nextDayName = routineCardState?.nextDayName,
+                dayPosition = routineCardState?.dayPosition,
+                exercisePreview = routineCardState?.exercisePreview ?: emptyList(),
+                lastPerformedLabel = routineCardState?.lastPerformedLabel,
                 onClick = {
-                    navController.navigate(Screen.RoutineList.route)
+                    val activeId = routineCardState?.routineId
+                    if (activeId != null) {
+                        navController.navigate(Screen.RoutineDetail.createRoute(activeId))
+                    } else {
+                        navController.navigate(Screen.RoutineList.route)
+                    }
                 }
             )
 
@@ -233,9 +243,16 @@ fun HomeScreen(
         ) {
             WorkoutStartPickerSheet(
                 nextRoutineDayName = nextRoutineDayName,
+                exercisePreview = routineCardState?.exercisePreview ?: emptyList(),
                 onStartRoutine = {
                     showWorkoutStartPicker = false
                     viewModel.startNextRoutineWorkout()
+                },
+                onChooseDay = routineCardState?.routineId?.let { activeId ->
+                    {
+                        showWorkoutStartPicker = false
+                        navController.navigate(Screen.RoutineDayStart.createRoute(activeId))
+                    }
                 },
                 onStartBlank = {
                     showWorkoutStartPicker = false
@@ -323,7 +340,9 @@ private fun QuickStartCard(
 @Composable
 private fun WorkoutStartPickerSheet(
     nextRoutineDayName: String?,
+    exercisePreview: List<String>,
     onStartRoutine: () -> Unit,
+    onChooseDay: (() -> Unit)?,
     onStartBlank: () -> Unit
 ) {
     val accentColor = MaterialTheme.colorScheme.primary
@@ -360,10 +379,38 @@ private fun WorkoutStartPickerSheet(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Continue your active routine in order.",
+                    text = if (exercisePreview.isNotEmpty()) {
+                        exercisePreview.joinToString(" · ")
+                    } else {
+                        "Continue your active routine in order."
+                    },
                     style = MaterialTheme.typography.bodySmall,
-                    color = LocalAppColors.current.textSecondary
+                    color = LocalAppColors.current.textSecondary,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
+            }
+        }
+
+        if (onChooseDay != null) {
+            GlowCard(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onChooseDay
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text(
+                        text = "Choose a Different Day",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = LocalAppColors.current.textPrimary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Pick any day from your routine.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = LocalAppColors.current.textSecondary
+                    )
+                }
             }
         }
 

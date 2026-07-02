@@ -87,7 +87,7 @@ fun RoutineLibraryContent(
                         RoutineLibraryItem(
                             routine = routine,
                             isSelectedActive = routine.id == activeRoutineId,
-                            onTap = { navController.navigate(Screen.RoutineDayList.createRoute(routine.id)) },
+                            onTap = { navController.navigate(Screen.RoutineDetail.createRoute(routine.id)) },
                             onToggleActive = { viewModel.toggleRoutineActive(routine) },
                             onDelete = { routineToDelete = routine }
                         )
@@ -102,7 +102,7 @@ fun RoutineLibraryContent(
         AlertDialog(
             onDismissRequest = { showMaxRoutinesDialog = false },
             title = { Text("Maximum Routines Reached", color = LocalAppColors.current.textPrimary) },
-            text = { Text("You can only create up to 3 routines. Delete an existing routine to create a new one.", color = LocalAppColors.current.textSecondary) },
+            text = { Text("You can only create up to 10 routines. Delete an existing routine to create a new one.", color = LocalAppColors.current.textSecondary) },
             confirmButton = {
                 TextButton(onClick = { showMaxRoutinesDialog = false }) {
                     Text("OK", color = accentColor)

@@ -67,7 +67,9 @@ data class WorkoutPanelData(
     val exercises: List<WorkoutExerciseSummary> = emptyList(),
     val setPreviews: Map<Long, List<String>> = emptyMap(),
     val muscleBreakdown: List<MuscleBreakdown> = emptyList(),
-    val stats: WorkoutStats = WorkoutStats(0, 0f, 0, "0m")
+    val stats: WorkoutStats = WorkoutStats(0, 0f, 0, "0m"),
+    // exerciseId -> planned working sets, for routine workouts only
+    val plannedSets: Map<Long, Int> = emptyMap()
 )
 
 data class PersonalRecords(
@@ -255,6 +257,11 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _currentPlanItem = MutableStateFlow<WorkoutPlanSummary?>(null)
     val currentPlanItem: StateFlow<WorkoutPlanSummary?> = _currentPlanItem
 
+    // Position within a routine day's plan, e.g. "Pull Day · Exercise 2 of 6"
+    data class PlanPosition(val index: Int, val total: Int, val dayName: String?)
+    private val _planPosition = MutableStateFlow<PlanPosition?>(null)
+    val planPosition: StateFlow<PlanPosition?> = _planPosition
+
     // Timer auto-start setting
     val timerAutoStart = userPreferencesRepository.timerAutoStart
 
@@ -334,6 +341,7 @@ class ExerciseLoggingViewModel @Inject constructor(
                 } else {
                     _currentPlanItem.value = null
                     _nextExerciseId.value = null
+                    _planPosition.value = null
                 }
             }
         }
@@ -352,6 +360,16 @@ class ExerciseLoggingViewModel @Inject constructor(
                 currentItem?.restSeconds?.let { _restTime.value = it }
 
                 val currentIndex = planItems.indexOfFirst { it.exerciseId == exerciseId }
+
+                _planPosition.value = if (currentIndex != -1) {
+                    PlanPosition(
+                        index = currentIndex + 1,
+                        total = planItems.size,
+                        dayName = _currentWorkout.value?.routineDayNameSnapshot
+                    )
+                } else {
+                    null
+                }
                 val currentGroupId = currentItem?.supersetGroupId
 
                 if (currentGroupId != null) {
@@ -820,12 +838,17 @@ class ExerciseLoggingViewModel @Inject constructor(
             _currentWorkout.value?.let { workout ->
                 combine(
                     workoutRepository.getWorkoutOverview(workout.id, workout.routineDayId),
-                    workoutRepository.getSetsForWorkout(workout.id)
-                ) { overview, sets ->
-                    overview to sets
-                }.collectLatest { (overview, sets) ->
+                    workoutRepository.getSetsForWorkout(workout.id),
+                    if (workout.startedFromRoutine) {
+                        workoutRepository.getWorkoutPlanSummaries(workout.id)
+                    } else {
+                        flowOf(emptyList())
+                    }
+                ) { overview, sets, planItems ->
+                    Triple(overview, sets, planItems)
+                }.collectLatest { (overview, sets, planItems) ->
                     _workoutOverview.value = overview
-                    _workoutPanelData.value = buildWorkoutPanelData(workout, overview, sets)
+                    _workoutPanelData.value = buildWorkoutPanelData(workout, overview, sets, planItems)
                     Log.d("ExerciseLoggingVM", "Workout overview loaded: ${overview.size} exercises, ${sets.size} sets")
                 }
             }
@@ -835,7 +858,8 @@ class ExerciseLoggingViewModel @Inject constructor(
     private fun buildWorkoutPanelData(
         workout: Workout,
         overview: List<WorkoutExerciseSummary>,
-        allSets: List<Set>
+        allSets: List<Set>,
+        planItems: List<WorkoutPlanSummary> = emptyList()
     ): WorkoutPanelData {
         val workingSets = allSets.filter { !it.isWarmup }
         val setPreviews = workingSets
@@ -879,7 +903,10 @@ class ExerciseLoggingViewModel @Inject constructor(
             exercises = overview,
             setPreviews = setPreviews,
             muscleBreakdown = muscleBreakdown,
-            stats = stats
+            stats = stats,
+            plannedSets = planItems.mapNotNull { item ->
+                item.plannedSets?.let { item.exerciseId to it }
+            }.toMap()
         )
     }
 
