@@ -38,7 +38,7 @@ fun RoutineFormScreen(
             if (isEditMode) {
                 navController.navigateUp()
             } else {
-                navController.navigate(Screen.RoutineDayList.createRoute(routineId)) {
+                navController.navigate(Screen.RoutineDetail.createRoute(routineId)) {
                     popUpTo(Screen.RoutineList.route)
                 }
             }

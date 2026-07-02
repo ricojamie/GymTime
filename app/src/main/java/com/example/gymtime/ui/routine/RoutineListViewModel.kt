@@ -20,7 +20,7 @@ class RoutineListViewModel @Inject constructor(
     val activeRoutineId: Flow<Long?> = routineRepository.getActiveRoutineStatus().map { it?.routine?.id }
 
     val canCreateMoreRoutines: StateFlow<Boolean> = routineRepository.getAllRoutines()
-        .map { it.size < 3 }
+        .map { it.size < RoutineRepository.MAX_ROUTINES }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     fun setActiveRoutine(routineId: Long?) {
@@ -32,6 +32,12 @@ class RoutineListViewModel @Inject constructor(
     fun deleteRoutine(routine: Routine) {
         viewModelScope.launch {
             routineRepository.deleteRoutine(routine)
+        }
+    }
+
+    fun duplicateRoutine(routineId: Long) {
+        viewModelScope.launch {
+            routineRepository.duplicateRoutine(routineId)
         }
     }
 }

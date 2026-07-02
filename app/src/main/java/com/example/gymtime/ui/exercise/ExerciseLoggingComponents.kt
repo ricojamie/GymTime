@@ -517,6 +517,7 @@ fun WorkoutOverviewCommandPanel(
                     WorkoutOverviewPanelRow(
                         summary = summary,
                         setPreviews = panelData.setPreviews[summary.exerciseId].orEmpty(),
+                        plannedSets = panelData.plannedSets[summary.exerciseId],
                         isActive = summary.exerciseId == currentExerciseId,
                         isConnectedTop = summary.supersetGroupId != null &&
                             prevSummary?.supersetGroupId == summary.supersetGroupId,
@@ -682,6 +683,7 @@ private fun formatPanelVolume(volume: Int): String =
 private fun WorkoutOverviewPanelRow(
     summary: WorkoutExerciseSummary,
     setPreviews: List<String>,
+    plannedSets: Int?,
     isActive: Boolean,
     isConnectedTop: Boolean,
     isConnectedBottom: Boolean,
@@ -772,6 +774,23 @@ private fun WorkoutOverviewPanelRow(
                             fontSize = 12.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // Plan progress: "done/planned" with a check when complete
+                    if (plannedSets != null && plannedSets > 0) {
+                        val done = setPreviews.size
+                        val complete = done >= plannedSets
+                        Text(
+                            text = if (complete) "✓ $done/$plannedSets" else "$done/$plannedSets",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = when {
+                                complete -> accent
+                                done > 0 -> LocalAppColors.current.textSecondary
+                                else -> LocalAppColors.current.textTertiary.copy(alpha = 0.7f)
+                            },
+                            maxLines = 1
                         )
                     }
 

@@ -130,9 +130,16 @@ fun RoutineListScreen(
                             RoutineListItem(
                                 routine = routine,
                                 isActive = routine.id == activeRoutineId,
-                                onTap = { navController.navigate(Screen.RoutineDayList.createRoute(routine.id)) },
+                                onTap = { navController.navigate(Screen.RoutineDetail.createRoute(routine.id)) },
                                 onSetActive = { viewModel.setActiveRoutine(routine.id) },
                                 onEdit = { navController.navigate(Screen.RoutineForm.createRoute(routine.id)) },
+                                onDuplicate = {
+                                    if (canCreateMore) {
+                                        viewModel.duplicateRoutine(routine.id)
+                                    } else {
+                                        showMaxRoutinesDialog = true
+                                    }
+                                },
                                 onDelete = { routineToDelete = routine }
                             )
                         }
@@ -147,7 +154,7 @@ fun RoutineListScreen(
         AlertDialog(
             onDismissRequest = { showMaxRoutinesDialog = false },
             title = { Text("Maximum Routines Reached") },
-            text = { Text("You can only create up to 3 routines. Delete an existing routine to create a new one.") },
+            text = { Text("You can only create up to 10 routines. Delete an existing routine to create a new one.") },
             confirmButton = {
                 TextButton(onClick = { showMaxRoutinesDialog = false }) {
                     Text("OK")
@@ -189,6 +196,7 @@ fun RoutineListItem(
     onTap: () -> Unit,
     onSetActive: () -> Unit,
     onEdit: () -> Unit,
+    onDuplicate: () -> Unit,
     onDelete: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -254,6 +262,13 @@ fun RoutineListItem(
                     onClick = {
                         showMenu = false
                         onEdit()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Duplicate", color = LocalAppColors.current.textPrimary) },
+                    onClick = {
+                        showMenu = false
+                        onDuplicate()
                     }
                 )
                 DropdownMenuItem(

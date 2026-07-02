@@ -14,6 +14,30 @@ import java.util.Date
 
 import androidx.room.Delete
 
+data class RoutineDayStat(
+    val routineDayId: Long,
+    val timesCompleted: Int,
+    val lastPerformed: Date?
+)
+
+data class RoutineWorkoutSummaryRow(
+    val workoutId: Long,
+    val routineDayId: Long?,
+    val startTime: Date,
+    val endTime: Date?,
+    val totalVolume: Float,
+    val workingSetCount: Int
+)
+
+data class RoutineSetRow(
+    val exerciseId: Long,
+    val exerciseName: String,
+    val workoutId: Long,
+    val startTime: Date,
+    val weight: Float,
+    val reps: Int
+)
+
 data class RatedWorkoutSetInfo(
     val workoutId: Long,
     val startTime: Date,
@@ -170,4 +194,39 @@ interface WorkoutDao {
         startTime: Long,
         endTime: Long
     ): List<RatedWorkoutSetInfo>
+
+    // Per-day completion stats for a routine (times done + most recent).
+    @Query("""
+        SELECT routineDayId, COUNT(*) as timesCompleted, MAX(startTime) as lastPerformed
+        FROM workouts
+        WHERE routineId = :routineId AND routineDayId IS NOT NULL AND endTime IS NOT NULL
+        GROUP BY routineDayId
+    """)
+    fun getRoutineDayStats(routineId: Long): Flow<List<RoutineDayStat>>
+
+    // All completed workouts for a routine with volume + working sets (for routine stats).
+    @Query("""
+        SELECT w.id as workoutId, w.routineDayId, w.startTime, w.endTime,
+            COALESCE(SUM(CASE WHEN s.isWarmup = 0 AND s.weight IS NOT NULL AND s.reps IS NOT NULL THEN s.weight * s.reps ELSE 0 END), 0) as totalVolume,
+            COALESCE(SUM(CASE WHEN s.isWarmup = 0 THEN 1 ELSE 0 END), 0) as workingSetCount
+        FROM workouts w
+        LEFT JOIN sets s ON s.workoutId = w.id
+        WHERE w.routineId = :routineId AND w.endTime IS NOT NULL
+        GROUP BY w.id
+        ORDER BY w.startTime DESC
+    """)
+    suspend fun getCompletedWorkoutsForRoutine(routineId: Long): List<RoutineWorkoutSummaryRow>
+
+    // All working sets logged in a routine's completed workouts (for per-exercise progression).
+    @Query("""
+        SELECT e.id as exerciseId, e.name as exerciseName, w.id as workoutId, w.startTime,
+            s.weight, s.reps
+        FROM sets s
+        INNER JOIN workouts w ON w.id = s.workoutId
+        INNER JOIN exercises e ON e.id = s.exerciseId
+        WHERE w.routineId = :routineId AND w.endTime IS NOT NULL
+          AND s.isWarmup = 0 AND s.weight IS NOT NULL AND s.reps IS NOT NULL
+        ORDER BY w.startTime ASC
+    """)
+    suspend fun getWorkingSetsForRoutine(routineId: Long): List<RoutineSetRow>
 }

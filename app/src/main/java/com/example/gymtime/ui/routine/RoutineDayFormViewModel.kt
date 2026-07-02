@@ -171,6 +171,45 @@ class RoutineDayFormViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Move an exercise up (-1) or down (+1) in the day's order.
+     * Superset pairs move as a single unit so linked exercises stay adjacent.
+     */
+    fun moveExercise(exerciseId: Long, delta: Int) {
+        val order = _selectedExerciseOrder.value
+        val links = _supersetLinks.value
+
+        // Build blocks: a block is either a single exercise or a linked pair.
+        val blocks = mutableListOf<List<Int>>()
+        var i = 0
+        while (i < order.size) {
+            if (links.contains(i) && i + 1 < order.size) {
+                blocks.add(listOf(i, i + 1))
+                i += 2
+            } else {
+                blocks.add(listOf(i))
+                i += 1
+            }
+        }
+
+        val blockIndex = blocks.indexOfFirst { block -> block.any { order[it] == exerciseId } }
+        val targetIndex = blockIndex + delta
+        if (blockIndex == -1 || targetIndex !in blocks.indices) return
+
+        val newBlocks = blocks.toMutableList()
+        val moved = newBlocks.removeAt(blockIndex)
+        newBlocks.add(targetIndex, moved)
+
+        val newOrder = mutableListOf<Long>()
+        val newLinks = mutableSetOf<Int>()
+        newBlocks.forEach { block ->
+            if (block.size == 2) newLinks.add(newOrder.size)
+            block.forEach { oldIndex -> newOrder.add(order[oldIndex]) }
+        }
+        _selectedExerciseOrder.value = newOrder
+        _supersetLinks.value = newLinks
+    }
+
     fun toggleSupersetLink(index: Int) {
         val currentLinks = _supersetLinks.value.toMutableSet()
         if (currentLinks.contains(index)) {

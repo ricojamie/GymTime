@@ -139,6 +139,7 @@ fun ExerciseLoggingScreen(
     val workoutOverview by viewModel.workoutOverview.collectAsState()
     val workoutPanelData by viewModel.workoutPanelData.collectAsState()
     val currentPlanItem by viewModel.currentPlanItem.collectAsState()
+    val planPosition by viewModel.planPosition.collectAsState()
     val personalBestsByReps by viewModel.personalBestsByReps.collectAsState()
     val attemptRecommendation by viewModel.attemptRecommendation.collectAsState()
     val volumeOrbState by viewModel.volumeOrbState.collectAsState()
@@ -257,10 +258,15 @@ fun ExerciseLoggingScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = ex.targetMuscle,
+                                text = planPosition?.let { pos ->
+                                    val prefix = pos.dayName?.let { "$it · " } ?: ""
+                                    "${prefix}Exercise ${pos.index} of ${pos.total}"
+                                } ?: ex.targetMuscle,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary,
-                                fontSize = 12.sp
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     },

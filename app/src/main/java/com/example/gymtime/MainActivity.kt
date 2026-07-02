@@ -18,7 +18,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -157,6 +159,8 @@ class MainActivity : ComponentActivity() {
                                         )
                                     )
                                     .padding(innerPadding)
+                                    .consumeWindowInsets(innerPadding)
+                                    .imePadding()
                             ) {
                                 composable(Screen.Home.route) { HomeScreen(navController = navController) }
                                 composable(Screen.History.route) { HistoryScreen(navController = navController) }
@@ -266,14 +270,14 @@ class MainActivity : ComponentActivity() {
                                     com.example.gymtime.ui.routine.RoutineFormScreen(navController = navController)
                                 }
                                 composable(
-                                    route = Screen.RoutineDayList.route,
+                                    route = Screen.RoutineDetail.route,
                                     arguments = listOf(
                                         androidx.navigation.navArgument("routineId") {
                                             type = androidx.navigation.NavType.LongType
                                         }
                                     )
                                 ) {
-                                    com.example.gymtime.ui.routine.RoutineDayListScreen(navController = navController)
+                                    com.example.gymtime.ui.routine.RoutineDetailScreen(navController = navController)
                                 }
                                 composable(
                                     route = Screen.RoutineDayForm.route,

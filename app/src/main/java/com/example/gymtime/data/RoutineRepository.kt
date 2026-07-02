@@ -11,6 +11,7 @@ import com.example.gymtime.data.db.entity.RoutineExercise
 import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.db.entity.WorkoutExerciseInstance
 import com.example.gymtime.data.repository.WorkoutStartResult
+import com.example.gymtime.data.db.dao.RoutineDayStat
 import com.example.gymtime.data.db.dao.WorkoutDao
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -25,7 +26,8 @@ import javax.inject.Singleton
 data class ActiveRoutineStatus(
     val routine: Routine,
     val nextDay: RoutineDay?,
-    val dayCount: Int
+    val dayCount: Int,
+    val nextDayPosition: Int? = null // 1-based position of nextDay within the routine
 )
 
 @Singleton
@@ -35,6 +37,11 @@ class RoutineRepository @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val workoutPlanDao: WorkoutPlanDao
 ) {
+    companion object {
+        const val MAX_ROUTINES = 10
+        const val MAX_DAYS_PER_ROUTINE = 10
+    }
+
     fun getAllRoutines(): Flow<List<Routine>> = routineDao.getAllRoutines()
 
     fun getRoutineById(id: Long): Flow<Routine?> = routineDao.getRoutineById(id)
@@ -59,7 +66,8 @@ class RoutineRepository @Inject constructor(
                 ActiveRoutineStatus(
                     routine = routine,
                     nextDay = nextDay,
-                    dayCount = days.size
+                    dayCount = days.size,
+                    nextDayPosition = nextDay?.let { days.indexOf(it) + 1 }
                 )
             }
         }
@@ -137,25 +145,97 @@ class RoutineRepository @Inject constructor(
         }
     }
 
-    suspend fun advanceRoutinePointerIfNeeded(workout: Workout) {
-        if (!workout.startedFromRoutine || workout.routineId == null || workout.routineDayId == null) return
+    fun getDaysWithExercisesForRoutine(routineId: Long): Flow<List<RoutineDayWithExercises>> =
+        routineDao.getDaysWithExercisesForRoutine(routineId)
 
-        database.withTransaction {
-            val active = routineDao.getActiveRoutineSync()
-            if (active?.id != workout.routineId) return@withTransaction
-
-            val startedCount = workoutPlanDao.getStartedInstanceCount(workout.id)
-            if (startedCount <= 0) return@withTransaction
-
-            val days = routineDao.getDaysForRoutineSync(active.id)
-            if (days.isEmpty()) return@withTransaction
-
-            val currentIndex = days.indexOfFirst { it.id == workout.routineDayId }
-            if (currentIndex == -1) return@withTransaction
-
-            val nextIndex = (currentIndex + 1) % days.size
-            routineDao.updateNextDayOrderIndex(active.id, days[nextIndex].orderIndex)
+    fun getRoutineDayStats(routineId: Long): Flow<Map<Long, RoutineDayStat>> =
+        workoutDao.getRoutineDayStats(routineId).map { stats ->
+            stats.associateBy { it.routineDayId }
         }
+
+    /** Manually point the routine's "up next" marker at the given day. */
+    suspend fun setNextDay(routineId: Long, dayId: Long) {
+        database.withTransaction {
+            val days = routineDao.getDaysForRoutineSync(routineId)
+            val day = days.firstOrNull { it.id == dayId } ?: return@withTransaction
+            routineDao.updateNextDayOrderIndex(routineId, day.orderIndex)
+        }
+    }
+
+    /**
+     * Swap a day with its neighbor (direction -1 = up, +1 = down), keeping the
+     * "up next" pointer on the same day it pointed at before the move.
+     */
+    suspend fun moveDay(routineId: Long, dayId: Long, direction: Int) {
+        database.withTransaction {
+            val routine = routineDao.getRoutineByIdSync(routineId) ?: return@withTransaction
+            val days = routineDao.getDaysForRoutineSync(routineId)
+            val index = days.indexOfFirst { it.id == dayId }
+            val targetIndex = index + direction
+            if (index == -1 || targetIndex !in days.indices) return@withTransaction
+
+            val day = days[index]
+            val neighbor = days[targetIndex]
+            val nextDayId = days.firstOrNull { it.orderIndex == routine.nextDayOrderIndex }?.id
+
+            routineDao.updateDayOrderIndex(day.id, neighbor.orderIndex)
+            routineDao.updateDayOrderIndex(neighbor.id, day.orderIndex)
+
+            // Keep "up next" pinned to the same day after the swap.
+            when (nextDayId) {
+                day.id -> routineDao.updateNextDayOrderIndex(routineId, neighbor.orderIndex)
+                neighbor.id -> routineDao.updateNextDayOrderIndex(routineId, day.orderIndex)
+            }
+        }
+    }
+
+    /** Copy a routine with all days and exercises. Returns the new routine id. */
+    suspend fun duplicateRoutine(routineId: Long): Long? {
+        return database.withTransaction {
+            val routine = routineDao.getRoutineByIdSync(routineId) ?: return@withTransaction null
+            val days = routineDao.getDaysForRoutineSync(routineId)
+            val newRoutineId = routineDao.insertRoutine(
+                Routine(name = "${routine.name} (copy)", isActive = false, nextDayOrderIndex = 0)
+            )
+            days.forEach { day ->
+                copyDayInternal(day, newRoutineId, day.name, day.orderIndex)
+            }
+            newRoutineId
+        }
+    }
+
+    /** Copy a day (with exercises) to the end of the same routine. Returns the new day id. */
+    suspend fun duplicateDay(dayId: Long): Long? {
+        return database.withTransaction {
+            val template = routineDao.getRoutineDayWithExercisesSync(dayId) ?: return@withTransaction null
+            val days = routineDao.getDaysForRoutineSync(template.day.routineId)
+            val nextOrderIndex = (days.maxOfOrNull { it.orderIndex } ?: -1) + 1
+            copyDayInternal(template.day, template.day.routineId, "${template.day.name} (copy)", nextOrderIndex)
+        }
+    }
+
+    private suspend fun copyDayInternal(
+        sourceDay: RoutineDay,
+        targetRoutineId: Long,
+        newName: String,
+        newOrderIndex: Int
+    ): Long? {
+        val template = routineDao.getRoutineDayWithExercisesSync(sourceDay.id) ?: return null
+        val newDayId = routineDao.insertRoutineDay(
+            RoutineDay(routineId = targetRoutineId, name = newName, orderIndex = newOrderIndex)
+        )
+        // Regenerate superset group ids so the copy is independent of the original.
+        val groupIdMap = mutableMapOf<String, String>()
+        template.exercises.sortedBy { it.routineExercise.orderIndex }.forEach { item ->
+            val re = item.routineExercise
+            val newGroupId = re.supersetGroupId?.let { old ->
+                groupIdMap.getOrPut(old) { java.util.UUID.randomUUID().toString() }
+            }
+            routineDao.insertRoutineExercise(
+                re.copy(id = 0, routineDayId = newDayId, supersetGroupId = newGroupId)
+            )
+        }
+        return newDayId
     }
 
     private suspend fun startRoutineDayInternal(

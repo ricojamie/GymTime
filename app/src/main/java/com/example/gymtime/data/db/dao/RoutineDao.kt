@@ -54,7 +54,7 @@ interface RoutineDao {
     @Delete
     suspend fun deleteRoutine(routine: Routine)
 
-    @Query("SELECT * FROM routines")
+    @Query("SELECT * FROM routines ORDER BY isActive DESC, name ASC")
     fun getAllRoutines(): Flow<List<Routine>>
 
     @Query("SELECT * FROM routines WHERE isActive = 1")
@@ -118,6 +118,13 @@ interface RoutineDao {
     @Transaction
     @Query("SELECT * FROM routine_days WHERE id = :dayId")
     suspend fun getRoutineDayWithExercisesSync(dayId: Long): RoutineDayWithExercises?
+
+    @Transaction
+    @Query("SELECT * FROM routine_days WHERE routineId = :routineId ORDER BY orderIndex ASC")
+    fun getDaysWithExercisesForRoutine(routineId: Long): Flow<List<RoutineDayWithExercises>>
+
+    @Query("UPDATE routine_days SET orderIndex = :orderIndex WHERE id = :dayId")
+    suspend fun updateDayOrderIndex(dayId: Long, orderIndex: Int)
 
     // Routine Exercise methods
     @Insert

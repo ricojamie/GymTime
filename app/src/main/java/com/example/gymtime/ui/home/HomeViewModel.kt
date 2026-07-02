@@ -14,13 +14,17 @@ import com.example.gymtime.domain.analytics.StrengthMomentumState
 import com.example.gymtime.domain.analytics.StrengthMomentumUseCase
 import com.example.gymtime.util.StreakCalculator
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -29,6 +33,15 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import javax.inject.Inject
+
+data class RoutineCardState(
+    val routineId: Long,
+    val routineName: String,
+    val nextDayName: String?,
+    val dayPosition: String?, // e.g. "Day 2 of 4"
+    val exercisePreview: List<String>,
+    val lastPerformedLabel: String? // e.g. "Last: Jun 12"
+)
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -56,6 +69,38 @@ class HomeViewModel @Inject constructor(
 
     val nextRoutineDayName: StateFlow<String?> = activeRoutineStatus.map { it?.nextDay?.name }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val routineCardState: StateFlow<RoutineCardState?> = activeRoutineStatus.flatMapLatest { status ->
+        when {
+            status == null -> flowOf(null)
+            status.nextDay == null -> flowOf(
+                RoutineCardState(
+                    routineId = status.routine.id,
+                    routineName = status.routine.name,
+                    nextDayName = null,
+                    dayPosition = null,
+                    exercisePreview = emptyList(),
+                    lastPerformedLabel = null
+                )
+            )
+            else -> combine(
+                routineRepository.getExerciseListForDay(status.nextDay.id),
+                routineRepository.getRoutineDayStats(status.routine.id)
+            ) { exercises, dayStats ->
+                val dateFormat = SimpleDateFormat("MMM d", Locale.getDefault())
+                RoutineCardState(
+                    routineId = status.routine.id,
+                    routineName = status.routine.name,
+                    nextDayName = status.nextDay.name,
+                    dayPosition = status.nextDayPosition?.let { "Day $it of ${status.dayCount}" },
+                    exercisePreview = exercises.take(3).map { it.name },
+                    lastPerformedLabel = dayStats[status.nextDay.id]?.lastPerformed
+                        ?.let { "Last: ${dateFormat.format(it)}" }
+                )
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private val _startRoutineWorkoutEvent = Channel<WorkoutStartResult>(Channel.BUFFERED)
     val startRoutineWorkoutEvent = _startRoutineWorkoutEvent.receiveAsFlow()

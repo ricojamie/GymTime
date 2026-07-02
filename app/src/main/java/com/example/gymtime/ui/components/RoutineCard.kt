@@ -11,9 +11,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.gymtime.ui.theme.LocalAppColors
 
 @Composable
@@ -21,7 +21,11 @@ fun RoutineCard(
     hasActiveRoutine: Boolean,
     routineName: String?,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    nextDayName: String? = null,
+    dayPosition: String? = null,
+    exercisePreview: List<String> = emptyList(),
+    lastPerformedLabel: String? = null
 ) {
     val accentColor = MaterialTheme.colorScheme.primary
 
@@ -29,49 +33,96 @@ fun RoutineCard(
         modifier = modifier.fillMaxSize(),
         onClick = onClick
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = if (hasActiveRoutine) Icons.Outlined.DateRange else Icons.AutoMirrored.Outlined.List,
-                contentDescription = null,
-                modifier = Modifier.size(24.dp),
-                tint = if (hasActiveRoutine) accentColor else LocalAppColors.current.textTertiary
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            if (hasActiveRoutine && routineName != null) {
+        if (hasActiveRoutine && routineName != null && nextDayName != null) {
+            // Active routine: show what's up next at a glance.
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.Center
+            ) {
                 Text(
-                    text = routineName,
+                    text = (dayPosition ?: routineName).uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accentColor,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = nextDayName,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = LocalAppColors.current.textPrimary,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (exercisePreview.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = exercisePreview.joinToString(" · "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = LocalAppColors.current.textSecondary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 14.sp
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Tap to start",
+                    text = lastPerformedLabel ?: "Not done yet",
                     style = MaterialTheme.typography.labelSmall,
-                    color = LocalAppColors.current.textSecondary
+                    color = LocalAppColors.current.textTertiary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-            } else {
-                Text(
-                    text = "Routines",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = LocalAppColors.current.textPrimary
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = if (hasActiveRoutine) Icons.Outlined.DateRange else Icons.AutoMirrored.Outlined.List,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = if (hasActiveRoutine) accentColor else LocalAppColors.current.textTertiary
                 )
-                Text(
-                    text = "Tap to browse",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = LocalAppColors.current.textSecondary
-                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                if (hasActiveRoutine && routineName != null) {
+                    Text(
+                        text = routineName,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = LocalAppColors.current.textPrimary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "Tap to view",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = LocalAppColors.current.textSecondary
+                    )
+                } else {
+                    Text(
+                        text = "Routines",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = LocalAppColors.current.textPrimary
+                    )
+                    Text(
+                        text = "Tap to browse",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = LocalAppColors.current.textSecondary
+                    )
+                }
             }
         }
     }

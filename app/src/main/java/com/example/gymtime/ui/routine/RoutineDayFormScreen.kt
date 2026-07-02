@@ -14,6 +14,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Search
@@ -184,7 +186,13 @@ fun RoutineDayFormScreen(
                             isLinkedToNext = isLinkedToNext,
                             isLinkedToPrev = isLinkedToPrev,
                             onToggleLink = { viewModel.toggleSupersetLink(index) },
-                            showLinkButton = index < selectedExercises.size - 1
+                            showLinkButton = index < selectedExercises.size - 1,
+                            onMoveUp = if (index > 0) {
+                                { viewModel.moveExercise(exercise.id, -1) }
+                            } else null,
+                            onMoveDown = if (index < selectedExercises.size - 1) {
+                                { viewModel.moveExercise(exercise.id, 1) }
+                            } else null
                         )
                     }
                 }
@@ -220,7 +228,9 @@ fun ExerciseListItem(
     isLinkedToNext: Boolean = false,
     isLinkedToPrev: Boolean = false,
     onToggleLink: () -> Unit = {},
-    showLinkButton: Boolean = false
+    showLinkButton: Boolean = false,
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null
 ) {
     val accentColor = MaterialTheme.colorScheme.primary
     
@@ -301,8 +311,32 @@ fun ExerciseListItem(
                             )
                         }
                     }
-                    IconButton(onClick = onRemove) {
-                        Icon(Icons.Default.Close, contentDescription = "Remove", tint = LocalAppColors.current.textTertiary)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        IconButton(
+                            onClick = { onMoveUp?.invoke() },
+                            enabled = onMoveUp != null,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.KeyboardArrowUp,
+                                contentDescription = "Move up",
+                                tint = if (onMoveUp != null) accentColor else LocalAppColors.current.textTertiary.copy(alpha = 0.3f)
+                            )
+                        }
+                        IconButton(onClick = onRemove, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "Remove", tint = LocalAppColors.current.textTertiary)
+                        }
+                        IconButton(
+                            onClick = { onMoveDown?.invoke() },
+                            enabled = onMoveDown != null,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Move down",
+                                tint = if (onMoveDown != null) accentColor else LocalAppColors.current.textTertiary.copy(alpha = 0.3f)
+                            )
+                        }
                     }
                 }
             }

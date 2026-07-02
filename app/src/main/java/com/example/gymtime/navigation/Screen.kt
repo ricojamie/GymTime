@@ -59,8 +59,8 @@ sealed class Screen(val route: String, val icon: ImageVector) {
         }
     }
 
-    object RoutineDayList : Screen("routine_day_list/{routineId}", Icons.Filled.Home) {
-        fun createRoute(routineId: Long) = "routine_day_list/$routineId"
+    object RoutineDetail : Screen("routine_detail/{routineId}", Icons.Filled.Home) {
+        fun createRoute(routineId: Long) = "routine_detail/$routineId"
     }
 
     object RoutineDayForm : Screen("routine_day_form/{routineId}?dayId={dayId}", Icons.Filled.Home) {
