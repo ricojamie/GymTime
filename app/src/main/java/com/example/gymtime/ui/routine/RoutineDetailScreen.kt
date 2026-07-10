@@ -29,6 +29,7 @@ import com.example.gymtime.domain.analytics.RoutineStats
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.LocalAppColors
+import com.example.gymtime.util.TimeFormatter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -630,7 +631,7 @@ private fun ExerciseTrendRow(trend: RoutineExerciseTrend) {
 }
 
 private fun formatShortDate(date: Date): String =
-    SimpleDateFormat("MMM d", Locale.getDefault()).format(date)
+    TimeFormatter.formatShortDate(date)
 
 private fun formatLongDate(date: Date): String =
     SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(date)

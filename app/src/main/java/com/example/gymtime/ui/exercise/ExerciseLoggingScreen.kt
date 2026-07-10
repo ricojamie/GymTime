@@ -9,6 +9,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -54,6 +55,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -104,6 +106,7 @@ import com.example.gymtime.ui.components.PlateCalculatorSheet
 import com.example.gymtime.ui.components.VolumeProgressBar
 import com.example.gymtime.ui.theme.IronLogTheme
 import com.example.gymtime.ui.theme.LocalAppColors
+import com.example.gymtime.ui.theme.appTextFieldColors
 import com.example.gymtime.util.TimeUtils
 import com.example.gymtime.util.TimeFormatter
 import com.example.gymtime.ui.components.InputCard
@@ -177,6 +180,9 @@ fun ExerciseLoggingScreen(
     var setToAddNote by remember { mutableStateOf<com.example.gymtime.data.db.entity.Set?>(null) }
     var noteText by remember { mutableStateOf("") }
 
+    // Exercise quick-edit (tap title)
+    var showExerciseQuickEdit by remember { mutableStateOf(false) }
+
     val view = LocalView.current
 
     DisposableEffect(viewModel) {
@@ -248,7 +254,9 @@ fun ExerciseLoggingScreen(
             exercise?.let { ex ->
                 TopAppBar(
                     title = {
-                        Column {
+                        Column(
+                            modifier = Modifier.clickable { showExerciseQuickEdit = true }
+                        ) {
                             Text(
                                 text = ex.name,
                                 style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
@@ -1217,13 +1225,7 @@ fun ExerciseLoggingScreen(
                         onValueChange = { noteText = it },
                         placeholder = { Text("Enter note...", color = LocalAppColors.current.textTertiary) },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = LocalAppColors.current.textTertiary,
-                            focusedTextColor = LocalAppColors.current.textPrimary,
-                            unfocusedTextColor = LocalAppColors.current.textPrimary,
-                            cursorColor = LocalAppColors.current.cursor
-                        ),
+                        colors = appTextFieldColors(),
                         maxLines = 3
                     )
                 }
@@ -1250,6 +1252,82 @@ fun ExerciseLoggingScreen(
             },
             containerColor = LocalAppColors.current.surfaceCards
         )
+    }
+
+    // Exercise quick-edit dialog (opened by tapping the title)
+    if (showExerciseQuickEdit) {
+        exercise?.let { ex ->
+            // Seeded on dialog-open (this block leaves composition when the flag
+            // flips false); the exercise flow re-emits after save and must not
+            // clobber in-progress typing.
+            var editName by remember { mutableStateOf(ex.name) }
+            var editRest by remember { mutableStateOf(ex.defaultRestSeconds.toString()) }
+            var editNotes by remember { mutableStateOf(ex.notes ?: "") }
+            val fieldColors = appTextFieldColors()
+
+            AlertDialog(
+                onDismissRequest = { showExerciseQuickEdit = false },
+                title = {
+                    Text(
+                        text = "Edit Exercise",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = LocalAppColors.current.textPrimary
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedTextField(
+                            value = editName,
+                            onValueChange = { editName = it },
+                            label = { Text("Name", color = LocalAppColors.current.textTertiary) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = fieldColors
+                        )
+                        OutlinedTextField(
+                            value = editRest,
+                            onValueChange = { new -> editRest = new.filter { it.isDigit() }.take(4) },
+                            label = { Text("Default rest (seconds)", color = LocalAppColors.current.textTertiary) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = fieldColors
+                        )
+                        OutlinedTextField(
+                            value = editNotes,
+                            onValueChange = { editNotes = it },
+                            label = { Text("Notes", color = LocalAppColors.current.textTertiary) },
+                            maxLines = 3,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = fieldColors
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.updateExerciseDetails(
+                                name = editName,
+                                restSeconds = editRest.toIntOrNull() ?: ex.defaultRestSeconds,
+                                notes = editNotes
+                            )
+                            showExerciseQuickEdit = false
+                        },
+                        enabled = editName.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Save", color = Color.Black, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showExerciseQuickEdit = false }) {
+                        Text("Cancel", color = LocalAppColors.current.textTertiary)
+                    }
+                },
+                containerColor = LocalAppColors.current.surfaceCards
+            )
+        }
     }
 
     // Finish Workout Dialog

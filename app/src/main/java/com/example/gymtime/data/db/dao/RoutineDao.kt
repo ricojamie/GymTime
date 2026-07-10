@@ -130,6 +130,9 @@ interface RoutineDao {
     @Insert
     suspend fun insertRoutineExercise(routineExercise: RoutineExercise)
 
+    @Insert
+    suspend fun insertRoutineExercises(routineExercises: List<RoutineExercise>)
+
     @Delete
     suspend fun deleteRoutineExercise(routineExercise: RoutineExercise)
 

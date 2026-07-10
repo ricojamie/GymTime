@@ -13,8 +13,11 @@ import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.db.entity.WorkoutExerciseInstance
 import com.example.gymtime.ui.exercise.WorkoutStats
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import java.util.Date
 import javax.inject.Inject
@@ -105,24 +108,30 @@ class WorkoutRepository @Inject constructor(
 
     suspend fun getLastCompletedWorkout(): Workout? = workoutDao.getLastCompletedWorkout()
 
-    fun getWorkoutOverview(workoutId: Long, routineDayId: Long?): Flow<List<WorkoutExerciseSummary>> {
-        return if (hasPlanBackedWorkout(routineDayId, workoutId)) {
-            workoutPlanDao.getWorkoutPlanSummaries(workoutId).map { plan ->
-                plan.map { item ->
-                    WorkoutExerciseSummary(
-                        exerciseId = item.exerciseId,
-                        exerciseName = item.exerciseName,
-                        targetMuscle = item.targetMuscle,
-                        setCount = item.setCount,
-                        bestWeight = item.bestWeight,
-                        totalVolume = item.totalVolume,
-                        firstSetTimestamp = item.orderIndex.toLong(),
-                        supersetGroupId = item.supersetGroupId
-                    )
-                }
+    // Plan-backed workouts (routine runs and repeats) are keyed on actual plan
+    // instances, not routine linkage, so repeats of ad-hoc workouts still list
+    // their planned exercises before any set is logged.
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun getWorkoutOverview(workoutId: Long): Flow<List<WorkoutExerciseSummary>> {
+        return workoutPlanDao.getWorkoutPlanSummaries(workoutId).flatMapLatest { plan ->
+            if (plan.isEmpty()) {
+                setDao.getWorkoutExerciseSummaries(workoutId)
+            } else {
+                flowOf(
+                    plan.map { item ->
+                        WorkoutExerciseSummary(
+                            exerciseId = item.exerciseId,
+                            exerciseName = item.exerciseName,
+                            targetMuscle = item.targetMuscle,
+                            setCount = item.setCount,
+                            bestWeight = item.bestWeight,
+                            totalVolume = item.totalVolume,
+                            firstSetTimestamp = item.orderIndex.toLong(),
+                            supersetGroupId = item.supersetGroupId
+                        )
+                    }
+                )
             }
-        } else {
-            setDao.getWorkoutExerciseSummaries(workoutId)
         }
     }
 
@@ -177,8 +186,4 @@ class WorkoutRepository @Inject constructor(
 
     suspend fun getTotalVolume(startTime: Long, endTime: Long): Float =
         setDao.getTotalVolume(startTime, endTime) ?: 0f
-
-    private fun hasPlanBackedWorkout(routineDayId: Long?, workoutId: Long): Boolean {
-        return routineDayId != null && workoutId >= 0
-    }
 }

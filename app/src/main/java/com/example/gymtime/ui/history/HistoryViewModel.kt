@@ -9,6 +9,11 @@ import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
 import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.db.entity.WorkoutWithMuscles
 import com.example.gymtime.data.db.dao.WorkoutDao
+import com.example.gymtime.data.db.entity.Routine
+import com.example.gymtime.data.db.entity.RoutineDay
+import com.example.gymtime.data.AddToRoutineResult
+import com.example.gymtime.data.RepeatWorkoutResult
+import com.example.gymtime.data.RoutineRepository
 import com.example.gymtime.data.repository.WorkoutRepository
 import com.example.gymtime.domain.share.ShareWorkoutUseCase
 import com.example.gymtime.util.ShareImagePalette
@@ -18,9 +23,12 @@ import com.example.gymtime.util.WorkoutSharePayload
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -31,6 +39,7 @@ class HistoryViewModel @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val setDao: SetDao,
     private val workoutRepository: WorkoutRepository,
+    private val routineRepository: RoutineRepository,
     private val shareWorkoutUseCase: ShareWorkoutUseCase,
     private val workoutShareImageGenerator: WorkoutShareImageGenerator
 ) : ViewModel() {
@@ -44,6 +53,17 @@ class HistoryViewModel @Inject constructor(
 
     private val _copyEvent = Channel<String>(Channel.BUFFERED)
     val copyEvent = _copyEvent.receiveAsFlow()
+
+    // Navigation event for repeating a workout (payload = first exercise to open)
+    private val _repeatWorkoutEvent = Channel<Long>(Channel.BUFFERED)
+    val repeatWorkoutEvent = _repeatWorkoutEvent.receiveAsFlow()
+
+    // Transient user-facing messages (toasts)
+    private val _userMessage = Channel<String>(Channel.BUFFERED)
+    val userMessage = _userMessage.receiveAsFlow()
+
+    val allRoutines: StateFlow<List<Routine>> = routineRepository.getAllRoutines()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _allWorkouts = MutableStateFlow<List<WorkoutWithMuscles>>(emptyList())
     val allWorkouts: StateFlow<List<WorkoutWithMuscles>> = _allWorkouts.asStateFlow()
@@ -120,6 +140,58 @@ class HistoryViewModel @Inject constructor(
                 Log.d(TAG, "Reopened workout $workoutId for resume")
             } catch (e: Exception) {
                 Log.e(TAG, "Error reopening workout", e)
+            }
+        }
+    }
+
+    fun repeatWorkout(workoutId: Long) {
+        viewModelScope.launch {
+            try {
+                when (val result = routineRepository.repeatWorkout(workoutId)) {
+                    is RepeatWorkoutResult.Started -> {
+                        clearSelection()
+                        _repeatWorkoutEvent.send(result.result.firstExerciseId)
+                        Log.d(TAG, "Repeated workout $workoutId as ${result.result.workoutId}")
+                    }
+                    RepeatWorkoutResult.OngoingWorkoutExists ->
+                        _userMessage.send("Finish your current workout first")
+                    RepeatWorkoutResult.NothingToRepeat ->
+                        _userMessage.send("Nothing to repeat in this workout")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error repeating workout", e)
+                _userMessage.send("Couldn't repeat workout")
+            }
+        }
+    }
+
+    suspend fun getDaysForRoutine(routineId: Long): List<RoutineDay> {
+        return try {
+            routineRepository.getDaysForRoutine(routineId).first()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading routine days", e)
+            emptyList()
+        }
+    }
+
+    fun addWorkoutToRoutine(workoutId: Long, routineId: Long, replaceDayId: Long?) {
+        viewModelScope.launch {
+            try {
+                val routineName = allRoutines.value.firstOrNull { it.id == routineId }?.name ?: "routine"
+                when (routineRepository.createRoutineDayFromWorkout(workoutId, routineId, replaceDayId)) {
+                    is AddToRoutineResult.Added ->
+                        _userMessage.send(
+                            if (replaceDayId != null) "Day replaced in $routineName"
+                            else "Added to $routineName"
+                        )
+                    AddToRoutineResult.NothingToAdd ->
+                        _userMessage.send("Nothing to add from this workout")
+                    AddToRoutineResult.RoutineFull ->
+                        _userMessage.send("$routineName already has the maximum number of days")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error adding workout to routine", e)
+                _userMessage.send("Couldn't add workout to routine")
             }
         }
     }

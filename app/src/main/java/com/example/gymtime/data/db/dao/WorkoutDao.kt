@@ -65,6 +65,9 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts WHERE id = :id")
     fun getWorkoutById(id: Long): Flow<Workout>
 
+    @Query("SELECT * FROM workouts WHERE id = :id")
+    suspend fun getWorkoutByIdSync(id: Long): Workout?
+
     @Query("SELECT * FROM workouts ORDER BY startTime DESC")
     fun getAllWorkouts(): Flow<List<Workout>>
 

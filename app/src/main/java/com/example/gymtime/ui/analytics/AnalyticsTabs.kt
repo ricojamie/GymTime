@@ -21,14 +21,17 @@ import com.example.gymtime.ui.theme.*
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
+import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLine
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
+import com.patrykandpatrick.vico.compose.common.fill
 import com.patrykandpatrick.vico.compose.cartesian.rememberVicoScrollState
 import com.patrykandpatrick.vico.compose.cartesian.rememberVicoZoomState
 import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
 import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
 import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
+import com.patrykandpatrick.vico.core.cartesian.layer.LineCartesianLayer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -587,9 +590,13 @@ private fun TrendLineChart(
     LaunchedEffect(data) {
         if (data.isNotEmpty()) {
             withContext(Dispatchers.Default) {
+                val trend = LinearRegression.trendValues(data.map { it.value })
                 modelProducer.runTransaction {
                     lineSeries {
                         series(data.map { it.value.toDouble() })
+                        if (trend.isNotEmpty()) {
+                            series(trend.map { it.toDouble() })
+                        }
                     }
                 }
             }
@@ -604,9 +611,27 @@ private fun TrendLineChart(
             .padding(16.dp)
     ) {
         if (data.isNotEmpty()) {
+            val dataLineColor = MaterialTheme.colorScheme.primary
+            val trendLineColor = LocalAppColors.current.textTertiary.copy(alpha = 0.7f)
             CartesianChartHost(
                 chart = rememberCartesianChart(
-                    rememberLineCartesianLayer(),
+                    rememberLineCartesianLayer(
+                        lineProvider = LineCartesianLayer.LineProvider.series(
+                            LineCartesianLayer.rememberLine(
+                                fill = LineCartesianLayer.LineFill.single(fill(dataLineColor))
+                            ),
+                            LineCartesianLayer.rememberLine(
+                                fill = LineCartesianLayer.LineFill.single(fill(trendLineColor)),
+                                stroke = LineCartesianLayer.LineStroke.Dashed(
+                                    thicknessDp = 2f,
+                                    dashLengthDp = 8f,
+                                    gapLengthDp = 6f
+                                ),
+                                areaFill = null,
+                                pointProvider = null
+                            )
+                        )
+                    ),
                     startAxis = VerticalAxis.rememberStart(),
                     bottomAxis = HorizontalAxis.rememberBottom(),
                 ),

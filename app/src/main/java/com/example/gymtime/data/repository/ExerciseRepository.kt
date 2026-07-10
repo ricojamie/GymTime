@@ -49,6 +49,10 @@ class ExerciseRepository @Inject constructor(
         return exerciseDao.getExerciseById(exerciseId)
     }
 
+    suspend fun updateExercise(exercise: Exercise) {
+        exerciseDao.updateExercise(exercise)
+    }
+
     suspend fun getExerciseHistory(exerciseId: Long): Map<Long, List<Set>> {
         val allSets = setDao.getExerciseHistoryByWorkout(exerciseId)
         return allSets.groupBy { it.workoutId }

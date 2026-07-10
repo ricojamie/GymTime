@@ -22,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gymtime.ui.theme.LocalAppColors
+import com.example.gymtime.ui.theme.appTextFieldColors
 import com.example.gymtime.util.PlateCalculator
 import com.example.gymtime.util.PlateLoadout
 
@@ -98,11 +99,7 @@ fun PlateCalculatorSheet(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                    cursorColor = LocalAppColors.current.cursor
-                )
+                colors = appTextFieldColors()
             )
 
             Spacer(modifier = Modifier.height(24.dp))

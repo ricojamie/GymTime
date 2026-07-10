@@ -10,9 +10,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,9 +32,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.gymtime.data.db.entity.Routine
+import com.example.gymtime.data.db.entity.RoutineDay
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.WorkoutWithMuscles
 import com.example.gymtime.data.db.dao.SetWithExerciseInfo
+import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.ExerciseIcons
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.*
@@ -70,6 +76,24 @@ fun HistoryScreen(
             navController.navigate("workout_resume")
         }
     }
+
+    // Handle repeat workout navigation (fresh copy of a past workout)
+    LaunchedEffect(Unit) {
+        viewModel.repeatWorkoutEvent.collect { firstExerciseId ->
+            navController.navigate(Screen.ExerciseLogging.createRoute(firstExerciseId)) {
+                popUpTo(Screen.Home.route)
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.userMessage.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Workout being added to a routine via the picker dialog (null = dialog hidden)
+    var addToRoutineWorkoutId by remember { mutableStateOf<Long?>(null) }
 
     // Launch system share sheet when the ViewModel emits a generated image.
     LaunchedEffect(Unit) {
@@ -155,9 +179,24 @@ fun HistoryScreen(
                 onDismiss = { viewModel.clearSelection() },
                 onResumeWorkout = { viewModel.resumeWorkout(selectedWorkout!!.workout.id) },
                 onCopyWorkout = { viewModel.copyWorkout(selectedWorkout!!.workout.id) },
-                onShareWorkout = { viewModel.shareWorkout(selectedWorkout!!.workout.id, sharePalette) }
+                onShareWorkout = { viewModel.shareWorkout(selectedWorkout!!.workout.id, sharePalette) },
+                onRepeatWorkout = { viewModel.repeatWorkout(selectedWorkout!!.workout.id) },
+                onAddToRoutine = { addToRoutineWorkoutId = selectedWorkout!!.workout.id }
             )
         }
+    }
+
+    addToRoutineWorkoutId?.let { workoutId ->
+        val routines by viewModel.allRoutines.collectAsState()
+        AddToRoutineDialog(
+            routines = routines,
+            loadDays = { routineId -> viewModel.getDaysForRoutine(routineId) },
+            onConfirm = { routineId, replaceDayId ->
+                viewModel.addWorkoutToRoutine(workoutId, routineId, replaceDayId)
+                addToRoutineWorkoutId = null
+            },
+            onDismiss = { addToRoutineWorkoutId = null }
+        )
     }
 }
 
@@ -320,6 +359,8 @@ fun WorkoutDetailsSheet(
     onResumeWorkout: () -> Unit = {},
     onCopyWorkout: () -> Unit = {},
     onShareWorkout: () -> Unit = {},
+    onRepeatWorkout: () -> Unit = {},
+    onAddToRoutine: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val accentColor = MaterialTheme.colorScheme.primary
@@ -424,6 +465,44 @@ fun WorkoutDetailsSheet(
                         contentDescription = "Share workout",
                         tint = accentColor
                     )
+                }
+            }
+
+            // Repeat + Add to Routine row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onRepeatWorkout,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, accentColor)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Replay,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Repeat", color = accentColor, fontWeight = FontWeight.SemiBold)
+                }
+                OutlinedButton(
+                    onClick = onAddToRoutine,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, accentColor)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Add to Routine", color = accentColor, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -650,6 +729,160 @@ fun DeleteWorkoutDialog(
                 Text("Cancel")
             }
         }
+    )
+}
+
+@Composable
+fun AddToRoutineDialog(
+    routines: List<Routine>,
+    loadDays: suspend (Long) -> List<RoutineDay>,
+    onConfirm: (routineId: Long, replaceDayId: Long?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val accentColor = MaterialTheme.colorScheme.primary
+    var pickedRoutine by remember { mutableStateOf<Routine?>(null) }
+    var days by remember { mutableStateOf<List<RoutineDay>?>(null) }
+    var dayToReplace by remember { mutableStateOf<RoutineDay?>(null) }
+
+    LaunchedEffect(pickedRoutine) {
+        days = pickedRoutine?.let { loadDays(it.id) }
+    }
+
+    // Step 3: confirm replacing an existing day
+    dayToReplace?.let { day ->
+        AlertDialog(
+            onDismissRequest = { dayToReplace = null },
+            title = {
+                Text(
+                    "Replace '${day.name}'?",
+                    color = LocalAppColors.current.textPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    "All exercises in this day will be replaced with the ones from this workout.",
+                    color = LocalAppColors.current.textSecondary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { onConfirm(day.routineId, day.id) },
+                    colors = ButtonDefaults.buttonColors(containerColor = accentColor)
+                ) {
+                    Text("Replace", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { dayToReplace = null }) {
+                    Text("Cancel", color = LocalAppColors.current.textTertiary)
+                }
+            },
+            containerColor = LocalAppColors.current.surfaceCards
+        )
+        return
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = pickedRoutine?.let { "Add to '${it.name}'" } ?: "Add to Routine",
+                color = LocalAppColors.current.textPrimary,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            val routine = pickedRoutine
+            if (routine == null) {
+                // Step 1: pick a routine
+                if (routines.isEmpty()) {
+                    Text(
+                        "No routines yet. Create one from the Library tab first.",
+                        color = LocalAppColors.current.textSecondary
+                    )
+                } else {
+                    LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                        items(routines) { r ->
+                            Text(
+                                text = r.name,
+                                color = LocalAppColors.current.textPrimary,
+                                fontSize = 15.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { pickedRoutine = r }
+                                    .padding(vertical = 12.dp)
+                            )
+                            HorizontalDivider(color = LocalAppColors.current.textTertiary.copy(alpha = 0.15f))
+                        }
+                    }
+                }
+            } else {
+                // Step 2: add as new day, or replace an existing day
+                val loadedDays = days
+                if (loadedDays == null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = accentColor)
+                    }
+                } else {
+                    val routineFull = loadedDays.size >= com.example.gymtime.data.RoutineRepository.MAX_DAYS_PER_ROUTINE
+                    LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                        item {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = !routineFull) { onConfirm(routine.id, null) }
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                Text(
+                                    text = "Add as new day",
+                                    color = if (routineFull) LocalAppColors.current.textTertiary else accentColor,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                if (routineFull) {
+                                    Text(
+                                        text = "Routine is full — replace a day instead",
+                                        color = LocalAppColors.current.textTertiary,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                            HorizontalDivider(color = LocalAppColors.current.textTertiary.copy(alpha = 0.15f))
+                        }
+                        items(loadedDays) { day ->
+                            Text(
+                                text = "Replace: ${day.name}",
+                                color = LocalAppColors.current.textPrimary,
+                                fontSize = 15.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { dayToReplace = day }
+                                    .padding(vertical = 12.dp)
+                            )
+                            HorizontalDivider(color = LocalAppColors.current.textTertiary.copy(alpha = 0.15f))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = {
+                if (pickedRoutine != null) pickedRoutine = null else onDismiss()
+            }) {
+                Text(
+                    if (pickedRoutine != null) "Back" else "Cancel",
+                    color = LocalAppColors.current.textTertiary
+                )
+            }
+        },
+        containerColor = LocalAppColors.current.surfaceCards
     )
 }
 

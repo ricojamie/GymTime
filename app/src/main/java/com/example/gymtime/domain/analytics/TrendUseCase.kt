@@ -7,6 +7,7 @@ import com.example.gymtime.data.db.dao.RatedWorkoutSetInfo
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.Exercise
+import com.example.gymtime.util.TimeFormatter
 import com.example.gymtime.util.TimeUtils
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -137,7 +138,6 @@ class TrendUseCase @Inject constructor(
         sets: List<SetWithExerciseInfo>,
         metric: TrendMetric
     ): List<TrendPoint> {
-        val sdf = SimpleDateFormat("MMM d", Locale.getDefault())
         return sets.groupBy { it.set.workoutId }
             .mapNotNull { (workoutId, workoutSets) ->
                 val firstSet = workoutSets.minByOrNull { it.set.timestamp.time }
@@ -147,7 +147,7 @@ class TrendUseCase @Inject constructor(
                 if (value == 0f) return@mapNotNull null
 
                 TrendPoint(
-                    label = sdf.format(date),
+                    label = TimeFormatter.formatShortDate(date),
                     value = value,
                     date = date,
                     workoutId = workoutId
@@ -278,12 +278,11 @@ class TrendUseCase @Inject constructor(
         snapshots: List<TrendRatedSnapshot>,
         metric: TrendMetric
     ): List<TrendPoint> {
-        val sdf = SimpleDateFormat("MMM d", Locale.getDefault())
         return snapshots.mapNotNull { snapshot ->
             val value = snapshot.ratedMetric(metric)
             if (value == 0f) return@mapNotNull null
             TrendPoint(
-                label = sdf.format(snapshot.startTime),
+                label = TimeFormatter.formatShortDate(snapshot.startTime),
                 value = value,
                 date = snapshot.startTime,
                 workoutId = snapshot.workoutId
