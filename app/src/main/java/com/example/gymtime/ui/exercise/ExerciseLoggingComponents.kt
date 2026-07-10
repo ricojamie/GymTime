@@ -39,9 +39,11 @@ import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
+import com.example.gymtime.domain.analytics.LinearRegression
 import com.example.gymtime.ui.components.ExerciseIcons
 import com.example.gymtime.ui.theme.LocalAppColors
 import com.example.gymtime.util.OneRepMaxCalculator
+import com.example.gymtime.util.TimeFormatter
 import com.example.gymtime.util.TimeUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -1188,9 +1190,18 @@ private fun E1RMSparkline(
     val primary = MaterialTheme.colorScheme.primary
     val colors = LocalAppColors.current
 
-    val minVal = points.min()
-    val maxVal = (listOf(points.max()) + listOfNotNull(prCeiling)).max()
+    // Fitted-line values at x = 0 and x = n-1: drawn as the dashed trend line and
+    // folded into the y-range so the line stays inside the canvas.
+    val trendEndpoints = remember(points) {
+        LinearRegression.fit(points)?.let {
+            listOf(it.intercept, it.intercept + it.slope * (points.size - 1))
+        } ?: emptyList()
+    }
+    val minVal = (points + trendEndpoints).min()
+    val maxVal = (listOf(points.max()) + listOfNotNull(prCeiling) + trendEndpoints).max()
     val span = (maxVal - minVal).coerceAtLeast(1f)
+    val ceilingDash = remember { PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f) }
+    val trendDash = remember { PathEffect.dashPathEffect(floatArrayOf(4f, 6f), 0f) }
 
     Column {
         Row(
@@ -1274,7 +1285,18 @@ private fun E1RMSparkline(
                     start = Offset(0f, ceilingY),
                     end = Offset(w, ceilingY),
                     strokeWidth = 1f,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
+                    pathEffect = ceilingDash
+                )
+            }
+
+            // Regression trend line
+            if (trendEndpoints.size == 2) {
+                drawLine(
+                    color = colors.textTertiary.copy(alpha = 0.7f),
+                    start = Offset(0f, yFor(trendEndpoints.first())),
+                    end = Offset(w, yFor(trendEndpoints.last())),
+                    strokeWidth = 1.5f,
+                    pathEffect = trendDash
                 )
             }
 
@@ -1359,7 +1381,6 @@ private fun SessionRow(
 ) {
     val colors = LocalAppColors.current
     val primary = MaterialTheme.colorScheme.primary
-    val dateFormatter = remember { java.text.SimpleDateFormat("MMM d", java.util.Locale.US) }
     val noteSet = session.workingSets.firstOrNull { !it.note.isNullOrBlank() }
         ?: session.sets.firstOrNull { !it.note.isNullOrBlank() }
 
@@ -1373,7 +1394,7 @@ private fun SessionRow(
             // Left rail: date
             Column(modifier = Modifier.width(60.dp)) {
                 Text(
-                    text = dateFormatter.format(session.date),
+                    text = TimeFormatter.formatShortDate(session.date, java.util.Locale.US),
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.textSecondary,
                     fontWeight = FontWeight.SemiBold,

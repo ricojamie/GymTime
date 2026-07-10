@@ -32,6 +32,8 @@ data class WorkoutExerciseInstance(
     val plannedSets: Int? = null,
     val repMin: Int? = null,
     val repMax: Int? = null,
+    // Explicit routine/session override. Null inherits Exercise.defaultRestSeconds
+    // when plan data is queried for display.
     val restSeconds: Int? = null,
     val notes: String? = null,
     val supersetGroupId: String? = null,

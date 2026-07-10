@@ -307,6 +307,7 @@ fun ExerciseListItem(
                                 value = targetRestSeconds,
                                 onValueChange = onTargetRestSecondsChange,
                                 suffix = "s",
+                                placeholder = exercise.defaultRestSeconds.toString(),
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -394,7 +395,8 @@ private fun PrescriptionField(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    suffix: String? = null
+    suffix: String? = null,
+    placeholder: String? = null
 ) {
     OutlinedTextField(
         value = value,
@@ -405,16 +407,14 @@ private fun PrescriptionField(
         label = {
             Text(label, style = MaterialTheme.typography.labelSmall)
         },
+        placeholder = placeholder?.let {
+            { Text(it, style = MaterialTheme.typography.labelSmall) }
+        },
         suffix = suffix?.let {
             { Text(it, style = MaterialTheme.typography.labelSmall) }
         },
         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            unfocusedBorderColor = LocalAppColors.current.textTertiary.copy(alpha = 0.4f),
-            focusedTextColor = LocalAppColors.current.textPrimary,
-            unfocusedTextColor = LocalAppColors.current.textPrimary
-        )
+        colors = appTextFieldColors()
     )
 }
 

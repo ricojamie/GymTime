@@ -868,20 +868,22 @@ fun SettingsScreen(
             text = {
                 Column {
                     Text(
-                        "Slider Logger & Cleaner Setup 🎚️",
+                        "Repeat Workouts & Trend Lines 📈",
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "🎚️ Slide to log\n" +
-                        "Log weight & reps by dragging a ruler — with markers for what you did last time and your goal, so progressive overload is a glance away. Tap the number to type an exact value, or nudge with +/−.\n\n" +
-                        "📝 Rebuilt exercise creator\n" +
-                        "The Create Exercise screen is reorganized into Essentials + More options, and the keyboard no longer covers the field you're typing in.\n\n" +
-                        "✅ Log Type is now required\n" +
-                        "New exercises no longer default to Weight + Reps — pick the right type up front so you don't have to re-edit later.\n\n" +
-                        "👁️ Dark mode cursor fix\n" +
-                        "The text cursor is finally visible while you type in dark mode.",
+                        "🔁 Repeat any past workout\n" +
+                        "Open a workout in History and tap Repeat to start a fresh session with the same exercises and targets.\n\n" +
+                        "📋 Add a workout to a routine\n" +
+                        "Turn any past workout into a routine day — add it as a new day or replace an existing one.\n\n" +
+                        "✏️ Quick-edit from the logger\n" +
+                        "Tap the exercise name while logging to rename it or tweak its rest time and notes on the spot.\n\n" +
+                        "📈 Trend lines on your charts\n" +
+                        "The Trends chart and the e1RM sparkline now show a best-fit line so you can see the direction of your progress.\n\n" +
+                        "⌨️ Smarter keyboard\n" +
+                        "Tapping anywhere outside a text field in the logger now dismisses the keyboard.",
                         color = LocalAppColors.current.textPrimary
                     )
                 }

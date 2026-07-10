@@ -17,9 +17,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -134,16 +136,11 @@ fun RulerSliderInput(
         return centerX + (v - activeValue).toFloat() / step * tickSpacing(width)
     }
 
-    var editing by remember { mutableStateOf(false) }
+    var editorFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(editing) {
-        if (editing) {
-            focusRequester.requestFocus()
-            keyboardController?.show()
-        }
-    }
     fun startEditing() {
-        editing = true
+        focusRequester.requestFocus()
+        keyboardController?.show()
     }
 
     val labelPaint = remember(colors.textTertiary) {
@@ -198,7 +195,11 @@ fun RulerSliderInput(
                     onValueChange((base - step).coerceAtLeast(minValue).toString())
                 }
 
-                if (editing) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 38.dp)
+                ) {
                     BasicTextField(
                         value = value,
                         onValueChange = { raw -> onValueChange(raw.filter { it.isDigit() || it == '.' }.take(6)) },
@@ -210,41 +211,39 @@ fun RulerSliderInput(
                         ),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                         keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                            onDone = {
-                                editing = false
-                                focusManager.clearFocus()
-                            }
+                            onDone = { focusManager.clearFocus() }
                         ),
                         cursorBrush = SolidColor(colors.cursor),
                         singleLine = true,
                         modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 38.dp)
+                            .fillMaxSize()
+                            .alpha(if (editorFocused) 1f else 0f)
                             .focusRequester(focusRequester)
+                            .onFocusChanged { editorFocused = it.isFocused }
                     )
-                } else {
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 38.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { startEditing() },
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.Bottom
-                    ) {
-                        Text(
-                            text = displayText.ifBlank { "0" },
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 28.sp,
-                            color = if (displayText.isBlank()) colors.textTertiary.copy(alpha = 0.35f) else colors.textPrimary
-                        )
-                        if (unitSuffix.isNotEmpty()) {
+                    if (!editorFocused) {
+                        Row(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { startEditing() },
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.Bottom
+                        ) {
                             Text(
-                                text = " $unitSuffix",
-                                fontSize = 13.sp,
-                                color = colors.textTertiary,
-                                modifier = Modifier.padding(bottom = 4.dp)
+                                text = displayText.ifBlank { "0" },
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 28.sp,
+                                color = if (displayText.isBlank()) colors.textTertiary.copy(alpha = 0.35f) else colors.textPrimary
                             )
+                            if (unitSuffix.isNotEmpty()) {
+                                Text(
+                                    text = " $unitSuffix",
+                                    fontSize = 13.sp,
+                                    color = colors.textTertiary,
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
+                            }
                         }
                     }
                 }

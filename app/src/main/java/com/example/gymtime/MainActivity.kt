@@ -49,6 +49,7 @@ import com.example.gymtime.notifications.MonthlyReportNotifier
 import com.example.gymtime.ui.history.HistoryScreen
 import com.example.gymtime.ui.home.HomeScreen
 import com.example.gymtime.ui.report.MonthlyReportScreen
+import com.example.gymtime.ui.components.clearFocusOnTapOutside
 import com.example.gymtime.ui.theme.IronLogTheme
 import com.example.gymtime.ui.theme.ThemeColors
 import dagger.hilt.android.AndroidEntryPoint
@@ -140,7 +141,11 @@ class MainActivity : ComponentActivity() {
                     val showBottomBar = currentRoute in bottomBarScreens
 
                     // Outer Box to allow BottomNavigationBar to overlay content
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clearFocusOnTapOutside()
+                    ) {
                         Scaffold(
                             modifier = Modifier.fillMaxSize(),
                             containerColor = Color.Transparent

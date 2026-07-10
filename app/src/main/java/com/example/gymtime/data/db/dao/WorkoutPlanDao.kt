@@ -33,6 +33,7 @@ data class WorkoutPlanSummary(
     val plannedSets: Int?,
     val repMin: Int?,
     val repMax: Int?,
+    /** Effective display value: explicit plan override, otherwise exercise default. */
     val restSeconds: Int?,
     val notes: String?,
     val supersetGroupId: String?,
@@ -68,6 +69,13 @@ interface WorkoutPlanDao {
     @Query("""
         SELECT * FROM workout_exercise_instances
         WHERE workoutId = :workoutId
+        ORDER BY orderIndex ASC
+    """)
+    suspend fun getInstancesForWorkoutSync(workoutId: Long): List<WorkoutExerciseInstance>
+
+    @Query("""
+        SELECT * FROM workout_exercise_instances
+        WHERE workoutId = :workoutId
           AND exerciseId = :exerciseId
         ORDER BY orderIndex ASC
         LIMIT 1
@@ -95,7 +103,7 @@ interface WorkoutPlanDao {
             wei.plannedSets as plannedSets,
             wei.repMin as repMin,
             wei.repMax as repMax,
-            wei.restSeconds as restSeconds,
+            COALESCE(wei.restSeconds, e.defaultRestSeconds) as restSeconds,
             wei.notes as notes,
             wei.supersetGroupId as supersetGroupId,
             wei.supersetOrderIndex as supersetOrderIndex,

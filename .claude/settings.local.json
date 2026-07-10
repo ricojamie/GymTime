@@ -69,7 +69,9 @@
       "Bash(./gradlew :app:compileDebugUnitTestKotlin :app:compileDebugAndroidTestKotlin --console=plain)",
       "Bash(./gradlew :app:testDebugUnitTest --console=plain)",
       "PowerShell(Get-Process git,git-bash,gitk -ErrorAction SilentlyContinue)",
-      "Bash(git fetch *)"
+      "Bash(git fetch *)",
+      "Bash(xargs grep -l \"stats\\\\|Statistics\\\\|performance\")",
+      "PowerShell(git checkout -b routines-overhaul)"
     ],
     "deny": [],
     "ask": []

@@ -13,6 +13,7 @@ import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.domain.analytics.StrengthMomentumState
 import com.example.gymtime.domain.analytics.StrengthMomentumUseCase
 import com.example.gymtime.util.StreakCalculator
+import com.example.gymtime.util.TimeFormatter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
@@ -88,7 +89,6 @@ class HomeViewModel @Inject constructor(
                 routineRepository.getExerciseListForDay(status.nextDay.id),
                 routineRepository.getRoutineDayStats(status.routine.id)
             ) { exercises, dayStats ->
-                val dateFormat = SimpleDateFormat("MMM d", Locale.getDefault())
                 RoutineCardState(
                     routineId = status.routine.id,
                     routineName = status.routine.name,
@@ -96,7 +96,7 @@ class HomeViewModel @Inject constructor(
                     dayPosition = status.nextDayPosition?.let { "Day $it of ${status.dayCount}" },
                     exercisePreview = exercises.take(3).map { it.name },
                     lastPerformedLabel = dayStats[status.nextDay.id]?.lastPerformed
-                        ?.let { "Last: ${dateFormat.format(it)}" }
+                        ?.let { "Last: ${TimeFormatter.formatShortDate(it)}" }
                 )
             }
         }

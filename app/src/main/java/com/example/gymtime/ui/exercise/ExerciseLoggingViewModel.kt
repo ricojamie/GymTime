@@ -787,6 +787,24 @@ class ExerciseLoggingViewModel @Inject constructor(
         }
     }
 
+    fun updateExerciseDetails(name: String, restSeconds: Int, notes: String?) {
+        viewModelScope.launch {
+            val ex = _exercise.value ?: return@launch
+            val trimmedName = name.trim()
+            if (trimmedName.isEmpty()) return@launch
+            exerciseRepository.updateExercise(
+                ex.copy(
+                    name = trimmedName,
+                    defaultRestSeconds = restSeconds,
+                    notes = notes?.trim()?.takeIf { it.isNotBlank() }
+                )
+            )
+            // Plan rows with no explicit routine/session rest resolve this updated
+            // exercise default at query/display time; explicit prescriptions still win.
+            Log.d("ExerciseLoggingVM", "Exercise details updated: name=$trimmedName, rest=$restSeconds")
+        }
+    }
+
     fun startTimer() {
         val seconds = _restTime.value
         Log.d("ExerciseLoggingVM", "Starting timer: $seconds seconds")
@@ -837,7 +855,7 @@ class ExerciseLoggingViewModel @Inject constructor(
         viewModelScope.launch {
             _currentWorkout.value?.let { workout ->
                 combine(
-                    workoutRepository.getWorkoutOverview(workout.id, workout.routineDayId),
+                    workoutRepository.getWorkoutOverview(workout.id),
                     workoutRepository.getSetsForWorkout(workout.id),
                     if (workout.startedFromRoutine) {
                         workoutRepository.getWorkoutPlanSummaries(workout.id)

@@ -94,8 +94,7 @@ class RoutineDayFormViewModel @Inject constructor(
                             exercise.exercise.id to (exercise.routineExercise.targetRepsMax?.toString() ?: "")
                         }
                         _targetRestSeconds.value = exercises.associate { exercise ->
-                            exercise.exercise.id to ((exercise.routineExercise.targetRestSeconds
-                                ?: exercise.exercise.defaultRestSeconds).toString())
+                            exercise.exercise.id to (exercise.routineExercise.targetRestSeconds?.toString() ?: "")
                         }
                         
                         // Reconstruct superset links
@@ -135,10 +134,8 @@ class RoutineDayFormViewModel @Inject constructor(
             _targetSets.value = _targetSets.value + (exerciseId to "3")
             _targetRepMin.value = _targetRepMin.value + (exerciseId to "")
             _targetRepMax.value = _targetRepMax.value + (exerciseId to "")
-            viewModelScope.launch {
-                val defaultRest = exerciseDao.getExerciseByIdSync(exerciseId)?.defaultRestSeconds ?: 90
-                _targetRestSeconds.value = _targetRestSeconds.value + (exerciseId to defaultRest.toString())
-            }
+            // Blank means this routine inherits Exercise.defaultRestSeconds at display time.
+            _targetRestSeconds.value = _targetRestSeconds.value + (exerciseId to "")
         }
     }
 
