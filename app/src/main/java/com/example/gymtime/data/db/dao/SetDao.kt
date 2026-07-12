@@ -417,6 +417,7 @@ interface SetDao {
         INNER JOIN exercises e ON s.exerciseId = e.id
         WHERE s.timestamp BETWEEN :startDate AND :endDate
           AND s.isWarmup = 0
+          AND s.isComplete = 1
         ORDER BY s.timestamp ASC
     """)
     suspend fun getPerformanceSetsWithExerciseInRange(

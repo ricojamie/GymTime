@@ -11,7 +11,6 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import kotlin.math.roundToInt
-import kotlin.math.sqrt
 
 enum class MomentumDirection {
     STRONG_UP,
@@ -22,14 +21,29 @@ enum class MomentumDirection {
     NO_BASELINE
 }
 
+enum class MomentumDataStatus {
+    READY,
+    BUILDING_BASELINE,
+    STALE
+}
+
+enum class MomentumConfidence {
+    LOW,
+    STANDARD
+}
+
 data class ExerciseMomentum(
     val exerciseId: Long,
     val exerciseName: String,
     val muscle: String,
-    val percentChange: Float,
-    val recentValue: Float,
-    val baselineValue: Float,
-    val workoutCount: Int
+    val percentChange: Float?,
+    val recentValue: Float?,
+    val baselineValue: Float?,
+    val recentSessionCount: Int,
+    val baselineSessionCount: Int,
+    val latestSessionTimestamp: Long,
+    val status: MomentumDataStatus,
+    val confidence: MomentumConfidence
 )
 
 data class MuscleMomentum(
@@ -41,15 +55,19 @@ data class MuscleMomentum(
     val decliningContributors: List<ExerciseMomentum> = emptyList(),
     val hasMixedContributors: Boolean = false,
     val currentWeekVolume: Float = 0f,
-    val previousWeekVolume: Float = 0f
+    val previousWeekVolume: Float = 0f,
+    val status: MomentumDataStatus = MomentumDataStatus.BUILDING_BASELINE,
+    val confidence: MomentumConfidence = MomentumConfidence.LOW,
+    val latestSessionTimestamp: Long? = null
 )
 
 data class StrengthMomentumState(
     val muscles: List<MuscleMomentum> = emptyList(),
     val topImproving: List<MuscleMomentum> = emptyList(),
     val topDeclining: List<MuscleMomentum> = emptyList(),
-    val recentWindowDays: Int = StrengthMomentumUseCase.WINDOW_DAYS,
-    val baselineWindowDays: Int = StrengthMomentumUseCase.WINDOW_DAYS
+    val recentSessionCount: Int = StrengthMomentumUseCase.MAX_SESSIONS_PER_SIDE,
+    val baselineSessionCount: Int = StrengthMomentumUseCase.MAX_SESSIONS_PER_SIDE,
+    val minimumSessionsPerSide: Int = StrengthMomentumUseCase.MIN_SESSIONS_PER_SIDE
 )
 
 class StrengthMomentumUseCase @Inject constructor(
@@ -59,73 +77,76 @@ class StrengthMomentumUseCase @Inject constructor(
 
     suspend fun getStrengthMomentum(nowMs: Long = System.currentTimeMillis()): StrengthMomentumState =
         withContext(Dispatchers.IO) {
-            val windowMs = TimeUnit.DAYS.toMillis(WINDOW_DAYS.toLong())
-            val historyMs = TimeUnit.DAYS.toMillis(HISTORY_DAYS.toLong())
-
-            val recentStart = nowMs - windowMs
-            val historyStart = nowMs - historyMs
+            val historyStart = nowMs - TimeUnit.DAYS.toMillis(HISTORY_DAYS.toLong())
+            val staleBefore = nowMs - TimeUnit.DAYS.toMillis(STALE_AFTER_DAYS.toLong())
 
             val allSets = setDao.getPerformanceSetsWithExerciseInRange(
                 startDate = historyStart,
                 endDate = nowMs
-            ).filter { !it.set.isWarmup }
-
-            // Current window: recent (last WINDOW_DAYS) vs baseline (the WINDOW_DAYS before that)
-            val recentSets = allSets.filter { it.set.timestamp.time >= recentStart }
-            val baselineSets = allSets.filter {
-                it.set.timestamp.time < recentStart && it.set.timestamp.time >= recentStart - windowMs
+            ).filter {
+                it.set.isComplete &&
+                    !it.set.isWarmup &&
+                    it.logType in STRENGTH_LOG_TYPES
             }
-            val currentExerciseMomentum = buildExerciseMomentum(recentSets, baselineSets)
-            val currentMuscleChanges = aggregatePercentChangeByMuscle(currentExerciseMomentum)
+
+            val exerciseMomentum = buildExerciseMomentum(allSets, staleBefore)
             val weeklyVolumeByMuscle = setDao.getMuscleWeeklyVolumeComparison(
                 previousWeekStartMs = WeekUtils.getLastWeekStartMs(),
                 currentWeekStartMs = WeekUtils.getCurrentWeekStartMs(),
                 nowMs = nowMs
             ).associateBy { it.muscle.lowercase(Locale.US) }
 
-            // Historical comparison points: slide 28d-vs-prior-28d backward in 7-day steps,
-            // skipping the most recent window (that's "current"). Build per-muscle series.
-            val historyPerMuscle = collectHistoricalSeries(allSets, nowMs, windowMs)
-
-            val allMuscles = buildMuscleList(currentExerciseMomentum)
-
-            val muscles = allMuscles.map { muscle ->
-                val contributions = currentExerciseMomentum
+            val muscles = buildMuscleList(exerciseMomentum).map { muscle ->
+                val allContributions = exerciseMomentum
                     .filter { it.muscle.equals(muscle, ignoreCase = true) }
-                    .sortedByDescending { kotlin.math.abs(it.percentChange) }
-                val improving = contributions
-                    .filter { it.percentChange >= NOISE_FLOOR }
-                    .sortedByDescending { it.percentChange }
-                val declining = contributions
-                    .filter { it.percentChange <= -NOISE_FLOOR }
-                    .sortedBy { it.percentChange }
+                val ready = allContributions
+                    .filter { it.status == MomentumDataStatus.READY && it.percentChange != null }
+                    .sortedByDescending { kotlin.math.abs(it.percentChange ?: 0f) }
+                val weeklyVolume = weeklyVolumeByMuscle[muscle.lowercase(Locale.US)]
 
-                if (contributions.isEmpty()) {
-                    val weeklyVolume = weeklyVolumeByMuscle[muscle.lowercase(Locale.US)]
+                if (ready.isEmpty()) {
+                    val latestTimestamp = allContributions.maxOfOrNull { it.latestSessionTimestamp }
+                    val status = if (
+                        allContributions.isNotEmpty() &&
+                        allContributions.all { it.status == MomentumDataStatus.STALE }
+                    ) {
+                        MomentumDataStatus.STALE
+                    } else {
+                        MomentumDataStatus.BUILDING_BASELINE
+                    }
                     MuscleMomentum(
                         muscle = muscle,
                         percentChange = null,
                         direction = MomentumDirection.NO_BASELINE,
-                        contributingExercises = emptyList(),
+                        contributingExercises = allContributions,
                         currentWeekVolume = weeklyVolume?.currentWeekVolume ?: 0f,
-                        previousWeekVolume = weeklyVolume?.previousWeekVolume ?: 0f
+                        previousWeekVolume = weeklyVolume?.previousWeekVolume ?: 0f,
+                        status = status,
+                        latestSessionTimestamp = latestTimestamp
                     )
                 } else {
-                    val percent = currentMuscleChanges[muscle.lowercase(Locale.US)]
-                        ?: weightedPercent(contributions)
-                    val series = historyPerMuscle[muscle.lowercase(Locale.US)].orEmpty()
-                    val weeklyVolume = weeklyVolumeByMuscle[muscle.lowercase(Locale.US)]
-
+                    val improving = ready.filter { (it.percentChange ?: 0f) >= STABLE_THRESHOLD }
+                        .sortedByDescending { it.percentChange }
+                    val declining = ready.filter { (it.percentChange ?: 0f) <= -STABLE_THRESHOLD }
+                        .sortedBy { it.percentChange }
+                    val percent = robustMusclePercent(ready)
                     MuscleMomentum(
                         muscle = muscle,
                         percentChange = percent,
-                        direction = directionFor(percent, series),
-                        contributingExercises = contributions,
+                        direction = directionFor(percent),
+                        contributingExercises = ready,
                         improvingContributors = improving,
                         decliningContributors = declining,
                         hasMixedContributors = improving.isNotEmpty() && declining.isNotEmpty(),
                         currentWeekVolume = weeklyVolume?.currentWeekVolume ?: 0f,
-                        previousWeekVolume = weeklyVolume?.previousWeekVolume ?: 0f
+                        previousWeekVolume = weeklyVolume?.previousWeekVolume ?: 0f,
+                        status = MomentumDataStatus.READY,
+                        confidence = if (ready.all { it.confidence == MomentumConfidence.STANDARD }) {
+                            MomentumConfidence.STANDARD
+                        } else {
+                            MomentumConfidence.LOW
+                        },
+                        latestSessionTimestamp = ready.maxOfOrNull { it.latestSessionTimestamp }
                     )
                 }
             }
@@ -133,11 +154,11 @@ class StrengthMomentumUseCase @Inject constructor(
             StrengthMomentumState(
                 muscles = muscles,
                 topImproving = muscles
-                    .filter { (it.percentChange ?: 0f) > 0f }
+                    .filter { it.direction == MomentumDirection.UP || it.direction == MomentumDirection.STRONG_UP }
                     .sortedByDescending { it.percentChange ?: 0f }
                     .take(3),
                 topDeclining = muscles
-                    .filter { (it.percentChange ?: 0f) < 0f }
+                    .filter { it.direction == MomentumDirection.DOWN || it.direction == MomentumDirection.STRONG_DOWN }
                     .sortedBy { it.percentChange ?: 0f }
                     .take(3)
             )
@@ -148,32 +169,53 @@ class StrengthMomentumUseCase @Inject constructor(
         val calculatedMuscles = exerciseMomentum.map { canonicalMuscleName(it.muscle) }
         return (storedMuscles + calculatedMuscles + DEFAULT_MUSCLES)
             .filterNot { it.equals(CARDIO_MUSCLE, ignoreCase = true) }
-            .distinctBy { it.lowercase() }
+            .distinctBy { it.lowercase(Locale.US) }
             .sortedWith(compareBy({ preferredMuscleIndex(it) }, { it }))
     }
 
     private fun buildExerciseMomentum(
-        recentSets: List<SetWithExercisePerformanceInfo>,
-        baselineSets: List<SetWithExercisePerformanceInfo>
+        sets: List<SetWithExercisePerformanceInfo>,
+        staleBefore: Long
     ): List<ExerciseMomentum> {
-        val recentByExercise = recentSets.groupBy { it.set.exerciseId }
-        val baselineByExercise = baselineSets.groupBy { it.set.exerciseId }
+        return sets.groupBy { it.set.exerciseId }.mapNotNull { (exerciseId, exerciseSets) ->
+            val sample = exerciseSets.maxByOrNull { it.set.timestamp.time } ?: return@mapNotNull null
+            val sessions = exerciseSets
+                .groupBy { it.set.workoutId }
+                .mapNotNull { (_, workoutSets) -> sessionScore(workoutSets) }
+                .sortedByDescending { it.timestamp }
+            if (sessions.isEmpty()) return@mapNotNull null
 
-        return recentByExercise.mapNotNull { (exerciseId, recentExerciseSets) ->
-            val baselineExerciseSets = baselineByExercise[exerciseId].orEmpty()
-            if (baselineExerciseSets.isEmpty()) return@mapNotNull null
+            val latestTimestamp = sessions.first().timestamp
+            val matchedCount = minOf(MAX_SESSIONS_PER_SIDE, sessions.size / 2)
+            val confidence = if (matchedCount >= MAX_SESSIONS_PER_SIDE) {
+                MomentumConfidence.STANDARD
+            } else {
+                MomentumConfidence.LOW
+            }
 
-            val sample = recentExerciseSets.firstOrNull() ?: return@mapNotNull null
-            if (isCardio(sample)) return@mapNotNull null
+            if (latestTimestamp < staleBefore || matchedCount < MIN_SESSIONS_PER_SIDE) {
+                return@mapNotNull ExerciseMomentum(
+                    exerciseId = exerciseId,
+                    exerciseName = sample.exerciseName,
+                    muscle = displayMuscleFor(sample),
+                    percentChange = null,
+                    recentValue = null,
+                    baselineValue = null,
+                    recentSessionCount = matchedCount,
+                    baselineSessionCount = matchedCount,
+                    latestSessionTimestamp = latestTimestamp,
+                    status = if (latestTimestamp < staleBefore) {
+                        MomentumDataStatus.STALE
+                    } else {
+                        MomentumDataStatus.BUILDING_BASELINE
+                    },
+                    confidence = confidence
+                )
+            }
 
-            val recentScores = topSessionScores(recentExerciseSets)
-            val baselineScores = topSessionScores(baselineExerciseSets)
-            if (recentScores.isEmpty() || baselineScores.isEmpty()) return@mapNotNull null
-
-            val recentValue = recentScores.average().toFloat()
-            val baselineValue = baselineScores.average().toFloat()
+            val recentValue = median(sessions.take(matchedCount).map { it.value })
+            val baselineValue = median(sessions.drop(matchedCount).take(matchedCount).map { it.value })
             if (baselineValue <= 0f) return@mapNotNull null
-
             val percentChange = (((recentValue - baselineValue) / baselineValue) * 100f)
                 .roundToSingleDecimal()
 
@@ -184,20 +226,24 @@ class StrengthMomentumUseCase @Inject constructor(
                 percentChange = percentChange,
                 recentValue = recentValue,
                 baselineValue = baselineValue,
-                workoutCount = recentScores.size + baselineScores.size
+                recentSessionCount = matchedCount,
+                baselineSessionCount = matchedCount,
+                latestSessionTimestamp = latestTimestamp,
+                status = MomentumDataStatus.READY,
+                confidence = confidence
             )
         }
     }
 
-    private fun topSessionScores(sets: List<SetWithExercisePerformanceInfo>): List<Float> {
-        return sets.groupBy { it.set.workoutId }
-            .mapNotNull { (_, workoutSets) ->
-                workoutSets.sumOf { performanceValue(it).toDouble() }
-                    .toFloat()
-                    .takeIf { it > 0f }
-            }
-            .sortedDescending()
-            .take(TOP_WORKOUT_COUNT)
+    private fun sessionScore(sets: List<SetWithExercisePerformanceInfo>): SessionScore? {
+        val values = sets.mapNotNull { set ->
+            performanceValue(set).takeIf { it > 0f }
+        }.sortedDescending().take(TOP_SETS_PER_SESSION)
+        if (values.isEmpty()) return null
+        return SessionScore(
+            value = values.average().toFloat(),
+            timestamp = sets.maxOf { it.set.timestamp.time }
+        )
     }
 
     private fun performanceValue(setInfo: SetWithExercisePerformanceInfo): Float {
@@ -209,172 +255,62 @@ class StrengthMomentumUseCase @Inject constructor(
                 if (weight <= 0f || reps <= 0) 0f else weight * (1 + reps / 30f)
             }
             LogType.REPS_ONLY -> (set.reps ?: 0).toFloat()
-            LogType.DURATION -> (set.durationSeconds ?: 0).toFloat()
-            LogType.WEIGHT_TIME -> {
-                val weight = set.weight ?: return 0f
-                val seconds = set.durationSeconds ?: return 0f
-                weight * seconds
-            }
-            LogType.WEIGHT_DISTANCE -> {
-                val weight = set.weight ?: return 0f
-                val distance = set.distanceMeters ?: return 0f
-                weight * distance
-            }
-            LogType.DISTANCE_TIME -> set.distanceMeters ?: set.durationSeconds?.toFloat() ?: 0f
-            LogType.CALORIES_TIME -> set.calories ?: set.durationSeconds?.toFloat() ?: 0f
+            else -> 0f
         }
     }
 
-    private fun displayMuscleFor(setInfo: SetWithExercisePerformanceInfo): String {
-        return canonicalMuscleName(setInfo.targetMuscle)
+    private fun robustMusclePercent(contributions: List<ExerciseMomentum>): Float {
+        val values = contributions.mapNotNull { it.percentChange }
+            .map { it.coerceIn(-MAX_EXERCISE_CHANGE, MAX_EXERCISE_CHANGE) }
+        return median(values).roundToSingleDecimal()
     }
 
-    private fun canonicalMuscleName(raw: String): String =
-        when {
-            raw.equals("Core", ignoreCase = true) || raw.equals("Abs", ignoreCase = true) -> "Abs"
-            else -> raw
-        }
-
-    private fun isCardio(setInfo: SetWithExercisePerformanceInfo): Boolean {
-        return setInfo.targetMuscle.equals(CARDIO_MUSCLE, ignoreCase = true) ||
-            setInfo.logType == LogType.DISTANCE_TIME ||
-            setInfo.logType == LogType.CALORIES_TIME
-    }
-
-    private fun aggregatePercentChangeByMuscle(
-        exerciseMomentum: List<ExerciseMomentum>
-    ): Map<String, Float> {
-        return exerciseMomentum
-            .groupBy { it.muscle.lowercase(Locale.US) }
-            .mapValues { (_, contributions) -> weightedPercent(contributions) }
-    }
-
-    private fun weightedPercent(contributions: List<ExerciseMomentum>): Float {
-        if (contributions.isEmpty()) return 0f
-        val weightedTotal = contributions.sumOf { c ->
-            c.percentChange.toDouble() * c.workoutCount.coerceAtLeast(1)
-        }
-        val weight = contributions.sumOf { it.workoutCount.coerceAtLeast(1) }
-        return (weightedTotal / weight).toFloat()
-    }
-
-    /**
-     * Returns a map of (lowercase muscle name) → list of historical 28d-vs-prior-28d % changes,
-     * sliding the comparison window backward in 7-day steps from one window ago. The most recent
-     * window (the one we're currently classifying) is intentionally excluded.
-     */
-    private fun collectHistoricalSeries(
-        allSets: List<SetWithExercisePerformanceInfo>,
-        nowMs: Long,
-        windowMs: Long
-    ): Map<String, List<Float>> {
-        val stepMs = TimeUnit.DAYS.toMillis(HISTORY_STEP_DAYS.toLong())
-        val series = mutableMapOf<String, MutableList<Float>>()
-
-        var anchorRecentEnd = nowMs - stepMs // start one step behind "current"
-        repeat(HISTORY_STEPS) {
-            val recentEnd = anchorRecentEnd
-            val recentStart = recentEnd - windowMs
-            val baselineEnd = recentStart
-            val baselineStart = baselineEnd - windowMs
-
-            val recent = allSets.filter {
-                it.set.timestamp.time in baselineStart..recentEnd && it.set.timestamp.time >= recentStart
-            }
-            val baseline = allSets.filter {
-                it.set.timestamp.time in baselineStart..recentStart - 1
-            }
-            if (recent.isNotEmpty() && baseline.isNotEmpty()) {
-                val em = buildExerciseMomentum(recent, baseline)
-                val perMuscle = aggregatePercentChangeByMuscle(em)
-                perMuscle.forEach { (muscleKey, pct) ->
-                    series.getOrPut(muscleKey) { mutableListOf() }.add(pct)
-                }
-            }
-            anchorRecentEnd -= stepMs
-        }
-        return series
-    }
-
-    private fun directionFor(percent: Float, history: List<Float>): MomentumDirection {
-        // Sub-noise wobble: don't reward sub-1.5% moves regardless of history quality.
-        if (kotlin.math.abs(percent) < NOISE_FLOOR) return MomentumDirection.FLAT
-
-        // Hard floor on absolute regressions: a real slump should never read as gray.
-        val absoluteFallback = absoluteDirection(percent)
-
-        if (history.size < MIN_HISTORY_SAMPLES) return absoluteFallback
-
-        val mean = history.average().toFloat()
-        val variance = history.sumOf { ((it - mean).toDouble()).let { d -> d * d } } / history.size
-        val stddev = sqrt(variance).toFloat()
-        if (stddev < MIN_STDDEV) return absoluteFallback
-
-        val z = (percent - mean) / stddev
-        val zClassified = when {
-            z >= 1.5f -> MomentumDirection.STRONG_UP
-            z >= 0.5f -> MomentumDirection.UP
-            z <= -1.5f -> MomentumDirection.STRONG_DOWN
-            z <= -0.5f -> MomentumDirection.DOWN
-            else -> MomentumDirection.FLAT
-        }
-
-        // Historical context can upgrade intensity, but it should never contradict or erase
-        // the absolute sign shown next to the muscle.
-        return signConsistentDirection(percent, absoluteFallback, zClassified)
-    }
-
-    private fun signConsistentDirection(
-        percent: Float,
-        absoluteDirection: MomentumDirection,
-        historicalDirection: MomentumDirection
-    ): MomentumDirection {
-        return when {
-            percent > 0f -> when {
-                absoluteDirection == MomentumDirection.STRONG_UP ||
-                    historicalDirection == MomentumDirection.STRONG_UP -> MomentumDirection.STRONG_UP
-                absoluteDirection == MomentumDirection.UP ||
-                    historicalDirection == MomentumDirection.UP -> MomentumDirection.UP
-                else -> MomentumDirection.FLAT
-            }
-            percent < 0f -> when {
-                absoluteDirection == MomentumDirection.STRONG_DOWN ||
-                    historicalDirection == MomentumDirection.STRONG_DOWN -> MomentumDirection.STRONG_DOWN
-                absoluteDirection == MomentumDirection.DOWN ||
-                    historicalDirection == MomentumDirection.DOWN -> MomentumDirection.DOWN
-                else -> MomentumDirection.FLAT
-            }
-            else -> MomentumDirection.FLAT
+    private fun median(values: List<Float>): Float {
+        if (values.isEmpty()) return 0f
+        val sorted = values.sorted()
+        val middle = sorted.size / 2
+        return if (sorted.size % 2 == 0) {
+            (sorted[middle - 1] + sorted[middle]) / 2f
+        } else {
+            sorted[middle]
         }
     }
 
-    private fun absoluteDirection(percent: Float): MomentumDirection {
-        return when {
-            percent >= 5f -> MomentumDirection.STRONG_UP
-            percent >= NOISE_FLOOR -> MomentumDirection.UP
-            percent <= -5f -> MomentumDirection.STRONG_DOWN
-            percent <= -NOISE_FLOOR -> MomentumDirection.DOWN
-            else -> MomentumDirection.FLAT
-        }
+    private fun directionFor(percent: Float): MomentumDirection = when {
+        percent >= STRONG_THRESHOLD -> MomentumDirection.STRONG_UP
+        percent >= STABLE_THRESHOLD -> MomentumDirection.UP
+        percent <= -STRONG_THRESHOLD -> MomentumDirection.STRONG_DOWN
+        percent <= -STABLE_THRESHOLD -> MomentumDirection.DOWN
+        else -> MomentumDirection.FLAT
     }
 
-    private fun preferredMuscleIndex(muscle: String): Int {
-        return DEFAULT_MUSCLES.indexOfFirst { it.equals(muscle, ignoreCase = true) }
+    private fun displayMuscleFor(setInfo: SetWithExercisePerformanceInfo): String =
+        canonicalMuscleName(setInfo.targetMuscle)
+
+    private fun canonicalMuscleName(raw: String): String = when {
+        raw.equals("Core", ignoreCase = true) || raw.equals("Abs", ignoreCase = true) -> "Abs"
+        else -> raw
+    }
+
+    private fun preferredMuscleIndex(muscle: String): Int =
+        DEFAULT_MUSCLES.indexOfFirst { it.equals(muscle, ignoreCase = true) }
             .takeIf { it >= 0 } ?: Int.MAX_VALUE
-    }
 
     private fun Float.roundToSingleDecimal(): Float = (this * 10f).roundToInt() / 10f
 
+    private data class SessionScore(val value: Float, val timestamp: Long)
+
     companion object {
-        const val WINDOW_DAYS = 28
-        const val HISTORY_DAYS = 7 * WINDOW_DAYS // ~6.5 months
-        private const val HISTORY_STEPS = 22
-        private const val HISTORY_STEP_DAYS = 7
-        private const val MIN_HISTORY_SAMPLES = 5
-        private const val MIN_STDDEV = 0.5f
-        private const val NOISE_FLOOR = 1.5f
-        private const val TOP_WORKOUT_COUNT = 3
+        const val MAX_SESSIONS_PER_SIDE = 3
+        const val MIN_SESSIONS_PER_SIDE = 2
+        private const val TOP_SETS_PER_SESSION = 3
+        private const val HISTORY_DAYS = 365
+        private const val STALE_AFTER_DAYS = 42
+        private const val STABLE_THRESHOLD = 2f
+        private const val STRONG_THRESHOLD = 5f
+        private const val MAX_EXERCISE_CHANGE = 20f
         private const val CARDIO_MUSCLE = "Cardio"
+        private val STRENGTH_LOG_TYPES = setOf(LogType.WEIGHT_REPS, LogType.REPS_ONLY)
         private val DEFAULT_MUSCLES = listOf(
             "Chest",
             "Back",

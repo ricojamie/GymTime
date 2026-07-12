@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
@@ -30,18 +33,25 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gymtime.data.VolumeOrbState
+import com.example.gymtime.domain.analytics.MomentumConfidence
+import com.example.gymtime.domain.analytics.MomentumDataStatus
 import com.example.gymtime.domain.analytics.MomentumDirection
 import com.example.gymtime.domain.analytics.MuscleMomentum
 import com.example.gymtime.domain.analytics.StrengthMomentumState
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.LocalAppColors
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import kotlin.math.min
 
@@ -52,12 +62,14 @@ fun StrengthMomentumMapCard(
     onClick: () -> Unit,
     onInfoClick: () -> Unit
 ) {
-    val improvingCount = remember(state) {
-        state.muscles.count { (it.percentChange ?: 0f) >= 2f }
+    val improvingCount = state.muscles.count {
+        it.direction == MomentumDirection.UP || it.direction == MomentumDirection.STRONG_UP
     }
-    val decliningCount = remember(state) {
-        state.muscles.count { (it.percentChange ?: 0f) <= -2f }
+    val stableCount = state.muscles.count { it.direction == MomentumDirection.FLAT }
+    val decliningCount = state.muscles.count {
+        it.direction == MomentumDirection.DOWN || it.direction == MomentumDirection.STRONG_DOWN
     }
+    val buildingCount = state.muscles.count { it.status != MomentumDataStatus.READY }
 
     GlowCard(
         modifier = modifier,
@@ -70,8 +82,7 @@ fun StrengthMomentumMapCard(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -95,27 +106,22 @@ fun StrengthMomentumMapCard(
                         }
                     }
                     Text(
-                        text = "Last ${state.recentWindowDays}d vs previous ${state.baselineWindowDays}d",
+                        text = "Recent sessions vs preceding sessions",
                         style = MaterialTheme.typography.labelSmall,
                         color = LocalAppColors.current.textSecondary
                     )
+                    Text(
+                        text = buildList {
+                            if (improvingCount > 0) add("↑ $improvingCount")
+                            if (stableCount > 0) add("• $stableCount")
+                            if (decliningCount > 0) add("↓ $decliningCount")
+                            if (buildingCount > 0) add("○ $buildingCount building")
+                        }.joinToString("  ").ifBlank { "Building baseline" },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = LocalAppColors.current.textSecondary,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
-
-                Text(
-                    text = when {
-                        state.muscles.any { it.hasMixedContributors } -> "mixed"
-                        improvingCount > 0 -> "$improvingCount up"
-                        decliningCount > 0 -> "$decliningCount down"
-                        else -> "baseline"
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = when {
-                        state.muscles.any { it.hasMixedContributors } -> Color(0xFFF59E0B)
-                        improvingCount > 0 -> Color(0xFF22C55E)
-                        else -> LocalAppColors.current.textTertiary
-                    },
-                    fontWeight = FontWeight.Bold
-                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -143,7 +149,11 @@ fun StrengthMomentumMapCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            MomentumLegend()
+
+            Spacer(modifier = Modifier.height(14.dp))
 
             MomentumStatsRow(state = state)
         }
@@ -174,24 +184,38 @@ private fun BodyAnatomyView(
         }
     }
 
-    val slugToDirection: Map<String, MomentumDirection> = remember(muscles, isBack) {
+    val slugToMomentum: Map<String, MuscleMomentum> = remember(muscles, isBack) {
         val mapping = if (isBack) BACK_APP_MUSCLE_TO_SLUGS else FRONT_APP_MUSCLE_TO_SLUGS
         val byName = muscles.associateBy { it.muscle.lowercase(Locale.US) }
         buildMap {
             mapping.forEach { (appMuscle, slugs) ->
                 val mm = byName[appMuscle.lowercase(Locale.US)]
-                if (mm != null && mm.direction != MomentumDirection.NO_BASELINE) {
-                    slugs.forEach { slug -> put(slug, mm.direction) }
+                if (mm != null) {
+                    slugs.forEach { slug -> put(slug, mm) }
                 }
             }
         }
+    }
+
+    val accessibilitySummary = remember(muscles, isBack) {
+        val mappedNames = (if (isBack) BACK_APP_MUSCLE_TO_SLUGS else FRONT_APP_MUSCLE_TO_SLUGS).keys
+        muscles.filter { muscle -> mappedNames.any { it.equals(muscle.muscle, ignoreCase = true) } }
+            .joinToString(", ") { muscle -> "${muscle.muscle} ${spokenMomentum(muscle)}" }
     }
 
     val neutralMuscleColor = Color(0xFF2A2A2E)
     val outlineStrokeColor = Color.White.copy(alpha = 0.18f)
     val muscleBorderColor = Color.Black.copy(alpha = 0.35f)
 
-    Canvas(modifier = modifier) {
+    Canvas(
+        modifier = modifier.semantics {
+            contentDescription = if (isBack) {
+                "Back strength momentum. $accessibilitySummary"
+            } else {
+                "Front strength momentum. $accessibilitySummary"
+            }
+        }
+    ) {
         val sx = size.width / BODY_VIEWBOX_WIDTH
         val sy = size.height / BODY_VIEWBOX_HEIGHT
         val s = min(sx, sy)
@@ -207,13 +231,45 @@ private fun BodyAnatomyView(
             translate(backShift, 0f)
         }) {
             musclePaths.forEach { (slug, path) ->
-                val direction = slugToDirection[slug]
-                val fill = if (direction != null) colorForDirection(direction) else neutralMuscleColor
+                val momentum = slugToMomentum[slug]
+                val fill = momentum?.let(::colorForMomentum) ?: neutralMuscleColor
                 drawPath(path, color = fill)
                 drawPath(path, color = muscleBorderColor, style = Stroke(width = 1.5f))
             }
             drawPath(outlinePath, color = outlineStrokeColor, style = Stroke(width = 2.5f))
         }
+    }
+}
+
+@Composable
+private fun MomentumLegend() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        LegendItem("↑ Improving", Color(0xFF22C55E))
+        LegendItem("• Stable", Color(0xFF71717A))
+        LegendItem("↓ Declining", Color(0xFFEF4444))
+        LegendItem("○ Need data", Color(0xFF27272A))
+    }
+}
+
+@Composable
+private fun LegendItem(label: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(7.dp)
+                .background(color, RoundedCornerShape(50))
+        )
+        Spacer(modifier = Modifier.width(3.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 9.sp,
+            color = LocalAppColors.current.textTertiary
+        )
     }
 }
 
@@ -268,7 +324,7 @@ private fun MomentumStatColumn(
         Text(
             text = formatPercent(item?.percentChange),
             style = MaterialTheme.typography.labelMedium,
-            color = colorForDirection(item?.direction ?: MomentumDirection.NO_BASELINE),
+            color = item?.let(::colorForMomentum) ?: Color(0xFF71717A),
             fontWeight = FontWeight.Bold
         )
     }
@@ -279,57 +335,59 @@ fun StrengthMomentumDetailSheet(
     state: StrengthMomentumState,
     onClose: () -> Unit
 ) {
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(24.dp)
+            .padding(horizontal = 24.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)
     ) {
-        Text(
-            text = "Strength Momentum",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = LocalAppColors.current.textPrimary
-        )
-        Text(
-            text = "Last ${state.recentWindowDays} days vs previous ${state.baselineWindowDays} days",
-            style = MaterialTheme.typography.bodySmall,
-            color = LocalAppColors.current.textTertiary
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        state.muscles.forEach { muscle ->
-            MomentumDetailRow(muscle = muscle)
-            Spacer(modifier = Modifier.height(12.dp))
+        item {
+            Text(
+                text = "Strength Momentum",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = LocalAppColors.current.textPrimary
+            )
+            Text(
+                text = "Up to ${state.recentSessionCount} recent sessions vs the same number before",
+                style = MaterialTheme.typography.bodySmall,
+                color = LocalAppColors.current.textTertiary
+            )
+            Spacer(modifier = Modifier.height(20.dp))
         }
 
-        Text(
-            text = "Only exercises with comparable recent and baseline history are scored.",
-            style = MaterialTheme.typography.labelSmall,
-            color = LocalAppColors.current.textTertiary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
+        items(state.muscles, key = { it.muscle }) { muscle ->
+            MomentumDetailRow(muscle = muscle)
+            Spacer(modifier = Modifier.height(14.dp))
+        }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "Close",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .clickable(onClick = onClose)
-                .padding(12.dp)
-        )
+        item {
+            Text(
+                text = "Weighted lifts use estimated 1RM; reps-only exercises use reps. At least ${state.minimumSessionsPerSide} matched sessions per side are required.",
+                style = MaterialTheme.typography.labelSmall,
+                color = LocalAppColors.current.textTertiary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Close",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onClose)
+                    .padding(12.dp),
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
 @Composable
 private fun MomentumDetailRow(muscle: MuscleMomentum) {
-    val progress = ((muscle.percentChange ?: 0f).coerceIn(-10f, 10f) + 10f) / 20f
-    val color = colorForDirection(muscle.direction)
+    val color = colorForMomentum(muscle)
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -344,7 +402,7 @@ private fun MomentumDetailRow(muscle: MuscleMomentum) {
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = formatPercent(muscle.percentChange),
+                text = directionSymbol(muscle) + " " + formatPercent(muscle.percentChange),
                 style = MaterialTheme.typography.bodyMedium,
                 color = color,
                 fontWeight = FontWeight.Bold
@@ -353,19 +411,13 @@ private fun MomentumDetailRow(muscle: MuscleMomentum) {
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp)
-                .background(LocalAppColors.current.inputBackground, RoundedCornerShape(4.dp))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(progress.coerceIn(0.05f, 1f))
-                    .background(color, RoundedCornerShape(4.dp))
-            )
-        }
+        DivergingMomentumBar(muscle = muscle, color = color)
+
+        Text(
+            text = statusDescription(muscle),
+            style = MaterialTheme.typography.labelSmall,
+            color = LocalAppColors.current.textSecondary
+        )
 
         val improving = muscle.improvingContributors.take(2).joinToString { exercise ->
             "${exercise.exerciseName} ${formatPercent(exercise.percentChange)}"
@@ -387,7 +439,11 @@ private fun MomentumDetailRow(muscle: MuscleMomentum) {
             )
         } else {
             Text(
-                text = "Building baseline",
+                text = when (muscle.status) {
+                    MomentumDataStatus.STALE -> "No qualifying strength session in the last 6 weeks"
+                    MomentumDataStatus.BUILDING_BASELINE -> "Building a matched-session baseline"
+                    MomentumDataStatus.READY -> "Exercises are within the stable range"
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = LocalAppColors.current.textTertiary
             )
@@ -402,6 +458,85 @@ private fun MomentumDetailRow(muscle: MuscleMomentum) {
                 maxLines = 1
             )
         }
+    }
+}
+
+@Composable
+private fun DivergingMomentumBar(muscle: MuscleMomentum, color: Color) {
+    val magnitude = ((kotlin.math.abs(muscle.percentChange ?: 0f) / 10f).coerceIn(0f, 1f))
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(10.dp)
+            .background(LocalAppColors.current.inputBackground, RoundedCornerShape(5.dp))
+    ) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                if ((muscle.percentChange ?: 0f) < 0f) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxWidth(magnitude)
+                            .fillMaxHeight()
+                            .background(color, RoundedCornerShape(topStart = 5.dp, bottomStart = 5.dp))
+                    )
+                }
+            }
+            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                if ((muscle.percentChange ?: 0f) > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .fillMaxWidth(magnitude)
+                            .fillMaxHeight()
+                            .background(color, RoundedCornerShape(topEnd = 5.dp, bottomEnd = 5.dp))
+                    )
+                }
+            }
+        }
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .width(1.dp)
+                .fillMaxHeight()
+                .background(Color.White.copy(alpha = 0.45f))
+        )
+    }
+}
+
+private fun statusDescription(muscle: MuscleMomentum): String {
+    val latest = muscle.latestSessionTimestamp?.let {
+        SimpleDateFormat("MMM d", Locale.US).format(Date(it))
+    }
+    val sessions = muscle.contributingExercises
+        .filter { it.status == MomentumDataStatus.READY }
+        .minOfOrNull { minOf(it.recentSessionCount, it.baselineSessionCount) }
+    return when (muscle.status) {
+        MomentumDataStatus.READY -> buildString {
+            append(if (muscle.confidence == MomentumConfidence.STANDARD) "Standard confidence" else "Early trend")
+            sessions?.let { append(" · $it vs $it sessions") }
+            latest?.let { append(" · Last trained $it") }
+        }
+        MomentumDataStatus.STALE -> latest?.let { "Stale · Last trained $it" } ?: "Stale"
+        MomentumDataStatus.BUILDING_BASELINE -> latest?.let { "Building baseline · Last trained $it" }
+            ?: "Building baseline"
+    }
+}
+
+private fun directionSymbol(muscle: MuscleMomentum): String = when (muscle.direction) {
+    MomentumDirection.STRONG_UP, MomentumDirection.UP -> "↑"
+    MomentumDirection.STRONG_DOWN, MomentumDirection.DOWN -> "↓"
+    MomentumDirection.FLAT -> "•"
+    MomentumDirection.NO_BASELINE -> "○"
+}
+
+private fun spokenMomentum(muscle: MuscleMomentum): String = when (muscle.status) {
+    MomentumDataStatus.STALE -> "stale"
+    MomentumDataStatus.BUILDING_BASELINE -> "building baseline"
+    MomentumDataStatus.READY -> when (muscle.direction) {
+        MomentumDirection.STRONG_UP, MomentumDirection.UP -> "improving ${formatPercent(muscle.percentChange)}"
+        MomentumDirection.STRONG_DOWN, MomentumDirection.DOWN -> "declining ${formatPercent(muscle.percentChange)}"
+        else -> "stable"
     }
 }
 
@@ -484,14 +619,16 @@ fun WeeklyLoadBar(
     }
 }
 
-private fun colorForDirection(direction: MomentumDirection): Color {
-    return when (direction) {
-        MomentumDirection.STRONG_UP -> Color(0xFF22C55E)
-        MomentumDirection.UP -> Color(0xFFA3E635)
-        MomentumDirection.FLAT -> Color(0xFF71717A)
-        MomentumDirection.DOWN -> Color(0xFFF59E0B)
-        MomentumDirection.STRONG_DOWN -> Color(0xFFEF4444)
-        MomentumDirection.NO_BASELINE -> Color(0xFF27272A)
+private fun colorForMomentum(momentum: MuscleMomentum): Color {
+    if (momentum.status == MomentumDataStatus.BUILDING_BASELINE) return Color(0xFF27272A)
+    if (momentum.status == MomentumDataStatus.STALE) return Color(0xFF374151)
+    val percent = momentum.percentChange ?: return Color(0xFF27272A)
+    if (kotlin.math.abs(percent) < 2f) return Color(0xFF71717A)
+    val intensity = (((kotlin.math.abs(percent) - 2f) / 8f).coerceIn(0f, 1f) * 0.65f) + 0.35f
+    return if (percent > 0f) {
+        lerp(Color(0xFF71717A), Color(0xFF22C55E), intensity)
+    } else {
+        lerp(Color(0xFF71717A), Color(0xFFEF4444), intensity)
     }
 }
 

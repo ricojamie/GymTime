@@ -232,6 +232,20 @@ class SetDaoTest {
         assertTrue(sets.isEmpty())
     }
 
+    @Test
+    fun performanceQueryReturnsOnlyCompletedWorkingSets() = runTest {
+        val workoutId = createTestWorkout()
+        val now = System.currentTimeMillis()
+        setDao.insertSet(testSet(workoutId, 1L, 100f, 8, timestamp = now - 2L))
+        setDao.insertSet(testSet(workoutId, 1L, 200f, 8, isWarmup = true, timestamp = now - 1L))
+        setDao.insertSet(testSet(workoutId, 1L, 300f, 8, isComplete = false, timestamp = now))
+
+        val result = setDao.getPerformanceSetsWithExerciseInRange(now - 10L, now + 10L)
+
+        assertEquals(1, result.size)
+        assertEquals(100f, result.single().set.weight)
+    }
+
     private fun testSet(
         workoutId: Long,
         exerciseId: Long,
