@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -43,17 +44,17 @@ fun RoutineDayFormScreen(
     navController: NavController,
     viewModel: RoutineDayFormViewModel = hiltViewModel()
 ) {
-    val dayName by viewModel.dayName.collectAsState()
-    val selectedExercises by viewModel.selectedExercises.collectAsState(initial = emptyList())
-    val availableExercises by viewModel.availableExercises.collectAsState(initial = emptyList())
-    val selectedExerciseIds by viewModel.selectedExerciseIds.collectAsState()
-    val targetSets by viewModel.targetSets.collectAsState()
-    val targetRepMin by viewModel.targetRepMin.collectAsState()
-    val targetRepMax by viewModel.targetRepMax.collectAsState()
-    val targetRestSeconds by viewModel.targetRestSeconds.collectAsState()
-    val isEditMode by viewModel.isEditMode.collectAsState()
-    val isSaveEnabled by viewModel.isSaveEnabled.collectAsState()
-    val supersetLinks by viewModel.supersetLinks.collectAsState()
+    val dayName by viewModel.dayName.collectAsStateWithLifecycle()
+    val selectedExercises by viewModel.selectedExercises.collectAsStateWithLifecycle(initialValue = emptyList())
+    val availableExercises by viewModel.availableExercises.collectAsStateWithLifecycle(initialValue = emptyList())
+    val selectedExerciseIds by viewModel.selectedExerciseIds.collectAsStateWithLifecycle()
+    val targetSets by viewModel.targetSets.collectAsStateWithLifecycle()
+    val targetRepMin by viewModel.targetRepMin.collectAsStateWithLifecycle()
+    val targetRepMax by viewModel.targetRepMax.collectAsStateWithLifecycle()
+    val targetRestSeconds by viewModel.targetRestSeconds.collectAsStateWithLifecycle()
+    val isEditMode by viewModel.isEditMode.collectAsStateWithLifecycle()
+    val isSaveEnabled by viewModel.isSaveEnabled.collectAsStateWithLifecycle()
+    val supersetLinks by viewModel.supersetLinks.collectAsStateWithLifecycle()
 
     var showExercisePicker by remember { mutableStateOf(false) }
     val accentColor = MaterialTheme.colorScheme.primary

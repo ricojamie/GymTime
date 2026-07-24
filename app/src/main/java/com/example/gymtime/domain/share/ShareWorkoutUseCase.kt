@@ -1,5 +1,7 @@
 package com.example.gymtime.domain.share
 
+import com.example.gymtime.ai.GeneratedNarrativeRepository
+import com.example.gymtime.ai.NarrativeKind
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.SetWithExerciseInfo
 import com.example.gymtime.data.db.dao.WorkoutDao
@@ -9,7 +11,8 @@ import javax.inject.Inject
 
 class ShareWorkoutUseCase @Inject constructor(
     private val workoutDao: WorkoutDao,
-    private val setDao: SetDao
+    private val setDao: SetDao,
+    private val generatedNarrativeRepository: GeneratedNarrativeRepository
 ) {
 
     /**
@@ -20,7 +23,7 @@ class ShareWorkoutUseCase @Inject constructor(
         return buildShareableWorkout(workoutId)?.let { WorkoutShareFormatter.format(it) }
     }
 
-    suspend fun buildShareableWorkout(workoutId: Long): ShareableWorkout? {
+    suspend fun buildShareableWorkout(workoutId: Long, recap: String? = null): ShareableWorkout? {
         val workout = workoutDao.getWorkoutById(workoutId).first()
         val rawSets = setDao.getWorkoutSetsWithExercises(workoutId)
         if (rawSets.isEmpty()) return null
@@ -44,12 +47,17 @@ class ShareWorkoutUseCase @Inject constructor(
             buildExercise(exerciseId, workoutStartMs, infos)
         }
 
+        val effectiveRecap = recap ?: generatedNarrativeRepository
+            .getLatest(NarrativeKind.POST_WORKOUT, workoutId.toString())
+            ?.text
+
         return ShareableWorkout(
             date = workout.startTime,
             durationMinutes = durationMinutes,
             totalVolume = totalVolume,
             totalWorkingSets = workingSets.size,
-            exercises = exercises
+            exercises = exercises,
+            recap = effectiveRecap?.trim()?.takeIf { it.isNotEmpty() }
         )
     }
 

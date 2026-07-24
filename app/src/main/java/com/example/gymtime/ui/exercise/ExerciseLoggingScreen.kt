@@ -11,6 +11,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +35,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
@@ -69,7 +71,7 @@ import com.example.gymtime.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -112,9 +114,8 @@ import com.example.gymtime.util.TimeFormatter
 import com.example.gymtime.ui.components.InputCard
 import com.example.gymtime.ui.components.RulerSliderInput
 import com.example.gymtime.ui.components.TimeInputCard
+import com.example.gymtime.ui.smartlog.SmartLogBottomSheet
 import kotlin.math.roundToInt
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -122,45 +123,47 @@ fun ExerciseLoggingScreen(
     navController: NavController,
     viewModel: ExerciseLoggingViewModel = hiltViewModel()
 ) {
-    val exercise by viewModel.exercise.collectAsState()
-    val currentWorkout by viewModel.currentWorkout.collectAsState()
-    val loggedSets by viewModel.loggedSets.collectAsState()
-    val weight by viewModel.weight.collectAsState()
-    val calories by viewModel.calories.collectAsState()
-    val reps by viewModel.reps.collectAsState()
-    val rpe by viewModel.rpe.collectAsState()
-    val duration by viewModel.duration.collectAsState()
-    val distance by viewModel.distance.collectAsState()
-    val selectedDistanceUnit by viewModel.selectedDistanceUnit.collectAsState()
-    val restTime by viewModel.restTime.collectAsState()
-    val countdownTimer by viewModel.countdownTimer.collectAsState()
-    val isWarmup by viewModel.isWarmup.collectAsState()
-    val isTimerRunning by viewModel.isTimerRunning.collectAsState()
-    val timerAudioEnabled by viewModel.timerAudioEnabled.collectAsState(initial = true)
-    val timerVibrateEnabled by viewModel.timerVibrateEnabled.collectAsState(initial = true)
-    val lastWorkoutSets by viewModel.lastWorkoutSets.collectAsState()
-    val workoutOverview by viewModel.workoutOverview.collectAsState()
-    val workoutPanelData by viewModel.workoutPanelData.collectAsState()
-    val currentPlanItem by viewModel.currentPlanItem.collectAsState()
-    val planPosition by viewModel.planPosition.collectAsState()
-    val personalBestsByReps by viewModel.personalBestsByReps.collectAsState()
-    val attemptRecommendation by viewModel.attemptRecommendation.collectAsState()
-    val volumeOrbState by viewModel.volumeOrbState.collectAsState()
+    val exercise by viewModel.exercise.collectAsStateWithLifecycle()
+    val currentWorkout by viewModel.currentWorkout.collectAsStateWithLifecycle()
+    val loggedSets by viewModel.loggedSets.collectAsStateWithLifecycle()
+    val weight by viewModel.weight.collectAsStateWithLifecycle()
+    val calories by viewModel.calories.collectAsStateWithLifecycle()
+    val reps by viewModel.reps.collectAsStateWithLifecycle()
+    val rpe by viewModel.rpe.collectAsStateWithLifecycle()
+    val duration by viewModel.duration.collectAsStateWithLifecycle()
+    val distance by viewModel.distance.collectAsStateWithLifecycle()
+    val selectedDistanceUnit by viewModel.selectedDistanceUnit.collectAsStateWithLifecycle()
+    val restTime by viewModel.restTime.collectAsStateWithLifecycle()
+    val countdownTimer by viewModel.countdownTimer.collectAsStateWithLifecycle()
+    val isWarmup by viewModel.isWarmup.collectAsStateWithLifecycle()
+    val isTimerRunning by viewModel.isTimerRunning.collectAsStateWithLifecycle()
+    val timerAudioEnabled by viewModel.timerAudioEnabled.collectAsStateWithLifecycle(initialValue = true)
+    val timerVibrateEnabled by viewModel.timerVibrateEnabled.collectAsStateWithLifecycle(initialValue = true)
+    val lastWorkoutSets by viewModel.lastWorkoutSets.collectAsStateWithLifecycle()
+    val workoutOverview by viewModel.workoutOverview.collectAsStateWithLifecycle()
+    val workoutPanelData by viewModel.workoutPanelData.collectAsStateWithLifecycle()
+    val currentPlanItem by viewModel.currentPlanItem.collectAsStateWithLifecycle()
+    val planPosition by viewModel.planPosition.collectAsStateWithLifecycle()
+    val personalBestsByReps by viewModel.personalBestsByReps.collectAsStateWithLifecycle()
+    val attemptRecommendation by viewModel.attemptRecommendation.collectAsStateWithLifecycle()
+    val volumeOrbState by viewModel.volumeOrbState.collectAsStateWithLifecycle()
+    val smartLogQueue by viewModel.smartLogQueue.collectAsStateWithLifecycle()
+    val isPersistingSet by viewModel.isPersistingSet.collectAsStateWithLifecycle()
 
 
-    val editingSet by viewModel.editingSet.collectAsState()
-    val timerAutoStart by viewModel.timerAutoStart.collectAsState(initial = true)
-    val barWeight by viewModel.barWeight.collectAsState(initial = 45f)
-    val availablePlates by viewModel.availablePlates.collectAsState(initial = listOf(45f, 35f, 25f, 10f, 5f, 2.5f))
-    val loadingSides by viewModel.loadingSides.collectAsState(initial = 2)
+    val editingSet by viewModel.editingSet.collectAsStateWithLifecycle()
+    val timerAutoStart by viewModel.timerAutoStart.collectAsStateWithLifecycle(initialValue = true)
+    val barWeight by viewModel.barWeight.collectAsStateWithLifecycle(initialValue = 45f)
+    val availablePlates by viewModel.availablePlates.collectAsStateWithLifecycle(initialValue = listOf(45f, 35f, 25f, 10f, 5f, 2.5f))
+    val loadingSides by viewModel.loadingSides.collectAsStateWithLifecycle(initialValue = 2)
     var showDistanceUnitMenu by remember { mutableStateOf(false) }
 
     // Superset state
-    val isInSupersetMode by viewModel.isInSupersetMode.collectAsState()
-    val supersetExercises by viewModel.supersetExercises.collectAsState()
-    val currentSupersetIndex by viewModel.currentSupersetIndex.collectAsState()
+    val isInSupersetMode by viewModel.isInSupersetMode.collectAsStateWithLifecycle()
+    val supersetExercises by viewModel.supersetExercises.collectAsStateWithLifecycle()
+    val currentSupersetIndex by viewModel.currentSupersetIndex.collectAsStateWithLifecycle()
 
-    val nextExerciseId by viewModel.nextExerciseId.collectAsState()
+    val nextExerciseId by viewModel.nextExerciseId.collectAsStateWithLifecycle()
 
     var showFinishDialog by remember { mutableStateOf(false) }
     var showTimerDialog by remember { mutableStateOf(false) }
@@ -168,6 +171,7 @@ fun ExerciseLoggingScreen(
     var showExerciseHistory by remember { mutableStateOf(false) }
     var showPlateCalculator by remember { mutableStateOf(false) }
     var showExerciseNotes by remember { mutableStateOf(false) }
+    var showSmartLog by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
 
     var personalRecords by remember { mutableStateOf<PersonalRecords?>(null) }
@@ -202,7 +206,7 @@ fun ExerciseLoggingScreen(
     // Observe auto-switch events for superset mode
     LaunchedEffect(Unit) {
         viewModel.autoSwitchEvent.collect { nextExerciseId ->
-            navController.navigate(Screen.ExerciseLogging.createRoute(nextExerciseId)) {
+            navController.navigate(Screen.ExerciseLogging.createRoute(nextExerciseId, viewModel.smartLogDraftToken)) {
                 // Pop the current logging screen off so we don't stack A -> B -> A -> B
                 popUpTo(navController.currentBackStackEntry?.destination?.route ?: return@navigate) {
                     inclusive = true
@@ -220,6 +224,7 @@ fun ExerciseLoggingScreen(
 
     val scope = rememberCoroutineScope()
     val gradientColors = com.example.gymtime.ui.theme.LocalGradientColors.current
+    val inputValidationMessage = viewModel.currentInputValidationMessage()
 
     // Load workout overview when bottom sheet opens
     LaunchedEffect(showWorkoutOverview) {
@@ -237,11 +242,11 @@ fun ExerciseLoggingScreen(
     }
 
     // Get best set data for inline "Best:" display
-    val bestWeight by viewModel.bestWeight.collectAsState()
-    val bestReps by viewModel.bestReps.collectAsState()
+    val bestWeight by viewModel.bestWeight.collectAsStateWithLifecycle()
+    val bestReps by viewModel.bestReps.collectAsStateWithLifecycle()
     // "Last time" values for the slider markers
-    val lastWeight by viewModel.lastWeight.collectAsState()
-    val lastReps by viewModel.lastReps.collectAsState()
+    val lastWeight by viewModel.lastWeight.collectAsStateWithLifecycle()
+    val lastReps by viewModel.lastReps.collectAsStateWithLifecycle()
 
     // Track if timer just finished for animation
     var timerJustFinished by remember { mutableStateOf(false) }
@@ -445,13 +450,52 @@ fun ExerciseLoggingScreen(
                     currentExerciseId = exercise?.id,
                     onExerciseClick = { exerciseId ->
                         if (exerciseId != exercise?.id) {
-                            navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId)) {
+                            navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId, viewModel.smartLogDraftToken)) {
                                 popUpTo("exercise_logging/{exerciseId}") { inclusive = true }
                                 launchSingleTop = true
                             }
                         }
                     }
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            smartLogQueue?.let { queue ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                "Smart Log ${queue.currentSetNumber} of ${queue.totalSets}",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        TextButton(onClick = viewModel::cancelSmartLogQueue) { Text("Cancel") }
+                    }
+                }
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
@@ -695,11 +739,13 @@ fun ExerciseLoggingScreen(
                 null
             )
 
-            if (showWarmupToggle || showPlateCalculatorButton) {
+            // Smart Log is always available; other actions remain log-type aware.
+            if (showWarmupToggle || showPlateCalculatorButton || exercise != null) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
+                        .padding(horizontal = 8.dp)
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // Warmup Toggle Pill
@@ -755,7 +801,7 @@ fun ExerciseLoggingScreen(
                     }
 
                     // Superset Toggle Pill / Add Exercise to Superset
-                    val isInSupersetMode by viewModel.isInSupersetMode.collectAsState()
+                    val isInSupersetMode by viewModel.isInSupersetMode.collectAsStateWithLifecycle()
                     if (isInSupersetMode) {
                         // Already in superset - show "Add" button to add more exercises
                         Surface(
@@ -820,22 +866,40 @@ fun ExerciseLoggingScreen(
                             }
                         }
                     }
+
+                    Surface(
+                        onClick = { showSmartLog = true },
+                        shape = RoundedCornerShape(50),
+                        color = Color.Transparent,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "Smart",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
             // Determine if Log Set button should be enabled based on LogType
-            val isLogSetEnabled = when (exercise?.logType) {
-                LogType.WEIGHT_REPS -> weight.isNotBlank() && reps.isNotBlank()
-                LogType.REPS_ONLY -> reps.isNotBlank()
-                LogType.DURATION -> duration.isNotBlank()
-                LogType.WEIGHT_DISTANCE -> weight.isNotBlank() && distance.isNotBlank()
-                LogType.DISTANCE_TIME -> distance.isNotBlank() && duration.isNotBlank()
-                LogType.WEIGHT_TIME -> weight.isNotBlank() && duration.isNotBlank()
-                LogType.CALORIES_TIME -> calories.isNotBlank() && duration.isNotBlank()
-                null -> weight.isNotBlank() && reps.isNotBlank()
-            }
+            val isLogSetEnabled = viewModel.isCurrentInputValid() && !isPersistingSet
 
             // Log Set Button (or Save Edit if editing)
             if (editingSet != null) {
@@ -884,14 +948,19 @@ fun ExerciseLoggingScreen(
                     onClick = {
                         if (isLogSetEnabled) {
                             view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                            viewModel.logSet()
-                            if (timerAutoStart) {
-                                viewModel.startTimer() // Auto-start timer only if enabled
-                            }
-                            viewModel.resetTimerToDefault() // Reset timer to exercise's default
+                            viewModel.logSet(startTimerAfterSave = timerAutoStart)
                         }
                     },
                     enabled = isLogSetEnabled
+                )
+            }
+
+            inputValidationMessage?.let { message ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
                 )
             }
 
@@ -980,7 +1049,7 @@ fun ExerciseLoggingScreen(
                 Button(
                     onClick = { 
                         if (nextExerciseId != null) {
-                            navController.navigate(Screen.ExerciseLogging.createRoute(nextExerciseId!!)) {
+                            navController.navigate(Screen.ExerciseLogging.createRoute(nextExerciseId!!, viewModel.smartLogDraftToken)) {
                                 popUpTo("exercise_logging/{exerciseId}") { inclusive = true }
                                 launchSingleTop = true
                             }
@@ -1388,6 +1457,30 @@ fun ExerciseLoggingScreen(
         )
     }
 
+    if (showSmartLog) {
+        SmartLogBottomSheet(
+            currentExercise = exercise,
+            allowedExerciseIds = if (isInSupersetMode) supersetExercises.map { it.id }.toSet() else null,
+            onDismiss = { showSmartLog = false },
+            onNavigateToLogger = { exerciseId, token ->
+                showSmartLog = false
+                navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId, token)) {
+                    popUpTo(navController.currentBackStackEntry?.destination?.route ?: Screen.ExerciseLogging.route) {
+                        inclusive = true
+                    }
+                    launchSingleTop = true
+                }
+            },
+            onCreateExercise = { name ->
+                showSmartLog = false
+                viewModel.prepareForSmartLogExerciseCreation(
+                    restrictedToSuperset = isInSupersetMode && supersetExercises.isNotEmpty()
+                )
+                navController.navigate(Screen.ExerciseForm.createRoute(fromWorkout = true, initialName = name))
+            }
+        )
+    }
+
     // Workout Overview Bottom Sheet
     if (showWorkoutOverview) {
         ModalBottomSheet(
@@ -1401,7 +1494,7 @@ fun ExerciseLoggingScreen(
                 onExerciseClick = { exerciseId ->
                     showWorkoutOverview = false
                     if (exerciseId != exercise?.id) {
-                        navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId)) {
+                        navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId, viewModel.smartLogDraftToken)) {
                             popUpTo(navController.currentBackStackEntry?.destination?.route ?: Screen.ExerciseLogging.route) {
                                 inclusive = true
                             }

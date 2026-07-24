@@ -23,10 +23,11 @@ class ExerciseFormViewModel @Inject constructor(
 
     private val exerciseId: Long? = savedStateHandle.get<String>("exerciseId")?.toLongOrNull()
     private val fromWorkout: Boolean = savedStateHandle.get<Boolean>("fromWorkout") ?: false
+    private val initialName: String = savedStateHandle.get<String>("initialName").orEmpty().trim()
 
     val isFromWorkout: StateFlow<Boolean> = MutableStateFlow(fromWorkout)
 
-    private val _exerciseName = MutableStateFlow("")
+    private val _exerciseName = MutableStateFlow(if (exerciseId == null) initialName else "")
     val exerciseName: StateFlow<String> = _exerciseName
 
     private val _targetMuscle = MutableStateFlow("")

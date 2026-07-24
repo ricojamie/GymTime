@@ -32,8 +32,13 @@ object StreakCalculator {
         val brokeToday: Boolean = false  // True only on the day the streak breaks
     )
 
-    fun calculateStreak(workoutDates: List<Date>, allowedSkipsPerWeek: Int = 2): StreakResult {
+    fun calculateStreak(
+        workoutDates: List<Date>,
+        allowedSkipsPerWeek: Int = 2,
+        asOf: Date = Date()
+    ): StreakResult {
         val safeAllowedSkips = allowedSkipsPerWeek.coerceIn(0, 7)
+        val today = normalizeToMidnight(asOf)
 
         if (workoutDates.isEmpty()) {
             return StreakResult(
@@ -41,17 +46,24 @@ object StreakCalculator {
                 streakDays = 0,
                 skipsRemaining = safeAllowedSkips,
                 allowedSkipsPerWeek = safeAllowedSkips,
-                nextResetDate = getNextSunday()
+                nextResetDate = getNextSunday(today)
             )
         }
 
-        val today = normalizeToMidnight(Date())
-        val workoutDaysNormalized = workoutDates.map { normalizeToMidnight(it) }.toSet()
+        val workoutDaysNormalized = workoutDates
+            .map { normalizeToMidnight(it) }
+            .filterNot { it.after(today) }
+            .toSet()
         val earliestWorkout = workoutDaysNormalized.minOrNull() ?: today
 
         // 1. Calculate how many skips have been used THIS calendar week (Sun-Sat)
-        val currentWeekStart = getStartOfCurrentWeek()
-        val usedSkipsThisWeek = countUsedSkipsInWeek(currentWeekStart, today, workoutDaysNormalized)
+        val currentWeekStart = getStartOfWeek(today)
+        val effectiveCurrentWeekStart = if (currentWeekStart.before(earliestWorkout)) {
+            earliestWorkout
+        } else {
+            currentWeekStart
+        }
+        val usedSkipsThisWeek = countUsedSkipsInWeek(effectiveCurrentWeekStart, today, workoutDaysNormalized)
         val skipsRemaining = (safeAllowedSkips - usedSkipsThisWeek).coerceAtLeast(0)
 
         // 2. Determine current state
@@ -85,7 +97,7 @@ object StreakCalculator {
             streakDays = totalStreakDays,
             skipsRemaining = skipsRemaining,
             allowedSkipsPerWeek = safeAllowedSkips,
-            nextResetDate = getNextSunday(),
+            nextResetDate = getNextSunday(today),
             brokeToday = brokeToday
         )
     }
@@ -159,12 +171,6 @@ object StreakCalculator {
         return totalDays
     }
 
-    private fun getStartOfCurrentWeek(): Date {
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY)
-        return normalizeToMidnight(cal.time)
-    }
-
     private fun getStartOfWeek(date: Date): Date {
         val cal = Calendar.getInstance()
         cal.time = date
@@ -172,8 +178,9 @@ object StreakCalculator {
         return normalizeToMidnight(cal.time)
     }
 
-    private fun getNextSunday(): Date {
+    private fun getNextSunday(referenceDate: Date): Date {
         val cal = Calendar.getInstance()
+        cal.time = referenceDate
         cal.add(Calendar.DAY_OF_YEAR, 1) // Start from tomorrow
         while (cal.get(Calendar.DAY_OF_WEEK) != Calendar.SUNDAY) {
             cal.add(Calendar.DAY_OF_YEAR, 1)

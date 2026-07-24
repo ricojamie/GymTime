@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.gymtime.navigation.Screen
+import com.example.gymtime.ui.ai.OnDeviceAiDownloadCard
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.components.VolumeOrb
 import com.example.gymtime.ui.components.OrbSize
@@ -46,12 +48,13 @@ fun PostWorkoutSummaryScreen(
     navController: NavController,
     viewModel: PostWorkoutSummaryViewModel = hiltViewModel()
 ) {
-    val workoutStats by viewModel.workoutStats.collectAsState()
-    val selectedRating by viewModel.selectedRating.collectAsState()
-    val ratingNote by viewModel.ratingNote.collectAsState()
-    val isSaving by viewModel.isSaving.collectAsState()
-    val volumeOrbState by viewModel.volumeOrbState.collectAsState()
-    val sessionContribution by viewModel.sessionContribution.collectAsState()
+    val workoutStats by viewModel.workoutStats.collectAsStateWithLifecycle()
+    val selectedRating by viewModel.selectedRating.collectAsStateWithLifecycle()
+    val ratingNote by viewModel.ratingNote.collectAsStateWithLifecycle()
+    val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
+    val volumeOrbState by viewModel.volumeOrbState.collectAsStateWithLifecycle()
+    val sessionContribution by viewModel.sessionContribution.collectAsStateWithLifecycle()
+    val recap by viewModel.recap.collectAsStateWithLifecycle()
     val accentColor = MaterialTheme.colorScheme.primary
     val appColors = LocalAppColors.current
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.US) }
@@ -83,6 +86,7 @@ fun PostWorkoutSummaryScreen(
             val send = Intent(Intent.ACTION_SEND).apply {
                 type = "image/png"
                 putExtra(Intent.EXTRA_STREAM, payload.imageUri)
+                putExtra(Intent.EXTRA_TEXT, payload.text)
                 clipData = ClipData.newUri(context.contentResolver, "Workout summary", payload.imageUri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
@@ -150,6 +154,25 @@ fun PostWorkoutSummaryScreen(
                 color = LocalAppColors.current.textTertiary,
                 textAlign = TextAlign.Center
             )
+
+            Spacer(modifier = Modifier.height(16.dp))
+            OnDeviceAiDownloadCard()
+
+            recap?.takeIf { it.isNotBlank() }?.let { recapText ->
+                Spacer(modifier = Modifier.height(16.dp))
+                GlowCard(
+                    onClick = {},
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = recapText,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                        color = LocalAppColors.current.textPrimary,
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
 

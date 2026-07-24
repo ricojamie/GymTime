@@ -26,6 +26,10 @@ object WorkoutShareFormatter {
         headerParts += "${workout.totalWorkingSets} sets across $exerciseCount exercises"
         builder.append(headerParts.joinToString("  |  ")).append("\n\n")
 
+        workout.recap?.takeIf { it.isNotBlank() }?.let { recap ->
+            builder.append(recap.trim()).append("\n\n")
+        }
+
         workout.exercises.forEach { exercise ->
             val workingSets = exercise.sets.filter { !it.isWarmup }
             if (workingSets.isEmpty()) return@forEach

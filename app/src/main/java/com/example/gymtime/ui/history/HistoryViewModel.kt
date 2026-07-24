@@ -202,7 +202,8 @@ class HistoryViewModel @Inject constructor(
                 shareWorkoutUseCase.buildShareableWorkout(workoutId)?.let { workout ->
                     _shareEvent.send(
                         WorkoutSharePayload(
-                            imageUri = workoutShareImageGenerator.generate(workout, palette)
+                            imageUri = workoutShareImageGenerator.generate(workout, palette),
+                            text = WorkoutShareFormatter.format(workout)
                         )
                     )
                 }

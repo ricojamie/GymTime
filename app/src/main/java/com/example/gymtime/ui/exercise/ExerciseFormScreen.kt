@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -41,17 +42,17 @@ fun ExerciseFormScreen(
     navController: NavController,
     viewModel: ExerciseFormViewModel = hiltViewModel()
 ) {
-    val exerciseName by viewModel.exerciseName.collectAsState()
-    val targetMuscle by viewModel.targetMuscle.collectAsState()
-    val logType by viewModel.logType.collectAsState()
-    val defaultDistanceUnit by viewModel.defaultDistanceUnit.collectAsState()
-    val notes by viewModel.notes.collectAsState()
-    val defaultRestSeconds by viewModel.defaultRestSeconds.collectAsState()
-    val repTarget by viewModel.repTarget.collectAsState()
-    val availableMuscles by viewModel.availableMuscles.collectAsState(initial = emptyList())
-    val isEditMode by viewModel.isEditMode.collectAsState()
-    val isSaveEnabled by viewModel.isSaveEnabled.collectAsState()
-    val isFromWorkout by viewModel.isFromWorkout.collectAsState()
+    val exerciseName by viewModel.exerciseName.collectAsStateWithLifecycle()
+    val targetMuscle by viewModel.targetMuscle.collectAsStateWithLifecycle()
+    val logType by viewModel.logType.collectAsStateWithLifecycle()
+    val defaultDistanceUnit by viewModel.defaultDistanceUnit.collectAsStateWithLifecycle()
+    val notes by viewModel.notes.collectAsStateWithLifecycle()
+    val defaultRestSeconds by viewModel.defaultRestSeconds.collectAsStateWithLifecycle()
+    val repTarget by viewModel.repTarget.collectAsStateWithLifecycle()
+    val availableMuscles by viewModel.availableMuscles.collectAsStateWithLifecycle(initialValue = emptyList())
+    val isEditMode by viewModel.isEditMode.collectAsStateWithLifecycle()
+    val isSaveEnabled by viewModel.isSaveEnabled.collectAsStateWithLifecycle()
+    val isFromWorkout by viewModel.isFromWorkout.collectAsStateWithLifecycle()
 
     var showMuscleDropdown by remember { mutableStateOf(false) }
     var showLogTypeDropdown by remember { mutableStateOf(false) }

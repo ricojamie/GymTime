@@ -246,6 +246,22 @@ class SetDaoTest {
         assertEquals(100f, result.single().set.weight)
     }
 
+    @Test
+    fun analyticsInsightQueryReturnsOnlyCompletedWorkingSetsWithLocalBucketingFields() = runTest {
+        val workoutId = createTestWorkout()
+        val now = System.currentTimeMillis()
+        setDao.insertSet(testSet(workoutId, 1L, 100f, 8, timestamp = now - 2L))
+        setDao.insertSet(testSet(workoutId, 1L, 200f, 8, isWarmup = true, timestamp = now - 1L))
+        setDao.insertSet(testSet(workoutId, 1L, 300f, 8, isComplete = false, timestamp = now))
+
+        val result = setDao.getAnalyticsInsightSets(now - 10L, now + 10L)
+
+        assertEquals(1, result.size)
+        assertEquals(workoutId, result.single().workoutId)
+        assertEquals("Chest", result.single().muscle)
+        assertEquals(now - 2L, result.single().timestampMs)
+    }
+
     private fun testSet(
         workoutId: Long,
         exerciseId: Long,

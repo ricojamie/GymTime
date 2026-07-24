@@ -59,6 +59,19 @@ data class MuscleWeeklyVolumeComparison(
     val previousWeekVolume: Float
 )
 
+/**
+ * Minimal completed-working-set projection used to derive the single weekly
+ * analytics insight. Keeping the date bucketing in Kotlin makes week boundaries
+ * respect the user's local time zone instead of SQLite's UTC date functions.
+ */
+data class AnalyticsInsightSetRow(
+    val workoutId: Long,
+    val timestampMs: Long,
+    val muscle: String,
+    val weight: Float?,
+    val reps: Int?
+)
+
 @Dao
 interface SetDao {
     @Insert
@@ -424,6 +437,26 @@ interface SetDao {
         startDate: Long,
         endDate: Long
     ): List<SetWithExercisePerformanceInfo>
+
+    @Query("""
+        SELECT
+            s.workoutId as workoutId,
+            s.timestamp as timestampMs,
+            e.targetMuscle as muscle,
+            s.weight as weight,
+            s.reps as reps
+        FROM sets s
+        INNER JOIN exercises e ON s.exerciseId = e.id
+        WHERE s.timestamp >= :startDate
+          AND s.timestamp < :endDate
+          AND s.isWarmup = 0
+          AND s.isComplete = 1
+        ORDER BY s.timestamp ASC
+    """)
+    suspend fun getAnalyticsInsightSets(
+        startDate: Long,
+        endDate: Long
+    ): List<AnalyticsInsightSetRow>
 
     // ===== VOLUME ORB QUERIES =====
 

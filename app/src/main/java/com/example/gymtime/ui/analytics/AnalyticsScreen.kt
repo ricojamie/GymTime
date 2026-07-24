@@ -2,20 +2,27 @@ package com.example.gymtime.ui.analytics
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -23,9 +30,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.gymtime.ui.ai.OnDeviceAiDownloadCard
 import com.example.gymtime.ui.theme.LocalAppColors
 
 @Composable
@@ -33,14 +42,15 @@ fun AnalyticsScreen(
     viewModel: AnalyticsViewModel = hiltViewModel()
 ) {
     // State
-    val heatMapData by viewModel.heatMapData.collectAsState()
-    val muscleDistribution by viewModel.muscleDistribution.collectAsState()
-    val radarDistribution by viewModel.radarDistribution.collectAsState()
-    val muscleFreshness by viewModel.muscleFreshness.collectAsState()
-    val consistencyStats by viewModel.consistencyStats.collectAsState()
-    val trophyCasePRs by viewModel.trophyCasePRs.collectAsState()
-    val workoutRatingStats by viewModel.workoutRatingStats.collectAsState()
-    val selectedBalanceRange by viewModel.selectedBalanceRange.collectAsState()
+    val heatMapData by viewModel.heatMapData.collectAsStateWithLifecycle()
+    val muscleDistribution by viewModel.muscleDistribution.collectAsStateWithLifecycle()
+    val radarDistribution by viewModel.radarDistribution.collectAsStateWithLifecycle()
+    val muscleFreshness by viewModel.muscleFreshness.collectAsStateWithLifecycle()
+    val consistencyStats by viewModel.consistencyStats.collectAsStateWithLifecycle()
+    val trophyCasePRs by viewModel.trophyCasePRs.collectAsStateWithLifecycle()
+    val workoutRatingStats by viewModel.workoutRatingStats.collectAsStateWithLifecycle()
+    val selectedBalanceRange by viewModel.selectedBalanceRange.collectAsStateWithLifecycle()
+    val weeklyInsightText by viewModel.weeklyInsightText.collectAsStateWithLifecycle()
     
     // Tab State
     var selectedTabIndex by remember { mutableIntStateOf(0) }
@@ -49,9 +59,9 @@ fun AnalyticsScreen(
     val gradientColors = com.example.gymtime.ui.theme.LocalGradientColors.current
     val appColors = LocalAppColors.current
 
-    // Refresh data when screen becomes visible
-    LaunchedEffect(Unit) {
-        viewModel.refreshData()
+    LifecycleResumeEffect(viewModel) {
+        viewModel.refreshDataIfDateChanged()
+        onPauseOrDispose { }
     }
 
     Column(
@@ -74,6 +84,14 @@ fun AnalyticsScreen(
             fontWeight = FontWeight.Bold,
             color = appColors.textPrimary
         )
+
+        Spacer(modifier = Modifier.height(12.dp))
+        OnDeviceAiDownloadCard()
+
+        weeklyInsightText?.let { insight ->
+            Spacer(modifier = Modifier.height(12.dp))
+            WeeklyAnalyticsInsightCard(insight)
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
         
@@ -118,6 +136,41 @@ fun AnalyticsScreen(
             }
             
             Spacer(modifier = Modifier.height(100.dp))
+        }
+    }
+}
+
+@Composable
+private fun WeeklyAnalyticsInsightCard(text: String) {
+    val appColors = LocalAppColors.current
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = appColors.surfaceCards)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.AutoAwesome,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+            Column(modifier = Modifier.padding(start = 12.dp)) {
+                Text(
+                    text = "This week",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = appColors.textSecondary
+                )
+            }
         }
     }
 }

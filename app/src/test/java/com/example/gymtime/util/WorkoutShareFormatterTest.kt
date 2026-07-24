@@ -11,6 +11,23 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class WorkoutShareFormatterTest {
+    @Test
+    fun includesGeneratedRecapOnce() {
+        val output = WorkoutShareFormatter.format(
+            ShareableWorkout(
+                date = date,
+                durationMinutes = 45,
+                totalVolume = 1_000f,
+                totalWorkingSets = 3,
+                exercises = emptyList(),
+                recap = "PR on deadlift and your strongest pull of the month."
+            ),
+            locale = locale
+        )
+
+        assertEquals(1, output.windowed("PR on deadlift".length).count { it == "PR on deadlift" })
+    }
+
 
     private val locale = Locale.US
     private val date = SimpleDateFormat("yyyy-MM-dd", locale).parse("2026-05-19")!!

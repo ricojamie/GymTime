@@ -4,12 +4,14 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.example.gymtime.data.db.dao.ExerciseDao
+import com.example.gymtime.data.db.dao.GeneratedNarrativeDao
 import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.dao.RoutineDao
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.WorkoutPlanDao
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.Exercise
+import com.example.gymtime.data.db.entity.GeneratedNarrative
 import com.example.gymtime.data.db.entity.MuscleGroup
 import com.example.gymtime.data.db.entity.Routine
 import com.example.gymtime.data.db.entity.RoutineDay
@@ -27,10 +29,11 @@ import com.example.gymtime.data.db.entity.WorkoutExerciseInstance
         RoutineExercise::class,
         RoutineDay::class,
         WorkoutExerciseInstance::class,
-        MuscleGroup::class
+        MuscleGroup::class,
+        GeneratedNarrative::class
     ],
-    version = 13, // Exercise rep targets
-    exportSchema = false
+    version = 14, // Derived on-device narrative cache
+    exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class GymTimeDatabase : RoomDatabase() {
@@ -40,4 +43,5 @@ abstract class GymTimeDatabase : RoomDatabase() {
     abstract fun routineDao(): RoutineDao
     abstract fun workoutPlanDao(): WorkoutPlanDao
     abstract fun muscleGroupDao(): MuscleGroupDao
+    abstract fun generatedNarrativeDao(): GeneratedNarrativeDao
 }

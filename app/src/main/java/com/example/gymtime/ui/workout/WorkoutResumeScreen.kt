@@ -11,7 +11,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,8 +31,8 @@ fun WorkoutResumeScreen(
     onAddExerciseClick: () -> Unit,
     onFinishWorkoutClick: (Long) -> Unit
 ) {
-    val todaysExercises by viewModel.todaysExercises.collectAsState()
-    val currentWorkout by viewModel.currentWorkout.collectAsState()
+    val todaysExercises by viewModel.todaysExercises.collectAsStateWithLifecycle()
+    val currentWorkout by viewModel.currentWorkout.collectAsStateWithLifecycle()
     val accentColor = MaterialTheme.colorScheme.primary
 
     // Observe finish workout event

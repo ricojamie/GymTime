@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,21 +37,21 @@ fun SettingsScreen(
     navController: NavController,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val userName by viewModel.userName.collectAsState(initial = "Athlete")
-    val themeColor by viewModel.themeColor.collectAsState(initial = "lime")
-    val timerAutoStart by viewModel.timerAutoStart.collectAsState(initial = true)
-    val timerAudioEnabled by viewModel.timerAudioEnabled.collectAsState(initial = true)
-    val timerVibrateEnabled by viewModel.timerVibrateEnabled.collectAsState(initial = true)
-    val monthlyReportEnabled by viewModel.monthlyReportEnabled.collectAsState(initial = true)
-    val keepScreenOn by viewModel.keepScreenOn.collectAsState(initial = false)
-    val darkMode by viewModel.darkMode.collectAsState(initial = true)
-    val restDaysPerWeek by viewModel.restDaysPerWeek.collectAsState(initial = 2)
-    val barWeight by viewModel.barWeight.collectAsState(initial = 45f)
-    val loadingSides by viewModel.loadingSides.collectAsState(initial = 2)
-    val availablePlates by viewModel.availablePlates.collectAsState(initial = listOf(45f, 35f, 25f, 15f, 10f, 5f, 2.5f))
-    val importState by viewModel.importState.collectAsState()
-    val exportState by viewModel.exportState.collectAsState()
-    val ironLogImportState by viewModel.ironLogImportState.collectAsState()
+    val userName by viewModel.userName.collectAsStateWithLifecycle(initialValue = "Athlete")
+    val themeColor by viewModel.themeColor.collectAsStateWithLifecycle(initialValue = "lime")
+    val timerAutoStart by viewModel.timerAutoStart.collectAsStateWithLifecycle(initialValue = true)
+    val timerAudioEnabled by viewModel.timerAudioEnabled.collectAsStateWithLifecycle(initialValue = true)
+    val timerVibrateEnabled by viewModel.timerVibrateEnabled.collectAsStateWithLifecycle(initialValue = true)
+    val monthlyReportEnabled by viewModel.monthlyReportEnabled.collectAsStateWithLifecycle(initialValue = true)
+    val keepScreenOn by viewModel.keepScreenOn.collectAsStateWithLifecycle(initialValue = false)
+    val darkMode by viewModel.darkMode.collectAsStateWithLifecycle(initialValue = true)
+    val restDaysPerWeek by viewModel.restDaysPerWeek.collectAsStateWithLifecycle(initialValue = 2)
+    val barWeight by viewModel.barWeight.collectAsStateWithLifecycle(initialValue = 45f)
+    val loadingSides by viewModel.loadingSides.collectAsStateWithLifecycle(initialValue = 2)
+    val availablePlates by viewModel.availablePlates.collectAsStateWithLifecycle(initialValue = listOf(45f, 35f, 25f, 15f, 10f, 5f, 2.5f))
+    val importState by viewModel.importState.collectAsStateWithLifecycle()
+    val exportState by viewModel.exportState.collectAsStateWithLifecycle()
+    val ironLogImportState by viewModel.ironLogImportState.collectAsStateWithLifecycle()
 
     var showChangelog by remember { mutableStateOf(false) }
 

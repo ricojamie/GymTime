@@ -9,8 +9,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Calendar
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 
@@ -35,6 +37,16 @@ class ConsistencyUseCase @Inject constructor(
     private val setDao: SetDao,
     private val userPreferencesRepository: UserPreferencesRepository
 ) {
+    private var zoneId: ZoneId = ZoneId.systemDefault()
+
+    internal constructor(
+        workoutDao: WorkoutDao,
+        setDao: SetDao,
+        userPreferencesRepository: UserPreferencesRepository,
+        zoneId: ZoneId
+    ) : this(workoutDao, setDao, userPreferencesRepository) {
+        this.zoneId = zoneId
+    }
 
     suspend fun getHeatMapData(): List<HeatMapDay> = withContext(Dispatchers.IO) {
         val rawData = workoutDao.getDailyVolumeForHeatMap()
@@ -45,35 +57,17 @@ class ConsistencyUseCase @Inject constructor(
         val p33 = if (volumes.isNotEmpty()) volumes[(volumes.size * 0.33).toInt()] else 0f
         val p66 = if (volumes.isNotEmpty()) volumes[(volumes.size * 0.66).toInt()] else 0f
 
-        val map = rawData.associateBy { stripTime(it.date) }
+        val map = rawData.associateBy { startOfLocalDayMillis(it.date) }
 
-        // Calendar year: January 1 to December 31
-        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
-
-        val calendar = Calendar.getInstance()
-        calendar.set(Calendar.YEAR, currentYear)
-        calendar.set(Calendar.MONTH, Calendar.JANUARY)
-        calendar.set(Calendar.DAY_OF_MONTH, 1)
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-
-        val today = Calendar.getInstance()
-        today.set(Calendar.HOUR_OF_DAY, 23)
-        today.set(Calendar.MINUTE, 59)
-        today.set(Calendar.SECOND, 59)
-
-        val endOfYear = Calendar.getInstance()
-        endOfYear.set(Calendar.YEAR, currentYear)
-        endOfYear.set(Calendar.MONTH, Calendar.DECEMBER)
-        endOfYear.set(Calendar.DAY_OF_MONTH, 31)
+        val today = LocalDate.now(zoneId)
+        val startOfYear = today.withDayOfYear(1)
+        val endOfYear = LocalDate.of(today.year, 12, 31)
 
         val days = mutableListOf<HeatMapDay>()
-
-        while (!calendar.after(endOfYear)) {
-            val dateMs = calendar.timeInMillis
-            val isFuture = calendar.after(today)
+        var cursor = startOfYear
+        while (!cursor.isAfter(endOfYear)) {
+            val dateMs = cursor.atStartOfDay(zoneId).toInstant().toEpochMilli()
+            val isFuture = cursor.isAfter(today)
             val item = map[dateMs]
             val volume = if (isFuture) 0f else (item?.dailyVol ?: 0f)
             val workingSetCount = if (isFuture) 0 else (item?.workingSetCount ?: 0)
@@ -91,10 +85,9 @@ class ConsistencyUseCase @Inject constructor(
                 volume = volume,
                 workingSetCount = workingSetCount,
                 level = level,
-                formattedDate = formatDate(dateMs)
+                formattedDate = formatDate(cursor)
             ))
-
-            calendar.add(Calendar.DAY_OF_YEAR, 1)
+            cursor = cursor.plusDays(1)
         }
 
         days
@@ -114,10 +107,11 @@ class ConsistencyUseCase @Inject constructor(
 
         // 2. Iron Streak Data (From HomeViewModel logic)
         val dateStrings = workoutDao.getWorkoutDatesWithWorkingSets()
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val allowedRestDays = userPreferencesRepository.restDaysPerWeek.firstOrNull() ?: 2
         val workoutDates = dateStrings.mapNotNull { dateStr ->
-            try { dateFormat.parse(dateStr) } catch (e: Exception) { null }
+            parseLocalDate(dateStr)?.let { localDate ->
+                Date.from(localDate.atStartOfDay(zoneId).toInstant())
+            }
         }
         val streakResult = StreakCalculator.calculateStreak(
             workoutDates = workoutDates,
@@ -135,13 +129,11 @@ class ConsistencyUseCase @Inject constructor(
         val ytdWorkouts = workoutDao.getYearToDateWorkoutCount()
 
         // 5. YTD Volume
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.DAY_OF_YEAR, 1)
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        val startOfYear = cal.timeInMillis
+        val startOfYear = LocalDate.now(zoneId)
+            .withDayOfYear(1)
+            .atStartOfDay(zoneId)
+            .toInstant()
+            .toEpochMilli()
         val endOfToday = System.currentTimeMillis()
         val ytdVolume = setDao.getTotalVolume(startOfYear, endOfToday) ?: 0f
 
@@ -155,24 +147,27 @@ class ConsistencyUseCase @Inject constructor(
     }
 
     private fun getWeekSinceEpoch(timestamp: Long): Long {
-        return timestamp / (1000L * 60 * 60 * 24 * 7)
+        return Instant.ofEpochMilli(timestamp)
+            .atZone(zoneId)
+            .toLocalDate()
+            .toEpochDay() / 7L
     }
-    
-    private fun stripTime(timestamp: Long): Long {
-        val cal = Calendar.getInstance()
-        cal.timeInMillis = timestamp
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        return cal.timeInMillis
+
+    private fun startOfLocalDayMillis(timestamp: Long): Long {
+        return Instant.ofEpochMilli(timestamp)
+            .atZone(zoneId)
+            .toLocalDate()
+            .atStartOfDay(zoneId)
+            .toInstant()
+            .toEpochMilli()
     }
-    
-    private fun formatDate(timestamp: Long): String {
-        val cal = Calendar.getInstance()
-        cal.timeInMillis = timestamp
-        val month = cal.getDisplayName(Calendar.MONTH, Calendar.SHORT, java.util.Locale.getDefault())
-        val day = cal.get(Calendar.DAY_OF_MONTH)
-        return "$month $day"
+
+    private fun parseLocalDate(value: String): LocalDate? {
+        return runCatching { LocalDate.parse(value) }.getOrNull()
+    }
+
+    private fun formatDate(date: LocalDate): String {
+        val month = date.month.getDisplayName(java.time.format.TextStyle.SHORT, Locale.getDefault())
+        return "$month ${date.dayOfMonth}"
     }
 }

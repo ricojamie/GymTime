@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,11 +32,11 @@ fun MuscleGroupManagementScreen(
     navController: NavController,
     viewModel: MuscleGroupManagementViewModel = hiltViewModel()
 ) {
-    val muscleGroups by viewModel.muscleGroups.collectAsState()
-    val editingMuscle by viewModel.editingMuscle.collectAsState()
-    val muscleNameInput by viewModel.muscleNameInput.collectAsState()
-    val validationError by viewModel.validationError.collectAsState()
-    val deleteCheckResult by viewModel.deleteCheckResult.collectAsState()
+    val muscleGroups by viewModel.muscleGroups.collectAsStateWithLifecycle()
+    val editingMuscle by viewModel.editingMuscle.collectAsStateWithLifecycle()
+    val muscleNameInput by viewModel.muscleNameInput.collectAsStateWithLifecycle()
+    val validationError by viewModel.validationError.collectAsStateWithLifecycle()
+    val deleteCheckResult by viewModel.deleteCheckResult.collectAsStateWithLifecycle()
 
     val accentColor = MaterialTheme.colorScheme.primary
     val gradientColors = LocalGradientColors.current

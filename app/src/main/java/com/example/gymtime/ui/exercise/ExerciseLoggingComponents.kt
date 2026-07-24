@@ -45,8 +45,6 @@ import com.example.gymtime.ui.theme.LocalAppColors
 import com.example.gymtime.util.OneRepMaxCalculator
 import com.example.gymtime.util.TimeFormatter
 import com.example.gymtime.util.TimeUtils
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @Composable
 fun SupersetIndicatorPills(
@@ -142,17 +140,13 @@ fun LogSetButton(
         label = "button_scale"
     )
     val keyboardController = LocalSoftwareKeyboardController.current
-    val scope = rememberCoroutineScope()
 
     Button(
         onClick = {
             isPressed = true
             keyboardController?.hide()
-            scope.launch {
-                delay(100)
-                isPressed = false
-                onClick()
-            }
+            onClick()
+            isPressed = false
         },
         enabled = enabled,
         modifier = modifier

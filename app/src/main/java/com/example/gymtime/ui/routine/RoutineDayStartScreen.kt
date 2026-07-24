@@ -10,6 +10,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,8 +31,8 @@ fun RoutineDayStartScreen(
     navController: NavController,
     viewModel: RoutineDayStartViewModel = hiltViewModel()
 ) {
-    val routineName by viewModel.routineName.collectAsState(initial = "")
-    val daysWithExercises by viewModel.daysWithExercises.collectAsState(initial = emptyList())
+    val routineName by viewModel.routineName.collectAsStateWithLifecycle(initialValue = "")
+    val daysWithExercises by viewModel.daysWithExercises.collectAsStateWithLifecycle(initialValue = emptyList())
 
     LaunchedEffect(Unit) {
         viewModel.startWorkoutEvent.collect { firstExerciseId ->

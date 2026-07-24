@@ -4,12 +4,17 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
+import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.db.entity.WorkoutWithMuscles
 import com.example.gymtime.data.db.entity.DailyVolume
 import com.example.gymtime.data.db.entity.MuscleDistribution
 import com.example.gymtime.data.db.entity.MuscleFreshness
 import kotlinx.coroutines.flow.Flow
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Date
 
 import androidx.room.Delete
@@ -50,6 +55,17 @@ data class RatedWorkoutSetInfo(
     val reps: Int?,
     val isWarmup: Boolean?
 )
+
+private val localDateFormatter: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
+
+private fun localDateStartMillis(timestampMs: Long, zoneId: ZoneId): Long {
+    return Instant.ofEpochMilli(timestampMs)
+        .atZone(zoneId)
+        .toLocalDate()
+        .atStartOfDay(zoneId)
+        .toInstant()
+        .toEpochMilli()
+}
 
 @Dao
 interface WorkoutDao {
@@ -99,40 +115,83 @@ interface WorkoutDao {
     """)
     fun getWorkoutsWithMuscles(): Flow<List<WorkoutWithMuscles>>
 
-    // Get distinct workout dates where at least 1 working set was logged (for streak calculation)
     @Query("""
-        SELECT DISTINCT DATE(w.startTime / 1000, 'unixepoch') as workoutDate
-        FROM workouts w
-        INNER JOIN sets s ON w.id = s.workoutId
-        WHERE s.isWarmup = 0
-        ORDER BY w.startTime DESC
+        SELECT *
+        FROM sets
+        WHERE isWarmup = 0
+          AND isComplete = 1
+        ORDER BY timestamp DESC
     """)
-    suspend fun getWorkoutDatesWithWorkingSets(): List<String>
+    suspend fun getCompletedWorkingSets(): List<Set>
 
-    // Get count of workouts with at least 1 working set this year (YTD)
+    suspend fun getWorkoutDatesWithWorkingSets(): List<String> {
+        val zoneId = ZoneId.systemDefault()
+        return getCompletedWorkingSets()
+            .asSequence()
+            .map { it.timestamp.toInstant().atZone(zoneId).toLocalDate() }
+            .distinct()
+            .sortedDescending()
+            .map(localDateFormatter::format)
+            .toList()
+    }
+
     @Query("""
         SELECT COUNT(DISTINCT w.id)
         FROM workouts w
         INNER JOIN sets s ON w.id = s.workoutId
         WHERE s.isWarmup = 0
-          AND strftime('%Y', w.startTime / 1000, 'unixepoch') = strftime('%Y', 'now')
+          AND s.isComplete = 1
+          AND w.startTime >= :startInclusive
+          AND w.startTime < :endExclusive
     """)
-    suspend fun getYearToDateWorkoutCount(): Int
+    suspend fun getWorkoutCountWithWorkingSetsInRange(
+        startInclusive: Long,
+        endExclusive: Long
+    ): Int
 
-    // Get daily weighted volume for the heat map (last 365 days).
+    suspend fun getYearToDateWorkoutCount(): Int {
+        val zoneId = ZoneId.systemDefault()
+        val today = ZonedDateTime.now(zoneId).toLocalDate()
+        val startInclusive = today.withDayOfYear(1)
+            .atStartOfDay(zoneId)
+            .toInstant()
+            .toEpochMilli()
+        val endExclusive = today.plusDays(1)
+            .atStartOfDay(zoneId)
+            .toInstant()
+            .toEpochMilli()
+        return getWorkoutCountWithWorkingSetsInRange(startInclusive, endExclusive)
+    }
+
     @Query("""
-        SELECT 
-            COALESCE(SUM(CASE WHEN s.weight IS NOT NULL AND s.reps IS NOT NULL THEN s.weight * s.reps ELSE 0 END), 0) as dailyVol,
-            COUNT(s.id) as workingSetCount,
-            MIN(w.startTime) as date
-        FROM workouts w
-        INNER JOIN sets s ON w.id = s.workoutId
-        WHERE s.isWarmup = 0
-          AND w.startTime > (strftime('%s', 'now', '-1 year') * 1000)
-        GROUP BY date(w.startTime / 1000, 'unixepoch')
-        ORDER BY w.startTime ASC
+        SELECT *
+        FROM sets
+        WHERE isWarmup = 0
+          AND isComplete = 1
+          AND timestamp >= :startInclusive
+        ORDER BY timestamp ASC
     """)
-    suspend fun getDailyVolumeForHeatMap(): List<DailyVolume>
+    suspend fun getCompletedWorkingSetsSince(startInclusive: Long): List<Set>
+
+    suspend fun getDailyVolumeForHeatMap(): List<DailyVolume> {
+        val zoneId = ZoneId.systemDefault()
+        val startInclusive = ZonedDateTime.now(zoneId)
+            .minusYears(1)
+            .toInstant()
+            .toEpochMilli()
+        return getCompletedWorkingSetsSince(startInclusive)
+            .groupBy { localDateStartMillis(it.timestamp.time, zoneId) }
+            .toSortedMap()
+            .map { (date, rows) ->
+                DailyVolume(
+                    dailyVol = rows.sumOf { row ->
+                        (((row.weight ?: 0f) * (row.reps ?: 0)).toDouble())
+                    }.toFloat(),
+                    date = date,
+                    workingSetCount = rows.size
+                )
+            }
+    }
 
     // Muscle Distribution (Last 30 days)
     @Query("""
@@ -169,6 +228,7 @@ interface WorkoutDao {
         FROM sets s
         INNER JOIN exercises e ON s.exerciseId = e.id
         WHERE s.isWarmup = 0
+          AND s.isComplete = 1
         GROUP BY e.targetMuscle
     """)
     suspend fun getMuscleLastTrainedDates(): List<MuscleFreshness>

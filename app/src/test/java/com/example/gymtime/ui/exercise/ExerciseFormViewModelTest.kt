@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -66,5 +67,16 @@ class ExerciseFormViewModelTest {
 
         assertFalse(viewModel.isSaveEnabled.value)
         job.cancel()
+    }
+
+    @Test
+    fun `new exercise name is prefilled from navigation`() {
+        val prefilled = ExerciseFormViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("initialName" to "Incline Dumbbell Press")),
+            exerciseDao = exerciseDao,
+            muscleGroupDao = muscleGroupDao
+        )
+
+        assertEquals("Incline Dumbbell Press", prefilled.exerciseName.value)
     }
 }

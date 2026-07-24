@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
@@ -29,7 +30,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +51,7 @@ import androidx.navigation.NavController
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.components.RoutineCard
+import com.example.gymtime.ui.smartlog.SmartLogBottomSheet
 import com.example.gymtime.ui.theme.LocalAppColors
 import com.example.gymtime.util.StreakCalculator
 import java.text.NumberFormat
@@ -62,29 +65,30 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
     navController: NavController
 ) {
-    val userName by viewModel.userName.collectAsState(initial = "Athlete")
-    val ongoingWorkout by viewModel.ongoingWorkout.collectAsState()
-    val hasActiveRoutine by viewModel.hasActiveRoutine.collectAsState()
-    val activeRoutineName by viewModel.activeRoutineName.collectAsState()
-    val nextRoutineDayName by viewModel.nextRoutineDayName.collectAsState()
-    val routineCardState by viewModel.routineCardState.collectAsState()
-    val volumeOrbState by viewModel.volumeOrbState.collectAsState()
-    val streakResult by viewModel.streakResult.collectAsState()
-    val bestStreak by viewModel.bestStreak.collectAsState()
-    val ytdWorkouts by viewModel.ytdWorkouts.collectAsState()
-    val ytdVolume by viewModel.ytdVolume.collectAsState()
-    val lastYearVolume by viewModel.lastYearVolume.collectAsState()
-    val strengthMomentum by viewModel.strengthMomentum.collectAsState()
+    val userName by viewModel.userName.collectAsStateWithLifecycle(initialValue = "Athlete")
+    val ongoingWorkout by viewModel.ongoingWorkout.collectAsStateWithLifecycle()
+    val hasActiveRoutine by viewModel.hasActiveRoutine.collectAsStateWithLifecycle()
+    val activeRoutineName by viewModel.activeRoutineName.collectAsStateWithLifecycle()
+    val nextRoutineDayName by viewModel.nextRoutineDayName.collectAsStateWithLifecycle()
+    val routineCardState by viewModel.routineCardState.collectAsStateWithLifecycle()
+    val volumeOrbState by viewModel.volumeOrbState.collectAsStateWithLifecycle()
+    val streakResult by viewModel.streakResult.collectAsStateWithLifecycle()
+    val bestStreak by viewModel.bestStreak.collectAsStateWithLifecycle()
+    val ytdWorkouts by viewModel.ytdWorkouts.collectAsStateWithLifecycle()
+    val ytdVolume by viewModel.ytdVolume.collectAsStateWithLifecycle()
+    val lastYearVolume by viewModel.lastYearVolume.collectAsStateWithLifecycle()
+    val strengthMomentum by viewModel.strengthMomentum.collectAsStateWithLifecycle()
 
     var showStreakDetail by remember { mutableStateOf(false) }
     var showMomentumDetail by remember { mutableStateOf(false) }
     var showMomentumInfo by remember { mutableStateOf(false) }
     var showWorkoutStartPicker by remember { mutableStateOf(false) }
+    var showSmartLog by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
 
-    // Refresh data when screen becomes visible
-    LaunchedEffect(Unit) {
-        viewModel.refreshData()
+    LifecycleResumeEffect(viewModel) {
+        viewModel.refreshDataIfDateChanged()
+        onPauseOrDispose { }
     }
 
     LaunchedEffect(Unit) {
@@ -120,6 +124,7 @@ fun HomeScreen(
             hasActiveRoutine = hasActiveRoutine,
             nextRoutineDayName = nextRoutineDayName,
             height = 140.dp,
+            onSmartLogClick = { showSmartLog = true },
             onClick = {
                 if (ongoingWorkout != null) {
                     navController.navigate(Screen.WorkoutResume.route)
@@ -261,6 +266,20 @@ fun HomeScreen(
             )
         }
     }
+
+    if (showSmartLog) {
+        SmartLogBottomSheet(
+            onDismiss = { showSmartLog = false },
+            onNavigateToLogger = { exerciseId, token ->
+                showSmartLog = false
+                navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId, token))
+            },
+            onCreateExercise = { name ->
+                showSmartLog = false
+                navController.navigate(Screen.ExerciseForm.createRoute(fromWorkout = true, initialName = name))
+            }
+        )
+    }
 }
 
 /**
@@ -272,6 +291,7 @@ private fun QuickStartCard(
     hasActiveRoutine: Boolean,
     nextRoutineDayName: String?,
     height: Dp,
+    onSmartLogClick: () -> Unit,
     onClick: () -> Unit
 ) {
     val accentColor = MaterialTheme.colorScheme.primary
@@ -298,6 +318,17 @@ private fun QuickStartCard(
                 letterSpacing = 1.sp,
                 fontWeight = FontWeight.Bold
             )
+
+            IconButton(
+                onClick = onSmartLogClick,
+                modifier = Modifier.align(Alignment.BottomEnd)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = "Smart Log",
+                    tint = accentColor
+                )
+            }
 
             Column(
                 modifier = Modifier.align(Alignment.CenterStart),

@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -348,14 +349,14 @@ fun BalanceTabContent(
 fun TrendsTabContent(
     viewModel: AnalyticsViewModel
 ) {
-    val trendData by viewModel.trendData.collectAsState()
-    val selectedMetric by viewModel.selectedMetric.collectAsState()
-    val selectedPeriod by viewModel.selectedPeriod.collectAsState()
-    val selectedInterval by viewModel.selectedInterval.collectAsState()
-    val selectedMuscle by viewModel.selectedMuscleFilter.collectAsState()
-    val selectedExerciseId by viewModel.selectedExerciseFilterId.collectAsState()
-    val allExercises by viewModel.allExercises.collectAsState()
-    val allMuscleGroups by viewModel.allMuscleGroups.collectAsState()
+    val trendData by viewModel.trendData.collectAsStateWithLifecycle()
+    val selectedMetric by viewModel.selectedMetric.collectAsStateWithLifecycle()
+    val selectedPeriod by viewModel.selectedPeriod.collectAsStateWithLifecycle()
+    val selectedInterval by viewModel.selectedInterval.collectAsStateWithLifecycle()
+    val selectedMuscle by viewModel.selectedMuscleFilter.collectAsStateWithLifecycle()
+    val selectedExerciseId by viewModel.selectedExerciseFilterId.collectAsStateWithLifecycle()
+    val allExercises by viewModel.allExercises.collectAsStateWithLifecycle()
+    val allMuscleGroups by viewModel.allMuscleGroups.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier.fillMaxWidth(),

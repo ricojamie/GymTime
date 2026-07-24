@@ -125,6 +125,7 @@ class ActiveWearSessionRepository @Inject constructor(
     private var lastSnapshot: WearSessionSnapshot = WearSessionSnapshot.inactive()
     private var lastCompletionId: Long = 0
     private var lastSaveConfirmationId: Long = 0
+    private var lastPublishAtMillis: Long = 0
 
     val draftPatches = MutableSharedFlow<WearDraftPatch>(
         extraBufferCapacity = 8,
@@ -162,8 +163,9 @@ class ActiveWearSessionRepository @Inject constructor(
     }
 
     private fun publishSnapshotState(snapshot: WearSessionSnapshot) {
+        val previousSnapshot = lastSnapshot
         val completionId = if (
-            lastSnapshot.timerRunning &&
+            previousSnapshot.timerRunning &&
             !snapshot.timerRunning &&
             snapshot.timerRemainingSeconds == 0 &&
             snapshot.active
@@ -176,18 +178,33 @@ class ActiveWearSessionRepository @Inject constructor(
         lastSnapshot = snapshot
         lastCompletionId = completionId
 
-        publishSnapshot(snapshot, completionId)
+        val now = System.currentTimeMillis()
+        val isRoutineTimerTick = previousSnapshot.isRoutineTimerTickTo(snapshot)
+        val checkpointDue = now - lastPublishAtMillis >= TIMER_CHECKPOINT_INTERVAL_MILLIS
+        if (!isRoutineTimerTick || checkpointDue) {
+            publishSnapshot(snapshot, completionId, now)
+        }
     }
 
     @Synchronized
     fun confirmSetSaved() {
         lastSaveConfirmationId = saveConfirmationCounter.incrementAndGet()
-        publishSnapshot(lastSnapshot, lastCompletionId)
+        publishSnapshot(lastSnapshot, lastCompletionId, System.currentTimeMillis())
     }
 
-    private fun publishSnapshot(snapshot: WearSessionSnapshot, completionId: Long) {
+    private fun publishSnapshot(
+        snapshot: WearSessionSnapshot,
+        completionId: Long,
+        publishedAtMillis: Long
+    ) {
+        lastPublishAtMillis = publishedAtMillis
         val request = PutDataMapRequest.create(WearContract.DATA_ACTIVE_SESSION).apply {
-            dataMap.putSnapshot(snapshot, completionId, lastSaveConfirmationId)
+            dataMap.putSnapshot(
+                snapshot = snapshot,
+                completionId = completionId,
+                saveConfirmationId = lastSaveConfirmationId,
+                updatedAtMillis = publishedAtMillis
+            )
         }.asPutDataRequest().setUrgent()
 
         dataClient.putDataItem(request)
@@ -207,7 +224,8 @@ class ActiveWearSessionRepository @Inject constructor(
     private fun DataMap.putSnapshot(
         snapshot: WearSessionSnapshot,
         completionId: Long,
-        saveConfirmationId: Long
+        saveConfirmationId: Long,
+        updatedAtMillis: Long
     ) {
         putBoolean(WearContract.KEY_ACTIVE, snapshot.active)
         putLong(WearContract.KEY_WORKOUT_ID, snapshot.workoutId ?: -1L)
@@ -229,10 +247,18 @@ class ActiveWearSessionRepository @Inject constructor(
         putBoolean(WearContract.KEY_TIMER_RUNNING, snapshot.timerRunning)
         putLong(WearContract.KEY_TIMER_COMPLETION_ID, completionId)
         putLong(WearContract.KEY_SET_SAVE_CONFIRMATION_ID, saveConfirmationId)
-        putLong(WearContract.KEY_UPDATED_AT, System.currentTimeMillis())
+        putLong(WearContract.KEY_UPDATED_AT, updatedAtMillis)
+    }
+
+    private fun WearSessionSnapshot.isRoutineTimerTickTo(next: WearSessionSnapshot): Boolean {
+        if (!timerRunning || !next.timerRunning) return false
+        if (next.timerRemainingSeconds >= timerRemainingSeconds) return false
+
+        return copy(timerRemainingSeconds = next.timerRemainingSeconds) == next
     }
 
     companion object {
         private const val TAG = "ActiveWearSession"
+        private const val TIMER_CHECKPOINT_INTERVAL_MILLIS = 30_000L
     }
 }

@@ -95,8 +95,21 @@ class RestTimerService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val seconds = intent?.getIntExtra(EXTRA_SECONDS, 90) ?: 90
-        
-        // Android 14 requirement: call startForeground immediately for EVERY path when started via startForegroundService
+
+        val action = intent?.action
+        val isTimerStart = action == ACTION_START_TIMER
+        val isTimerControl = action == ACTION_ADD_TIME ||
+            action == ACTION_ADJUST_TIME ||
+            action == ACTION_STOP_TIMER
+        if ((!isTimerStart && !isTimerControl) || (isTimerControl && !_isRunning.value)) {
+            // A stale notification or Wear command must not create an idle foreground
+            // service. Only ACTION_START_TIMER is launched via startForegroundService.
+            stopSelfResult(startId)
+            return START_NOT_STICKY
+        }
+
+        // Android 14 requires prompt foreground promotion for ACTION_START_TIMER.
+        // Control actions arrive while the timer is already foreground.
         createNotificationChannel()
         startForeground(
             NOTIFICATION_ID, 
@@ -104,7 +117,7 @@ class RestTimerService : Service() {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         )
 
-        when (intent?.action) {
+        when (action) {
             ACTION_START_TIMER -> {
                 startTimer(seconds)
             }

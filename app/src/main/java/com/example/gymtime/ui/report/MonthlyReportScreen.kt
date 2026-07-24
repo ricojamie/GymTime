@@ -7,6 +7,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,6 +21,7 @@ import com.example.gymtime.domain.report.MonthlyPR
 import com.example.gymtime.domain.report.MonthlyReport
 import com.example.gymtime.domain.report.MuscleTotal
 import com.example.gymtime.navigation.navigateHomeAndClearStack
+import com.example.gymtime.ui.ai.OnDeviceAiDownloadCard
 import com.example.gymtime.ui.theme.LocalAppColors
 import java.text.NumberFormat
 import java.util.Locale
@@ -27,9 +30,15 @@ import java.util.Locale
 @Composable
 fun MonthlyReportScreen(navController: NavController) {
     val viewModel: MonthlyReportViewModel = hiltViewModel()
-    val report by viewModel.report.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+    val report by viewModel.report.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val narrative by viewModel.narrative.collectAsStateWithLifecycle()
     val accent = MaterialTheme.colorScheme.primary
+
+    LifecycleResumeEffect(viewModel) {
+        viewModel.refreshIfDateChanged()
+        onPauseOrDispose { }
+    }
 
     Scaffold(
         topBar = {
@@ -71,13 +80,23 @@ fun MonthlyReportScreen(navController: NavController) {
                 )
             }
 
-            else -> ReportBody(report = report!!, padding = padding, accent = accent)
+            else -> ReportBody(
+                report = report!!,
+                narrative = narrative,
+                padding = padding,
+                accent = accent
+            )
         }
     }
 }
 
 @Composable
-private fun ReportBody(report: MonthlyReport, padding: PaddingValues, accent: Color) {
+private fun ReportBody(
+    report: MonthlyReport,
+    narrative: String?,
+    padding: PaddingValues,
+    accent: Color
+) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.getDefault()) }
 
     LazyColumn(
@@ -100,6 +119,30 @@ private fun ReportBody(report: MonthlyReport, padding: PaddingValues, accent: Co
                 color = LocalAppColors.current.textTertiary,
                 fontSize = 14.sp
             )
+        }
+
+        item { OnDeviceAiDownloadCard() }
+
+        narrative?.takeIf { it.isNotBlank() }?.let { recap ->
+            item {
+                ReportCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "MONTH IN REVIEW",
+                            color = accent,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.3.sp
+                        )
+                        Text(
+                            text = recap,
+                            color = LocalAppColors.current.textPrimary,
+                            fontSize = 15.sp,
+                            lineHeight = 21.sp
+                        )
+                    }
+                }
+            }
         }
 
         item {

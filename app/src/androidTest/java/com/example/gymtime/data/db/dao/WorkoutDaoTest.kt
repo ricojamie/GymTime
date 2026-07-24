@@ -15,8 +15,11 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.text.SimpleDateFormat
-import java.util.*
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.util.Calendar
+import java.util.Date
+import java.util.TimeZone
 
 @RunWith(AndroidJUnit4::class)
 class WorkoutDaoTest {
@@ -25,6 +28,7 @@ class WorkoutDaoTest {
     private lateinit var workoutDao: WorkoutDao
     private lateinit var setDao: SetDao
     private lateinit var exerciseDao: ExerciseDao
+    private lateinit var originalTimeZone: TimeZone
 
     private val testExercise = Exercise(
         id = 1L,
@@ -38,6 +42,7 @@ class WorkoutDaoTest {
 
     @Before
     fun setup() {
+        originalTimeZone = TimeZone.getDefault()
         database = Room.inMemoryDatabaseBuilder(
             ApplicationProvider.getApplicationContext(),
             GymTimeDatabase::class.java
@@ -50,6 +55,7 @@ class WorkoutDaoTest {
 
     @After
     fun teardown() {
+        TimeZone.setDefault(originalTimeZone)
         database.close()
     }
 
@@ -265,5 +271,187 @@ class WorkoutDaoTest {
 
         // Should only return the date of the workout with working sets
         assertEquals(1, dates.size)
+    }
+
+    @Test
+    fun getWorkoutDatesWithWorkingSetsUsesLocalSetDatesAcrossUtcMidnight() = runTest {
+        val zoneId = ZoneId.of("America/New_York")
+        TimeZone.setDefault(TimeZone.getTimeZone(zoneId))
+        exerciseDao.insertExercise(testExercise)
+
+        val currentYear = ZonedDateTime.now(zoneId).year
+
+        val workoutId1 = insertCompletedWorkout(
+            startTime = localDateTime(currentYear, 7, 1, 23, 20, zoneId),
+            endTime = localDateTime(currentYear, 7, 1, 23, 50, zoneId),
+            name = "Late Session"
+        )
+        val workoutId2 = insertCompletedWorkout(
+            startTime = localDateTime(currentYear, 7, 2, 0, 10, zoneId),
+            endTime = localDateTime(currentYear, 7, 2, 0, 40, zoneId),
+            name = "After Midnight"
+        )
+
+        insertWorkingSet(workoutId1, localDateTime(currentYear, 7, 1, 23, 30, zoneId), weight = 225f, reps = 5)
+        insertWorkingSet(workoutId2, localDateTime(currentYear, 7, 2, 0, 30, zoneId), weight = 185f, reps = 8)
+
+        val dates = workoutDao.getWorkoutDatesWithWorkingSets()
+
+        assertEquals(listOf("$currentYear-07-02", "$currentYear-07-01"), dates)
+    }
+
+    @Test
+    fun getYearToDateWorkoutCountUsesLocalWorkoutStartYearBoundaries() = runTest {
+        val zoneId = ZoneId.of("America/New_York")
+        TimeZone.setDefault(TimeZone.getTimeZone(zoneId))
+        exerciseDao.insertExercise(testExercise)
+
+        val currentYear = ZonedDateTime.now(zoneId).year
+
+        val previousYearWorkoutId = insertCompletedWorkout(
+            startTime = localDateTime(currentYear - 1, 12, 31, 23, 30, zoneId),
+            endTime = localDateTime(currentYear, 1, 1, 0, 15, zoneId),
+            name = "Previous Year Local"
+        )
+        insertWorkingSet(
+            workoutId = previousYearWorkoutId,
+            timestamp = localDateTime(currentYear - 1, 12, 31, 23, 40, zoneId),
+            weight = 135f,
+            reps = 10
+        )
+
+        val currentYearWorkoutId = insertCompletedWorkout(
+            startTime = localDateTime(currentYear, 1, 1, 0, 30, zoneId),
+            endTime = localDateTime(currentYear, 1, 1, 1, 15, zoneId),
+            name = "Current Year Local"
+        )
+        insertWorkingSet(
+            workoutId = currentYearWorkoutId,
+            timestamp = localDateTime(currentYear, 1, 1, 0, 40, zoneId),
+            weight = 185f,
+            reps = 6
+        )
+
+        val warmupOnlyWorkoutId = insertCompletedWorkout(
+            startTime = localDateTime(currentYear, 1, 2, 8, 0, zoneId),
+            endTime = localDateTime(currentYear, 1, 2, 8, 30, zoneId),
+            name = "Warmup Only"
+        )
+        setDao.insertSet(
+            Set(
+                workoutId = warmupOnlyWorkoutId,
+                exerciseId = 1L,
+                weight = 95f,
+                reps = 12,
+                rpe = null,
+                durationSeconds = null,
+                distanceMeters = null,
+                isWarmup = true,
+                isComplete = true,
+                timestamp = localDateTime(currentYear, 1, 2, 8, 5, zoneId),
+                note = null,
+                supersetGroupId = null,
+                supersetOrderIndex = 0
+            )
+        )
+
+        assertEquals(1, workoutDao.getYearToDateWorkoutCount())
+    }
+
+    @Test
+    fun getDailyVolumeForHeatMapGroupsByLocalSetDay() = runTest {
+        val zoneId = ZoneId.of("America/New_York")
+        TimeZone.setDefault(TimeZone.getTimeZone(zoneId))
+        exerciseDao.insertExercise(testExercise)
+
+        val currentYear = ZonedDateTime.now(zoneId).year
+        val workoutId = insertCompletedWorkout(
+            startTime = localDateTime(currentYear, 7, 1, 23, 0, zoneId),
+            endTime = localDateTime(currentYear, 7, 2, 1, 0, zoneId),
+            name = "Split Session"
+        )
+
+        insertWorkingSet(workoutId, localDateTime(currentYear, 7, 1, 23, 30, zoneId), weight = 200f, reps = 5)
+        insertWorkingSet(workoutId, localDateTime(currentYear, 7, 2, 0, 30, zoneId), weight = 150f, reps = 4)
+        setDao.insertSet(
+            Set(
+                workoutId = workoutId,
+                exerciseId = 1L,
+                weight = null,
+                reps = null,
+                rpe = null,
+                durationSeconds = 600,
+                distanceMeters = null,
+                isWarmup = false,
+                isComplete = true,
+                timestamp = localDateTime(currentYear, 7, 2, 0, 45, zoneId),
+                note = null,
+                supersetGroupId = null,
+                supersetOrderIndex = 0
+            )
+        )
+
+        val dailyVolumes = workoutDao.getDailyVolumeForHeatMap()
+        val july1 = localDateTime(currentYear, 7, 1, 0, 0, zoneId).time
+        val july2 = localDateTime(currentYear, 7, 2, 0, 0, zoneId).time
+
+        assertEquals(
+            listOf(july1, july2),
+            dailyVolumes
+                .filter { it.date == july1 || it.date == july2 }
+                .map { it.date }
+        )
+        assertEquals(1000f, dailyVolumes.first { it.date == july1 }.dailyVol, 0.001f)
+        assertEquals(1, dailyVolumes.first { it.date == july1 }.workingSetCount)
+        assertEquals(600f, dailyVolumes.first { it.date == july2 }.dailyVol, 0.001f)
+        assertEquals(2, dailyVolumes.first { it.date == july2 }.workingSetCount)
+    }
+
+    private suspend fun insertCompletedWorkout(startTime: Date, endTime: Date, name: String): Long {
+        return workoutDao.insertWorkout(
+            Workout(
+                startTime = startTime,
+                endTime = endTime,
+                name = name,
+                note = null,
+                rating = null,
+                ratingNote = null,
+                routineDayId = null
+            )
+        )
+    }
+
+    private suspend fun insertWorkingSet(workoutId: Long, timestamp: Date, weight: Float, reps: Int) {
+        setDao.insertSet(
+            Set(
+                workoutId = workoutId,
+                exerciseId = 1L,
+                weight = weight,
+                reps = reps,
+                rpe = null,
+                durationSeconds = null,
+                distanceMeters = null,
+                isWarmup = false,
+                isComplete = true,
+                timestamp = timestamp,
+                note = null,
+                supersetGroupId = null,
+                supersetOrderIndex = 0
+            )
+        )
+    }
+
+    private fun localDateTime(
+        year: Int,
+        month: Int,
+        day: Int,
+        hour: Int,
+        minute: Int,
+        zoneId: ZoneId
+    ): Date {
+        return Date.from(
+            ZonedDateTime.of(year, month, day, hour, minute, 0, 0, zoneId)
+                .toInstant()
+        )
     }
 }

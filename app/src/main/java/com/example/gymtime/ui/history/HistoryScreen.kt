@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,10 +52,10 @@ fun HistoryScreen(
     navController: NavController,
     viewModel: HistoryViewModel = hiltViewModel()
 ) {
-    val workouts by viewModel.allWorkouts.collectAsState()
-    val selectedWorkout by viewModel.selectedWorkout.collectAsState()
-    val selectedWorkoutDetails by viewModel.selectedWorkoutDetails.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+    val workouts by viewModel.allWorkouts.collectAsStateWithLifecycle()
+    val selectedWorkout by viewModel.selectedWorkout.collectAsStateWithLifecycle()
+    val selectedWorkoutDetails by viewModel.selectedWorkoutDetails.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val accentColor = MaterialTheme.colorScheme.primary
     val appColors = LocalAppColors.current
     val context = LocalContext.current
@@ -101,6 +102,7 @@ fun HistoryScreen(
             val send = Intent(Intent.ACTION_SEND).apply {
                 type = "image/png"
                 putExtra(Intent.EXTRA_STREAM, payload.imageUri)
+                putExtra(Intent.EXTRA_TEXT, payload.text)
                 clipData = ClipData.newUri(context.contentResolver, "Workout summary", payload.imageUri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
@@ -187,7 +189,7 @@ fun HistoryScreen(
     }
 
     addToRoutineWorkoutId?.let { workoutId ->
-        val routines by viewModel.allRoutines.collectAsState()
+        val routines by viewModel.allRoutines.collectAsStateWithLifecycle()
         AddToRoutineDialog(
             routines = routines,
             loadDays = { routineId -> viewModel.getDaysForRoutine(routineId) },

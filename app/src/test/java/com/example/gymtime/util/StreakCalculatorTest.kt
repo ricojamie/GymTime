@@ -98,4 +98,38 @@ class StreakCalculatorTest {
         val result = StreakCalculator.calculateStreak(emptyList())
         assertNotNull(result.brokeToday)
     }
+
+    @Test
+    fun historicalAsOfIgnoresLaterWorkouts() {
+        val asOf = date(2026, Calendar.JUNE, 10)
+        val result = StreakCalculator.calculateStreak(
+            workoutDates = listOf(
+                date(2026, Calendar.JUNE, 10),
+                date(2026, Calendar.JUNE, 11)
+            ),
+            allowedSkipsPerWeek = 2,
+            asOf = asOf
+        )
+
+        assertEquals(StreakCalculator.StreakState.ACTIVE, result.state)
+        assertEquals(1, result.streakDays)
+    }
+
+    @Test
+    fun historicalAsOfCalculatesNextSundayFromReferenceDate() {
+        val asOf = date(2026, Calendar.JUNE, 10)
+        val result = StreakCalculator.calculateStreak(
+            workoutDates = listOf(asOf),
+            asOf = asOf
+        )
+        val reset = Calendar.getInstance().apply { time = result.nextResetDate }
+
+        assertEquals(Calendar.SUNDAY, reset.get(Calendar.DAY_OF_WEEK))
+        assertTrue(result.nextResetDate.after(asOf))
+    }
+
+    private fun date(year: Int, month: Int, day: Int): Date = Calendar.getInstance().apply {
+        set(year, month, day, 12, 0, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.time
 }

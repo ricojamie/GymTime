@@ -58,6 +58,14 @@ class WorkoutShareImageGenerator @Inject constructor(
     private fun measureLayout(workout: ShareableWorkout, width: Int): ShareImageLayout {
         val contentWidth = width - (OUTER_PADDING * 2)
         var height = OUTER_PADDING + 148 + 40 + 160 + 32
+        workout.recap?.takeIf { it.isNotBlank() }?.let { recap ->
+            val lineCount = wrapText(
+                text = recap,
+                paint = textPaint(30f, 0, Typeface.NORMAL),
+                maxWidth = (contentWidth - 64).toFloat()
+            ).size
+            height += 64 + (lineCount * 42) + 32
+        }
         workout.exercises.forEach { exercise ->
             val workingSets = exercise.sets.filter { !it.isWarmup }
             if (workingSets.isEmpty()) return@forEach
@@ -119,6 +127,18 @@ class WorkoutShareImageGenerator @Inject constructor(
             strongPaint
         )
         y += 200f
+
+        workout.recap?.takeIf { it.isNotBlank() }?.let { recap ->
+            val recapPaint = textPaint(30f, palette.textPrimary, Typeface.NORMAL)
+            val lines = wrapText(recap, recapPaint, contentWidth - 64f)
+            val recapHeight = 64f + (lines.size * 42f)
+            drawRoundRect(canvas, contentLeft, y, contentRight, y + recapHeight, palette.card, 24f)
+            canvas.drawText("WORKOUT RECAP", contentLeft + 32f, y + 36f, labelPaint)
+            lines.forEachIndexed { index, line ->
+                canvas.drawText(line, contentLeft + 32f, y + 80f + (index * 42f), recapPaint)
+            }
+            y += recapHeight + 32f
+        }
 
         workout.exercises.forEach { exercise ->
             val workingSets = exercise.sets.filter { !it.isWarmup }
@@ -234,6 +254,30 @@ class WorkoutShareImageGenerator @Inject constructor(
         return "$candidate..."
     }
 
+    private fun wrapText(text: String, paint: Paint, maxWidth: Float): List<String> {
+        val words = text.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (words.isEmpty()) return emptyList()
+        val lines = mutableListOf<String>()
+        var current = ""
+        words.forEach { word ->
+            val candidate = if (current.isEmpty()) word else "$current $word"
+            if (paint.measureText(candidate) <= maxWidth || current.isEmpty()) {
+                current = candidate
+            } else {
+                lines += current
+                current = word
+            }
+        }
+        if (current.isNotEmpty()) lines += current
+        return lines.take(MAX_RECAP_LINES).mapIndexed { index, line ->
+            if (index == MAX_RECAP_LINES - 1 && lines.size > MAX_RECAP_LINES) {
+                ellipsize("$line...", paint, maxWidth)
+            } else {
+                line
+            }
+        }
+    }
+
     private data class ShareImageLayout(
         val contentWidth: Int,
         val height: Int
@@ -241,5 +285,6 @@ class WorkoutShareImageGenerator @Inject constructor(
 
     private companion object {
         private const val OUTER_PADDING = 64
+        private const val MAX_RECAP_LINES = 3
     }
 }

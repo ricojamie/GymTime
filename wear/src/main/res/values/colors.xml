@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <color name="ironlog_accent">#B6FF3B</color>
+    <color name="ironlog_background">#090B08</color>
     <color name="ic_launcher_background">#10130F</color>
 </resources>

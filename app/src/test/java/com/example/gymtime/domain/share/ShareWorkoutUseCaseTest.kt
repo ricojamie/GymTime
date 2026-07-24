@@ -1,5 +1,6 @@
 package com.example.gymtime.domain.share
 
+import com.example.gymtime.ai.GeneratedNarrativeRepository
 import com.example.gymtime.data.db.dao.PBWithTimestamp
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.SetWithExerciseInfo
@@ -21,6 +22,7 @@ class ShareWorkoutUseCaseTest {
 
     private val workoutDao: WorkoutDao = mockk()
     private val setDao: SetDao = mockk()
+    private val generatedNarrativeRepository: GeneratedNarrativeRepository = mockk()
     private lateinit var useCase: ShareWorkoutUseCase
 
     private val workoutStart = 1_000_000L
@@ -34,8 +36,9 @@ class ShareWorkoutUseCaseTest {
 
     @Before
     fun setup() {
-        useCase = ShareWorkoutUseCase(workoutDao, setDao)
+        useCase = ShareWorkoutUseCase(workoutDao, setDao, generatedNarrativeRepository)
         every { workoutDao.getWorkoutById(1L) } returns flowOf(workout)
+        coEvery { generatedNarrativeRepository.getLatest(any(), any()) } returns null
     }
 
     @Test

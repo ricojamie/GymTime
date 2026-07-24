@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -43,7 +44,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +64,7 @@ import com.example.gymtime.R
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.GlowCard
+import com.example.gymtime.ui.smartlog.SmartLogBottomSheet
 import com.example.gymtime.ui.theme.IronLogTheme
 import com.example.gymtime.ui.theme.LocalAppColors
 
@@ -99,21 +101,22 @@ fun ExerciseSelectionContent(
         }
     }
     val accentColor = MaterialTheme.colorScheme.primary
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val selectedMuscles by viewModel.selectedMuscles.collectAsState()
-    val sortMode by viewModel.sortMode.collectAsState()
-    val availableMuscles by viewModel.availableMuscles.collectAsState(initial = emptyList<String>())
-    val filteredExercises by viewModel.filteredExercises.collectAsState(initial = emptyList())
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val selectedMuscles by viewModel.selectedMuscles.collectAsStateWithLifecycle()
+    val sortMode by viewModel.sortMode.collectAsStateWithLifecycle()
+    val availableMuscles by viewModel.availableMuscles.collectAsStateWithLifecycle(initialValue = emptyList<String>())
+    val filteredExercises by viewModel.filteredExercises.collectAsStateWithLifecycle(initialValue = emptyList())
 
     // Superset mode state
-    val isSupersetMode by viewModel.isSupersetModeEnabled.collectAsState()
-    val selectedForSuperset by viewModel.selectedForSuperset.collectAsState()
+    val isSupersetMode by viewModel.isSupersetModeEnabled.collectAsStateWithLifecycle()
+    val selectedForSuperset by viewModel.selectedForSuperset.collectAsStateWithLifecycle()
     val canStartSuperset = selectedForSuperset.size >= 2
 
     // Workout mode state (for navigation after creating exercise)
-    val isWorkoutMode by viewModel.isWorkoutMode.collectAsState()
+    val isWorkoutMode by viewModel.isWorkoutMode.collectAsStateWithLifecycle()
 
     var exerciseToDelete by remember { mutableStateOf<Exercise?>(null) }
+    var showSmartLog by remember { mutableStateOf(false) }
 
     Log.d(TAG, "ExerciseSelectionContent recomposed: availableMuscles=${availableMuscles.size}, filteredExercises=${filteredExercises.size}, isSupersetMode=$isSupersetMode, selectedCount=${selectedForSuperset.size}")
 
@@ -177,7 +180,10 @@ fun ExerciseSelectionContent(
             // Search Box
             ExerciseSearchBox(
                 query = searchQuery,
-                onQueryChange = { viewModel.updateSearchQuery(it) }
+                onQueryChange = { viewModel.updateSearchQuery(it) },
+                onSmartLogClick = if (!isSupersetMode && !viewModel.isAddToSupersetMode) {
+                    { showSmartLog = true }
+                } else null
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -299,12 +305,27 @@ fun ExerciseSelectionContent(
             textContentColor = LocalAppColors.current.textSecondary
         )
     }
+
+    if (showSmartLog) {
+        SmartLogBottomSheet(
+            onDismiss = { showSmartLog = false },
+            onNavigateToLogger = { exerciseId, token ->
+                showSmartLog = false
+                navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId, token))
+            },
+            onCreateExercise = { name ->
+                showSmartLog = false
+                navController.navigate(Screen.ExerciseForm.createRoute(fromWorkout = true, initialName = name))
+            }
+        )
+    }
 }
 
 @Composable
 private fun ExerciseSearchBox(
     query: String,
     onQueryChange: (String) -> Unit,
+    onSmartLogClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     GlowCard(
@@ -340,6 +361,15 @@ private fun ExerciseSearchBox(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                 singleLine = true
             )
+            onSmartLogClick?.let { onClick ->
+                androidx.compose.material3.IconButton(onClick = onClick) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = "Smart Log",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
         }
     }
 }

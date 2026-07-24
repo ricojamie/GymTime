@@ -8,6 +8,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.gymtime.data.db.GymTimeDatabase
 import com.example.gymtime.data.db.dao.ExerciseDao
+import com.example.gymtime.data.db.dao.GeneratedNarrativeDao
 import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.dao.RoutineDao
 import com.example.gymtime.data.db.dao.SetDao
@@ -68,10 +69,10 @@ object DatabaseModule {
         }
     }
 
-    // Migration from version 5 to 6: Adding routines days structure
+    // Migration from version 5 to 6: Adding routine days while preserving legacy routines
     private val MIGRATION_5_6 = object : Migration(5, 6) {
         override fun migrate(database: SupportSQLiteDatabase) {
-            Log.d(TAG, "Running migration 5 -> 6: Adding routines days structure")
+            Log.d(TAG, "Running migration 5 -> 6: Adding routine days structure")
 
             // Create routine_days table
             database.execSQL("""
@@ -85,8 +86,9 @@ object DatabaseModule {
             """)
             database.execSQL("CREATE INDEX IF NOT EXISTS index_routine_days_routineId ON routine_days(routineId)")
 
-            // Drop old routine_exercises table (breaking change)
-            database.execSQL("DROP TABLE IF EXISTS routine_exercises")
+            // Preserve the legacy one-routine-to-many-exercises structure by creating a
+            // synthetic first day for each routine, then remapping legacy routine exercises.
+            database.execSQL("ALTER TABLE routine_exercises RENAME TO routine_exercises_legacy")
 
             // Create new routine_exercises table with routineDayId
             database.execSQL("""
@@ -101,6 +103,23 @@ object DatabaseModule {
             """)
             database.execSQL("CREATE INDEX IF NOT EXISTS index_routine_exercises_routineDayId ON routine_exercises(routineDayId)")
             database.execSQL("CREATE INDEX IF NOT EXISTS index_routine_exercises_exerciseId ON routine_exercises(exerciseId)")
+
+            database.execSQL("""
+                INSERT INTO routine_days (routineId, name, orderIndex)
+                SELECT id, 'Day 1', 0
+                FROM routines
+            """.trimIndent())
+
+            database.execSQL("""
+                INSERT INTO routine_exercises (routineDayId, exerciseId, orderIndex)
+                SELECT rd.id, legacy.exerciseId, legacy.orderIndex
+                FROM routine_exercises_legacy legacy
+                INNER JOIN routine_days rd
+                    ON rd.routineId = legacy.routineId
+                   AND rd.orderIndex = 0
+            """.trimIndent())
+
+            database.execSQL("DROP TABLE IF EXISTS routine_exercises_legacy")
 
             // Add routineDayId to workouts table
             database.execSQL("ALTER TABLE workouts ADD COLUMN routineDayId INTEGER DEFAULT NULL")
@@ -181,16 +200,19 @@ object DatabaseModule {
         }
     }
 
-    // Migration from version 11 to 12: Overhaul routines around live workout plan snapshots
+    // Migration from version 11 to 12: Add workout plan snapshots without deleting routines
     private val MIGRATION_11_12 = object : Migration(11, 12) {
         override fun migrate(database: SupportSQLiteDatabase) {
-            Log.d(TAG, "Running migration 11 -> 12: Rebuilding routines and adding workout plan snapshots")
-
-            database.execSQL("DELETE FROM routine_exercises")
-            database.execSQL("DELETE FROM routine_days")
-            database.execSQL("DELETE FROM routines")
+            Log.d(TAG, "Running migration 11 -> 12: Preserving routines and adding workout plan snapshots")
 
             database.execSQL("ALTER TABLE routines ADD COLUMN nextDayOrderIndex INTEGER NOT NULL DEFAULT 0")
+            database.execSQL("""
+                UPDATE routines
+                SET nextDayOrderIndex = COALESCE(
+                    (SELECT MIN(orderIndex) FROM routine_days WHERE routineId = routines.id),
+                    0
+                )
+            """.trimIndent())
 
             database.execSQL("ALTER TABLE routine_exercises ADD COLUMN targetSets INTEGER NOT NULL DEFAULT 3")
             database.execSQL("ALTER TABLE routine_exercises ADD COLUMN targetRepsMin INTEGER DEFAULT NULL")
@@ -203,6 +225,30 @@ object DatabaseModule {
             database.execSQL("ALTER TABLE workouts ADD COLUMN routineDayNameSnapshot TEXT DEFAULT NULL")
             database.execSQL("ALTER TABLE workouts ADD COLUMN startedFromRoutine INTEGER NOT NULL DEFAULT 0")
             database.execSQL("CREATE INDEX IF NOT EXISTS index_workouts_routineId ON workouts(routineId)")
+            database.execSQL("""
+                UPDATE workouts
+                SET routineId = (
+                        SELECT rd.routineId
+                        FROM routine_days rd
+                        WHERE rd.id = workouts.routineDayId
+                    ),
+                    routineNameSnapshot = (
+                        SELECT r.name
+                        FROM routine_days rd
+                        INNER JOIN routines r ON r.id = rd.routineId
+                        WHERE rd.id = workouts.routineDayId
+                    ),
+                    routineDayNameSnapshot = (
+                        SELECT rd.name
+                        FROM routine_days rd
+                        WHERE rd.id = workouts.routineDayId
+                    ),
+                    startedFromRoutine = CASE
+                        WHEN routineDayId IS NOT NULL THEN 1
+                        ELSE 0
+                    END
+                WHERE routineDayId IS NOT NULL
+            """.trimIndent())
 
             database.execSQL(
                 """
@@ -241,6 +287,51 @@ object DatabaseModule {
         }
     }
 
+    // Migration from version 13 to 14: Add a derived cache for on-device AI narratives.
+    internal val MIGRATION_13_14 = object : Migration(13, 14) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            Log.d(TAG, "Running migration 13 -> 14: Adding generated narrative cache")
+            database.execSQL(
+                """CREATE TABLE IF NOT EXISTS `generated_narratives` (
+                    `kind` TEXT NOT NULL,
+                    `subjectKey` TEXT NOT NULL,
+                    `workoutId` INTEGER,
+                    `subjectStartEpochMs` INTEGER,
+                    `sourceFingerprint` TEXT NOT NULL,
+                    `promptVersion` INTEGER NOT NULL,
+                    `modelName` TEXT,
+                    `generatorType` TEXT NOT NULL,
+                    `text` TEXT NOT NULL,
+                    `generatedAtEpochMs` INTEGER NOT NULL,
+                    PRIMARY KEY(`kind`, `subjectKey`),
+                    FOREIGN KEY(`workoutId`) REFERENCES `workouts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                )""".trimIndent()
+            )
+            database.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_generated_narratives_workoutId` ON `generated_narratives` (`workoutId`)"
+            )
+            database.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_generated_narratives_kind_subjectStartEpochMs` ON `generated_narratives` (`kind`, `subjectStartEpochMs`)"
+            )
+        }
+    }
+
+    internal val ALL_MIGRATIONS = arrayOf(
+        MIGRATION_1_2,
+        MIGRATION_2_3,
+        MIGRATION_3_4,
+        MIGRATION_4_5,
+        MIGRATION_5_6,
+        MIGRATION_6_7,
+        MIGRATION_7_8,
+        MIGRATION_8_9,
+        MIGRATION_9_10,
+        MIGRATION_10_11,
+        MIGRATION_11_12,
+        MIGRATION_12_13,
+        MIGRATION_13_14
+    )
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): GymTimeDatabase {
@@ -249,20 +340,7 @@ object DatabaseModule {
             GymTimeDatabase::class.java,
             "gym_time_db"
         )
-        .addMigrations(
-            MIGRATION_1_2,
-            MIGRATION_2_3,
-            MIGRATION_3_4,
-            MIGRATION_4_5,
-            MIGRATION_5_6,
-            MIGRATION_6_7,
-            MIGRATION_7_8,
-            MIGRATION_8_9,
-            MIGRATION_9_10,
-            MIGRATION_10_11,
-            MIGRATION_11_12,
-            MIGRATION_12_13
-        )
+        .addMigrations(*ALL_MIGRATIONS)
         .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
@@ -390,4 +468,8 @@ object DatabaseModule {
 
     @Provides
     fun provideMuscleGroupDao(database: GymTimeDatabase): MuscleGroupDao = database.muscleGroupDao()
+
+    @Provides
+    fun provideGeneratedNarrativeDao(database: GymTimeDatabase): GeneratedNarrativeDao =
+        database.generatedNarrativeDao()
 }

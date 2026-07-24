@@ -48,7 +48,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -86,10 +86,10 @@ fun ThemeSettingsScreen(
     navController: NavController,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val themeColor by viewModel.themeColor.collectAsState(initial = ThemePreset.SUMMER_SHRED.storageKey)
-    val customThemeColor by viewModel.customThemeColor.collectAsState(initial = null)
-    val themeFont by viewModel.themeFont.collectAsState(initial = ThemeFontOption.BEBAS_NEUE.storageKey)
-    val customFontUri by viewModel.customFontUri.collectAsState(initial = null)
+    val themeColor by viewModel.themeColor.collectAsStateWithLifecycle(initialValue = ThemePreset.SUMMER_SHRED.storageKey)
+    val customThemeColor by viewModel.customThemeColor.collectAsStateWithLifecycle(initialValue = null)
+    val themeFont by viewModel.themeFont.collectAsStateWithLifecycle(initialValue = ThemeFontOption.BEBAS_NEUE.storageKey)
+    val customFontUri by viewModel.customFontUri.collectAsStateWithLifecycle(initialValue = null)
 
     val context = LocalContext.current
     var showCustomColorDialog by remember { mutableStateOf(false) }

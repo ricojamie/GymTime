@@ -2,6 +2,11 @@ package com.example.gymtime.ui.analytics
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.gymtime.ai.NarrativeFingerprint
+import com.example.gymtime.ai.NarrativeGenerator
+import com.example.gymtime.ai.NarrativeKind
+import com.example.gymtime.ai.NarrativeRequest
+import com.example.gymtime.ai.NarrativeValidationRules
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.entity.MuscleDistribution
@@ -19,13 +24,18 @@ import com.example.gymtime.domain.analytics.TrendUseCase
 import com.example.gymtime.domain.analytics.TrophyPR
 import com.example.gymtime.domain.analytics.WorkoutRatingStats
 import com.example.gymtime.domain.analytics.WorkoutRatingUseCase
+import com.example.gymtime.domain.analytics.WeeklyAnalyticsInsightUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.ZoneId
 import javax.inject.Inject
 
 @HiltViewModel
@@ -35,8 +45,11 @@ class AnalyticsViewModel @Inject constructor(
     private val consistencyUseCase: ConsistencyUseCase,
     private val balanceUseCase: BalanceUseCase,
     private val trendUseCase: TrendUseCase,
-    private val workoutRatingUseCase: WorkoutRatingUseCase
+    private val workoutRatingUseCase: WorkoutRatingUseCase,
+    private val weeklyAnalyticsInsightUseCase: WeeklyAnalyticsInsightUseCase,
+    private val narrativeGenerator: NarrativeGenerator
 ) : ViewModel() {
+    private val deviceZoneId = ZoneId.systemDefault()
 
     // --- State ---
 
@@ -87,6 +100,11 @@ class AnalyticsViewModel @Inject constructor(
     private val _workoutRatingStats = MutableStateFlow<WorkoutRatingStats?>(null)
     val workoutRatingStats = _workoutRatingStats.asStateFlow()
 
+    private val _weeklyInsightText = MutableStateFlow<String?>(null)
+    val weeklyInsightText: StateFlow<String?> = _weeklyInsightText.asStateFlow()
+    private var weeklyInsightJob: Job? = null
+    private var lastDateSensitiveRefreshDate: LocalDate? = null
+
     val allExercises = exerciseDao.getAllExercises()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -101,6 +119,7 @@ class AnalyticsViewModel @Inject constructor(
      * Call this to refresh data when navigating back to the analytics screen
      */
     fun refreshData() {
+        lastDateSensitiveRefreshDate = LocalDate.now(deviceZoneId)
         viewModelScope.launch {
             _isLoading.value = true
             
@@ -109,8 +128,16 @@ class AnalyticsViewModel @Inject constructor(
             refreshTrendData()
             refreshTrophyCase()
             refreshWorkoutRatings()
+            refreshWeeklyInsight()
 
             _isLoading.value = false
+        }
+    }
+
+    fun refreshDataIfDateChanged() {
+        val today = LocalDate.now(deviceZoneId)
+        if (lastDateSensitiveRefreshDate != today) {
+            refreshData()
         }
     }
 
@@ -206,5 +233,49 @@ class AnalyticsViewModel @Inject constructor(
                 _workoutRatingStats.value = null
             }
         }
+    }
+
+    private fun refreshWeeklyInsight() {
+        weeklyInsightJob?.cancel()
+        weeklyInsightJob = viewModelScope.launch {
+            try {
+                val facts = weeklyAnalyticsInsightUseCase()
+                _weeklyInsightText.value = facts.fallbackText
+                narrativeGenerator.generate(
+                    NarrativeRequest(
+                        kind = NarrativeKind.WEEKLY_ANALYTICS,
+                        subjectKey = facts.subjectKey,
+                        subjectStartEpochMs = facts.weekStartEpochMs,
+                        sourceFingerprint = NarrativeFingerprint.sha256(facts.canonicalFacts),
+                        promptVersion = WEEKLY_INSIGHT_PROMPT_VERSION,
+                        prompt = buildWeeklyInsightPrompt(facts.canonicalFacts),
+                        fallbackText = facts.fallbackText,
+                        validationRules = NarrativeValidationRules(
+                            maxWords = 30,
+                            maxSentences = 1,
+                            allowedNumbers = facts.allowedNumbers,
+                            allowedNames = facts.allowedMuscleNames,
+                            knownNames = facts.knownMuscleNames
+                        ),
+                        maxOutputTokens = 64
+                    )
+                ).collect { result ->
+                    _weeklyInsightText.value = result.text
+                }
+            } catch (e: Exception) {
+                // Keep the last valid insight, or no card if facts could not load.
+            }
+        }
+    }
+
+    private fun buildWeeklyInsightPrompt(canonicalFacts: String): String = """
+        Write one factual, descriptive weekly training insight of at most 30 words.
+        Use only the facts, numbers, and named muscles provided below.
+        Do not give advice, prescribe a workout, or introduce another comparison.
+        Verified facts: $canonicalFacts
+    """.trimIndent()
+
+    private companion object {
+        const val WEEKLY_INSIGHT_PROMPT_VERSION = 1
     }
 }

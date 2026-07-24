@@ -26,6 +26,9 @@ import com.example.gymtime.data.repository.WorkoutRepository
 import com.example.gymtime.domain.recommendation.ExerciseAttemptRecommendation
 import com.example.gymtime.domain.recommendation.ExerciseAttemptRecommendationUseCase
 import com.example.gymtime.service.RestTimerService
+import com.example.gymtime.smartlog.SetDraft
+import com.example.gymtime.smartlog.SmartLogDraftStore
+import com.example.gymtime.smartlog.SmartLogQueueSnapshot
 import com.example.gymtime.util.PlateCalculator
 import com.example.gymtime.util.PlateLoadout
 import com.example.gymtime.util.TimeUtils
@@ -47,6 +50,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.Date
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import kotlin.math.roundToInt
 
@@ -78,6 +82,12 @@ data class PersonalRecords(
     val bestE10RM: Pair<Set, Float>?  // Set and calculated E10RM (premium feature)
 )
 
+data class SmartLogQueueUiState(
+    val currentSetNumber: Int,
+    val totalSets: Int,
+    val exerciseName: String
+)
+
 private data class WearWorkoutState(
     val workoutId: Long?,
     val exercise: Exercise?,
@@ -105,6 +115,38 @@ private data class WearTimerState(
     val timerRunning: Boolean
 )
 
+private data class SetFormSnapshot(
+    val weight: String,
+    val calories: String,
+    val reps: String,
+    val rpe: String,
+    val duration: String,
+    val distance: String,
+    val distanceUnit: DistanceUnit,
+    val isWarmup: Boolean,
+    val note: String
+)
+
+private data class ParsedSetInput(
+    val weight: Float? = null,
+    val calories: Float? = null,
+    val reps: Int? = null,
+    val rpe: Float? = null,
+    val durationSeconds: Int? = null,
+    val distanceValue: Float? = null,
+    val distanceUnit: DistanceUnit? = null,
+    val distanceMeters: Float? = null,
+    val isWarmup: Boolean,
+    val note: String?
+)
+
+private data class SetInputValidationResult(
+    val parsedInput: ParsedSetInput? = null,
+    val message: String? = null
+) {
+    val isValid: Boolean get() = parsedInput != null
+}
+
 @HiltViewModel
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ExerciseLoggingViewModel @Inject constructor(
@@ -117,10 +159,14 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val supersetManager: SupersetManager,
     private val routineRepository: RoutineRepository,
     private val recommendationUseCase: ExerciseAttemptRecommendationUseCase,
-    private val activeWearSessionRepository: ActiveWearSessionRepository
+    private val activeWearSessionRepository: ActiveWearSessionRepository,
+    private val smartLogDraftStore: SmartLogDraftStore
 ) : ViewModel() {
 
     private val exerciseId: Long = checkNotNull(savedStateHandle["exerciseId"])
+    private var activeSmartLogToken: String? = savedStateHandle["draftToken"]
+    private var lastAppliedSmartLogIndex: Int? = null
+    val smartLogDraftToken: String? get() = activeSmartLogToken
 
     // Expose superset state for the UI
     val isInSupersetMode = supersetManager.isInSupersetMode
@@ -212,6 +258,13 @@ class ExerciseLoggingViewModel @Inject constructor(
 
     private val _setNote = MutableStateFlow("")
     val setNote: StateFlow<String> = _setNote
+
+    private val _isPersistingSet = MutableStateFlow(false)
+    val isPersistingSet: StateFlow<Boolean> = _isPersistingSet
+    private val setPersistenceInFlight = AtomicBoolean(false)
+
+    private val _smartLogQueue = MutableStateFlow<SmartLogQueueUiState?>(null)
+    val smartLogQueue: StateFlow<SmartLogQueueUiState?> = _smartLogQueue
 
     private val _isTimerRunning = MutableStateFlow(false)
     val isTimerRunning: StateFlow<Boolean> = _isTimerRunning
@@ -311,6 +364,7 @@ class ExerciseLoggingViewModel @Inject constructor(
                              supersetManager.setCurrentExerciseIndex(orderIndex)
                          }
                     }
+                    applySmartLogDraftIfAvailable()
                 }
                 Log.d("ExerciseLoggingVM", "Exercise loaded: ${ex?.name}")
             }
@@ -530,186 +584,44 @@ class ExerciseLoggingViewModel @Inject constructor(
         _setNote.value = note
     }
 
-    fun logSet() {
+    fun isCurrentInputValid(): Boolean {
+        val exercise = _exercise.value ?: return false
+        return validateSetInput(exercise, captureCurrentFormSnapshot()).isValid
+    }
+
+    fun currentInputValidationMessage(): String? {
+        val exercise = _exercise.value ?: return null
+        return validateSetInput(exercise, captureCurrentFormSnapshot()).message
+    }
+
+    fun logSet(startTimerAfterSave: Boolean = false) {
+        val workout = _currentWorkout.value ?: return
+        val exercise = _exercise.value ?: return
+        val formSnapshot = captureCurrentFormSnapshot()
+        val parsedInput = validateSetInput(exercise, formSnapshot).parsedInput ?: return
+        if (!beginSetPersistence()) return
+
         viewModelScope.launch {
-            val workout = _currentWorkout.value ?: return@launch
-            val exercise = _exercise.value ?: return@launch
-
-            val isWarmup = _isWarmup.value
-            val note = _setNote.value.takeIf { it.isNotBlank() }
-            val setTimestamp = Date()
-
-            // Get superset data if in superset mode
-            val supersetGroupId = if (supersetManager.isInSupersetMode.value) {
-                supersetManager.supersetGroupId.value
-            } else null
-            val supersetOrderIndex = if (supersetGroupId != null) {
-                supersetManager.getOrderIndex(exercise.id)
-            } else 0
-
-            // Build set based on exercise LogType
-            val distanceUnit = _selectedDistanceUnit.value
-            val distanceValue = _distance.value.toFloatOrNull()
-            val normalizedDistance = distanceValue?.let { TimeUtils.distanceToMeters(it, distanceUnit) }
-            val newSet = when (exercise.logType) {
-                LogType.WEIGHT_REPS -> Set(
-                    workoutId = workout.id,
-                    exerciseId = exercise.id,
-                    weight = _weight.value.toFloatOrNull(),
-                    reps = _reps.value.toIntOrNull(),
-                    rpe = _rpe.value.toFloatOrNull(),
-                    durationSeconds = null,
-                    distanceMeters = null,
-                    isWarmup = isWarmup,
-                    isComplete = true,
-                    timestamp = setTimestamp,
-                    note = note,
-                    supersetGroupId = supersetGroupId,
-                    supersetOrderIndex = supersetOrderIndex
-                )
-                LogType.REPS_ONLY -> Set(
-                    workoutId = workout.id,
-                    exerciseId = exercise.id,
-                    weight = null,
-                    reps = _reps.value.toIntOrNull(),
-                    rpe = _rpe.value.toFloatOrNull(),
-                    durationSeconds = null,
-                    distanceMeters = null,
-                    isWarmup = isWarmup,
-                    isComplete = true,
-                    timestamp = setTimestamp,
-                    note = note,
-                    supersetGroupId = supersetGroupId,
-                    supersetOrderIndex = supersetOrderIndex
-                )
-                LogType.DURATION -> Set(
-                    workoutId = workout.id,
-                    exerciseId = exercise.id,
-                    weight = null,
-                    reps = null,
-                    rpe = _rpe.value.toFloatOrNull(),
-                    durationSeconds = TimeUtils.parseHMSToSeconds(_duration.value),
-                    distanceMeters = null,
-                    isWarmup = isWarmup,
-                    isComplete = true,
-                    timestamp = setTimestamp,
-                    note = note,
-                    supersetGroupId = supersetGroupId,
-                    supersetOrderIndex = supersetOrderIndex
-                )
-                LogType.WEIGHT_DISTANCE -> Set(
-                    workoutId = workout.id,
-                    exerciseId = exercise.id,
-                    weight = _weight.value.toFloatOrNull(),
-                    reps = null,
-                    rpe = _rpe.value.toFloatOrNull(),
-                    durationSeconds = null,
-                    distanceValue = distanceValue,
-                    distanceUnit = distanceUnit,
-                    distanceMeters = normalizedDistance,
-                    isWarmup = isWarmup,
-                    isComplete = true,
-                    timestamp = setTimestamp,
-                    note = note,
-                    supersetGroupId = supersetGroupId,
-                    supersetOrderIndex = supersetOrderIndex
-                )
-                LogType.DISTANCE_TIME -> Set(
-                    workoutId = workout.id,
-                    exerciseId = exercise.id,
-                    weight = null,
-                    reps = null,
-                    rpe = _rpe.value.toFloatOrNull(),
-                    durationSeconds = TimeUtils.parseHMSToSeconds(_duration.value),
-                    distanceValue = distanceValue,
-                    distanceUnit = distanceUnit,
-                    distanceMeters = normalizedDistance,
-                    isWarmup = isWarmup,
-                    isComplete = true,
-                    timestamp = setTimestamp,
-                    note = note,
-                    supersetGroupId = supersetGroupId,
-                    supersetOrderIndex = supersetOrderIndex
-                )
-                LogType.WEIGHT_TIME -> Set(
-                    workoutId = workout.id,
-                    exerciseId = exercise.id,
-                    weight = _weight.value.toFloatOrNull(),
-                    reps = null,
-                    rpe = _rpe.value.toFloatOrNull(),
-                    durationSeconds = TimeUtils.parseHMSToSeconds(_duration.value),
-                    distanceMeters = null,
-                    isWarmup = isWarmup,
-                    isComplete = true,
-                    timestamp = setTimestamp,
-                    note = note,
-                    supersetGroupId = supersetGroupId,
-                    supersetOrderIndex = supersetOrderIndex
-                )
-                LogType.CALORIES_TIME -> Set(
-                    workoutId = workout.id,
-                    exerciseId = exercise.id,
-                    weight = null,
-                    calories = _calories.value.toFloatOrNull(),
-                    reps = null,
-                    rpe = _rpe.value.toFloatOrNull(),
-                    durationSeconds = TimeUtils.parseHMSToSeconds(_duration.value),
-                    distanceMeters = null,
-                    isWarmup = isWarmup,
-                    isComplete = true,
-                    timestamp = setTimestamp,
-                    note = note,
-                    supersetGroupId = supersetGroupId,
-                    supersetOrderIndex = supersetOrderIndex
-                )
-            }
-
-            // Log set via Repository
-            workoutRepository.logSet(newSet)
-            activeWearSessionRepository.confirmSetSaved()
-
-            // Update personal bests if this is a new record for this rep count (only for WEIGHT_REPS)
-            if (exercise.logType == LogType.WEIGHT_REPS) {
-                val newWeight = _weight.value.toFloatOrNull()
-                val newReps = _reps.value.toIntOrNull()
-                if (!isWarmup && newWeight != null && newReps != null) {
-                    val currentPBs = _personalBestsByReps.value.toMutableMap()
-                    val currentPBForReps = currentPBs[newReps]
-
-                    // If this is a raw improvement for this specific rep count, update...
-                    // Note: We might want to refresh from Repository here, but local update for UI responsiveness
-                    if (currentPBForReps == null || newWeight > currentPBForReps.maxWeight) {
-                         // Refresh PBs
-                         _personalBestsByReps.value = exerciseRepository.getPersonalBestsByReps(exerciseId)
-                    }
-                }
-            }
-
-            // Clear RPE and note (primary inputs persist for next set)
-            _rpe.value = ""
-            _setNote.value = ""
-            _isWarmup.value = false
-
-            // Auto-switch to next exercise if in superset mode
-            if (supersetManager.isInSupersetMode.value) {
-                // Save current form values before switching
-                supersetManager.saveLastLoggedValues(
-                    exerciseId,
-                    LastLoggedValues(
-                        weight = _weight.value,
-                        calories = _calories.value,
-                        reps = _reps.value,
-                        duration = _duration.value,
-                        distance = _distance.value,
-                        distanceUnit = _selectedDistanceUnit.value
-                    )
+            try {
+                val newSet = buildLoggedSet(
+                    workout = workout,
+                    exercise = exercise,
+                    parsedInput = parsedInput,
+                    timestamp = Date()
                 )
 
-                val nextExerciseId = supersetManager.switchToNextExercise()
-                if (nextExerciseId > 0) {
-                    Log.d("ExerciseLoggingVM", "Superset auto-switching to exercise: $nextExerciseId")
-                    _autoSwitchEvent.send(nextExerciseId)
-                }
+                workoutRepository.logSet(newSet)
+                activeWearSessionRepository.confirmSetSaved()
+                onLogSetSavedSuccessfully(
+                    exercise = exercise,
+                    formSnapshot = formSnapshot,
+                    parsedInput = parsedInput,
+                    startTimerAfterSave = startTimerAfterSave
+                )
+            } catch (error: Throwable) {
+                Log.e("ExerciseLoggingVM", "Failed to log set", error)
+            } finally {
+                endSetPersistence()
             }
         }
     }
@@ -726,34 +638,33 @@ class ExerciseLoggingViewModel @Inject constructor(
     }
 
     fun saveEditedSet() {
+        val set = _editingSet.value ?: return
+        val exercise = _exercise.value ?: return
+        val formSnapshot = captureCurrentFormSnapshot()
+        val parsedInput = validateSetInput(exercise, formSnapshot).parsedInput ?: return
+        if (!beginSetPersistence()) return
+
         viewModelScope.launch {
-            _editingSet.value?.let { set ->
-                val exercise = _exercise.value
-                val currentUnit = _selectedDistanceUnit.value
-                val rawDistance = _distance.value.toFloatOrNull()
+            try {
                 val updatedSet = set.copy(
-                    weight = _weight.value.toFloatOrNull(),
-                    calories = _calories.value.toFloatOrNull(),
-                    reps = _reps.value.toIntOrNull(),
-                    durationSeconds = TimeUtils.parseHMSToSeconds(_duration.value),
-                    distanceValue = rawDistance,
-                    distanceUnit = if (exercise?.logType == LogType.WEIGHT_DISTANCE || exercise?.logType == LogType.DISTANCE_TIME) currentUnit else null,
-                    distanceMeters = rawDistance?.let { TimeUtils.distanceToMeters(it, currentUnit) },
-                    isWarmup = _isWarmup.value
+                    weight = parsedInput.weight,
+                    calories = parsedInput.calories,
+                    reps = parsedInput.reps,
+                    rpe = parsedInput.rpe,
+                    durationSeconds = parsedInput.durationSeconds,
+                    distanceValue = parsedInput.distanceValue,
+                    distanceUnit = parsedInput.distanceUnit,
+                    distanceMeters = parsedInput.distanceMeters,
+                    isWarmup = parsedInput.isWarmup,
+                    note = parsedInput.note
                 )
-                // Update via Repository
                 workoutRepository.updateSet(updatedSet)
                 Log.d("ExerciseLoggingVM", "Set updated: id=${set.id}")
-
-                // Clear editing state and form
-                _editingSet.value = null
-                _weight.value = ""
-                _calories.value = ""
-                _reps.value = ""
-                _rpe.value = ""
-                _duration.value = ""
-                _distance.value = ""
-                _isWarmup.value = false
+                clearEditingStateAndForm()
+            } catch (error: Throwable) {
+                Log.e("ExerciseLoggingVM", "Failed to save edited set", error)
+            } finally {
+                endSetPersistence()
             }
         }
     }
@@ -767,6 +678,13 @@ class ExerciseLoggingViewModel @Inject constructor(
         _duration.value = ""
         _distance.value = ""
         _isWarmup.value = false
+    }
+
+    fun cancelSmartLogQueue() {
+        smartLogDraftStore.discard(activeSmartLogToken)
+        activeSmartLogToken = null
+        lastAppliedSmartLogIndex = null
+        _smartLogQueue.value = null
     }
 
     fun deleteSet(setId: Long) {
@@ -848,6 +766,12 @@ class ExerciseLoggingViewModel @Inject constructor(
     fun exitSupersetMode() {
         supersetManager.exitSupersetMode()
         Log.d("ExerciseLoggingVM", "Exited superset mode")
+    }
+
+    fun prepareForSmartLogExerciseCreation(restrictedToSuperset: Boolean) {
+        if (restrictedToSuperset) {
+            exitSupersetMode()
+        }
     }
 
     // Load workout overview data
@@ -1023,6 +947,50 @@ class ExerciseLoggingViewModel @Inject constructor(
         }
     }
 
+    private fun applySmartLogDraftIfAvailable() {
+        val snapshot = smartLogDraftStore.peek(activeSmartLogToken, exerciseId)
+        if (snapshot == null) {
+            _smartLogQueue.value = null
+            return
+        }
+        if (lastAppliedSmartLogIndex == snapshot.currentIndex) return
+        hasPrefilled = true
+        lastAppliedSmartLogIndex = snapshot.currentIndex
+        applySmartLogSet(snapshot.current)
+        _smartLogQueue.value = snapshot.toUiState()
+    }
+
+    private fun advanceSmartLogDraft() {
+        val token = activeSmartLogToken ?: return
+        if (smartLogDraftStore.peek(token, exerciseId) == null) return
+        val next = smartLogDraftStore.advance(token, exerciseId)
+        if (next == null) {
+            activeSmartLogToken = null
+            lastAppliedSmartLogIndex = null
+            _smartLogQueue.value = null
+        } else {
+            applySmartLogDraftIfAvailable()
+        }
+    }
+
+    private fun applySmartLogSet(draft: SetDraft) {
+        _weight.value = draft.weight?.let(::formatWeightForInput) ?: ""
+        _calories.value = draft.calories?.let(::formatWeightForInput) ?: ""
+        _reps.value = draft.reps?.toString() ?: ""
+        _rpe.value = draft.rpe?.let(::formatWeightForInput) ?: ""
+        _duration.value = draft.durationSeconds?.let(TimeUtils::formatSecondsToHMS) ?: ""
+        _distance.value = draft.distanceValue?.let(::formatWeightForInput) ?: ""
+        draft.distanceUnit?.let { _selectedDistanceUnit.value = it }
+        _isWarmup.value = draft.isWarmup
+        _setNote.value = draft.note.orEmpty()
+    }
+
+    private fun SmartLogQueueSnapshot.toUiState() = SmartLogQueueUiState(
+        currentSetNumber = currentIndex + 1,
+        totalSets = total,
+        exerciseName = exerciseName
+    )
+
     private fun observeWearCommands() {
         viewModelScope.launch {
             activeWearSessionRepository.draftPatches.collectLatest { patch ->
@@ -1033,13 +1001,7 @@ class ExerciseLoggingViewModel @Inject constructor(
         viewModelScope.launch {
             activeWearSessionRepository.logRequests.collectLatest { patch ->
                 if (patch != null && !applyWearDraftPatch(patch)) return@collectLatest
-                if (!isCurrentDraftLoggable()) return@collectLatest
-
-                logSet()
-                if (timerAutoStart.first()) {
-                    startTimer()
-                }
-                resetTimerToDefault()
+                logSet(startTimerAfterSave = timerAutoStart.first())
             }
         }
     }
@@ -1119,16 +1081,345 @@ class ExerciseLoggingViewModel @Inject constructor(
         }
     }
 
-    private fun isCurrentDraftLoggable(): Boolean {
-        return when (_exercise.value?.logType) {
-            LogType.WEIGHT_REPS -> _weight.value.isNotBlank() && _reps.value.isNotBlank()
-            LogType.REPS_ONLY -> _reps.value.isNotBlank()
-            LogType.DURATION -> _duration.value.isNotBlank()
-            LogType.WEIGHT_DISTANCE -> _weight.value.isNotBlank() && _distance.value.isNotBlank()
-            LogType.DISTANCE_TIME -> _distance.value.isNotBlank() && _duration.value.isNotBlank()
-            LogType.WEIGHT_TIME -> _weight.value.isNotBlank() && _duration.value.isNotBlank()
-            LogType.CALORIES_TIME -> _calories.value.isNotBlank() && _duration.value.isNotBlank()
-            null -> false
+    private fun beginSetPersistence(): Boolean {
+        if (!setPersistenceInFlight.compareAndSet(false, true)) return false
+        _isPersistingSet.value = true
+        return true
+    }
+
+    private fun endSetPersistence() {
+        _isPersistingSet.value = false
+        setPersistenceInFlight.set(false)
+    }
+
+    private fun captureCurrentFormSnapshot(): SetFormSnapshot = SetFormSnapshot(
+        weight = _weight.value,
+        calories = _calories.value,
+        reps = _reps.value,
+        rpe = _rpe.value,
+        duration = _duration.value,
+        distance = _distance.value,
+        distanceUnit = _selectedDistanceUnit.value,
+        isWarmup = _isWarmup.value,
+        note = _setNote.value
+    )
+
+    private fun buildLoggedSet(
+        workout: Workout,
+        exercise: Exercise,
+        parsedInput: ParsedSetInput,
+        timestamp: Date
+    ): Set {
+        val supersetGroupId = if (supersetManager.isInSupersetMode.value) {
+            supersetManager.supersetGroupId.value
+        } else null
+        val supersetOrderIndex = if (supersetGroupId != null) {
+            supersetManager.getOrderIndex(exercise.id)
+        } else {
+            0
         }
+
+        return Set(
+            workoutId = workout.id,
+            exerciseId = exercise.id,
+            weight = parsedInput.weight,
+            calories = parsedInput.calories,
+            reps = parsedInput.reps,
+            rpe = parsedInput.rpe,
+            durationSeconds = parsedInput.durationSeconds,
+            distanceValue = parsedInput.distanceValue,
+            distanceUnit = parsedInput.distanceUnit,
+            distanceMeters = parsedInput.distanceMeters,
+            isWarmup = parsedInput.isWarmup,
+            isComplete = true,
+            timestamp = timestamp,
+            note = parsedInput.note,
+            supersetGroupId = supersetGroupId,
+            supersetOrderIndex = supersetOrderIndex
+        )
+    }
+
+    private suspend fun onLogSetSavedSuccessfully(
+        exercise: Exercise,
+        formSnapshot: SetFormSnapshot,
+        parsedInput: ParsedSetInput,
+        startTimerAfterSave: Boolean
+    ) {
+        if (
+            exercise.logType == LogType.WEIGHT_REPS &&
+            !parsedInput.isWarmup &&
+            parsedInput.weight != null &&
+            parsedInput.reps != null
+        ) {
+            val currentPBs = _personalBestsByReps.value
+            val currentPBForReps = currentPBs[parsedInput.reps]
+            if (currentPBForReps == null || parsedInput.weight > currentPBForReps.maxWeight) {
+                _personalBestsByReps.value = exerciseRepository.getPersonalBestsByReps(exerciseId)
+            }
+        }
+
+        _rpe.value = ""
+        _setNote.value = ""
+        _isWarmup.value = false
+
+        advanceSmartLogDraft()
+
+        if (startTimerAfterSave) {
+            startTimer()
+        }
+        resetTimerToDefault()
+
+        if (supersetManager.isInSupersetMode.value) {
+            supersetManager.saveLastLoggedValues(
+                exerciseId,
+                LastLoggedValues(
+                    weight = formSnapshot.weight,
+                    calories = formSnapshot.calories,
+                    reps = formSnapshot.reps,
+                    duration = formSnapshot.duration,
+                    distance = formSnapshot.distance,
+                    distanceUnit = formSnapshot.distanceUnit
+                )
+            )
+
+            val nextExerciseId = supersetManager.switchToNextExercise()
+            if (nextExerciseId > 0) {
+                Log.d("ExerciseLoggingVM", "Superset auto-switching to exercise: $nextExerciseId")
+                _autoSwitchEvent.send(nextExerciseId)
+            }
+        }
+    }
+
+    private fun clearEditingStateAndForm() {
+        _editingSet.value = null
+        _weight.value = ""
+        _calories.value = ""
+        _reps.value = ""
+        _rpe.value = ""
+        _duration.value = ""
+        _distance.value = ""
+        _isWarmup.value = false
+        _setNote.value = ""
+    }
+
+    private fun validateSetInput(
+        exercise: Exercise,
+        formSnapshot: SetFormSnapshot
+    ): SetInputValidationResult {
+        val weight = parseStrictDecimal(formSnapshot.weight)
+        val calories = parseStrictDecimal(formSnapshot.calories)
+        val reps = parseStrictPositiveInt(formSnapshot.reps)
+        val rpe = parseOptionalRpe(formSnapshot.rpe)
+        val durationSeconds = parseStrictDurationSeconds(formSnapshot.duration)
+        val distanceValue = parseStrictDecimal(formSnapshot.distance)
+        val distanceMeters = distanceValue?.let { value ->
+            if (value <= 0f) {
+                null
+            } else {
+                TimeUtils.distanceToMeters(value, formSnapshot.distanceUnit)
+            }
+        }
+        val note = formSnapshot.note.trim().takeIf { it.isNotEmpty() }
+
+        fun positiveFloat(value: Float?) = value != null && value > 0f
+        fun hasText(value: String) = value.trim().isNotEmpty()
+
+        fun invalidWeightMessage() =
+            if (hasText(formSnapshot.weight) && weight == null) "Enter a valid weight." else null
+
+        fun invalidCaloriesMessage() =
+            if (hasText(formSnapshot.calories) && !positiveFloat(calories)) "Enter positive calories." else null
+
+        fun invalidRepsMessage() =
+            if (hasText(formSnapshot.reps) && reps == null) "Enter whole-number reps." else null
+
+        fun invalidDurationMessage() =
+            if (hasText(formSnapshot.duration) && durationSeconds == null) "Enter time as seconds, mm:ss, or hh:mm:ss." else null
+
+        fun invalidDistanceMessage() =
+            if (hasText(formSnapshot.distance) && !positiveFloat(distanceValue)) "Enter a positive distance." else null
+
+        fun invalidRpeMessage() =
+            if (hasText(formSnapshot.rpe) && rpe == null) "Enter RPE from 0 to 10." else null
+
+        invalidRpeMessage()?.let { return SetInputValidationResult(message = it) }
+
+        return when (exercise.logType) {
+            LogType.WEIGHT_REPS -> {
+                invalidWeightMessage()?.let { SetInputValidationResult(message = it) }
+                    ?: invalidRepsMessage()?.let { SetInputValidationResult(message = it) }
+                    ?: if (weight == null || reps == null) {
+                        SetInputValidationResult()
+                    } else {
+                        SetInputValidationResult(
+                            parsedInput = ParsedSetInput(
+                                weight = weight,
+                                reps = reps,
+                                rpe = rpe,
+                                isWarmup = formSnapshot.isWarmup,
+                                note = note
+                            )
+                        )
+                    }
+            }
+            LogType.REPS_ONLY -> {
+                invalidRepsMessage()?.let { SetInputValidationResult(message = it) }
+                    ?: if (reps == null) {
+                        SetInputValidationResult()
+                    } else {
+                        SetInputValidationResult(
+                            parsedInput = ParsedSetInput(
+                                reps = reps,
+                                rpe = rpe,
+                                isWarmup = formSnapshot.isWarmup,
+                                note = note
+                            )
+                        )
+                    }
+            }
+            LogType.DURATION -> {
+                invalidDurationMessage()?.let { SetInputValidationResult(message = it) }
+                    ?: if (durationSeconds == null || durationSeconds <= 0) {
+                        SetInputValidationResult()
+                    } else {
+                        SetInputValidationResult(
+                            parsedInput = ParsedSetInput(
+                                rpe = rpe,
+                                durationSeconds = durationSeconds,
+                                isWarmup = formSnapshot.isWarmup,
+                                note = note
+                            )
+                        )
+                    }
+            }
+            LogType.WEIGHT_DISTANCE -> {
+                invalidWeightMessage()?.let { SetInputValidationResult(message = it) }
+                    ?: invalidDistanceMessage()?.let { SetInputValidationResult(message = it) }
+                    ?: if (weight == null || !positiveFloat(distanceValue)) {
+                        SetInputValidationResult()
+                    } else {
+                        SetInputValidationResult(
+                            parsedInput = ParsedSetInput(
+                                weight = weight,
+                                rpe = rpe,
+                                distanceValue = distanceValue,
+                                distanceUnit = formSnapshot.distanceUnit,
+                                distanceMeters = distanceMeters,
+                                isWarmup = formSnapshot.isWarmup,
+                                note = note
+                            )
+                        )
+                    }
+            }
+            LogType.DISTANCE_TIME -> {
+                invalidDistanceMessage()?.let { SetInputValidationResult(message = it) }
+                    ?: invalidDurationMessage()?.let { SetInputValidationResult(message = it) }
+                    ?: if (!positiveFloat(distanceValue) || durationSeconds == null || durationSeconds <= 0) {
+                        SetInputValidationResult()
+                    } else {
+                        SetInputValidationResult(
+                            parsedInput = ParsedSetInput(
+                                rpe = rpe,
+                                durationSeconds = durationSeconds,
+                                distanceValue = distanceValue,
+                                distanceUnit = formSnapshot.distanceUnit,
+                                distanceMeters = distanceMeters,
+                                isWarmup = formSnapshot.isWarmup,
+                                note = note
+                            )
+                        )
+                    }
+            }
+            LogType.WEIGHT_TIME -> {
+                invalidWeightMessage()?.let { SetInputValidationResult(message = it) }
+                    ?: invalidDurationMessage()?.let { SetInputValidationResult(message = it) }
+                    ?: if (weight == null || durationSeconds == null || durationSeconds <= 0) {
+                        SetInputValidationResult()
+                    } else {
+                        SetInputValidationResult(
+                            parsedInput = ParsedSetInput(
+                                weight = weight,
+                                rpe = rpe,
+                                durationSeconds = durationSeconds,
+                                isWarmup = formSnapshot.isWarmup,
+                                note = note
+                            )
+                        )
+                    }
+            }
+            LogType.CALORIES_TIME -> {
+                invalidCaloriesMessage()?.let { SetInputValidationResult(message = it) }
+                    ?: invalidDurationMessage()?.let { SetInputValidationResult(message = it) }
+                    ?: if (!positiveFloat(calories) || durationSeconds == null || durationSeconds <= 0) {
+                        SetInputValidationResult()
+                    } else {
+                        SetInputValidationResult(
+                            parsedInput = ParsedSetInput(
+                                calories = calories,
+                                rpe = rpe,
+                                durationSeconds = durationSeconds,
+                                isWarmup = formSnapshot.isWarmup,
+                                note = note
+                            )
+                        )
+                    }
+            }
+        }
+    }
+
+    private fun parseStrictPositiveInt(raw: String): Int? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty() || !POSITIVE_INT_PATTERN.matches(trimmed)) return null
+        return trimmed.toIntOrNull()?.takeIf { it > 0 }
+    }
+
+    private fun parseStrictDecimal(raw: String): Float? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty() || !STRICT_DECIMAL_PATTERN.matches(trimmed)) return null
+        return trimmed.toFloatOrNull()?.takeIf { it.isFinite() && it >= 0f }
+    }
+
+    private fun parseOptionalRpe(raw: String): Float? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return null
+        val parsed = parseStrictDecimal(trimmed) ?: return null
+        return parsed.takeIf { it in 0f..10f }
+    }
+
+    private fun parseStrictDurationSeconds(raw: String): Int? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return null
+        val parts = trimmed.split(":")
+        if (parts.isEmpty() || parts.size > 3 || parts.any { it.isEmpty() || !it.all(Char::isDigit) }) {
+            return null
+        }
+        return try {
+            when (parts.size) {
+                1 -> parts[0].toInt().takeIf { it > 0 }
+                2 -> {
+                    val minutes = parts[0].toInt()
+                    val seconds = parts[1].toInt()
+                    if (seconds !in 0..59) null else (minutes * 60) + seconds
+                }
+                3 -> {
+                    val hours = parts[0].toInt()
+                    val minutes = parts[1].toInt()
+                    val seconds = parts[2].toInt()
+                    if (minutes !in 0..59 || seconds !in 0..59) {
+                        null
+                    } else {
+                        (hours * 3600) + (minutes * 60) + seconds
+                    }
+                }
+                else -> null
+            }?.takeIf { it > 0 }
+        } catch (_: NumberFormatException) {
+            null
+        }
+    }
+
+    companion object {
+        private val STRICT_DECIMAL_PATTERN = Regex("""(?:\d+(?:\.\d+)?|\.\d+)""")
+        private val POSITIVE_INT_PATTERN = Regex("""\d+""")
     }
 }

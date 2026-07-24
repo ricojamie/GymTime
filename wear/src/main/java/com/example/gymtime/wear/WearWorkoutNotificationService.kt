@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -18,14 +19,24 @@ class WearWorkoutNotificationService : WearableListenerService() {
 
     override fun onDataChanged(dataEvents: DataEventBuffer) {
         for (event in dataEvents) {
-            if (event.type != DataEvent.TYPE_CHANGED) continue
             if (event.dataItem.uri.path != WearContract.DATA_ACTIVE_SESSION) continue
 
-            val session = WearSession.fromDataMap(DataMapItem.fromDataItem(event.dataItem).dataMap)
-            if (session.active) {
-                showWorkoutNotification(session)
-            } else {
-                NotificationManagerCompat.from(this).cancel(NOTIFICATION_ID)
+            when (event.type) {
+                DataEvent.TYPE_CHANGED -> {
+                    val session = runCatching {
+                        WearSession.fromDataMap(DataMapItem.fromDataItem(event.dataItem).dataMap)
+                    }.onFailure { error ->
+                        Log.w(TAG, "Ignoring malformed Wear session data", error)
+                    }.getOrNull() ?: continue
+
+                    if (session.active) {
+                        showWorkoutNotification(session)
+                    } else {
+                        cancelWorkoutNotification()
+                    }
+                }
+
+                DataEvent.TYPE_DELETED -> cancelWorkoutNotification()
             }
         }
     }
@@ -36,6 +47,14 @@ class WearWorkoutNotificationService : WearableListenerService() {
         ) {
             return
         }
+
+        val contentKey = listOf(
+            session.workoutId,
+            session.exerciseId,
+            session.setNumber,
+            session.exerciseName
+        ).joinToString(separator = "|")
+        if (contentKey == lastRenderedContentKey) return
 
         createChannel()
         val launchIntent = Intent(this, MainActivity::class.java).apply {
@@ -48,29 +67,37 @@ class WearWorkoutNotificationService : WearableListenerService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val text = if (session.exerciseName.isBlank()) {
-            "Open logger on phone"
-        } else {
-            "Set ${session.setNumber} - ${session.exerciseName}"
+        val text = when {
+            session.exerciseName.isBlank() -> "Open logger on phone"
+            session.setNumber > 0 -> "Set ${session.setNumber} · ${session.exerciseName}"
+            else -> session.exerciseName
         }
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification_workout)
             .setContentTitle("IronLog workout active")
             .setContentText(text)
             .setContentIntent(launchPendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
+            .setShowWhen(false)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setLocalOnly(true)
             .build()
 
         try {
             NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
+            lastRenderedContentKey = contentKey
         } catch (_: SecurityException) {
             // Permission can still be revoked between the check and notify call.
         }
+    }
+
+    private fun cancelWorkoutNotification() {
+        NotificationManagerCompat.from(this).cancel(NOTIFICATION_ID)
+        lastRenderedContentKey = null
     }
 
     private fun createChannel() {
@@ -89,7 +116,9 @@ class WearWorkoutNotificationService : WearableListenerService() {
     }
 
     companion object {
+        private const val TAG = "WearWorkoutNotification"
         private const val CHANNEL_ID = "ironlog_active_workout"
         private const val NOTIFICATION_ID = 3001
+        @Volatile private var lastRenderedContentKey: String? = null
     }
 }

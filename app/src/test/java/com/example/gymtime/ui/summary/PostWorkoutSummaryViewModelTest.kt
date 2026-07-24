@@ -11,7 +11,9 @@ import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
+import com.example.gymtime.ai.NarrativeGenerator
 import com.example.gymtime.domain.share.ShareWorkoutUseCase
+import com.example.gymtime.domain.summary.WorkoutRecapFactsUseCase
 import com.example.gymtime.util.TestDispatcherRule
 import com.example.gymtime.util.WorkoutShareImageGenerator
 import io.mockk.*
@@ -39,6 +41,8 @@ class PostWorkoutSummaryViewModelTest {
     private lateinit var volumeOrbRepository: VolumeOrbRepository
     private lateinit var shareWorkoutUseCase: ShareWorkoutUseCase
     private lateinit var workoutShareImageGenerator: WorkoutShareImageGenerator
+    private lateinit var workoutRecapFactsUseCase: WorkoutRecapFactsUseCase
+    private lateinit var narrativeGenerator: NarrativeGenerator
 
     private val testWorkoutId = 1L
     private val testWorkout = Workout(
@@ -86,6 +90,8 @@ class PostWorkoutSummaryViewModelTest {
         volumeOrbRepository = mockk(relaxed = true)
         shareWorkoutUseCase = mockk(relaxed = true)
         workoutShareImageGenerator = mockk(relaxed = true)
+        workoutRecapFactsUseCase = mockk(relaxed = true)
+        narrativeGenerator = mockk(relaxed = true)
 
         every { workoutDao.getWorkoutById(testWorkoutId) } returns flowOf(testWorkout)
         every { setDao.getSetsForWorkout(testWorkoutId) } returns flowOf(testSets)
@@ -95,6 +101,7 @@ class PostWorkoutSummaryViewModelTest {
         )
         coEvery { volumeOrbRepository.refresh() } just Runs
         coEvery { volumeOrbRepository.getSessionContribution(any()) } returns 1000f
+        coEvery { workoutRecapFactsUseCase(testWorkoutId) } returns null
     }
 
     private fun createViewModel(): PostWorkoutSummaryViewModel {
@@ -105,7 +112,9 @@ class PostWorkoutSummaryViewModelTest {
             exerciseDao,
             volumeOrbRepository,
             shareWorkoutUseCase,
-            workoutShareImageGenerator
+            workoutShareImageGenerator,
+            workoutRecapFactsUseCase,
+            narrativeGenerator
         )
     }
 

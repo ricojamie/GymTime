@@ -26,7 +26,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -84,12 +84,12 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
-            val themeColorName by userPreferencesRepository.themeColor.collectAsState(initial = "lime")
-            val customThemeColor by userPreferencesRepository.customThemeColor.collectAsState(initial = null)
-            val themeFont by userPreferencesRepository.themeFont.collectAsState(initial = "bebas_neue")
-            val customFontUri by userPreferencesRepository.customFontUri.collectAsState(initial = null)
-            val keepScreenOn by userPreferencesRepository.keepScreenOn.collectAsState(initial = false)
-            val darkMode by userPreferencesRepository.darkMode.collectAsState(initial = true)
+            val themeColorName by userPreferencesRepository.themeColor.collectAsStateWithLifecycle(initialValue = "lime")
+            val customThemeColor by userPreferencesRepository.customThemeColor.collectAsStateWithLifecycle(initialValue = null)
+            val themeFont by userPreferencesRepository.themeFont.collectAsStateWithLifecycle(initialValue = "bebas_neue")
+            val customFontUri by userPreferencesRepository.customFontUri.collectAsStateWithLifecycle(initialValue = null)
+            val keepScreenOn by userPreferencesRepository.keepScreenOn.collectAsStateWithLifecycle(initialValue = false)
+            val darkMode by userPreferencesRepository.darkMode.collectAsStateWithLifecycle(initialValue = true)
             val colorScheme = ThemeColors.getScheme(themeColorName, customThemeColor)
 
             DisposableEffect(keepScreenOn) {
@@ -213,9 +213,16 @@ class MainActivity : ComponentActivity() {
                                 }
                                 composable(
                                     route = Screen.ExerciseLogging.route,
-                                    arguments = listOf(androidx.navigation.navArgument("exerciseId") {
-                                        type = androidx.navigation.NavType.LongType
-                                    }),
+                                    arguments = listOf(
+                                        androidx.navigation.navArgument("exerciseId") {
+                                            type = androidx.navigation.NavType.LongType
+                                        },
+                                        androidx.navigation.navArgument("draftToken") {
+                                            type = androidx.navigation.NavType.StringType
+                                            nullable = true
+                                            defaultValue = null
+                                        }
+                                    ),
                                 ) {
                                     com.example.gymtime.ui.exercise.ExerciseLoggingScreen(navController = navController)
                                 }
@@ -230,6 +237,11 @@ class MainActivity : ComponentActivity() {
                                         androidx.navigation.navArgument("fromWorkout") {
                                             type = androidx.navigation.NavType.BoolType
                                             defaultValue = false
+                                        },
+                                        androidx.navigation.navArgument("initialName") {
+                                            type = androidx.navigation.NavType.StringType
+                                            nullable = true
+                                            defaultValue = null
                                         }
                                     )
                                 ) {

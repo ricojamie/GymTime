@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -28,9 +29,9 @@ fun RoutineFormScreen(
     navController: NavController,
     viewModel: RoutineFormViewModel = hiltViewModel()
 ) {
-    val routineName by viewModel.routineName.collectAsState()
-    val isEditMode by viewModel.isEditMode.collectAsState()
-    val isSaveEnabled by viewModel.isSaveEnabled.collectAsState()
+    val routineName by viewModel.routineName.collectAsStateWithLifecycle()
+    val isEditMode by viewModel.isEditMode.collectAsStateWithLifecycle()
+    val isSaveEnabled by viewModel.isSaveEnabled.collectAsStateWithLifecycle()
     val accentColor = MaterialTheme.colorScheme.primary
 
     LaunchedEffect(Unit) {

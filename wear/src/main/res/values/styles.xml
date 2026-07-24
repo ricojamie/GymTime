@@ -4,6 +4,14 @@
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowActionBar">false</item>
         <item name="android:windowIsTranslucent">false</item>
-        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowBackground">@color/ironlog_background</item>
+        <item name="android:windowSplashScreenBackground">@color/ironlog_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+        <item name="android:colorAccent">@color/ironlog_accent</item>
+        <item name="android:statusBarColor">@color/ironlog_background</item>
+        <item name="android:navigationBarColor">@color/ironlog_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
     </style>
 </resources>

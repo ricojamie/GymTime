@@ -30,9 +30,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.Date
 import java.util.Calendar
-import java.util.Locale
 import javax.inject.Inject
 
 data class RoutineCardState(
@@ -52,6 +53,8 @@ class HomeViewModel @Inject constructor(
     private val volumeOrbRepository: VolumeOrbRepository,
     private val strengthMomentumUseCase: StrengthMomentumUseCase
 ) : ViewModel() {
+    private val deviceZoneId = ZoneId.systemDefault()
+
     val userName: Flow<String> = userPreferencesRepository.userName
     val ongoingWorkout: StateFlow<Workout?> = workoutRepository.getOngoingWorkoutFlow().stateIn(
         scope = viewModelScope,
@@ -136,15 +139,10 @@ class HomeViewModel @Inject constructor(
 
     private val _strengthMomentum = MutableStateFlow(StrengthMomentumState())
     val strengthMomentum: StateFlow<StrengthMomentumState> = _strengthMomentum.asStateFlow()
+    private var lastDateSensitiveRefreshDate: LocalDate? = null
 
     init {
-        loadWeeklyVolume()
-        refreshVolumeOrb()
-        loadStrengthMomentum()
-        loadStreakData()
-        loadYtdWorkouts()
-        loadYtdVolume()
-        loadLastYearVolume()
+        refreshData()
     }
 
     fun startNextRoutineWorkout() {
@@ -250,13 +248,12 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             val dateStrings = workoutRepository.getWorkoutDatesWithWorkingSets()
             val allowedRestDays = userPreferencesRepository.restDaysPerWeek.firstOrNull() ?: 2
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
             val workoutDates = dateStrings.mapNotNull { dateStr ->
-                try {
-                    dateFormat.parse(dateStr)
-                } catch (_: Exception) {
-                    null
-                }
+                runCatching { LocalDate.parse(dateStr) }
+                    .getOrNull()
+                    ?.let { localDate ->
+                        Date.from(localDate.atStartOfDay(deviceZoneId).toInstant())
+                    }
             }
             val result = StreakCalculator.calculateStreak(
                 workoutDates = workoutDates,
@@ -274,6 +271,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun refreshData() {
+        lastDateSensitiveRefreshDate = LocalDate.now(deviceZoneId)
         loadWeeklyVolume()
         refreshVolumeOrb()
         loadStrengthMomentum()
@@ -281,5 +279,12 @@ class HomeViewModel @Inject constructor(
         loadYtdWorkouts()
         loadYtdVolume()
         loadLastYearVolume()
+    }
+
+    fun refreshDataIfDateChanged() {
+        val today = LocalDate.now(deviceZoneId)
+        if (lastDateSensitiveRefreshDate != today) {
+            refreshData()
+        }
     }
 }

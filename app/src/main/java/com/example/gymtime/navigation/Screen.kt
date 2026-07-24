@@ -1,5 +1,6 @@
 package com.example.gymtime.navigation
 
+import android.net.Uri
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.ShowChart
@@ -26,15 +27,25 @@ sealed class Screen(val route: String, val icon: ImageVector) {
         }
     }
     object WorkoutResume : Screen("workout_resume", Icons.Filled.Home) // Placeholder, not in bottom nav
-    object ExerciseLogging : Screen("exercise_logging/{exerciseId}", Icons.Filled.Home) { // Placeholder, not in bottom nav
-        fun createRoute(exerciseId: Long) = "exercise_logging/$exerciseId"
+    object ExerciseLogging : Screen("exercise_logging/{exerciseId}?draftToken={draftToken}", Icons.Filled.Home) { // Placeholder, not in bottom nav
+        fun createRoute(exerciseId: Long, draftToken: String? = null) = buildString {
+            append("exercise_logging/$exerciseId")
+            draftToken?.let { append("?draftToken=$it") }
+        }
     }
-    object ExerciseForm : Screen("exercise_form?exerciseId={exerciseId}&fromWorkout={fromWorkout}", Icons.Filled.Home) { // Create/Edit exercise
-        fun createRoute(exerciseId: Long? = null, fromWorkout: Boolean = false) = buildString {
+    object ExerciseForm : Screen("exercise_form?exerciseId={exerciseId}&fromWorkout={fromWorkout}&initialName={initialName}", Icons.Filled.Home) { // Create/Edit exercise
+        fun createRoute(
+            exerciseId: Long? = null,
+            fromWorkout: Boolean = false,
+            initialName: String? = null
+        ) = buildString {
             append("exercise_form")
             val params = mutableListOf<String>()
             exerciseId?.let { params.add("exerciseId=$it") }
             if (fromWorkout) params.add("fromWorkout=true")
+            initialName?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                params.add("initialName=${Uri.encode(it)}")
+            }
             if (params.isNotEmpty()) append("?${params.joinToString("&")}")
         }
     }

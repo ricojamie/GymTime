@@ -7,7 +7,8 @@ data class ShareableWorkout(
     val durationMinutes: Int?,
     val totalVolume: Float,
     val totalWorkingSets: Int,
-    val exercises: List<ShareableExercise>
+    val exercises: List<ShareableExercise>,
+    val recap: String? = null
 )
 
 data class ShareableExercise(
