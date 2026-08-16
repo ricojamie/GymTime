@@ -50,6 +50,45 @@ class WorkoutRepository @Inject constructor(
         }
     }
 
+    /**
+     * Starts a one-off workout whose exercise order is planned up front.
+     * The snapshots support navigation and resume without linking to a routine.
+     */
+    suspend fun startPlannedWorkout(exerciseIds: List<Long>): WorkoutStartResult {
+        val orderedExerciseIds = exerciseIds.distinct()
+        require(orderedExerciseIds.isNotEmpty()) { "Select at least one exercise" }
+
+        return database.withTransaction {
+            check(workoutDao.getOngoingWorkout().first() == null) {
+                "An active workout is already in progress"
+            }
+
+            val workoutId = workoutDao.insertWorkout(
+                Workout(
+                    startTime = Date(),
+                    endTime = null,
+                    name = null,
+                    note = null,
+                    startedFromRoutine = false
+                )
+            )
+            workoutPlanDao.insertInstances(
+                orderedExerciseIds.mapIndexed { index, exerciseId ->
+                    WorkoutExerciseInstance(
+                        workoutId = workoutId,
+                        exerciseId = exerciseId,
+                        orderIndex = index
+                    )
+                }
+            )
+
+            WorkoutStartResult(
+                workoutId = workoutId,
+                firstExerciseId = orderedExerciseIds.first()
+            )
+        }
+    }
+
     fun getOngoingWorkoutFlow(): Flow<Workout?> = workoutDao.getOngoingWorkout()
 
     suspend fun getWorkoutById(workoutId: Long): Flow<Workout?> = workoutDao.getWorkoutById(workoutId)
@@ -140,8 +179,12 @@ class WorkoutRepository @Inject constructor(
 
     suspend fun ensureWorkoutPlanInstance(workoutId: Long, exerciseId: Long): WorkoutExerciseInstance? {
         return database.withTransaction {
-            val workout = workoutDao.getWorkoutById(workoutId).first() ?: return@withTransaction null
-            if (!workout.startedFromRoutine) return@withTransaction null
+            workoutDao.getWorkoutById(workoutId).first() ?: return@withTransaction null
+            // Blank workouts remain build-as-you-go. Existing routine and
+            // one-off plans both keep newly added exercises in their order.
+            if (workoutPlanDao.getInstanceCountForWorkout(workoutId) == 0) {
+                return@withTransaction null
+            }
 
             val existing = workoutPlanDao.getFirstInstanceForExercise(workoutId, exerciseId)
             if (existing != null) return@withTransaction existing

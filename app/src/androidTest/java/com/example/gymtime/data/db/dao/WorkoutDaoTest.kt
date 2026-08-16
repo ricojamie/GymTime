@@ -8,6 +8,8 @@ import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
+import com.example.gymtime.data.VolumeOrbRepository
+import com.example.gymtime.data.repository.WorkoutRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -28,6 +30,7 @@ class WorkoutDaoTest {
     private lateinit var workoutDao: WorkoutDao
     private lateinit var setDao: SetDao
     private lateinit var exerciseDao: ExerciseDao
+    private lateinit var workoutPlanDao: WorkoutPlanDao
     private lateinit var originalTimeZone: TimeZone
 
     private val testExercise = Exercise(
@@ -51,6 +54,7 @@ class WorkoutDaoTest {
         workoutDao = database.workoutDao()
         setDao = database.setDao()
         exerciseDao = database.exerciseDao()
+        workoutPlanDao = database.workoutPlanDao()
     }
 
     @After
@@ -76,6 +80,32 @@ class WorkoutDaoTest {
 
         assertEquals("Morning Workout", retrieved.name)
         assertEquals("Felt good", retrieved.note)
+    }
+
+    @Test
+    fun startPlannedWorkoutPersistsOrderedOneOffPlanWithoutRoutineLinkage() = runTest {
+        val secondExercise = testExercise.copy(id = 2L, name = "Barbell Row", targetMuscle = "Back")
+        exerciseDao.insertExercise(testExercise)
+        exerciseDao.insertExercise(secondExercise)
+        val repository = WorkoutRepository(
+            database = database,
+            workoutDao = workoutDao,
+            setDao = setDao,
+            routineDao = database.routineDao(),
+            workoutPlanDao = workoutPlanDao,
+            volumeOrbRepository = VolumeOrbRepository(setDao)
+        )
+
+        val start = repository.startPlannedWorkout(listOf(secondExercise.id, testExercise.id))
+        val workout = workoutDao.getWorkoutById(start.workoutId).first()
+        val plan = workoutPlanDao.getInstancesForWorkout(start.workoutId).first()
+
+        assertFalse(workout.startedFromRoutine)
+        assertNull(workout.routineId)
+        assertNull(workout.routineDayId)
+        assertEquals(secondExercise.id, start.firstExerciseId)
+        assertEquals(listOf(secondExercise.id, testExercise.id), plan.map { it.exerciseId })
+        assertEquals(listOf(0, 1), plan.map { it.orderIndex })
     }
 
     @Test

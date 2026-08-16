@@ -109,6 +109,7 @@ import com.example.gymtime.ui.components.VolumeProgressBar
 import com.example.gymtime.ui.theme.IronLogTheme
 import com.example.gymtime.ui.theme.LocalAppColors
 import com.example.gymtime.ui.theme.appTextFieldColors
+import com.example.gymtime.util.PlateCalculator
 import com.example.gymtime.util.TimeUtils
 import com.example.gymtime.util.TimeFormatter
 import com.example.gymtime.ui.components.InputCard
@@ -116,6 +117,11 @@ import com.example.gymtime.ui.components.RulerSliderInput
 import com.example.gymtime.ui.components.TimeInputCard
 import com.example.gymtime.ui.smartlog.SmartLogBottomSheet
 import kotlin.math.roundToInt
+
+private fun NavController.replaceExerciseLogger(exerciseId: Long, draftToken: String?) {
+    popBackStack()
+    navigate(Screen.ExerciseLogging.createRoute(exerciseId, draftToken))
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -154,7 +160,7 @@ fun ExerciseLoggingScreen(
     val editingSet by viewModel.editingSet.collectAsStateWithLifecycle()
     val timerAutoStart by viewModel.timerAutoStart.collectAsStateWithLifecycle(initialValue = true)
     val barWeight by viewModel.barWeight.collectAsStateWithLifecycle(initialValue = 45f)
-    val availablePlates by viewModel.availablePlates.collectAsStateWithLifecycle(initialValue = listOf(45f, 35f, 25f, 10f, 5f, 2.5f))
+    val availablePlates by viewModel.availablePlates.collectAsStateWithLifecycle(initialValue = listOf(45f, 35f, 25f, 15f, 10f, 5f, 2.5f))
     val loadingSides by viewModel.loadingSides.collectAsStateWithLifecycle(initialValue = 2)
     var showDistanceUnitMenu by remember { mutableStateOf(false) }
 
@@ -164,6 +170,7 @@ fun ExerciseLoggingScreen(
     val currentSupersetIndex by viewModel.currentSupersetIndex.collectAsStateWithLifecycle()
 
     val nextExerciseId by viewModel.nextExerciseId.collectAsStateWithLifecycle()
+    val previousExerciseId by viewModel.previousExerciseId.collectAsStateWithLifecycle()
 
     var showFinishDialog by remember { mutableStateOf(false) }
     var showTimerDialog by remember { mutableStateOf(false) }
@@ -195,7 +202,18 @@ fun ExerciseLoggingScreen(
             viewModel.stopWearPublishing()
         }
     }
-    
+
+    fun navigateToLoggerExercise(
+        targetExerciseId: Long,
+        draftTokenOverride: String? = viewModel.smartLogDraftToken
+    ) {
+        if (targetExerciseId == exercise?.id) return
+        if (isInSupersetMode) {
+            viewModel.selectSupersetExercise(targetExerciseId)
+        }
+        navController.replaceExerciseLogger(targetExerciseId, draftTokenOverride)
+    }
+
     // Observe navigation events from ViewModel
     LaunchedEffect(Unit) {
         viewModel.navigationEvents.collect { workoutId ->
@@ -206,13 +224,7 @@ fun ExerciseLoggingScreen(
     // Observe auto-switch events for superset mode
     LaunchedEffect(Unit) {
         viewModel.autoSwitchEvent.collect { nextExerciseId ->
-            navController.navigate(Screen.ExerciseLogging.createRoute(nextExerciseId, viewModel.smartLogDraftToken)) {
-                // Pop the current logging screen off so we don't stack A -> B -> A -> B
-                popUpTo(navController.currentBackStackEntry?.destination?.route ?: return@navigate) {
-                    inclusive = true
-                }
-                launchSingleTop = true
-            }
+            navigateToLoggerExercise(nextExerciseId)
             view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
         }
     }
@@ -410,16 +422,23 @@ fun ExerciseLoggingScreen(
                         .fillMaxWidth()
                         .verticalScroll(scrollState)
                 ) {
-                currentPlanItem?.let { plan ->
-                    WorkoutPrescriptionCard(
-                        plannedSets = plan.plannedSets,
-                        repMin = plan.repMin,
-                        repMax = plan.repMax,
-                        restSeconds = plan.restSeconds,
-                        notes = plan.notes
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
+                currentPlanItem
+                    ?.takeIf { plan ->
+                        currentWorkout?.startedFromRoutine == true ||
+                            plan.plannedSets != null ||
+                            plan.repMin != null ||
+                            !plan.notes.isNullOrBlank()
+                    }
+                    ?.let { plan ->
+                        WorkoutPrescriptionCard(
+                            plannedSets = plan.plannedSets,
+                            repMin = plan.repMin,
+                            repMax = plan.repMax,
+                            restSeconds = plan.restSeconds,
+                            notes = plan.notes
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
 
                 if (exercise?.logType.supportsRepTarget && exercise?.repTarget != null) {
                     if (attemptRecommendation != null) {
@@ -449,12 +468,7 @@ fun ExerciseLoggingScreen(
                     currentExerciseIndex = currentSupersetIndex,
                     currentExerciseId = exercise?.id,
                     onExerciseClick = { exerciseId ->
-                        if (exerciseId != exercise?.id) {
-                            navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId, viewModel.smartLogDraftToken)) {
-                                popUpTo("exercise_logging/{exerciseId}") { inclusive = true }
-                                launchSingleTop = true
-                            }
-                        }
+                        navigateToLoggerExercise(exerciseId)
                     }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1027,10 +1041,8 @@ fun ExerciseLoggingScreen(
             ) {
                 OutlinedButton(
                     onClick = {
-                        if (isInSupersetMode) {
-                            // Exit superset mode before navigating to add exercise
-                            viewModel.exitSupersetMode()
-                            navController.popBackStack()
+                        if (previousExerciseId != null) {
+                            navigateToLoggerExercise(previousExerciseId!!)
                         } else {
                             navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
                         }
@@ -1041,7 +1053,7 @@ fun ExerciseLoggingScreen(
                     )
                 ) {
                     Text(
-                        text = if (isInSupersetMode) "Exit Superset" else "Add Exercise",
+                        text = if (previousExerciseId != null) "Previous Exercise" else "Add Exercise",
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -1049,10 +1061,7 @@ fun ExerciseLoggingScreen(
                 Button(
                     onClick = { 
                         if (nextExerciseId != null) {
-                            navController.navigate(Screen.ExerciseLogging.createRoute(nextExerciseId!!, viewModel.smartLogDraftToken)) {
-                                popUpTo("exercise_logging/{exerciseId}") { inclusive = true }
-                                launchSingleTop = true
-                            }
+                            navigateToLoggerExercise(nextExerciseId!!)
                         } else {
                             showFinishDialog = true 
                         }
@@ -1451,7 +1460,7 @@ fun ExerciseLoggingScreen(
                 navController.navigate(Screen.Settings.route)
             },
             onUseWeight = { newWeight ->
-                viewModel.updateWeight(newWeight.toString())
+                viewModel.updateWeight(PlateCalculator.formatWeight(newWeight))
                 showPlateCalculator = false
             }
         )
@@ -1464,12 +1473,7 @@ fun ExerciseLoggingScreen(
             onDismiss = { showSmartLog = false },
             onNavigateToLogger = { exerciseId, token ->
                 showSmartLog = false
-                navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId, token)) {
-                    popUpTo(navController.currentBackStackEntry?.destination?.route ?: Screen.ExerciseLogging.route) {
-                        inclusive = true
-                    }
-                    launchSingleTop = true
-                }
+                navigateToLoggerExercise(exerciseId, token)
             },
             onCreateExercise = { name ->
                 showSmartLog = false
@@ -1493,14 +1497,7 @@ fun ExerciseLoggingScreen(
                 currentExerciseId = exercise?.id,
                 onExerciseClick = { exerciseId ->
                     showWorkoutOverview = false
-                    if (exerciseId != exercise?.id) {
-                        navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId, viewModel.smartLogDraftToken)) {
-                            popUpTo(navController.currentBackStackEntry?.destination?.route ?: Screen.ExerciseLogging.route) {
-                                inclusive = true
-                            }
-                            launchSingleTop = true
-                        }
-                    }
+                    navigateToLoggerExercise(exerciseId)
                 },
                 onAddExercise = {
                     showWorkoutOverview = false

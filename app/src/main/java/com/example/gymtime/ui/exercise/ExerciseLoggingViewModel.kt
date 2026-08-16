@@ -44,7 +44,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Job
@@ -332,9 +331,12 @@ class ExerciseLoggingViewModel @Inject constructor(
     private var wearPublisherId: Long? = null
     private var wearPublishJob: Job? = null
 
-    // Next exercise in routine
+    // Adjacent exercises in a routine or one-off workout plan.
     private val _nextExerciseId = MutableStateFlow<Long?>(null)
     val nextExerciseId: StateFlow<Long?> = _nextExerciseId
+
+    private val _previousExerciseId = MutableStateFlow<Long?>(null)
+    val previousExerciseId: StateFlow<Long?> = _previousExerciseId
 
     init {
         // Bind to timer service
@@ -390,23 +392,13 @@ class ExerciseLoggingViewModel @Inject constructor(
 
         viewModelScope.launch {
             _currentWorkout.filterNotNull().collectLatest { workout ->
-                if (workout.startedFromRoutine) {
-                    workoutRepository.ensureWorkoutPlanInstance(workout.id, exerciseId)
-                } else {
-                    _currentPlanItem.value = null
-                    _nextExerciseId.value = null
-                    _planPosition.value = null
-                }
+                workoutRepository.ensureWorkoutPlanInstance(workout.id, exerciseId)
             }
         }
 
         viewModelScope.launch {
             _currentWorkout.filterNotNull().flatMapLatest { workout ->
-                if (workout.startedFromRoutine) {
-                    workoutRepository.getWorkoutPlanSummaries(workout.id)
-                } else {
-                    flowOf(emptyList())
-                }
+                workoutRepository.getWorkoutPlanSummaries(workout.id)
             }.collectLatest { planItems ->
                 val currentItem = planItems.firstOrNull { it.exerciseId == exerciseId }
                 _currentPlanItem.value = currentItem
@@ -414,6 +406,12 @@ class ExerciseLoggingViewModel @Inject constructor(
                 currentItem?.restSeconds?.let { _restTime.value = it }
 
                 val currentIndex = planItems.indexOfFirst { it.exerciseId == exerciseId }
+
+                _previousExerciseId.value = if (currentIndex > 0) {
+                    planItems[currentIndex - 1].exerciseId
+                } else {
+                    null
+                }
 
                 _planPosition.value = if (currentIndex != -1) {
                     PlanPosition(
@@ -451,7 +449,7 @@ class ExerciseLoggingViewModel @Inject constructor(
                     }
                 } else if (currentIndex != -1 && currentIndex < planItems.lastIndex) {
                     _nextExerciseId.value = planItems[currentIndex + 1].exerciseId
-                } else if (!supersetManager.isInSupersetMode.value) {
+                } else {
                     _nextExerciseId.value = null
                 }
             }
@@ -768,6 +766,10 @@ class ExerciseLoggingViewModel @Inject constructor(
         Log.d("ExerciseLoggingVM", "Exited superset mode")
     }
 
+    /** Keeps the singleton superset cursor aligned with a manually tapped pill. */
+    fun selectSupersetExercise(exerciseId: Long): Boolean =
+        supersetManager.switchToExercise(exerciseId)
+
     fun prepareForSmartLogExerciseCreation(restrictedToSuperset: Boolean) {
         if (restrictedToSuperset) {
             exitSupersetMode()
@@ -781,11 +783,7 @@ class ExerciseLoggingViewModel @Inject constructor(
                 combine(
                     workoutRepository.getWorkoutOverview(workout.id),
                     workoutRepository.getSetsForWorkout(workout.id),
-                    if (workout.startedFromRoutine) {
-                        workoutRepository.getWorkoutPlanSummaries(workout.id)
-                    } else {
-                        flowOf(emptyList())
-                    }
+                    workoutRepository.getWorkoutPlanSummaries(workout.id)
                 ) { overview, sets, planItems ->
                     Triple(overview, sets, planItems)
                 }.collectLatest { (overview, sets, planItems) ->

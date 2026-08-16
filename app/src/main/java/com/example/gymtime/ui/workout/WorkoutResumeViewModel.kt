@@ -69,7 +69,7 @@ class WorkoutResumeViewModel @Inject constructor(
 
                 Log.d("WorkoutResumeVM", "Ongoing workout found: ${workout.id}, startedFromRoutine=${workout.startedFromRoutine}")
 
-                if (workout.startedFromRoutine && workoutRepository.hasWorkoutPlan(workout.id)) {
+                if (workoutRepository.hasWorkoutPlan(workout.id)) {
                     workoutRepository.getWorkoutPlanSummaries(workout.id).collectLatest { plan ->
                         _todaysExercises.value = plan.map { it.toResumeExerciseItem() }
                     }

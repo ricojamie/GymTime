@@ -26,6 +26,7 @@ sealed class Screen(val route: String, val icon: ImageVector) {
             if (params.isNotEmpty()) append("?${params.joinToString("&")}")
         }
     }
+    object WorkoutBuilder : Screen("workout_builder", Icons.Filled.Home)
     object WorkoutResume : Screen("workout_resume", Icons.Filled.Home) // Placeholder, not in bottom nav
     object ExerciseLogging : Screen("exercise_logging/{exerciseId}?draftToken={draftToken}", Icons.Filled.Home) { // Placeholder, not in bottom nav
         fun createRoute(exerciseId: Long, draftToken: String? = null) = buildString {

@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.example.gymtime.data.RoutineRepository
 import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.VolumeOrbRepository
+import com.example.gymtime.data.db.dao.WorkoutPlanSummary
 import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
@@ -113,6 +114,39 @@ class ExerciseLoggingViewModelTest {
 
         assertEquals(testExercise, viewModel.exercise.value)
         assertEquals(testWorkout, viewModel.currentWorkout.value)
+    }
+
+    @Test
+    fun `one-off plan exposes previous and next exercise navigation`() = runTest {
+        val secondExercise = testExercise.copy(id = 2L, name = "Row", targetMuscle = "Back")
+        val planItems = listOf(
+            planSummary(instanceId = 11L, exerciseId = 1L, name = "Bench Press", orderIndex = 0),
+            planSummary(instanceId = 12L, exerciseId = 2L, name = "Row", orderIndex = 1),
+            planSummary(instanceId = 13L, exerciseId = 3L, name = "Squat", orderIndex = 2)
+        )
+
+        val plannedViewModel = buildViewModel(
+            exercise = secondExercise,
+            planItems = planItems
+        )
+        advanceUntilIdle()
+
+        assertFalse(plannedViewModel.currentWorkout.value!!.startedFromRoutine)
+        assertEquals(1L, plannedViewModel.previousExerciseId.value)
+        assertEquals(3L, plannedViewModel.nextExerciseId.value)
+        assertEquals(2, plannedViewModel.planPosition.value?.index)
+        assertEquals(3, plannedViewModel.planPosition.value?.total)
+        assertNull(plannedViewModel.planPosition.value?.dayName)
+    }
+
+    @Test
+    fun `tapped superset exercise updates active cursor`() = runTest {
+        val secondExercise = testExercise.copy(id = 2L, name = "Row")
+        supersetManager.startSuperset(listOf(testExercise, secondExercise))
+
+        assertTrue(viewModel.selectSupersetExercise(secondExercise.id))
+        assertEquals(1, viewModel.currentSupersetIndex.value)
+        assertEquals(secondExercise.id, supersetManager.getCurrentExerciseId())
     }
 
     @Test
@@ -487,7 +521,8 @@ class ExerciseLoggingViewModelTest {
 
     private fun buildViewModel(
         exercise: Exercise = testExercise,
-        draftToken: String? = null
+        draftToken: String? = null,
+        planItems: List<WorkoutPlanSummary> = emptyList()
     ): ExerciseLoggingViewModel {
         val savedStateHandle = SavedStateHandle(
             buildMap {
@@ -500,6 +535,8 @@ class ExerciseLoggingViewModelTest {
         coEvery { exerciseRepository.getPersonalBestsByReps(exercise.id) } returns emptyMap()
         coEvery { exerciseRepository.getHeaviestSet(exercise.id) } returns null
         coEvery { workoutRepository.getCurrentWorkout() } returns testWorkout
+        coEvery { workoutRepository.ensureWorkoutPlanInstance(testWorkout.id, exercise.id) } returns null
+        every { workoutRepository.getWorkoutPlanSummaries(testWorkout.id) } returns flowOf(planItems)
         coEvery { workoutRepository.getSetsForWorkout(testWorkout.id) } returns flowOf(emptyList())
         coEvery { workoutRepository.getLastWorkoutSetsForExercise(exercise.id, any()) } returns emptyList()
         coEvery { routineRepository.getRoutineDayWithExercises(any()) } returns flowOf(null)
@@ -519,6 +556,31 @@ class ExerciseLoggingViewModelTest {
             smartLogDraftStore = smartLogDraftStore
         )
     }
+
+    private fun planSummary(
+        instanceId: Long,
+        exerciseId: Long,
+        name: String,
+        orderIndex: Int
+    ) = WorkoutPlanSummary(
+        instanceId = instanceId,
+        exerciseId = exerciseId,
+        exerciseName = name,
+        targetMuscle = "Test",
+        setCount = 0,
+        bestWeight = null,
+        totalVolume = 0f,
+        orderIndex = orderIndex,
+        plannedSets = null,
+        repMin = null,
+        repMax = null,
+        restSeconds = 90,
+        notes = null,
+        supersetGroupId = null,
+        supersetOrderIndex = 0,
+        isSkipped = false,
+        addedDuringWorkout = false
+    )
 
     private fun exerciseFor(logType: LogType): Exercise {
         return testExercise.copy(logType = logType)

@@ -128,10 +128,8 @@ fun HomeScreen(
             onClick = {
                 if (ongoingWorkout != null) {
                     navController.navigate(Screen.WorkoutResume.route)
-                } else if (hasActiveRoutine) {
-                    showWorkoutStartPicker = true
                 } else {
-                    navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
+                    showWorkoutStartPicker = true
                 }
             }
         )
@@ -247,6 +245,7 @@ fun HomeScreen(
             scrimColor = Color.Black.copy(alpha = 0.6f)
         ) {
             WorkoutStartPickerSheet(
+                hasActiveRoutine = hasActiveRoutine,
                 nextRoutineDayName = nextRoutineDayName,
                 exercisePreview = routineCardState?.exercisePreview ?: emptyList(),
                 onStartRoutine = {
@@ -262,6 +261,10 @@ fun HomeScreen(
                 onStartBlank = {
                     showWorkoutStartPicker = false
                     navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
+                },
+                onPlanWorkout = {
+                    showWorkoutStartPicker = false
+                    navController.navigate(Screen.WorkoutBuilder.route)
                 }
             )
         }
@@ -358,7 +361,7 @@ private fun QuickStartCard(
                     text = when {
                         isOngoing -> "Continue your session"
                         hasActiveRoutine -> "Routine knows what is next"
-                        else -> "Build as you go"
+                        else -> "Quick start or plan ahead"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = LocalAppColors.current.textTertiary
@@ -370,11 +373,13 @@ private fun QuickStartCard(
 
 @Composable
 private fun WorkoutStartPickerSheet(
+    hasActiveRoutine: Boolean,
     nextRoutineDayName: String?,
     exercisePreview: List<String>,
     onStartRoutine: () -> Unit,
     onChooseDay: (() -> Unit)?,
-    onStartBlank: () -> Unit
+    onStartBlank: () -> Unit,
+    onPlanWorkout: () -> Unit
 ) {
     val accentColor = MaterialTheme.colorScheme.primary
 
@@ -392,11 +397,16 @@ private fun WorkoutStartPickerSheet(
         )
 
         Text(
-            text = "Choose the next routine day or start a blank session.",
+            text = if (hasActiveRoutine) {
+                "Continue your routine or start a separate one-off workout."
+            } else {
+                "Start immediately or choose every exercise before you begin."
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = LocalAppColors.current.textSecondary
         )
 
+        if (hasActiveRoutine) {
         GlowCard(
             modifier = Modifier.fillMaxWidth(),
             onClick = onStartRoutine
@@ -423,6 +433,8 @@ private fun WorkoutStartPickerSheet(
             }
         }
 
+        }
+
         if (onChooseDay != null) {
             GlowCard(
                 modifier = Modifier.fillMaxWidth(),
@@ -447,18 +459,38 @@ private fun WorkoutStartPickerSheet(
 
         GlowCard(
             modifier = Modifier.fillMaxWidth(),
+            onClick = onPlanWorkout
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Text(
+                    text = "Plan a One-Off Workout",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = accentColor
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Choose and order every exercise, then move through them in the logger.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalAppColors.current.textSecondary
+                )
+            }
+        }
+
+        GlowCard(
+            modifier = Modifier.fillMaxWidth(),
             onClick = onStartBlank
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
                 Text(
-                    text = "Blank Workout",
+                    text = "Quick Start",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = LocalAppColors.current.textPrimary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Log freely without advancing the routine.",
+                    text = "Pick the first exercise and build as you go.",
                     style = MaterialTheme.typography.bodySmall,
                     color = LocalAppColors.current.textSecondary
                 )

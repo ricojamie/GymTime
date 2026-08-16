@@ -87,6 +87,17 @@ class SupersetManagerTest {
     }
 
     @Test
+    fun `switchToExercise updates cursor for a tapped pill`() {
+        supersetManager.startSuperset(listOf(exercise1, exercise2, exercise3))
+
+        assertTrue(supersetManager.switchToExercise(exercise3.id))
+        assertEquals(2, supersetManager.currentExerciseIndex.value)
+        assertEquals(exercise3.id, supersetManager.getCurrentExerciseId())
+        assertFalse(supersetManager.switchToExercise(99L))
+        assertEquals(2, supersetManager.currentExerciseIndex.value)
+    }
+
+    @Test
     fun `exitSupersetMode clears all state including last logged values`() {
         supersetManager.startSuperset(listOf(exercise1, exercise2))
         supersetManager.saveLastLoggedValues(exercise1.id, LastLoggedValues(weight = "100", reps = "5"))

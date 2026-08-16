@@ -869,22 +869,20 @@ fun SettingsScreen(
             text = {
                 Column {
                     Text(
-                        "Repeat Workouts & Trend Lines 📈",
+                        "Plan It, Load It, Lift It 💪",
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "🔁 Repeat any past workout\n" +
-                        "Open a workout in History and tap Repeat to start a fresh session with the same exercises and targets.\n\n" +
-                        "📋 Add a workout to a routine\n" +
-                        "Turn any past workout into a routine day — add it as a new day or replace an existing one.\n\n" +
-                        "✏️ Quick-edit from the logger\n" +
-                        "Tap the exercise name while logging to rename it or tweak its rest time and notes on the spot.\n\n" +
-                        "📈 Trend lines on your charts\n" +
-                        "The Trends chart and the e1RM sparkline now show a best-fit line so you can see the direction of your progress.\n\n" +
-                        "⌨️ Smarter keyboard\n" +
-                        "Tapping anywhere outside a text field in the logger now dismisses the keyboard.",
+                        "🧱 Build a one-off workout\n" +
+                        "Start a new workout, choose every exercise you plan to do, then move forward or back through your plan while logging. No routine required.\n\n" +
+                        "🔁 Supersets switch correctly\n" +
+                        "Tapping an exercise pill in a superset now opens that exercise in the logger right away.\n\n" +
+                        "🏋️ A smarter plate calculator\n" +
+                        "Enter a target weight to see the best plate loadout, or add plates yourself to see the live total. It respects your bar, plates, and loading setup.\n\n" +
+                        "✨ Built for the gym floor\n" +
+                        "The redesigned calculator has bigger controls, clearer visuals, and keeps your setup intact when you switch modes.",
                         color = LocalAppColors.current.textPrimary
                     )
                 }

@@ -211,6 +211,11 @@ class MainActivity : ComponentActivity() {
                                         }
                                     )
                                 }
+                                composable(Screen.WorkoutBuilder.route) {
+                                    com.example.gymtime.ui.workout.WorkoutBuilderScreen(
+                                        navController = navController
+                                    )
+                                }
                                 composable(
                                     route = Screen.ExerciseLogging.route,
                                     arguments = listOf(

@@ -105,6 +105,14 @@ class SupersetManager @Inject constructor() {
         }
     }
 
+    /** Selects a specific exercise in the active superset. */
+    fun switchToExercise(exerciseId: Long): Boolean {
+        val index = getOrderIndex(exerciseId)
+        if (!_isInSupersetMode.value || index == -1) return false
+        _currentExerciseIndex.value = index
+        return true
+    }
+
     /**
      * Add an exercise to an existing active superset.
      * @param exercise The exercise to add
