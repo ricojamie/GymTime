@@ -3,12 +3,7 @@
     <application>
         <activity
             android:name="com.example.gymtime.ui.components.PlateCalculatorTestActivity"
-            android:exported="true"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar">
-            <intent-filter android:priority="-100">
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:exported="false"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
     </application>
 </manifest>
