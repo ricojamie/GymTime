@@ -34,16 +34,20 @@ sealed class Screen(val route: String, val icon: ImageVector) {
             draftToken?.let { append("?draftToken=$it") }
         }
     }
-    object ExerciseForm : Screen("exercise_form?exerciseId={exerciseId}&fromWorkout={fromWorkout}&initialName={initialName}", Icons.Filled.Home) { // Create/Edit exercise
+    object ExerciseForm : Screen("exercise_form?exerciseId={exerciseId}&fromWorkout={fromWorkout}&fromWorkoutBuilder={fromWorkoutBuilder}&initialName={initialName}", Icons.Filled.Home) { // Create/Edit exercise
+        const val RESULT_CREATED_EXERCISE_ID = "createdExerciseId"
+
         fun createRoute(
             exerciseId: Long? = null,
             fromWorkout: Boolean = false,
+            fromWorkoutBuilder: Boolean = false,
             initialName: String? = null
         ) = buildString {
             append("exercise_form")
             val params = mutableListOf<String>()
             exerciseId?.let { params.add("exerciseId=$it") }
             if (fromWorkout) params.add("fromWorkout=true")
+            if (fromWorkoutBuilder) params.add("fromWorkoutBuilder=true")
             initialName?.trim()?.takeIf { it.isNotEmpty() }?.let {
                 params.add("initialName=${Uri.encode(it)}")
             }

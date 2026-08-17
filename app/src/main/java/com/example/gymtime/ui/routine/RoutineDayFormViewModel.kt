@@ -15,6 +15,16 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 
+private data class RoutineDayDraft(
+    val name: String = "",
+    val exerciseOrder: List<Long> = emptyList(),
+    val targetSets: Map<Long, String> = emptyMap(),
+    val targetRepMin: Map<Long, String> = emptyMap(),
+    val targetRepMax: Map<Long, String> = emptyMap(),
+    val targetRestSeconds: Map<Long, String> = emptyMap(),
+    val supersetLinks: Set<Int> = emptySet()
+)
+
 @HiltViewModel
 class RoutineDayFormViewModel @Inject constructor(
     private val routineRepository: RoutineRepository,
@@ -54,6 +64,39 @@ class RoutineDayFormViewModel @Inject constructor(
     private val _supersetLinks = MutableStateFlow<Set<Int>>(emptySet())
     val supersetLinks: StateFlow<Set<Int>> = _supersetLinks.asStateFlow()
 
+    private val currentDraft = combine(
+        combine(
+            _dayName,
+            _selectedExerciseOrder,
+            _targetSets,
+            _targetRepMin,
+            _targetRepMax
+        ) { name, order, sets, repMin, repMax ->
+            RoutineDayDraft(
+                name = name,
+                exerciseOrder = order,
+                targetSets = sets,
+                targetRepMin = repMin,
+                targetRepMax = repMax
+            )
+        },
+        _targetRestSeconds,
+        _supersetLinks
+    ) { partial, rest, links ->
+        partial.copy(targetRestSeconds = rest, supersetLinks = links)
+    }
+
+    private val _baselineDraft = MutableStateFlow<RoutineDayDraft?>(
+        if (dayId == null) RoutineDayDraft() else null
+    )
+
+    val hasUnsavedChanges: StateFlow<Boolean> = combine(
+        currentDraft,
+        _baselineDraft
+    ) { current, baseline ->
+        baseline != null && current != baseline
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val selectedExercises: Flow<List<Exercise>> = combine(
         _selectedExerciseOrder,
         exerciseDao.getAllExercises()
@@ -78,8 +121,7 @@ class RoutineDayFormViewModel @Inject constructor(
     init {
         if (dayId != null) {
             viewModelScope.launch {
-                routineRepository.getRoutineDayWithExercises(dayId).collectLatest { dayWithExercises ->
-                    dayWithExercises?.let {
+                routineRepository.getRoutineDayWithExercises(dayId).firstOrNull()?.let {
                         _dayName.value = it.day.name
                         val exercises = it.exercises.sortedBy { it.routineExercise.orderIndex }
                         _selectedExerciseIds.value = exercises.map { it.exercise.id }.toSet()
@@ -109,7 +151,16 @@ class RoutineDayFormViewModel @Inject constructor(
                             }
                         }
                         _supersetLinks.value = links
-                    }
+
+                        _baselineDraft.value = RoutineDayDraft(
+                            name = it.day.name,
+                            exerciseOrder = exercises.map { item -> item.exercise.id },
+                            targetSets = _targetSets.value,
+                            targetRepMin = _targetRepMin.value,
+                            targetRepMax = _targetRepMax.value,
+                            targetRestSeconds = _targetRestSeconds.value,
+                            supersetLinks = links
+                        )
                 }
             }
         }

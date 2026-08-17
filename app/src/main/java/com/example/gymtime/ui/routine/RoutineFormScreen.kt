@@ -19,8 +19,13 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.gymtime.navigation.Screen
+import com.example.gymtime.navigation.navigateBackOrHome
 import com.example.gymtime.navigation.navigateHomeAndClearStack
+import com.example.gymtime.navigation.navigateToNewRoutineDetail
+import com.example.gymtime.ui.components.BackNavigationIcon
 import com.example.gymtime.ui.components.GlowCard
+import com.example.gymtime.ui.components.HomeNavigationAction
+import com.example.gymtime.ui.components.rememberGuardedNavigationActions
 import com.example.gymtime.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,16 +37,20 @@ fun RoutineFormScreen(
     val routineName by viewModel.routineName.collectAsStateWithLifecycle()
     val isEditMode by viewModel.isEditMode.collectAsStateWithLifecycle()
     val isSaveEnabled by viewModel.isSaveEnabled.collectAsStateWithLifecycle()
+    val hasUnsavedChanges by viewModel.hasUnsavedChanges.collectAsStateWithLifecycle()
     val accentColor = MaterialTheme.colorScheme.primary
+    val navigationActions = rememberGuardedNavigationActions(
+        hasUnsavedChanges = hasUnsavedChanges,
+        onBack = navController::navigateBackOrHome,
+        onHome = navController::navigateHomeAndClearStack
+    )
 
     LaunchedEffect(Unit) {
         viewModel.saveSuccessEvent.collect { routineId ->
             if (isEditMode) {
                 navController.navigateUp()
             } else {
-                navController.navigate(Screen.RoutineDetail.createRoute(routineId)) {
-                    popUpTo(Screen.RoutineList.route)
-                }
+                navController.navigateToNewRoutineDetail(routineId)
             }
         }
     }
@@ -58,11 +67,10 @@ fun RoutineFormScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigateHomeAndClearStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = LocalAppColors.current.textPrimary)
-                    }
+                    BackNavigationIcon(navigationActions.back)
                 },
                 actions = {
+                    HomeNavigationAction(navigationActions.home)
                     IconButton(
                         onClick = { viewModel.saveRoutine() },
                         enabled = isSaveEnabled

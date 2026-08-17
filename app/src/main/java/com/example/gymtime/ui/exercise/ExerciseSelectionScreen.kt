@@ -23,8 +23,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -34,15 +36,19 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -63,6 +69,9 @@ import androidx.navigation.NavController
 import com.example.gymtime.R
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.navigation.Screen
+import com.example.gymtime.navigation.navigateBackOrHome
+import com.example.gymtime.navigation.navigateHomeAndClearStack
+import com.example.gymtime.navigation.navigateToWorkoutExercise
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.smartlog.SmartLogBottomSheet
 import com.example.gymtime.ui.theme.IronLogTheme
@@ -77,7 +86,8 @@ fun ExerciseSelectionScreen(
 ) {
     ExerciseSelectionContent(
         navController = navController,
-        viewModel = viewModel
+        viewModel = viewModel,
+        showNavigationChrome = true
     )
 }
 
@@ -85,10 +95,12 @@ fun ExerciseSelectionScreen(
  * Reusable content for exercise selection.
  * Can be used standalone in ExerciseSelectionScreen or embedded in LibraryScreen.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExerciseSelectionContent(
     navController: NavController,
-    viewModel: ExerciseSelectionViewModel = hiltViewModel()
+    viewModel: ExerciseSelectionViewModel = hiltViewModel(),
+    showNavigationChrome: Boolean = false
 ) {
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.supersetStarted.collect { parentId: Long ->
@@ -121,6 +133,38 @@ fun ExerciseSelectionContent(
     Log.d(TAG, "ExerciseSelectionContent recomposed: availableMuscles=${availableMuscles.size}, filteredExercises=${filteredExercises.size}, isSupersetMode=$isSupersetMode, selectedCount=${selectedForSuperset.size}")
 
     Scaffold(
+        topBar = {
+            if (showNavigationChrome) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            if (isSupersetMode) "Build Superset" else "Choose Exercise",
+                            color = LocalAppColors.current.textPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = navController::navigateBackOrHome) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = LocalAppColors.current.textPrimary
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = navController::navigateHomeAndClearStack) {
+                            Icon(
+                                Icons.Default.Home,
+                                contentDescription = "Home",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                )
+            }
+        },
         floatingActionButton = {
             Column(
                 modifier = Modifier.padding(bottom = 100.dp),
@@ -131,7 +175,7 @@ fun ExerciseSelectionContent(
                     ExtendedFloatingActionButton(
                         onClick = {
                             val firstExerciseId = viewModel.startSuperset()
-                            navController.navigate(Screen.ExerciseLogging.createRoute(firstExerciseId))
+                            navController.navigateToWorkoutExercise(firstExerciseId)
                         },
                         containerColor = accentColor,
                         contentColor = Color.Black,
@@ -253,7 +297,7 @@ fun ExerciseSelectionContent(
                                 } else if (isSupersetMode) {
                                     viewModel.toggleExerciseSelection(exercise)
                                 } else {
-                                    navController.navigate(Screen.ExerciseLogging.createRoute(exercise.id))
+                                    navController.navigateToWorkoutExercise(exercise.id)
                                 }
                             },
                             onEdit = {
@@ -311,7 +355,7 @@ fun ExerciseSelectionContent(
             onDismiss = { showSmartLog = false },
             onNavigateToLogger = { exerciseId, token ->
                 showSmartLog = false
-                navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId, token))
+                navController.navigateToWorkoutExercise(exerciseId, token)
             },
             onCreateExercise = { name ->
                 showSmartLog = false

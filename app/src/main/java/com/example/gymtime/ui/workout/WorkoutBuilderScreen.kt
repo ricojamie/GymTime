@@ -34,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -56,6 +57,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.navigation.Screen
+import com.example.gymtime.navigation.navigateBackOrHome
+import com.example.gymtime.navigation.navigateHomeAndClearStack
+import com.example.gymtime.navigation.navigateToWorkoutExercise
+import com.example.gymtime.ui.components.BackNavigationIcon
+import com.example.gymtime.ui.components.HomeNavigationAction
+import com.example.gymtime.ui.components.rememberGuardedNavigationActions
 import com.example.gymtime.ui.theme.LocalAppColors
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -73,13 +80,30 @@ fun WorkoutBuilderScreen(
     val isStarting by viewModel.isStarting.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val navigationActions = rememberGuardedNavigationActions(
+        hasUnsavedChanges = selectedIds.isNotEmpty(),
+        onBack = navController::navigateBackOrHome,
+        onHome = navController::navigateHomeAndClearStack,
+        dialogTitle = "Discard workout plan?",
+        dialogMessage = "The exercises selected for this one-time workout will be lost."
+    )
+    val builderBackStackEntry = remember(navController) {
+        navController.getBackStackEntry(Screen.WorkoutBuilder.route)
+    }
+    val createdExerciseId by builderBackStackEntry.savedStateHandle
+        .getStateFlow<Long?>(Screen.ExerciseForm.RESULT_CREATED_EXERCISE_ID, null)
+        .collectAsStateWithLifecycle()
+
+    LaunchedEffect(createdExerciseId) {
+        createdExerciseId?.let { exerciseId ->
+            viewModel.addExercise(exerciseId)
+            builderBackStackEntry.savedStateHandle[Screen.ExerciseForm.RESULT_CREATED_EXERCISE_ID] = null
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.workoutStarted.collect { start ->
-            navController.navigate(Screen.ExerciseLogging.createRoute(start.firstExerciseId)) {
-                popUpTo(Screen.WorkoutBuilder.route) { inclusive = true }
-                launchSingleTop = true
-            }
+            navController.navigateToWorkoutExercise(start.firstExerciseId)
         }
     }
 
@@ -104,9 +128,10 @@ fun WorkoutBuilderScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    BackNavigationIcon(navigationActions.back)
+                },
+                actions = {
+                    HomeNavigationAction(navigationActions.home)
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
@@ -203,6 +228,24 @@ fun WorkoutBuilderScreen(
                 label = { Text("Search exercises") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
             )
+            OutlinedButton(
+                onClick = {
+                    navController.navigate(
+                        Screen.ExerciseForm.createRoute(
+                            fromWorkoutBuilder = true,
+                            initialName = searchQuery
+                        )
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Create New Exercise", fontWeight = FontWeight.Bold)
+            }
             Spacer(Modifier.height(10.dp))
 
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -247,7 +290,7 @@ fun WorkoutBuilderScreen(
                             text = if (searchQuery.isNotBlank() || selectedMuscle != null) {
                                 "No exercises match this filter. Clear it or try a different search."
                             } else {
-                                "No exercises available yet. Add one in the library, then come back to build this workout."
+                                "No exercises available yet. Create one above to add it to this workout."
                             },
                             color = LocalAppColors.current.textSecondary,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center

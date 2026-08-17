@@ -22,6 +22,10 @@ import androidx.navigation.NavController
 import com.example.gymtime.data.db.dao.RoutineDayWithExercises
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.navigation.navigateHomeAndClearStack
+import com.example.gymtime.navigation.navigateBackOrHome
+import com.example.gymtime.navigation.navigateToWorkoutExercise
+import com.example.gymtime.ui.components.BackNavigationIcon
+import com.example.gymtime.ui.components.HomeNavigationAction
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.*
 
@@ -42,10 +46,7 @@ fun RoutineDayStartScreen(
             // Since I'm limited by the current navigation structure, 
             // I'll assume navigating to ExerciseLogging with the first exercise is the intention.
             // The ExerciseLogging screen should ideally know it's part of an active workout (which it does via global state or VM).
-            navController.navigate(Screen.ExerciseLogging.createRoute(firstExerciseId)) {
-                // Clear back stack so we don't come back to this start screen easily
-                popUpTo(Screen.Home.route)
-            }
+            navController.navigateToWorkoutExercise(firstExerciseId)
         }
     }
 
@@ -68,9 +69,10 @@ fun RoutineDayStartScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigateHomeAndClearStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = LocalAppColors.current.textPrimary)
-                    }
+                    BackNavigationIcon(navController::navigateBackOrHome)
+                },
+                actions = {
+                    HomeNavigationAction(navController::navigateHomeAndClearStack)
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )

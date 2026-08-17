@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,10 +35,12 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.gymtime.navigation.Screen
+import com.example.gymtime.navigation.navigateHomeAndClearStack
 import com.example.gymtime.ui.ai.OnDeviceAiDownloadCard
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.components.VolumeOrb
 import com.example.gymtime.ui.components.OrbSize
+import com.example.gymtime.ui.components.rememberGuardedNavigationActions
 import com.example.gymtime.ui.theme.*
 import com.example.gymtime.util.ShareImagePalette
 import java.text.NumberFormat
@@ -70,13 +73,18 @@ fun PostWorkoutSummaryScreen(
             onAccent = Color.Black.toArgb()
         )
     }
+    val navigationActions = rememberGuardedNavigationActions(
+        hasUnsavedChanges = selectedRating != null || ratingNote.isNotBlank(),
+        onBack = viewModel::skipAndFinish,
+        onHome = viewModel::skipAndFinish,
+        dialogTitle = "Leave without saving feedback?",
+        dialogMessage = "Your workout is already saved, but its rating and note will be discarded."
+    )
 
     // Observe navigation event
     LaunchedEffect(Unit) {
         viewModel.navigationEvent.collect {
-            navController.navigate(Screen.Home.route) {
-                popUpTo(navController.graph.id) { inclusive = true }
-            }
+            navController.navigateHomeAndClearStack()
         }
     }
 
@@ -119,6 +127,13 @@ fun PostWorkoutSummaryScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
+                IconButton(onClick = navigationActions.home) {
+                    Icon(
+                        imageVector = Icons.Default.Home,
+                        contentDescription = "Home",
+                        tint = accentColor
+                    )
+                }
                 IconButton(onClick = { viewModel.onCopyClicked() }) {
                     Icon(
                         imageVector = Icons.Filled.ContentCopy,

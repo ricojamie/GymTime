@@ -35,7 +35,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.navigation.navigateHomeAndClearStack
+import com.example.gymtime.navigation.navigateBackOrHome
+import com.example.gymtime.ui.components.BackNavigationIcon
 import com.example.gymtime.ui.components.GlowCard
+import com.example.gymtime.ui.components.HomeNavigationAction
+import com.example.gymtime.ui.components.rememberGuardedNavigationActions
 import com.example.gymtime.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,10 +58,16 @@ fun RoutineDayFormScreen(
     val targetRestSeconds by viewModel.targetRestSeconds.collectAsStateWithLifecycle()
     val isEditMode by viewModel.isEditMode.collectAsStateWithLifecycle()
     val isSaveEnabled by viewModel.isSaveEnabled.collectAsStateWithLifecycle()
+    val hasUnsavedChanges by viewModel.hasUnsavedChanges.collectAsStateWithLifecycle()
     val supersetLinks by viewModel.supersetLinks.collectAsStateWithLifecycle()
 
     var showExercisePicker by remember { mutableStateOf(false) }
     val accentColor = MaterialTheme.colorScheme.primary
+    val navigationActions = rememberGuardedNavigationActions(
+        hasUnsavedChanges = hasUnsavedChanges,
+        onBack = navController::navigateBackOrHome,
+        onHome = navController::navigateHomeAndClearStack
+    )
 
     LaunchedEffect(Unit) {
         viewModel.saveSuccessEvent.collect {
@@ -77,11 +87,10 @@ fun RoutineDayFormScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigateHomeAndClearStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = LocalAppColors.current.textPrimary)
-                    }
+                    BackNavigationIcon(navigationActions.back)
                 },
                 actions = {
+                    HomeNavigationAction(navigationActions.home)
                     IconButton(
                         onClick = { viewModel.saveDay() },
                         enabled = isSaveEnabled

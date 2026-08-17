@@ -49,6 +49,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.gymtime.navigation.Screen
+import com.example.gymtime.navigation.navigateToWorkoutExercise
+import com.example.gymtime.navigation.navigateToWorkoutOverview
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.components.RoutineCard
 import com.example.gymtime.ui.smartlog.SmartLogBottomSheet
@@ -93,7 +95,7 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) {
         viewModel.startRoutineWorkoutEvent.collect { start ->
-            navController.navigate(Screen.ExerciseLogging.createRoute(start.firstExerciseId))
+            navController.navigateToWorkoutExercise(start.firstExerciseId)
         }
     }
 
@@ -127,7 +129,7 @@ fun HomeScreen(
             onSmartLogClick = { showSmartLog = true },
             onClick = {
                 if (ongoingWorkout != null) {
-                    navController.navigate(Screen.WorkoutResume.route)
+                    navController.navigateToWorkoutOverview()
                 } else {
                     showWorkoutStartPicker = true
                 }
@@ -275,7 +277,7 @@ fun HomeScreen(
             onDismiss = { showSmartLog = false },
             onNavigateToLogger = { exerciseId, token ->
                 showSmartLog = false
-                navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId, token))
+                navController.navigateToWorkoutExercise(exerciseId, token)
             },
             onCreateExercise = { name ->
                 showSmartLog = false

@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.entity.LogType
+import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.MuscleGroup
 import com.example.gymtime.util.TestDispatcherRule
 import io.mockk.mockk
@@ -78,5 +79,52 @@ class ExerciseFormViewModelTest {
         )
 
         assertEquals("Incline Dumbbell Press", prefilled.exerciseName.value)
+    }
+
+    @Test
+    fun `new form becomes dirty and returns clean when reverted`() = runTest {
+        val job = launch { viewModel.hasUnsavedChanges.collect {} }
+        advanceUntilIdle()
+        assertFalse(viewModel.hasUnsavedChanges.value)
+
+        viewModel.updateExerciseName("Bench Press")
+        advanceUntilIdle()
+        assertTrue(viewModel.hasUnsavedChanges.value)
+
+        viewModel.updateExerciseName("")
+        advanceUntilIdle()
+        assertFalse(viewModel.hasUnsavedChanges.value)
+        job.cancel()
+    }
+
+    @Test
+    fun `loaded edit form is clean until a persisted field changes`() = runTest {
+        val exercise = Exercise(
+            id = 7L,
+            name = "Bench Press",
+            targetMuscle = "Chest",
+            logType = LogType.WEIGHT_REPS,
+            isCustom = true,
+            notes = "Pause",
+            defaultRestSeconds = 120
+        )
+        every { exerciseDao.getExerciseById(7L) } returns flowOf(exercise)
+        val editing = ExerciseFormViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("exerciseId" to "7")),
+            exerciseDao = exerciseDao,
+            muscleGroupDao = muscleGroupDao
+        )
+        val job = launch { editing.hasUnsavedChanges.collect {} }
+        advanceUntilIdle()
+        assertFalse(editing.hasUnsavedChanges.value)
+
+        editing.updateNotes("Long pause")
+        advanceUntilIdle()
+        assertTrue(editing.hasUnsavedChanges.value)
+
+        editing.updateNotes("Pause")
+        advanceUntilIdle()
+        assertFalse(editing.hasUnsavedChanges.value)
+        job.cancel()
     }
 }

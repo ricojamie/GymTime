@@ -22,6 +22,9 @@ import androidx.navigation.NavController
 import com.example.gymtime.data.db.entity.Routine
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.navigation.navigateHomeAndClearStack
+import com.example.gymtime.navigation.navigateBackOrHome
+import com.example.gymtime.ui.components.BackNavigationIcon
+import com.example.gymtime.ui.components.HomeNavigationAction
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.*
 
@@ -53,9 +56,10 @@ fun RoutineListScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigateHomeAndClearStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = LocalAppColors.current.textPrimary)
-                    }
+                    BackNavigationIcon(navController::navigateBackOrHome)
+                },
+                actions = {
+                    HomeNavigationAction(navController::navigateHomeAndClearStack)
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )

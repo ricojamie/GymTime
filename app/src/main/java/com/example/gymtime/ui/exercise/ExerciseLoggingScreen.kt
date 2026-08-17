@@ -1,7 +1,6 @@
 package com.example.gymtime.ui.exercise
 
 import android.view.HapticFeedbackConstants
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -37,9 +36,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Summarize
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
@@ -103,7 +102,10 @@ import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.domain.recommendation.ExerciseAttemptRecommendation
 import com.example.gymtime.navigation.Screen
+import com.example.gymtime.navigation.navigateBackOrHome
 import com.example.gymtime.navigation.navigateHomeAndClearStack
+import com.example.gymtime.navigation.navigateToWorkoutExercise
+import com.example.gymtime.navigation.navigateToWorkoutSummary
 import com.example.gymtime.ui.components.PlateCalculatorSheet
 import com.example.gymtime.ui.components.VolumeProgressBar
 import com.example.gymtime.ui.theme.IronLogTheme
@@ -119,8 +121,7 @@ import com.example.gymtime.ui.smartlog.SmartLogBottomSheet
 import kotlin.math.roundToInt
 
 private fun NavController.replaceExerciseLogger(exerciseId: Long, draftToken: String?) {
-    popBackStack()
-    navigate(Screen.ExerciseLogging.createRoute(exerciseId, draftToken))
+    navigateToWorkoutExercise(exerciseId, draftToken)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -146,8 +147,6 @@ fun ExerciseLoggingScreen(
     val timerAudioEnabled by viewModel.timerAudioEnabled.collectAsStateWithLifecycle(initialValue = true)
     val timerVibrateEnabled by viewModel.timerVibrateEnabled.collectAsStateWithLifecycle(initialValue = true)
     val lastWorkoutSets by viewModel.lastWorkoutSets.collectAsStateWithLifecycle()
-    val workoutOverview by viewModel.workoutOverview.collectAsStateWithLifecycle()
-    val workoutPanelData by viewModel.workoutPanelData.collectAsStateWithLifecycle()
     val currentPlanItem by viewModel.currentPlanItem.collectAsStateWithLifecycle()
     val planPosition by viewModel.planPosition.collectAsStateWithLifecycle()
     val personalBestsByReps by viewModel.personalBestsByReps.collectAsStateWithLifecycle()
@@ -174,7 +173,6 @@ fun ExerciseLoggingScreen(
 
     var showFinishDialog by remember { mutableStateOf(false) }
     var showTimerDialog by remember { mutableStateOf(false) }
-    var showWorkoutOverview by remember { mutableStateOf(false) }
     var showExerciseHistory by remember { mutableStateOf(false) }
     var showPlateCalculator by remember { mutableStateOf(false) }
     var showExerciseNotes by remember { mutableStateOf(false) }
@@ -217,7 +215,7 @@ fun ExerciseLoggingScreen(
     // Observe navigation events from ViewModel
     LaunchedEffect(Unit) {
         viewModel.navigationEvents.collect { workoutId ->
-            navController.navigate(Screen.PostWorkoutSummary.createRoute(workoutId))
+            navController.navigateToWorkoutSummary(workoutId)
         }
     }
 
@@ -229,21 +227,9 @@ fun ExerciseLoggingScreen(
         }
     }
 
-    // Keep system back behavior consistent even while superset mode is active.
-    BackHandler(enabled = isInSupersetMode) {
-        navController.navigateHomeAndClearStack()
-    }
-
     val scope = rememberCoroutineScope()
     val gradientColors = com.example.gymtime.ui.theme.LocalGradientColors.current
     val inputValidationMessage = viewModel.currentInputValidationMessage()
-
-    // Load workout overview when bottom sheet opens
-    LaunchedEffect(showWorkoutOverview) {
-        if (showWorkoutOverview) {
-            viewModel.loadWorkoutOverview()
-        }
-    }
 
     // Load exercise history when bottom sheet opens
     LaunchedEffect(showExerciseHistory) {
@@ -297,7 +283,7 @@ fun ExerciseLoggingScreen(
                     },
                     navigationIcon = {
                         IconButton(onClick = {
-                            navController.navigateHomeAndClearStack()
+                            navController.navigateBackOrHome()
                         }) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -377,11 +363,11 @@ fun ExerciseLoggingScreen(
                             }
                         }
 
-                        // Workout overview icon
-                        IconButton(onClick = { showWorkoutOverview = true }) {
+                        // Back opens the full overview; Home minimizes the workout.
+                        IconButton(onClick = { navController.navigateHomeAndClearStack() }) {
                             Icon(
-                                imageVector = Icons.Default.Summarize,
-                                contentDescription = "Workout Overview",
+                                imageVector = Icons.Default.Home,
+                                contentDescription = "Home",
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
@@ -1483,28 +1469,6 @@ fun ExerciseLoggingScreen(
                 navController.navigate(Screen.ExerciseForm.createRoute(fromWorkout = true, initialName = name))
             }
         )
-    }
-
-    // Workout Overview Bottom Sheet
-    if (showWorkoutOverview) {
-        ModalBottomSheet(
-            onDismissRequest = { showWorkoutOverview = false },
-            containerColor = LocalAppColors.current.surfaceCards,
-            scrimColor = Color.Black.copy(alpha = 0.5f)
-        ) {
-            WorkoutOverviewCommandPanel(
-                panelData = workoutPanelData,
-                currentExerciseId = exercise?.id,
-                onExerciseClick = { exerciseId ->
-                    showWorkoutOverview = false
-                    navigateToLoggerExercise(exerciseId)
-                },
-                onAddExercise = {
-                    showWorkoutOverview = false
-                    navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
-                }
-            )
-        }
     }
 
     // Exercise History Bottom Sheet

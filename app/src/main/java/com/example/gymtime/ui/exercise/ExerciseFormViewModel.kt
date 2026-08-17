@@ -14,6 +14,24 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+private data class ExerciseFormDraft(
+    val name: String,
+    val targetMuscle: String,
+    val logType: LogType?,
+    val distanceUnit: DistanceUnit,
+    val notes: String,
+    val restSeconds: String,
+    val repTarget: String
+)
+
+private data class ExerciseFormCoreDraft(
+    val name: String,
+    val targetMuscle: String,
+    val logType: LogType?,
+    val distanceUnit: DistanceUnit,
+    val notes: String
+)
+
 @HiltViewModel
 class ExerciseFormViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
@@ -23,9 +41,11 @@ class ExerciseFormViewModel @Inject constructor(
 
     private val exerciseId: Long? = savedStateHandle.get<String>("exerciseId")?.toLongOrNull()
     private val fromWorkout: Boolean = savedStateHandle.get<Boolean>("fromWorkout") ?: false
+    private val fromWorkoutBuilder: Boolean = savedStateHandle.get<Boolean>("fromWorkoutBuilder") ?: false
     private val initialName: String = savedStateHandle.get<String>("initialName").orEmpty().trim()
 
     val isFromWorkout: StateFlow<Boolean> = MutableStateFlow(fromWorkout)
+    val isFromWorkoutBuilder: StateFlow<Boolean> = MutableStateFlow(fromWorkoutBuilder)
 
     private val _exerciseName = MutableStateFlow(if (exerciseId == null) initialName else "")
     val exerciseName: StateFlow<String> = _exerciseName
@@ -49,6 +69,45 @@ class ExerciseFormViewModel @Inject constructor(
 
     private val _repTarget = MutableStateFlow("")
     val repTarget: StateFlow<String> = _repTarget
+
+    private val currentDraft = combine(
+        combine(
+            _exerciseName,
+            _targetMuscle,
+            _logType,
+            _defaultDistanceUnit,
+            _notes
+        ) { name, muscle, type, distanceUnit, notes ->
+            ExerciseFormCoreDraft(name, muscle, type, distanceUnit, notes)
+        },
+        _defaultRestSeconds,
+        _repTarget
+    ) { core, rest, target ->
+        ExerciseFormDraft(
+            name = core.name,
+            targetMuscle = core.targetMuscle,
+            logType = core.logType,
+            distanceUnit = core.distanceUnit,
+            notes = core.notes,
+            restSeconds = rest,
+            repTarget = target
+        )
+    }
+
+    private val _baselineDraft = MutableStateFlow<ExerciseFormDraft?>(
+        if (exerciseId == null) {
+            ExerciseFormDraft(initialName, "", null, DistanceUnit.MILES, "", "90", "")
+        } else {
+            null
+        }
+    )
+
+    val hasUnsavedChanges: StateFlow<Boolean> = combine(
+        currentDraft,
+        _baselineDraft
+    ) { current, baseline ->
+        baseline != null && current != baseline
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private var existingIsStarred: Boolean = false
 
@@ -96,6 +155,15 @@ class ExerciseFormViewModel @Inject constructor(
                     _defaultRestSeconds.value = exercise.defaultRestSeconds.toString()
                     _repTarget.value = exercise.repTarget?.toString() ?: ""
                     existingIsStarred = exercise.isStarred
+                    _baselineDraft.value = ExerciseFormDraft(
+                        name = exercise.name,
+                        targetMuscle = exercise.targetMuscle,
+                        logType = exercise.logType,
+                        distanceUnit = exercise.defaultDistanceUnit,
+                        notes = exercise.notes ?: "",
+                        restSeconds = exercise.defaultRestSeconds.toString(),
+                        repTarget = exercise.repTarget?.toString() ?: ""
+                    )
                 }
             }
         }

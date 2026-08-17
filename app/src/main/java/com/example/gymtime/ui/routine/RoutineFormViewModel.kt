@@ -23,6 +23,14 @@ class RoutineFormViewModel @Inject constructor(
     private val _routineName = MutableStateFlow("")
     val routineName: StateFlow<String> = _routineName.asStateFlow()
 
+    private val _baselineName = MutableStateFlow<String?>(if (routineId == null) "" else null)
+    val hasUnsavedChanges: StateFlow<Boolean> = combine(
+        _routineName,
+        _baselineName
+    ) { current, baseline ->
+        baseline != null && current != baseline
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val isEditMode: StateFlow<Boolean> = MutableStateFlow(routineId != null)
 
     val isSaveEnabled: StateFlow<Boolean> = _routineName
@@ -38,6 +46,7 @@ class RoutineFormViewModel @Inject constructor(
                 routineRepository.getRoutineById(routineId).firstOrNull()?.let { routine ->
                     existingRoutine = routine
                     _routineName.value = routine.name
+                    _baselineName.value = routine.name
                 }
             }
         }
