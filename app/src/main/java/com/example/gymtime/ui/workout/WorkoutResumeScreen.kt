@@ -7,7 +7,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,12 +26,15 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkoutResumeScreen(
     viewModel: WorkoutResumeViewModel = hiltViewModel(),
     onExerciseClick: (Long) -> Unit,
     onAddExerciseClick: () -> Unit,
-    onFinishWorkoutClick: (Long) -> Unit
+    onFinishWorkoutClick: (Long) -> Unit,
+    onBackClick: () -> Unit,
+    onHomeClick: () -> Unit
 ) {
     val todaysExercises by viewModel.todaysExercises.collectAsStateWithLifecycle()
     val currentWorkout by viewModel.currentWorkout.collectAsStateWithLifecycle()
@@ -43,6 +48,36 @@ fun WorkoutResumeScreen(
     }
 
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        "Workout Overview",
+                        color = LocalAppColors.current.textPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = LocalAppColors.current.textPrimary
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onHomeClick) {
+                        Icon(
+                            Icons.Default.Home,
+                            contentDescription = "Home",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+            )
+        },
         bottomBar = {
             if (todaysExercises.isNotEmpty()) {
                 Surface(

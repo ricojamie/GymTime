@@ -56,6 +56,16 @@ class WorkoutBuilderViewModelTest {
     }
 
     @Test
+    fun `newly created exercise is appended once to the workout plan`() {
+        viewModel.toggleExercise(bench.id)
+
+        viewModel.addExercise(99L)
+        viewModel.addExercise(99L)
+
+        assertEquals(listOf(bench.id, 99L), viewModel.selectedExerciseIds.value)
+    }
+
+    @Test
     fun `search and muscle filter narrow the exercise library`() = runTest {
         viewModel.updateSearchQuery("bar")
         assertEquals(listOf(row), viewModel.filteredExercises.first())

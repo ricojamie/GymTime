@@ -83,6 +83,12 @@ class WorkoutBuilderViewModel @Inject constructor(
         _selectedExerciseIds.value = selected
     }
 
+    fun addExercise(exerciseId: Long) {
+        if (exerciseId !in _selectedExerciseIds.value) {
+            _selectedExerciseIds.value = _selectedExerciseIds.value + exerciseId
+        }
+    }
+
     fun moveExercise(exerciseId: Long, offset: Int) {
         val selected = _selectedExerciseIds.value.toMutableList()
         val fromIndex = selected.indexOf(exerciseId)

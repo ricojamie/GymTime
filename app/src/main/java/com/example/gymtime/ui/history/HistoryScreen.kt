@@ -39,6 +39,8 @@ import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.WorkoutWithMuscles
 import com.example.gymtime.data.db.dao.SetWithExerciseInfo
 import com.example.gymtime.navigation.Screen
+import com.example.gymtime.navigation.navigateToWorkoutExercise
+import com.example.gymtime.navigation.navigateToWorkoutOverview
 import com.example.gymtime.ui.components.ExerciseIcons
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.*
@@ -74,16 +76,14 @@ fun HistoryScreen(
     // Handle resume workout navigation
     LaunchedEffect(Unit) {
         viewModel.resumeWorkoutEvent.collect { workoutId ->
-            navController.navigate("workout_resume")
+            navController.navigateToWorkoutOverview()
         }
     }
 
     // Handle repeat workout navigation (fresh copy of a past workout)
     LaunchedEffect(Unit) {
         viewModel.repeatWorkoutEvent.collect { firstExerciseId ->
-            navController.navigate(Screen.ExerciseLogging.createRoute(firstExerciseId)) {
-                popUpTo(Screen.Home.route)
-            }
+            navController.navigateToWorkoutExercise(firstExerciseId)
         }
     }
 

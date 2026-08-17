@@ -9,6 +9,7 @@ import com.example.gymtime.data.db.dao.WorkoutPlanSummary
 import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
 import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.repository.WorkoutRepository
+import com.example.gymtime.ui.exercise.SupersetManager
 import com.example.gymtime.wear.ActiveWearSessionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -41,7 +42,8 @@ class WorkoutResumeViewModel @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val setDao: SetDao,
     private val workoutRepository: WorkoutRepository,
-    private val activeWearSessionRepository: ActiveWearSessionRepository
+    private val activeWearSessionRepository: ActiveWearSessionRepository,
+    private val supersetManager: SupersetManager
 ) : ViewModel() {
 
     private val _currentWorkout = MutableStateFlow<Workout?>(null)
@@ -89,6 +91,7 @@ class WorkoutResumeViewModel @Inject constructor(
             val workout = _currentWorkout.value ?: return@launch
             workoutRepository.finishWorkout(workout.id)
             activeWearSessionRepository.clear()
+            supersetManager.exitSupersetMode()
             Log.d("WorkoutResumeVM", "Workout finished: ${workout.id}")
             _finishWorkoutEvent.send(workout.id)
         }

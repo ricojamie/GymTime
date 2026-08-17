@@ -13,7 +13,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import android.util.Log
 import androidx.activity.viewModels
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,7 +43,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.navigation.BottomNavigationBar
 import com.example.gymtime.navigation.Screen
+import com.example.gymtime.navigation.navigateBackOrHome
 import com.example.gymtime.navigation.navigateHomeAndClearStack
+import com.example.gymtime.navigation.navigateToWorkoutExercise
+import com.example.gymtime.navigation.navigateToWorkoutSummary
 import com.example.gymtime.notifications.MonthlyReportNotifier
 import com.example.gymtime.ui.history.HistoryScreen
 import com.example.gymtime.ui.home.HomeScreen
@@ -201,14 +203,16 @@ class MainActivity : ComponentActivity() {
                                 composable(Screen.WorkoutResume.route) {
                                     com.example.gymtime.ui.workout.WorkoutResumeScreen(
                                         onExerciseClick = { exerciseId ->
-                                            navController.navigate(Screen.ExerciseLogging.createRoute(exerciseId))
+                                            navController.navigateToWorkoutExercise(exerciseId)
                                         },
                                         onAddExerciseClick = {
                                             navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
                                         },
                                         onFinishWorkoutClick = { workoutId ->
-                                            navController.navigate(Screen.PostWorkoutSummary.createRoute(workoutId))
-                                        }
+                                            navController.navigateToWorkoutSummary(workoutId)
+                                        },
+                                        onBackClick = navController::navigateBackOrHome,
+                                        onHomeClick = navController::navigateHomeAndClearStack
                                     )
                                 }
                                 composable(Screen.WorkoutBuilder.route) {
@@ -240,6 +244,10 @@ class MainActivity : ComponentActivity() {
                                             defaultValue = null
                                         },
                                         androidx.navigation.navArgument("fromWorkout") {
+                                            type = androidx.navigation.NavType.BoolType
+                                            defaultValue = false
+                                        },
+                                        androidx.navigation.navArgument("fromWorkoutBuilder") {
                                             type = androidx.navigation.NavType.BoolType
                                             defaultValue = false
                                         },
@@ -339,13 +347,6 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
-                        // Re-key on currentRoute so this callback is re-added to the
-                        // dispatcher on every nav, winning LIFO over NavController's.
-                        androidx.compose.runtime.key(currentRoute) {
-                            BackHandler(enabled = currentRoute != null && currentRoute != Screen.Home.route) {
-                                navController.navigateHomeAndClearStack()
-                            }
-                        }
                     }
                 }
             }
