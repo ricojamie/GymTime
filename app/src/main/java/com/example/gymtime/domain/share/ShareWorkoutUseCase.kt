@@ -17,7 +17,7 @@ class ShareWorkoutUseCase @Inject constructor(
 
     /**
      * Builds the plain-text share body for the given workout. Returns null if
-     * the workout has no sets (nothing meaningful to share).
+     * the workout has no completed sets (nothing meaningful to share).
      */
     suspend operator fun invoke(workoutId: Long): String? {
         return buildShareableWorkout(workoutId)?.let { WorkoutShareFormatter.format(it) }
@@ -26,6 +26,7 @@ class ShareWorkoutUseCase @Inject constructor(
     suspend fun buildShareableWorkout(workoutId: Long, recap: String? = null): ShareableWorkout? {
         val workout = workoutDao.getWorkoutById(workoutId).first()
         val rawSets = setDao.getWorkoutSetsWithExercises(workoutId)
+            .filter { it.set.isComplete }
         if (rawSets.isEmpty()) return null
 
         val workoutStartMs = workout.startTime.time

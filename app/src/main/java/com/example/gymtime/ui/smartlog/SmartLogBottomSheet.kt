@@ -26,15 +26,18 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -63,6 +66,8 @@ import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.smartlog.SetDraft
 import com.example.gymtime.smartlog.WeightUnit
 import com.example.gymtime.ui.theme.LocalAppColors
+import com.example.gymtime.ui.theme.LocalLoggerActionColors
+import com.example.gymtime.ui.theme.LocalLoggerPreviewThemeActive
 import com.example.gymtime.ui.ai.OnDeviceAiDownloadCard
 import java.util.Locale
 
@@ -74,8 +79,16 @@ fun SmartLogBottomSheet(
     onDismiss: () -> Unit,
     onNavigateToLogger: (exerciseId: Long, draftToken: String) -> Unit,
     onCreateExercise: (name: String) -> Unit,
-    viewModel: SmartLogViewModel = hiltViewModel()
+    viewModel: SmartLogViewModel = hiltViewModel(),
+    useThemeForegrounds: Boolean = false
 ) {
+    val previewActive = LocalLoggerPreviewThemeActive.current
+    val action = LocalLoggerActionColors.current
+    val buttonForeground = when {
+        previewActive -> action.onFill
+        useThemeForegrounds -> MaterialTheme.colorScheme.onPrimary
+        else -> Color.Black
+    }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var listening by remember { mutableStateOf(false) }
@@ -117,8 +130,8 @@ fun SmartLogBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
+                .then(if (previewActive) Modifier else Modifier.navigationBarsPadding())
+                .padding(horizontal = if (previewActive) 16.dp else 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -140,6 +153,7 @@ fun SmartLogBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2,
                 maxLines = 4,
+                shape = if (previewActive) RoundedCornerShape(18.dp) else OutlinedTextFieldDefaults.shape,
                 placeholder = { Text("Incline dumbbell press, 32s, 10, 9, 8") },
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Sentences,
@@ -209,10 +223,11 @@ fun SmartLogBottomSheet(
                 state.candidates.forEach { candidate ->
                     Surface(
                         onClick = { viewModel.chooseExercise(candidate.exercise) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color.Transparent,
-                        border = BorderStroke(1.dp, LocalAppColors.current.textTertiary.copy(alpha = 0.5f))
+                        modifier = Modifier.fillMaxWidth().then(if (previewActive) Modifier.heightIn(min = 48.dp) else Modifier),
+                        shape = RoundedCornerShape(if (previewActive) 18.dp else 12.dp),
+                        color = if (previewActive) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
+                        border = BorderStroke(1.dp, if (previewActive) MaterialTheme.colorScheme.outlineVariant else LocalAppColors.current.textTertiary.copy(alpha = 0.5f)),
+                        shadowElevation = if (previewActive) 1.dp else 0.dp
                     ) {
                         Column(Modifier.padding(12.dp)) {
                             Text(candidate.exercise.name, fontWeight = FontWeight.Bold)
@@ -224,7 +239,13 @@ fun SmartLogBottomSheet(
 
             state.review?.let { review ->
                 Text("Review", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                OutlinedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = if (previewActive) RoundedCornerShape(20.dp) else CardDefaults.outlinedShape,
+                    colors = if (previewActive) CardDefaults.outlinedCardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ) else CardDefaults.outlinedCardColors()
+                ) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(review.exercise.name, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
                         LazyColumn(modifier = Modifier.height((review.sets.size.coerceAtMost(4) * 40 + 8).dp)) {
@@ -250,21 +271,25 @@ fun SmartLogBottomSheet(
                     if (state.review != null) viewModel.confirmReview()
                     else viewModel.submit(currentExercise, allowedExerciseIds)
                 },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
+                modifier = Modifier.fillMaxWidth().then(if (previewActive) Modifier.heightIn(min = 52.dp) else Modifier.height(52.dp)),
                 enabled = state.input.isNotBlank() && !state.isProcessing && state.candidates.isEmpty(),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                shape = RoundedCornerShape(14.dp)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (previewActive) action.fill else MaterialTheme.colorScheme.primary,
+                    contentColor = buttonForeground
+                ),
+                shape = RoundedCornerShape(if (previewActive) 18.dp else 14.dp)
             ) {
+                val contentColor = if (previewActive) LocalContentColor.current else buttonForeground
                 if (state.isProcessing) {
-                    CircularProgressIndicator(Modifier.size(22.dp), color = Color.Black, strokeWidth = 2.dp)
+                    CircularProgressIndicator(Modifier.size(22.dp), color = contentColor, strokeWidth = 2.dp)
                 } else {
                     Text(
                         if (state.review != null) "OPEN LOGGER" else "PARSE SET",
-                        color = Color.Black,
+                        color = contentColor,
                         fontWeight = FontWeight.ExtraBold
                     )
                     Spacer(Modifier.size(8.dp))
-                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color.Black)
+                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = contentColor)
                 }
             }
             Spacer(Modifier.height(8.dp))

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import com.example.gymtime.data.RoutineRepository
 import com.example.gymtime.data.UserPreferencesRepository
+import com.example.gymtime.data.PlateInventorySettings
 import com.example.gymtime.data.VolumeOrbRepository
 import com.example.gymtime.data.db.dao.WorkoutPlanSummary
 import com.example.gymtime.data.db.entity.DistanceUnit
@@ -11,6 +12,7 @@ import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
+import com.example.gymtime.data.db.entity.WARMUP_MUSCLE_GROUP
 import com.example.gymtime.data.repository.ExerciseRepository
 import com.example.gymtime.data.repository.WorkoutRepository
 import com.example.gymtime.domain.recommendation.ExerciseAttemptRecommendationUseCase
@@ -33,6 +35,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -63,6 +67,7 @@ class ExerciseLoggingViewModelTest {
     private val smartLogDraftStore = SmartLogDraftStore()
     private val wearDraftPatches = MutableSharedFlow<WearDraftPatch>()
     private val wearLogRequests = MutableSharedFlow<WearDraftPatch?>()
+    private val plateInventorySettings = MutableStateFlow(PlateInventorySettings(emptyMap(), false))
 
     private lateinit var viewModel: ExerciseLoggingViewModel
 
@@ -93,6 +98,8 @@ class ExerciseLoggingViewModelTest {
         every { userPreferencesRepository.barWeight } returns MutableStateFlow(45f)
         every { userPreferencesRepository.loadingSides } returns MutableStateFlow(2)
         every { userPreferencesRepository.availablePlates } returns MutableStateFlow(listOf(45f, 25f, 10f, 5f, 2.5f))
+        plateInventorySettings.value = PlateInventorySettings(emptyMap(), false)
+        every { userPreferencesRepository.plateInventorySettings } returns plateInventorySettings
 
         every { volumeOrbRepository.orbState } returns MutableStateFlow(mockk(relaxed = true))
         every { activeWearSessionRepository.draftPatches } returns wearDraftPatches
@@ -150,6 +157,90 @@ class ExerciseLoggingViewModelTest {
     }
 
     @Test
+    fun `opening an unrelated exercise exits superset and logs without rotating`() = runTest {
+        advanceUntilIdle()
+        supersetManager.startSuperset(listOf(testExercise, testExercise.copy(id = 2L)))
+        val standalone = buildViewModel(exercise = testExercise.copy(id = 3L))
+        val switches = mutableListOf<Long>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            standalone.autoSwitchEvent.collect { switches += it }
+        }
+        advanceUntilIdle()
+
+        assertFalse(standalone.isInSupersetMode.value)
+        standalone.updateWeight("100")
+        standalone.updateReps("10")
+        standalone.logSet()
+        advanceUntilIdle()
+
+        coVerify { workoutRepository.logSet(match {
+            it.exerciseId == 3L && it.supersetGroupId == null && it.supersetOrderIndex == 0
+        }) }
+        assertTrue(switches.isEmpty())
+    }
+
+    @Test
+    fun `opening another superset member preserves grouping and rotation`() = runTest {
+        advanceUntilIdle()
+        val second = testExercise.copy(id = 2L)
+        supersetManager.startSuperset(listOf(testExercise, second), "group")
+        val member = buildViewModel(exercise = second)
+        val switches = mutableListOf<Long>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            member.autoSwitchEvent.collect { switches += it }
+        }
+        advanceUntilIdle()
+
+        assertTrue(member.isInSupersetMode.value)
+        assertEquals(1, member.currentSupersetIndex.value)
+        member.updateWeight("100")
+        member.updateReps("10")
+        member.logSet()
+        advanceUntilIdle()
+
+        coVerify { workoutRepository.logSet(match {
+            it.exerciseId == 2L && it.supersetGroupId == "group" && it.supersetOrderIndex == 1
+        }) }
+        assertEquals(listOf(1L), switches)
+    }
+
+    @Test
+    fun `explicit exit survives plan updates and stops planned superset rotation`() = runTest {
+        advanceUntilIdle()
+        val second = testExercise.copy(id = 2L)
+        every { exerciseRepository.getExercise(2L) } returns flowOf(second)
+        val plans = MutableStateFlow(listOf(
+            planSummary(11L, 1L, "Bench", 0).copy(supersetGroupId = "planned"),
+            planSummary(12L, 2L, "Row", 1).copy(supersetGroupId = "planned", supersetOrderIndex = 1)
+        ))
+        val planned = buildViewModel(exercise = second)
+        every { workoutRepository.getWorkoutPlanSummaries(testWorkout.id) } returns plans
+        val switches = mutableListOf<Long>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            planned.autoSwitchEvent.collect { switches += it }
+        }
+        advanceUntilIdle()
+        assertTrue(planned.isInSupersetMode.value)
+        assertEquals(1L, planned.nextExerciseId.value)
+
+        planned.exitSupersetMode()
+        advanceUntilIdle()
+        plans.value = plans.value.map { it.copy(setCount = 1) }
+        advanceUntilIdle()
+        assertFalse(planned.isInSupersetMode.value)
+        assertNull(planned.nextExerciseId.value)
+
+        planned.updateWeight("100")
+        planned.updateReps("10")
+        planned.logSet()
+        advanceUntilIdle()
+        coVerify { workoutRepository.logSet(match {
+            it.exerciseId == 2L && it.supersetGroupId == null
+        }) }
+        assertTrue(switches.isEmpty())
+    }
+
+    @Test
     fun `wear publishing starts only when requested and stops with active owner`() = runTest {
         advanceUntilIdle()
         val publishedSnapshots = mutableListOf<WearSessionSnapshot>()
@@ -196,6 +287,33 @@ class ExerciseLoggingViewModelTest {
         assertEquals(1L, capturedSet?.exerciseId)
         assertTrue(capturedSet?.isComplete == true)
         verify(exactly = 1) { activeWearSessionRepository.confirmSetSaved() }
+    }
+
+    @Test
+    fun `warmup library exercise always logs excluded entries`() = runTest {
+        val warmupExercise = testExercise.copy(
+            name = "Hip Switches",
+            targetMuscle = WARMUP_MUSCLE_GROUP,
+            logType = LogType.REPS_ONLY
+        )
+        var capturedSet: Set? = null
+        coEvery { workoutRepository.logSet(any()) } coAnswers {
+            capturedSet = firstArg()
+            Unit
+        }
+        viewModel = buildViewModel(exercise = warmupExercise)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.isWarmup.value)
+        viewModel.toggleWarmup()
+        assertTrue(viewModel.isWarmup.value)
+        viewModel.updateReps("10")
+
+        viewModel.logSet()
+        advanceUntilIdle()
+
+        assertTrue(capturedSet?.isWarmup == true)
+        assertTrue(viewModel.isWarmup.value)
     }
 
     @Test
@@ -277,6 +395,92 @@ class ExerciseLoggingViewModelTest {
 
         coVerify(exactly = 0) { workoutRepository.updateSet(any()) }
         assertNotNull(viewModel.editingSet.value)
+    }
+
+    @Test
+    fun `weight-only edit preserves saved RPE and note and restores next set draft`() = runTest {
+        advanceUntilIdle()
+        viewModel.updateWeight("125")
+        viewModel.updateReps("12")
+        viewModel.updateRpe("6")
+        viewModel.updateSetNote("Next set draft")
+        val existingSet = existingSetFor(LogType.WEIGHT_REPS).copy(rpe = 8.5f, note = "Pause at the bottom")
+        var updated: Set? = null
+        coEvery { workoutRepository.updateSet(any()) } coAnswers {
+            updated = firstArg()
+            Unit
+        }
+
+        viewModel.startEditingSet(existingSet)
+        assertEquals("8.5", viewModel.rpe.value)
+        assertEquals("Pause at the bottom", viewModel.setNote.value)
+        viewModel.updateWeight("110")
+        viewModel.saveEditedSet()
+        advanceUntilIdle()
+
+        assertEquals(existingSet.copy(weight = 110f), updated)
+        assertNull(viewModel.editingSet.value)
+        assertEquals("125", viewModel.weight.value)
+        assertEquals("12", viewModel.reps.value)
+        assertEquals("6", viewModel.rpe.value)
+        assertEquals("Next set draft", viewModel.setNote.value)
+    }
+
+    @Test
+    fun `cancel edit restores every draft field even after switching edited rows`() = runTest {
+        advanceUntilIdle()
+        viewModel.updateWeight("125")
+        viewModel.updateReps("12")
+        viewModel.updateRpe("6")
+        viewModel.updateCalories("50")
+        viewModel.updateDuration("2:30")
+        viewModel.updateDistance("3.2")
+        viewModel.updateSelectedDistanceUnit(DistanceUnit.KILOMETERS)
+        viewModel.toggleWarmup()
+        viewModel.updateSetNote("Keep this draft")
+
+        viewModel.startEditingSet(existingSetFor(LogType.WEIGHT_REPS))
+        viewModel.updateSetNote("Discard this change")
+        viewModel.startEditingSet(existingSetFor(LogType.WEIGHT_REPS).copy(id = 11, rpe = null, note = null))
+        assertEquals("", viewModel.rpe.value)
+        assertEquals("", viewModel.setNote.value)
+        viewModel.cancelEditing()
+
+        assertNull(viewModel.editingSet.value)
+        assertEquals("125", viewModel.weight.value)
+        assertEquals("12", viewModel.reps.value)
+        assertEquals("6", viewModel.rpe.value)
+        assertEquals("50", viewModel.calories.value)
+        assertEquals("2:30", viewModel.duration.value)
+        assertEquals("3.2", viewModel.distance.value)
+        assertEquals(DistanceUnit.KILOMETERS, viewModel.selectedDistanceUnit.value)
+        assertTrue(viewModel.isWarmup.value)
+        assertEquals("Keep this draft", viewModel.setNote.value)
+        coVerify(exactly = 0) { workoutRepository.updateSet(any()) }
+    }
+
+    @Test
+    fun `failed edit keeps loaded metadata and original draft available for cancel`() = runTest {
+        advanceUntilIdle()
+        viewModel.updateWeight("125")
+        viewModel.updateReps("12")
+        viewModel.updateSetNote("Unsaved next set")
+        val existingSet = existingSetFor(LogType.WEIGHT_REPS)
+        coEvery { workoutRepository.updateSet(any()) } throws IllegalStateException("Storage unavailable")
+
+        viewModel.startEditingSet(existingSet)
+        viewModel.updateWeight("110")
+        viewModel.saveEditedSet()
+        advanceUntilIdle()
+
+        assertEquals(existingSet, viewModel.editingSet.value)
+        assertEquals("110", viewModel.weight.value)
+        assertEquals("8.0", viewModel.rpe.value)
+        assertEquals("good", viewModel.setNote.value)
+        viewModel.cancelEditing()
+        assertEquals("125", viewModel.weight.value)
+        assertEquals("12", viewModel.reps.value)
+        assertEquals("Unsaved next set", viewModel.setNote.value)
     }
 
     @Test
@@ -517,6 +721,28 @@ class ExerciseLoggingViewModelTest {
 
         assertEquals("Enter RPE from 0 to 10.", viewModel.currentInputValidationMessage())
         assertFalse(viewModel.isCurrentInputValid())
+    }
+
+    @Test
+    fun `plate calculation uses saved individual inventory counts`() = runTest {
+        plateInventorySettings.value = PlateInventorySettings(mapOf(45f to 2), true)
+
+        val loadout = viewModel.calculatePlates(225f)
+
+        assertEquals(listOf(45f), loadout.platesPerSide)
+        assertEquals(135f, loadout.totalWeight, 0f)
+        assertFalse(loadout.isExact)
+    }
+
+    @Test
+    fun `turning off inventory limits restores unlimited calculation`() = runTest {
+        plateInventorySettings.value = PlateInventorySettings(mapOf(45f to 2), false)
+
+        val loadout = viewModel.calculatePlates(225f)
+
+        assertEquals(listOf(45f, 45f), loadout.platesPerSide)
+        assertEquals(225f, loadout.totalWeight, 0f)
+        assertTrue(loadout.isExact)
     }
 
     private fun buildViewModel(

@@ -104,11 +104,11 @@ interface WorkoutDao {
     @Query("""
         SELECT
             w.*,
-            GROUP_CONCAT(DISTINCT e.targetMuscle) as muscleGroups,
+            GROUP_CONCAT(DISTINCT CASE WHEN s.isWarmup = 0 THEN e.targetMuscle END) as muscleGroups,
             SUM(CASE WHEN s.isWarmup = 0 AND s.weight IS NOT NULL AND s.reps IS NOT NULL THEN s.weight * s.reps ELSE 0 END) as totalVolume,
             SUM(CASE WHEN s.isWarmup = 0 THEN 1 ELSE 0 END) as workingSetCount
         FROM workouts w
-        LEFT JOIN sets s ON w.id = s.workoutId
+        LEFT JOIN sets s ON w.id = s.workoutId AND s.isComplete = 1
         LEFT JOIN exercises e ON s.exerciseId = e.id
         GROUP BY w.id
         ORDER BY w.startTime DESC

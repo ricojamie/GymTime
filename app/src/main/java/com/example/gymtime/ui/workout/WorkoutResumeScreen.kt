@@ -9,12 +9,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -23,8 +30,15 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.*
+import com.example.gymtime.ui.workout.preview.CurrentWorkoutAction
+import com.example.gymtime.ui.workout.preview.PreviewCurrentWorkoutContent
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,20 +46,65 @@ fun WorkoutResumeScreen(
     viewModel: WorkoutResumeViewModel = hiltViewModel(),
     onExerciseClick: (Long) -> Unit,
     onAddExerciseClick: () -> Unit,
+    onSwapExerciseClick: (Long) -> Unit,
     onFinishWorkoutClick: (Long) -> Unit,
     onBackClick: () -> Unit,
     onHomeClick: () -> Unit
 ) {
-    val todaysExercises by viewModel.todaysExercises.collectAsStateWithLifecycle()
-    val currentWorkout by viewModel.currentWorkout.collectAsStateWithLifecycle()
-    val accentColor = MaterialTheme.colorScheme.primary
-
-    // Observe finish workout event
-    LaunchedEffect(Unit) {
-        viewModel.finishWorkoutEvent.collect { workoutId ->
-            onFinishWorkoutClick(workoutId)
+    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
+    val snackbarHostState = remember { SnackbarHostState() }
+    val latestFinishClick by rememberUpdatedState(onFinishWorkoutClick)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(viewModel, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            launch {
+                viewModel.finishWorkoutEvent.collect { workoutId -> latestFinishClick(workoutId) }
+            }
+            launch {
+                viewModel.planEditMessage.collect { message -> snackbarHostState.showSnackbar(message) }
+            }
         }
     }
+    if (newUiEnabled) {
+        val state by viewModel.previewState.collectAsStateWithLifecycle()
+        LoggerPreviewTheme {
+            PreviewCurrentWorkoutContent(
+                state = state,
+                onAction = { action ->
+                    when (action) {
+                        CurrentWorkoutAction.Back -> onBackClick()
+                        CurrentWorkoutAction.Home -> onHomeClick()
+                        CurrentWorkoutAction.AddExercise -> onAddExerciseClick()
+                        CurrentWorkoutAction.Finish -> viewModel.finishWorkout()
+                        is CurrentWorkoutAction.OpenExercise -> onExerciseClick(action.exerciseId)
+                        is CurrentWorkoutAction.SwapExercise -> onSwapExerciseClick(action.instanceId)
+                        is CurrentWorkoutAction.RemoveExercise -> viewModel.removePlannedExercise(action.instanceId)
+                    }
+                },
+                snackbarHost = { SnackbarHost(snackbarHostState) }
+            )
+        }
+    } else {
+        LegacyWorkoutResumeScreen(viewModel, onExerciseClick, onAddExerciseClick, onSwapExerciseClick, onBackClick, onHomeClick, snackbarHostState)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LegacyWorkoutResumeScreen(
+    viewModel: WorkoutResumeViewModel,
+    onExerciseClick: (Long) -> Unit,
+    onAddExerciseClick: () -> Unit,
+    onSwapExerciseClick: (Long) -> Unit,
+    onBackClick: () -> Unit,
+    onHomeClick: () -> Unit,
+    snackbarHostState: SnackbarHostState
+) {
+    val todaysExercises by viewModel.todaysExercises.collectAsStateWithLifecycle()
+    val currentWorkout by viewModel.currentWorkout.collectAsStateWithLifecycle()
+    val isFinishing by viewModel.isFinishing.collectAsStateWithLifecycle()
+    val accentColor = MaterialTheme.colorScheme.primary
+    var exerciseToRemove by remember { mutableStateOf<ResumeExerciseItem?>(null) }
 
     Scaffold(
         topBar = {
@@ -120,6 +179,7 @@ fun WorkoutResumeScreen(
                         // Finish Workout Button
                         Button(
                             onClick = { viewModel.finishWorkout() },
+                            enabled = !isFinishing,
                             modifier = Modifier
                                 .weight(1f)
                                 .height(56.dp),
@@ -139,6 +199,7 @@ fun WorkoutResumeScreen(
                 }
             }
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = Color.Transparent
     ) { padding ->
         Column(
@@ -230,7 +291,13 @@ fun WorkoutResumeScreen(
 
                                 ExerciseSummaryCard(
                                     exercise = exercise,
-                                    onClick = { onExerciseClick(exercise.exerciseId) }
+                                    onClick = { onExerciseClick(exercise.exerciseId) },
+                                    onSwap = exercise.instanceId
+                                        ?.takeIf { exercise.anySetCount == 0 }
+                                        ?.let { instanceId -> { onSwapExerciseClick(instanceId) } },
+                                    onRemove = exercise.instanceId
+                                        ?.takeIf { exercise.anySetCount == 0 }
+                                        ?.let { { exerciseToRemove = exercise } }
                                 )
                             }
                         }
@@ -244,15 +311,45 @@ fun WorkoutResumeScreen(
             }
         }
     }
+
+    exerciseToRemove?.let { exercise ->
+        AlertDialog(
+            onDismissRequest = { exerciseToRemove = null },
+            title = { Text("Remove ${exercise.exerciseName}?") },
+            text = {
+                Text("This removes it from today's workout only. Your saved routine will not change.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        exercise.instanceId?.let(viewModel::removePlannedExercise)
+                        exerciseToRemove = null
+                    }
+                ) {
+                    Text("Remove", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { exerciseToRemove = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
-private fun ExerciseSummaryCard(
+internal fun ExerciseSummaryCard(
     exercise: ResumeExerciseItem,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onSwap: (() -> Unit)? = null,
+    onRemove: (() -> Unit)? = null
 ) {
-    val isUnstarted = exercise.setCount == 0 && !exercise.isSkipped
+    val isWarmupLibraryExercise = exercise.targetMuscle.isWarmupMuscleGroup()
+    val displayedEntryCount = if (isWarmupLibraryExercise) exercise.anySetCount else exercise.setCount
+    val isUnstarted = displayedEntryCount == 0 && !exercise.isSkipped
     val accentColor = MaterialTheme.colorScheme.primary
+    var showActions by remember { mutableStateOf(false) }
 
     GlowCard(
         onClick = onClick,
@@ -281,47 +378,86 @@ private fun ExerciseSummaryCard(
                 )
             }
 
-            if (isUnstarted) {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "Not started",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = LocalAppColors.current.textTertiary
-                    )
-                    exercise.plannedSets?.let { sets ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isUnstarted) {
+                    Column(horizontalAlignment = Alignment.End) {
                         Text(
-                            text = buildString {
-                                append("$sets sets")
-                                if (exercise.repMin != null) {
-                                    append(" • ")
-                                    append(exercise.repMin)
-                                    if (exercise.repMax != null && exercise.repMax != exercise.repMin) {
-                                        append("-${exercise.repMax}")
+                            text = "Not started",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = LocalAppColors.current.textTertiary
+                        )
+                        exercise.plannedSets?.let { sets ->
+                            Text(
+                                text = buildString {
+                                    append("$sets sets")
+                                    if (exercise.repMin != null) {
+                                        append(" • ")
+                                        append(exercise.repMin)
+                                        if (exercise.repMax != null && exercise.repMax != exercise.repMin) {
+                                            append("-${exercise.repMax}")
+                                        }
+                                        append(" reps")
                                     }
-                                    append(" reps")
-                                }
+                                },
+                                fontSize = 12.sp,
+                                color = accentColor
+                            )
+                        }
+                    }
+                } else {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = if (isWarmupLibraryExercise) {
+                                "$displayedEntryCount ${if (displayedEntryCount == 1) "entry" else "entries"}"
+                            } else {
+                                "$displayedEntryCount sets"
                             },
-                            fontSize = 12.sp,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
                             color = accentColor
                         )
+                        exercise.bestWeight?.let { weight ->
+                            Text(
+                                text = "Best: ${weight.toInt()} lbs",
+                                fontSize = 12.sp,
+                                color = LocalAppColors.current.textSecondary,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
                     }
                 }
-            } else {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "${exercise.setCount} sets",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = accentColor
-                    )
-                    exercise.bestWeight?.let { weight ->
-                        Text(
-                            text = "Best: ${weight.toInt()} lbs",
-                            fontSize = 12.sp,
-                            color = LocalAppColors.current.textSecondary,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
+
+                if (exercise.anySetCount == 0 && onSwap != null && onRemove != null) {
+                    Box {
+                        IconButton(onClick = { showActions = true }) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = "Exercise actions for ${exercise.exerciseName}",
+                                tint = LocalAppColors.current.textSecondary
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showActions,
+                            onDismissRequest = { showActions = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Swap exercise") },
+                                leadingIcon = { Icon(Icons.Default.SwapHoriz, contentDescription = null) },
+                                onClick = {
+                                    showActions = false
+                                    onSwap()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Remove from today") },
+                                leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
+                                onClick = {
+                                    showActions = false
+                                    onRemove()
+                                }
+                            )
+                        }
                     }
                 }
             }

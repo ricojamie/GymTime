@@ -134,6 +134,36 @@ class RoutineRepository @Inject constructor(
 
     suspend fun updateRoutineDay(day: RoutineDay) = routineDao.updateRoutineDay(day)
 
+    /** Save the complete editor draft together; a failed exercise insert leaves the old day intact. */
+    suspend fun saveRoutineDay(
+        routineId: Long,
+        dayId: Long?,
+        name: String,
+        exercises: List<RoutineExercise>
+    ): Long = database.withTransaction {
+        require(name.isNotBlank() && exercises.isNotEmpty()) { "Give the day a name and add an exercise." }
+        require(routineDao.getRoutineByIdSync(routineId) != null) { "This routine no longer exists." }
+        val days = routineDao.getDaysForRoutineSync(routineId)
+        val targetId = if (dayId != null) {
+            val existing = days.firstOrNull { it.id == dayId }
+                ?: throw IllegalArgumentException("This day no longer belongs to the routine.")
+            routineDao.updateRoutineDay(existing.copy(name = name.trim()))
+            routineDao.deleteAllExercisesForDay(dayId)
+            dayId
+        } else {
+            require(days.size < MAX_DAYS_PER_ROUTINE) { "A routine can have up to $MAX_DAYS_PER_ROUTINE days." }
+            routineDao.insertRoutineDay(RoutineDay(
+                routineId = routineId,
+                name = name.trim(),
+                orderIndex = (days.maxOfOrNull { it.orderIndex } ?: -1) + 1
+            ))
+        }
+        routineDao.insertRoutineExercises(exercises.mapIndexed { index, exercise ->
+            exercise.copy(id = 0, routineDayId = targetId, orderIndex = index)
+        })
+        targetId
+    }
+
     suspend fun deleteRoutineDay(day: RoutineDay) {
         database.withTransaction {
             routineDao.deleteRoutineDay(day)
@@ -224,6 +254,7 @@ class RoutineRepository @Inject constructor(
     suspend fun duplicateRoutine(routineId: Long): Long? {
         return database.withTransaction {
             val routine = routineDao.getRoutineByIdSync(routineId) ?: return@withTransaction null
+            require(routineDao.getAllRoutinesSync().size < MAX_ROUTINES) { "You can have up to $MAX_ROUTINES routines." }
             val days = routineDao.getDaysForRoutineSync(routineId)
             val newRoutineId = routineDao.insertRoutine(
                 Routine(name = "${routine.name} (copy)", isActive = false, nextDayOrderIndex = 0)
@@ -240,6 +271,7 @@ class RoutineRepository @Inject constructor(
         return database.withTransaction {
             val template = routineDao.getRoutineDayWithExercisesSync(dayId) ?: return@withTransaction null
             val days = routineDao.getDaysForRoutineSync(template.day.routineId)
+            require(days.size < MAX_DAYS_PER_ROUTINE) { "A routine can have up to $MAX_DAYS_PER_ROUTINE days." }
             val nextOrderIndex = (days.maxOfOrNull { it.orderIndex } ?: -1) + 1
             copyDayInternal(template.day, template.day.routineId, "${template.day.name} (copy)", nextOrderIndex)
         }
@@ -377,6 +409,7 @@ class RoutineRepository @Inject constructor(
      */
     private suspend fun buildBlueprintFromWorkout(workoutId: Long): List<WorkoutBlueprintItem> {
         val instances = workoutPlanDao.getInstancesForWorkoutSync(workoutId)
+            .filterNot { it.isSkipped }
         if (instances.isNotEmpty()) {
             return instances.map { instance ->
                 WorkoutBlueprintItem(

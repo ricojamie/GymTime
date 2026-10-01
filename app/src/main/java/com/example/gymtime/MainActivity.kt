@@ -6,6 +6,7 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
 import androidx.activity.result.contract.ActivityResultContracts
 import android.Manifest
 import android.content.pm.PackageManager
@@ -22,9 +23,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.ui.platform.LocalView
@@ -92,7 +96,17 @@ class MainActivity : ComponentActivity() {
             val customFontUri by userPreferencesRepository.customFontUri.collectAsStateWithLifecycle(initialValue = null)
             val keepScreenOn by userPreferencesRepository.keepScreenOn.collectAsStateWithLifecycle(initialValue = false)
             val darkMode by userPreferencesRepository.darkMode.collectAsStateWithLifecycle(initialValue = true)
+            val newUiEnabled by userPreferencesRepository.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
             val colorScheme = ThemeColors.getScheme(themeColorName, customThemeColor)
+
+            // Follow the app's saved appearance instead of the device's appearance.
+            SideEffect {
+                enableEdgeToEdge(
+                    statusBarStyle = SystemBarStyle.auto(Color.Transparent.toArgb(), Color.Transparent.toArgb()) { darkMode },
+                    navigationBarStyle = SystemBarStyle.auto(0xE6FFFFFF.toInt(), 0x801B1B1B.toInt()) { darkMode }
+                )
+                window.isNavigationBarContrastEnforced = !newUiEnabled
+            }
 
             DisposableEffect(keepScreenOn) {
                 if (keepScreenOn) {
@@ -109,12 +123,14 @@ class MainActivity : ComponentActivity() {
                 appColorScheme = colorScheme,
                 darkMode = darkMode,
                 themeFontKey = themeFont,
-                customFontUri = customFontUri
+                customFontUri = customFontUri,
+                newUiEnabled = newUiEnabled
             ) {
                 val gradientColors = com.example.gymtime.ui.theme.LocalGradientColors.current
 
                 Surface(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    color = if (newUiEnabled) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface
                 ) {
                     val navController = rememberNavController()
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -175,7 +191,11 @@ class MainActivity : ComponentActivity() {
                                     com.example.gymtime.ui.library.LibraryScreen(navController = navController)
                                 }
                                 composable(Screen.Analytics.route) {
-                                    com.example.gymtime.ui.analytics.AnalyticsScreen()
+                                    com.example.gymtime.ui.analytics.AnalyticsScreen(
+                                        onHistory = { navController.navigate(Screen.History.route) { launchSingleTop = true } },
+                                        onLibrary = { navController.navigate(Screen.Library.route) { launchSingleTop = true } },
+                                        onOpenHome = navController::navigateHomeAndClearStack
+                                    )
                                 }
                                 composable(
                                     route = Screen.ExerciseSelection.route,
@@ -195,6 +215,10 @@ class MainActivity : ComponentActivity() {
                                         androidx.navigation.navArgument("addToSuperset") {
                                             type = androidx.navigation.NavType.BoolType
                                             defaultValue = false
+                                        },
+                                        androidx.navigation.navArgument("swapInstanceId") {
+                                            type = androidx.navigation.NavType.LongType
+                                            defaultValue = -1L
                                         }
                                     )
                                 ) {
@@ -207,6 +231,14 @@ class MainActivity : ComponentActivity() {
                                         },
                                         onAddExerciseClick = {
                                             navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
+                                        },
+                                        onSwapExerciseClick = { instanceId ->
+                                            navController.navigate(
+                                                Screen.ExerciseSelection.createRoute(
+                                                    workoutMode = true,
+                                                    swapInstanceId = instanceId
+                                                )
+                                            )
                                         },
                                         onFinishWorkoutClick = { workoutId ->
                                             navController.navigateToWorkoutSummary(workoutId)
@@ -255,6 +287,15 @@ class MainActivity : ComponentActivity() {
                                             type = androidx.navigation.NavType.StringType
                                             nullable = true
                                             defaultValue = null
+                                        },
+                                        androidx.navigation.navArgument("initialMuscle") {
+                                            type = androidx.navigation.NavType.StringType
+                                            nullable = true
+                                            defaultValue = null
+                                        },
+                                        androidx.navigation.navArgument("returnToPicker") {
+                                            type = androidx.navigation.NavType.BoolType
+                                            defaultValue = false
                                         }
                                     )
                                 ) {

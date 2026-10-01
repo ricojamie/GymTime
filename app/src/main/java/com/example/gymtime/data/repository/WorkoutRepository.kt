@@ -28,6 +28,14 @@ data class WorkoutStartResult(
     val firstExerciseId: Long
 )
 
+sealed interface WorkoutPlanEditResult {
+    data object Updated : WorkoutPlanEditResult
+    data object Removed : WorkoutPlanEditResult
+    data object HasLoggedSets : WorkoutPlanEditResult
+    data object DuplicateExercise : WorkoutPlanEditResult
+    data object NotFound : WorkoutPlanEditResult
+}
+
 @Singleton
 class WorkoutRepository @Inject constructor(
     private val database: GymTimeDatabase,
@@ -176,6 +184,83 @@ class WorkoutRepository @Inject constructor(
 
     fun getWorkoutPlanSummaries(workoutId: Long): Flow<List<WorkoutPlanSummary>> =
         workoutPlanDao.getWorkoutPlanSummaries(workoutId)
+
+    /**
+     * Replaces an unstarted exercise in this workout's plan snapshot. The saved
+     * routine is never edited; targets and superset placement stay attached to
+     * the slot being replaced.
+     */
+    suspend fun swapWorkoutPlanExercise(
+        instanceId: Long,
+        replacementExerciseId: Long
+    ): WorkoutPlanEditResult = database.withTransaction {
+        val instance = workoutPlanDao.getInstanceById(instanceId)
+            ?: return@withTransaction WorkoutPlanEditResult.NotFound
+        if (instance.isSkipped) return@withTransaction WorkoutPlanEditResult.NotFound
+        val workout = workoutDao.getWorkoutByIdSync(instance.workoutId)
+            ?: return@withTransaction WorkoutPlanEditResult.NotFound
+        if (workout.endTime != null) return@withTransaction WorkoutPlanEditResult.NotFound
+
+        if (setDao.getSetCountForWorkoutExercise(instance.workoutId, instance.exerciseId) > 0) {
+            return@withTransaction WorkoutPlanEditResult.HasLoggedSets
+        }
+        if (replacementExerciseId == instance.exerciseId) {
+            return@withTransaction WorkoutPlanEditResult.Updated
+        }
+
+        val alreadyPlanned = workoutPlanDao.getInstancesForWorkoutSync(instance.workoutId)
+            .any { !it.isSkipped && it.id != instance.id && it.exerciseId == replacementExerciseId }
+        if (alreadyPlanned) return@withTransaction WorkoutPlanEditResult.DuplicateExercise
+
+        workoutPlanDao.updateInstance(
+            instance.copy(
+                exerciseId = replacementExerciseId,
+                routineExerciseId = null,
+                addedDuringWorkout = true
+            )
+        )
+        WorkoutPlanEditResult.Updated
+    }
+
+    /** Removes only an unstarted plan slot, preserving every logged set. */
+    suspend fun removeWorkoutPlanExercise(instanceId: Long): WorkoutPlanEditResult =
+        database.withTransaction {
+            val instance = workoutPlanDao.getInstanceById(instanceId)
+                ?: return@withTransaction WorkoutPlanEditResult.NotFound
+            if (instance.isSkipped) return@withTransaction WorkoutPlanEditResult.NotFound
+            val workout = workoutDao.getWorkoutByIdSync(instance.workoutId)
+                ?: return@withTransaction WorkoutPlanEditResult.NotFound
+            if (workout.endTime != null) return@withTransaction WorkoutPlanEditResult.NotFound
+
+            if (setDao.getSetCountForWorkoutExercise(instance.workoutId, instance.exerciseId) > 0) {
+                return@withTransaction WorkoutPlanEditResult.HasLoggedSets
+            }
+
+            workoutPlanDao.updateInstance(
+                instance.copy(
+                    isSkipped = true,
+                    supersetGroupId = null,
+                    supersetOrderIndex = 0
+                )
+            )
+
+            // A one-exercise superset is not a superset. Dissolve the leftover
+            // marker so overview connectors and logger rotation stay accurate.
+            instance.supersetGroupId?.let { groupId ->
+                val remainingGroup = workoutPlanDao.getInstancesForWorkoutSync(instance.workoutId)
+                    .filter { !it.isSkipped && it.supersetGroupId == groupId }
+                if (remainingGroup.size == 1) {
+                    workoutPlanDao.updateInstance(
+                        remainingGroup.single().copy(
+                            supersetGroupId = null,
+                            supersetOrderIndex = 0
+                        )
+                    )
+                }
+            }
+
+            WorkoutPlanEditResult.Removed
+        }
 
     suspend fun ensureWorkoutPlanInstance(workoutId: Long, exerciseId: Long): WorkoutExerciseInstance? {
         return database.withTransaction {

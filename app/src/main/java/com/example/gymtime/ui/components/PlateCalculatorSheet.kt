@@ -44,6 +44,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +67,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gymtime.ui.theme.IronLogTheme
 import com.example.gymtime.ui.theme.LocalAppColors
+import com.example.gymtime.ui.theme.LocalLoggerPreviewThemeActive
+import com.example.gymtime.ui.components.plate.PlateCalculatorPreviewContent
+import com.example.gymtime.ui.components.plate.validManualPlates
 import com.example.gymtime.util.PlateCalculator
 import com.example.gymtime.util.PlateLoadout
 import kotlin.math.abs
@@ -89,7 +93,12 @@ fun PlateCalculatorSheet(
     loadingSides: Int,
     onDismiss: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    onUseWeight: (Float) -> Unit
+    onUseWeight: (Float) -> Unit,
+    plateInventory: Map<Float, Int> = emptyMap(),
+    usePlateInventory: Boolean = false,
+    onPlateInventoryCountChange: (Float, Int) -> Unit = { _, _ -> },
+    onUsePlateInventoryChange: (Boolean) -> Unit = {},
+    onPlateInventoryCountDelta: ((Float, Int) -> Unit)? = null
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -105,7 +114,12 @@ fun PlateCalculatorSheet(
             onDismiss = onDismiss,
             onNavigateToSettings = onNavigateToSettings,
             onUseWeight = onUseWeight,
-            modifier = Modifier.fillMaxHeight(0.94f)
+            modifier = Modifier.fillMaxHeight(0.94f),
+            plateInventory = plateInventory,
+            usePlateInventory = usePlateInventory,
+            onPlateInventoryCountChange = onPlateInventoryCountChange,
+            onUsePlateInventoryChange = onUsePlateInventoryChange,
+            onPlateInventoryCountDelta = onPlateInventoryCountDelta
         )
     }
 }
@@ -120,12 +134,56 @@ internal fun PlateCalculatorContent(
     onNavigateToSettings: () -> Unit,
     onUseWeight: (Float) -> Unit,
     modifier: Modifier = Modifier,
-    initialMode: PlateCalculatorMode = PlateCalculatorMode.TARGET
+    initialMode: PlateCalculatorMode = PlateCalculatorMode.TARGET,
+    plateInventory: Map<Float, Int> = emptyMap(),
+    usePlateInventory: Boolean = false,
+    onPlateInventoryCountChange: (Float, Int) -> Unit = { _, _ -> },
+    onUsePlateInventoryChange: (Boolean) -> Unit = {},
+    onPlateInventoryCountDelta: ((Float, Int) -> Unit)? = null
+) {
+    if (LocalLoggerPreviewThemeActive.current) {
+        PlateCalculatorPreviewContent(
+            initialWeight = initialWeight,
+            barWeight = barWeight,
+            availablePlates = availablePlates,
+            loadingSides = loadingSides,
+            onDismiss = onDismiss,
+            onNavigateToSettings = onNavigateToSettings,
+            onUseWeight = onUseWeight,
+            modifier = modifier,
+            initialMode = initialMode,
+            plateInventory = plateInventory,
+            usePlateInventory = usePlateInventory,
+            onPlateInventoryCountChange = onPlateInventoryCountChange,
+            onUsePlateInventoryChange = onUsePlateInventoryChange,
+            onPlateInventoryCountDelta = onPlateInventoryCountDelta
+        )
+        return
+    }
+    LegacyPlateCalculatorContent(
+        initialWeight, barWeight, availablePlates, loadingSides, onDismiss,
+        onNavigateToSettings, onUseWeight, modifier, initialMode,
+        plateInventory.takeIf { usePlateInventory }
+    )
+}
+
+@Composable
+private fun LegacyPlateCalculatorContent(
+    initialWeight: Float,
+    barWeight: Float,
+    availablePlates: List<Float>,
+    loadingSides: Int,
+    onDismiss: () -> Unit,
+    onNavigateToSettings: () -> Unit,
+    onUseWeight: (Float) -> Unit,
+    modifier: Modifier,
+    initialMode: PlateCalculatorMode,
+    plateInventory: Map<Float, Int>?
 ) {
     val colors = LocalAppColors.current
     val accent = MaterialTheme.colorScheme.primary
-    val safeBarWeight = barWeight.takeIf { it.isFinite() }?.coerceAtLeast(0f) ?: 0f
-    val safeLoadingSides = loadingSides.coerceAtLeast(1)
+    val safeBarWeight = barWeight.takeIf { it.isFinite() }?.coerceIn(0f, PlateCalculator.MAX_SUPPORTED_WEIGHT) ?: 0f
+    val safeLoadingSides = loadingSides.coerceIn(1, 16)
     val plates = remember(availablePlates) {
         PlateCalculator.sanitizePlateOptions(availablePlates)
     }
@@ -134,8 +192,8 @@ internal fun PlateCalculatorContent(
         .takeIf { it.isFinite() && it >= safeBarWeight }
         ?: safeBarWeight
     var targetText by remember { mutableStateOf(PlateCalculator.formatWeight(startingWeight)) }
-    val startingLoadout = remember(startingWeight, plates, safeBarWeight, safeLoadingSides) {
-        PlateCalculator.calculatePlates(startingWeight, plates, safeBarWeight, safeLoadingSides)
+    val startingLoadout = remember(startingWeight, plates, safeBarWeight, safeLoadingSides, plateInventory) {
+        PlateCalculator.calculatePlates(startingWeight, plates, safeBarWeight, safeLoadingSides, plateInventory)
     }
     val manualPlates = remember {
         mutableStateListOf<Float>().apply {
@@ -144,20 +202,30 @@ internal fun PlateCalculatorContent(
     }
     var manualModeVisited by remember { mutableStateOf(initialMode == PlateCalculatorMode.BUILD) }
 
+    // Render from the constrained snapshot immediately; reconcile local draft after composition.
+    val validManual = validManualPlates(manualPlates.toList(), plates, safeLoadingSides, plateInventory, safeBarWeight)
+    LaunchedEffect(plates, safeLoadingSides, plateInventory, safeBarWeight) {
+        val current = validManualPlates(manualPlates.toList(), plates, safeLoadingSides, plateInventory, safeBarWeight)
+        if (manualPlates.toList() != current) {
+            manualPlates.clear()
+            manualPlates.addAll(current)
+        }
+    }
+
     val target = targetText.toFloatOrNull()
     val targetLoadout = PlateCalculator.calculatePlates(
         targetWeight = target ?: safeBarWeight,
         availablePlates = plates,
         barWeight = safeBarWeight,
-        loadingSides = safeLoadingSides
+        loadingSides = safeLoadingSides,
+        plateInventory = plateInventory
     )
     val manualTotal = PlateCalculator.calculateTotalWeight(
-        platesPerSide = manualPlates,
+        platesPerSide = validManual,
         barWeight = safeBarWeight,
         loadingSides = safeLoadingSides
     )
     val activeTotal = if (mode == PlateCalculatorMode.TARGET) targetLoadout.totalWeight else manualTotal
-    val activePlates = if (mode == PlateCalculatorMode.TARGET) targetLoadout.platesPerSide else manualPlates.toList()
     val canUseWeight = activeTotal.isFinite() && activeTotal >= safeBarWeight &&
         (mode == PlateCalculatorMode.BUILD || target != null)
 
@@ -165,10 +233,13 @@ internal fun PlateCalculatorContent(
         if (newMode == mode) return
         if (newMode == PlateCalculatorMode.BUILD && !manualModeVisited) {
             manualPlates.clear()
-            manualPlates.addAll(targetLoadout.platesPerSide)
+            manualPlates.addAll(PlateCalculator.calculatePlates(
+                targetText.toFloatOrNull() ?: safeBarWeight, plates, safeBarWeight, safeLoadingSides, plateInventory).platesPerSide)
             manualModeVisited = true
         } else if (newMode == PlateCalculatorMode.TARGET) {
-            targetText = PlateCalculator.formatWeight(manualTotal)
+            targetText = PlateCalculator.formatWeight(PlateCalculator.calculateTotalWeight(
+                validManualPlates(manualPlates.toList(), plates, safeLoadingSides, plateInventory, safeBarWeight),
+                safeBarWeight, safeLoadingSides))
         }
         mode = newMode
     }
@@ -230,18 +301,21 @@ internal fun PlateCalculatorContent(
 
                     PlateCalculatorMode.BUILD -> BuildMode(
                         totalWeight = manualTotal,
-                        platesPerSide = manualPlates,
+                        platesPerSide = validManual,
                         availablePlates = plates,
                         barWeight = safeBarWeight,
                         loadingSides = safeLoadingSides,
+                        canAddPlate = { plate ->
+                            PlateCalculator.canAddPlate(validManual, plate, safeLoadingSides, plateInventory) &&
+                                safeBarWeight.toDouble() + (validManual.sumOf { it.toDouble() } + plate) * safeLoadingSides <= PlateCalculator.MAX_SUPPORTED_WEIGHT
+                        },
                         onAddPlate = { plate ->
-                            val nextTotal = PlateCalculator.calculateTotalWeight(
-                                platesPerSide = manualPlates + plate,
-                                barWeight = safeBarWeight,
-                                loadingSides = safeLoadingSides
-                            )
-                            if (nextTotal < PlateCalculator.MAX_SUPPORTED_WEIGHT || manualTotal < PlateCalculator.MAX_SUPPORTED_WEIGHT) {
-                                manualPlates.add(plate)
+                            val current = validManualPlates(manualPlates.toList(), plates, safeLoadingSides, plateInventory, safeBarWeight)
+                            if (PlateCalculator.canAddPlate(current, plate, safeLoadingSides, plateInventory) &&
+                                safeBarWeight.toDouble() + (current.sumOf { it.toDouble() } + plate) * safeLoadingSides <= PlateCalculator.MAX_SUPPORTED_WEIGHT
+                            ) {
+                                manualPlates.clear()
+                                manualPlates.addAll(current + plate)
                             }
                         },
                         onRemovePlate = { plate ->
@@ -259,10 +333,19 @@ internal fun PlateCalculatorContent(
 
         Surface(
             color = colors.backgroundCanvas,
-            shadowElevation = 12.dp
+            shadowElevation = if (com.example.gymtime.ui.theme.LocalLoggerPreviewThemeActive.current) 2.dp else 12.dp
         ) {
             Button(
-                onClick = { onUseWeight(activeTotal) },
+                onClick = {
+                    if (mode == PlateCalculatorMode.BUILD) {
+                        val current = validManualPlates(manualPlates.toList(), plates, safeLoadingSides, plateInventory, safeBarWeight)
+                        onUseWeight(PlateCalculator.calculateTotalWeight(current, safeBarWeight, safeLoadingSides))
+                    } else {
+                        targetText.toFloatOrNull()?.takeIf { it.isFinite() && it in 0f..PlateCalculator.MAX_SUPPORTED_WEIGHT }?.let {
+                            onUseWeight(PlateCalculator.calculatePlates(it, plates, safeBarWeight, safeLoadingSides, plateInventory).totalWeight)
+                        }
+                    }
+                },
                 enabled = canUseWeight,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = accent,
@@ -490,7 +573,8 @@ private fun BuildMode(
     onAddPlate: (Float) -> Unit,
     onRemovePlate: (Float) -> Unit,
     onClear: () -> Unit,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    canAddPlate: (Float) -> Boolean
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         TotalHero(
@@ -525,7 +609,7 @@ private fun BuildMode(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     availablePlates.forEach { plate ->
-                        PlateRackButton(plate = plate, onClick = { onAddPlate(plate) })
+                        PlateRackButton(plate = plate, enabled = canAddPlate(plate), onClick = { onAddPlate(plate) })
                     }
                 }
                 Text(
@@ -540,7 +624,8 @@ private fun BuildMode(
             platesPerSide = platesPerSide,
             loadingSides = loadingSides,
             onRemovePlate = onRemovePlate,
-            onAddPlate = onAddPlate
+            onAddPlate = onAddPlate,
+            canAddPlate = canAddPlate
         )
     }
 }
@@ -573,12 +658,12 @@ private fun TotalHero(total: Float, status: String, exact: Boolean) {
                 }
             }
             Surface(
-                color = if (exact) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else colors.inputBackground,
+                color = if (exact) MaterialTheme.colorScheme.primaryContainer else colors.inputBackground,
                 shape = RoundedCornerShape(50)
             ) {
                 Text(
                     status,
-                    color = if (exact) MaterialTheme.colorScheme.primary else colors.textSecondary,
+                    color = if (exact) MaterialTheme.colorScheme.onPrimaryContainer else colors.textSecondary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
@@ -623,7 +708,7 @@ private fun BarbellVisual(platesPerSide: List<Float>, barWeight: Float) {
                             .background(colors.textSecondary, RoundedCornerShape(4.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(PlateCalculator.formatWeight(barWeight), color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text(PlateCalculator.formatWeight(barWeight), color = MaterialTheme.colorScheme.surface, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
                     Row(
                         modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
@@ -711,16 +796,16 @@ private fun PlateCountChip(plate: Float, count: Int) {
 }
 
 @Composable
-private fun PlateRackButton(plate: Float, onClick: () -> Unit) {
+private fun PlateRackButton(plate: Float, enabled: Boolean, onClick: () -> Unit) {
     val color = Color(PlateCalculator.getPlateColor(plate))
     val textColor = if (plate < 45f) Color.Black else Color.White
     Box(
         modifier = Modifier
             .size(70.dp)
             .clip(CircleShape)
-            .background(color)
+            .background(if (enabled) color else LocalAppColors.current.inputBackground)
             .border(2.dp, Color.White.copy(alpha = 0.25f), CircleShape)
-            .clickable(role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .testTag("plate_add_${PlateCalculator.formatWeight(plate)}"),
         contentAlignment = Alignment.Center
     ) {
@@ -736,7 +821,8 @@ private fun ManualLoadoutControls(
     platesPerSide: List<Float>,
     loadingSides: Int,
     onRemovePlate: (Float) -> Unit,
-    onAddPlate: (Float) -> Unit
+    onAddPlate: (Float) -> Unit,
+    canAddPlate: (Float) -> Boolean
 ) {
     val colors = LocalAppColors.current
     val groups = platesPerSide.groupingBy { it }.eachCount().toList().sortedByDescending { it.first }
@@ -770,6 +856,7 @@ private fun ManualLoadoutControls(
                             icon = Icons.Rounded.Add,
                             description = "Add another ${PlateCalculator.formatWeight(plate)} pound plate",
                             tag = "plate_increment_${PlateCalculator.formatWeight(plate)}",
+                            enabled = canAddPlate(plate),
                             onClick = { onAddPlate(plate) }
                         )
                     }
@@ -826,6 +913,7 @@ private fun SmallCountButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     description: String,
     tag: String,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     Box(
@@ -833,7 +921,7 @@ private fun SmallCountButton(
             .size(44.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(LocalAppColors.current.inputBackground)
-            .clickable(role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .testTag(tag),
         contentAlignment = Alignment.Center
     ) {

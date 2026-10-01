@@ -1,6 +1,7 @@
 package com.example.gymtime.ui.exercise
 
 import androidx.lifecycle.SavedStateHandle
+import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.entity.LogType
@@ -30,15 +31,18 @@ class ExerciseFormViewModelTest {
 
     private val exerciseDao: ExerciseDao = mockk(relaxed = true)
     private val muscleGroupDao: MuscleGroupDao = mockk()
+    private val userPreferencesRepository: UserPreferencesRepository = mockk()
     private lateinit var viewModel: ExerciseFormViewModel
 
     @Before
     fun setup() {
+        every { userPreferencesRepository.newUiEnabled } returns flowOf(false)
         every { muscleGroupDao.getAllMuscleGroups() } returns flowOf(listOf(MuscleGroup(name = "Chest")))
         viewModel = ExerciseFormViewModel(
             savedStateHandle = SavedStateHandle(),
             exerciseDao = exerciseDao,
-            muscleGroupDao = muscleGroupDao
+            muscleGroupDao = muscleGroupDao,
+            userPreferencesRepository = userPreferencesRepository
         )
     }
 
@@ -75,7 +79,8 @@ class ExerciseFormViewModelTest {
         val prefilled = ExerciseFormViewModel(
             savedStateHandle = SavedStateHandle(mapOf("initialName" to "Incline Dumbbell Press")),
             exerciseDao = exerciseDao,
-            muscleGroupDao = muscleGroupDao
+            muscleGroupDao = muscleGroupDao,
+            userPreferencesRepository = userPreferencesRepository
         )
 
         assertEquals("Incline Dumbbell Press", prefilled.exerciseName.value)
@@ -112,7 +117,8 @@ class ExerciseFormViewModelTest {
         val editing = ExerciseFormViewModel(
             savedStateHandle = SavedStateHandle(mapOf("exerciseId" to "7")),
             exerciseDao = exerciseDao,
-            muscleGroupDao = muscleGroupDao
+            muscleGroupDao = muscleGroupDao,
+            userPreferencesRepository = userPreferencesRepository
         )
         val job = launch { editing.hasUnsavedChanges.collect {} }
         advanceUntilIdle()

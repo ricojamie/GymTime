@@ -1,6 +1,8 @@
 package com.example.gymtime.data.repository
 
 import com.example.gymtime.data.db.dao.ExerciseDao
+import com.example.gymtime.data.db.dao.ExerciseHistorySet
+import com.example.gymtime.data.db.dao.ExerciseLastSetRow
 import com.example.gymtime.data.db.dao.ExerciseUsageRow
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.entity.Exercise
@@ -28,6 +30,9 @@ class ExerciseRepository @Inject constructor(
     fun getExercisesWithUsageStats(recentStartMs: Long): Flow<List<ExerciseUsageRow>> {
         return exerciseDao.getExercisesWithUsageStats(recentStartMs)
     }
+
+    fun observeLastWorkoutSets(): Flow<List<ExerciseLastSetRow>> =
+        exerciseDao.observeLastWorkoutSets()
 
     fun getAllMuscleGroups(): Flow<List<MuscleGroup>> {
         return muscleGroupDao.getAllMuscleGroups()
@@ -57,6 +62,9 @@ class ExerciseRepository @Inject constructor(
         val allSets = setDao.getExerciseHistoryByWorkout(exerciseId)
         return allSets.groupBy { it.workoutId }
     }
+
+    fun observeFullExerciseHistory(exerciseId: Long): Flow<List<ExerciseHistorySet>> =
+        setDao.observeFullExerciseHistory(exerciseId)
 
     suspend fun getPersonalRecords(exerciseId: Long): PersonalRecords {
         val heaviest = setDao.getPersonalBest(exerciseId)

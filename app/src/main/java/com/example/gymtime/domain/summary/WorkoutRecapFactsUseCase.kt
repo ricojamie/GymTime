@@ -90,7 +90,11 @@ class WorkoutRecapFactsUseCase @Inject constructor(
             totalVolume = shareable.totalVolume,
             workingSetCount = shareable.totalWorkingSets,
             exerciseCount = shareable.exercises.count { it.sets.any { set -> !set.isWarmup } },
-            muscles = shareable.exercises.map { it.targetMuscle }.distinct().sorted(),
+            muscles = shareable.exercises
+                .filter { exercise -> exercise.sets.any { set -> !set.isWarmup } }
+                .map { it.targetMuscle }
+                .distinct()
+                .sorted(),
             personalRecordExercises = prExercises,
             leadingMuscle = leadingMuscle,
             isHighestComparableVolumeInSixWeeks = shareable.totalVolume > 0f &&

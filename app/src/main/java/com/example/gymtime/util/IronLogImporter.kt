@@ -13,6 +13,8 @@ import com.example.gymtime.data.db.entity.Routine
 import com.example.gymtime.data.db.entity.RoutineDay
 import com.example.gymtime.data.db.entity.RoutineExercise
 import com.example.gymtime.data.db.entity.Workout
+import com.example.gymtime.data.db.entity.WARMUP_MUSCLE_GROUP
+import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
 import java.io.InputStream
 import java.util.Date
 import java.util.zip.ZipInputStream
@@ -67,7 +69,8 @@ class IronLogImporter @Inject constructor(
         // 1. Import muscle groups
         var muscleGroupsImported = 0
         csvFiles["muscle_groups.csv"]?.forEach { row ->
-            val name = row["name"] ?: return@forEach
+            val importedName = row["name"] ?: return@forEach
+            val name = if (importedName.isWarmupMuscleGroup()) WARMUP_MUSCLE_GROUP else importedName
             try {
                 muscleGroupDao.insertMuscleGroup(MuscleGroup(name = name))
                 muscleGroupsImported++
@@ -93,7 +96,9 @@ class IronLogImporter @Inject constructor(
                 val exercise = Exercise(
                     id = 0,
                     name = name,
-                    targetMuscle = row["targetMuscle"] ?: "Other",
+                    targetMuscle = (row["targetMuscle"] ?: "Other").let { muscle ->
+                        if (muscle.isWarmupMuscleGroup()) WARMUP_MUSCLE_GROUP else muscle
+                    },
                     logType = row["logType"]?.let { runCatching { LogType.valueOf(it) }.getOrNull() } ?: LogType.WEIGHT_REPS,
                     defaultDistanceUnit = row["defaultDistanceUnit"]
                         ?.let { runCatching { DistanceUnit.valueOf(it) }.getOrNull() }

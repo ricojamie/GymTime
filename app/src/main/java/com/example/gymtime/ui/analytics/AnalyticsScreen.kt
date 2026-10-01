@@ -36,9 +36,29 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.gymtime.ui.ai.OnDeviceAiDownloadCard
 import com.example.gymtime.ui.theme.LocalAppColors
+import com.example.gymtime.ui.analytics.preview.TrainingInsightsViewModel
+import com.example.gymtime.ui.analytics.preview.PreviewTrainingInsightsScreen
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.CircularProgressIndicator
 
 @Composable
 fun AnalyticsScreen(
+    onHistory: () -> Unit,
+    onLibrary: () -> Unit,
+    onOpenHome: () -> Unit,
+    previewViewModel: TrainingInsightsViewModel = hiltViewModel()
+) {
+    val newUiEnabled by previewViewModel.newUiEnabled.collectAsStateWithLifecycle()
+    when (newUiEnabled) {
+        true -> PreviewTrainingInsightsScreen(previewViewModel, onHistory, onLibrary, onOpenHome)
+        false -> LegacyAnalyticsScreen()
+        null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+    }
+}
+
+@Composable
+private fun LegacyAnalyticsScreen(
     viewModel: AnalyticsViewModel = hiltViewModel()
 ) {
     // State

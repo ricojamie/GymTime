@@ -44,7 +44,7 @@ class WorkoutRatingUseCase @Inject constructor(
             val startOfMonth = startOfCurrentMonth(nowMs)
             val trendStart = startOfWeek - WEEKS_FOR_TREND * WEEK_MS
             val rows = workoutDao.getRatedWorkoutSetInfo(trendStart, nowMs)
-            val workouts = rows.toSnapshots()
+            val workouts = rows.toSnapshots().filter { it.workingRows().isNotEmpty() }
 
             val weekWorkouts = workouts.filter { it.startTime.time >= startOfWeek }
             val monthWorkouts = workouts.filter { it.startTime.time >= startOfMonth }

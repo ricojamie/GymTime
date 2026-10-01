@@ -4,6 +4,8 @@ import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.SetWithExercisePerformanceInfo
 import com.example.gymtime.data.db.entity.LogType
+import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
+import com.example.gymtime.domain.progression.StrengthPerformanceCalculator
 import com.example.gymtime.util.WeekUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -165,7 +167,9 @@ class StrengthMomentumUseCase @Inject constructor(
         }
 
     private suspend fun buildMuscleList(exerciseMomentum: List<ExerciseMomentum>): List<String> {
-        val storedMuscles = muscleGroupDao.getAllMuscleGroupNames().map { canonicalMuscleName(it) }
+        val storedMuscles = muscleGroupDao.getAllMuscleGroupNames()
+            .filterNot { it.isWarmupMuscleGroup() }
+            .map { canonicalMuscleName(it) }
         val calculatedMuscles = exerciseMomentum.map { canonicalMuscleName(it.muscle) }
         return (storedMuscles + calculatedMuscles + DEFAULT_MUSCLES)
             .filterNot { it.equals(CARDIO_MUSCLE, ignoreCase = true) }
@@ -236,27 +240,13 @@ class StrengthMomentumUseCase @Inject constructor(
     }
 
     private fun sessionScore(sets: List<SetWithExercisePerformanceInfo>): SessionScore? {
-        val values = sets.mapNotNull { set ->
-            performanceValue(set).takeIf { it > 0f }
-        }.sortedDescending().take(TOP_SETS_PER_SESSION)
-        if (values.isEmpty()) return null
+        val value = sets.mapNotNull { setInfo ->
+            StrengthPerformanceCalculator.strengthValue(setInfo.set, setInfo.logType)
+        }.maxOrNull() ?: return null
         return SessionScore(
-            value = values.average().toFloat(),
+            value = value,
             timestamp = sets.maxOf { it.set.timestamp.time }
         )
-    }
-
-    private fun performanceValue(setInfo: SetWithExercisePerformanceInfo): Float {
-        val set = setInfo.set
-        return when (setInfo.logType) {
-            LogType.WEIGHT_REPS -> {
-                val weight = set.weight ?: return 0f
-                val reps = set.reps ?: return 0f
-                if (weight <= 0f || reps <= 0) 0f else weight * (1 + reps / 30f)
-            }
-            LogType.REPS_ONLY -> (set.reps ?: 0).toFloat()
-            else -> 0f
-        }
     }
 
     private fun robustMusclePercent(contributions: List<ExerciseMomentum>): Float {
@@ -303,7 +293,6 @@ class StrengthMomentumUseCase @Inject constructor(
     companion object {
         const val MAX_SESSIONS_PER_SIDE = 3
         const val MIN_SESSIONS_PER_SIDE = 2
-        private const val TOP_SETS_PER_SESSION = 3
         private const val HISTORY_DAYS = 365
         private const val STALE_AFTER_DAYS = 42
         private const val STABLE_THRESHOLD = 2f

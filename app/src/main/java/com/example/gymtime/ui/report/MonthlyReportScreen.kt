@@ -1,10 +1,12 @@
 package com.example.gymtime.ui.report
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -26,6 +28,7 @@ import com.example.gymtime.ui.components.BackNavigationIcon
 import com.example.gymtime.ui.components.HomeNavigationAction
 import com.example.gymtime.ui.ai.OnDeviceAiDownloadCard
 import com.example.gymtime.ui.theme.LocalAppColors
+import com.example.gymtime.ui.theme.LocalLoggerPreviewThemeActive
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -98,20 +101,21 @@ private fun ReportBody(
     accent: Color
 ) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.getDefault()) }
+    val previewActive = LocalLoggerPreviewThemeActive.current
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(padding)
             .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(if (previewActive) 12.dp else 16.dp)
     ) {
         item {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = report.monthLabel,
                 color = LocalAppColors.current.textPrimary,
-                fontSize = 28.sp,
+                fontSize = if (previewActive) 26.sp else 28.sp,
                 fontWeight = FontWeight.ExtraBold
             )
             Text(
@@ -130,7 +134,7 @@ private fun ReportBody(
                         Text(
                             text = "MONTH IN REVIEW",
                             color = accent,
-                            fontSize = 11.sp,
+                            fontSize = if (previewActive) 12.sp else 11.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.3.sp
                         )
@@ -200,21 +204,23 @@ private fun ReportBody(
 
 @Composable
 private fun HeroStats(report: MonthlyReport, accent: Color, numberFormat: NumberFormat) {
+    val previewActive = LocalLoggerPreviewThemeActive.current
     ReportCard {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                StatBlock("WORKOUTS", report.workoutCount.toString(), accent)
-                StatBlock("SETS", report.totalWorkingSets.toString(), accent)
-                StatBlock("EXERCISES", report.exerciseCount.toString(), accent)
+                val statModifier = if (previewActive) Modifier.weight(1f) else Modifier
+                StatBlock("WORKOUTS", report.workoutCount.toString(), statModifier)
+                StatBlock("SETS", report.totalWorkingSets.toString(), statModifier)
+                StatBlock("EXERCISES", report.exerciseCount.toString(), statModifier)
             }
-            Spacer(modifier = Modifier.height(20.dp))
-            HorizontalDivider(color = LocalAppColors.current.textTertiary.copy(alpha = 0.15f))
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(if (previewActive) 12.dp else 20.dp))
+            HorizontalDivider(color = if (previewActive) MaterialTheme.colorScheme.outlineVariant else LocalAppColors.current.textTertiary.copy(alpha = 0.15f))
+            Spacer(modifier = Modifier.height(if (previewActive) 12.dp else 20.dp))
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "VOLUME",
                     color = LocalAppColors.current.textTertiary,
-                    fontSize = 11.sp,
+                    fontSize = if (previewActive) 12.sp else 11.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.5.sp
                 )
@@ -222,7 +228,7 @@ private fun HeroStats(report: MonthlyReport, accent: Color, numberFormat: Number
                 Text(
                     text = "${numberFormat.format(report.totalVolume.toLong())} lbs",
                     color = accent,
-                    fontSize = 36.sp,
+                    fontSize = if (previewActive) 28.sp else 36.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
             }
@@ -231,12 +237,13 @@ private fun HeroStats(report: MonthlyReport, accent: Color, numberFormat: Number
 }
 
 @Composable
-private fun StatBlock(label: String, value: String, accent: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun StatBlock(label: String, value: String, modifier: Modifier = Modifier) {
+    val previewActive = LocalLoggerPreviewThemeActive.current
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = label,
             color = LocalAppColors.current.textTertiary,
-            fontSize = 10.sp,
+            fontSize = if (previewActive) 12.sp else 10.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.sp
         )
@@ -275,6 +282,7 @@ private fun MuscleList(items: List<MuscleTotal>, accent: Color) {
 
 @Composable
 private fun PRList(items: List<MonthlyPR>, accent: Color) {
+    val previewActive = LocalLoggerPreviewThemeActive.current
     ReportCard {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items.forEach { pr ->
@@ -296,10 +304,16 @@ private fun PRList(items: List<MonthlyPR>, accent: Color) {
                             fontSize = 12.sp
                         )
                     }
-                    Text(
-                        text = "🏆",
-                        fontSize = 22.sp
-                    )
+                    if (previewActive) {
+                        Icon(
+                            Icons.Default.EmojiEvents,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.tertiary
+                        )
+                    } else {
+                        Text(text = "🏆", fontSize = 22.sp)
+                    }
                 }
             }
         }
@@ -322,11 +336,14 @@ private fun SectionTitle(text: String) {
 
 @Composable
 private fun ReportCard(content: @Composable () -> Unit) {
+    val previewActive = LocalLoggerPreviewThemeActive.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(if (previewActive) 22.dp else 16.dp),
+        border = if (previewActive) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (previewActive) 1.dp else 0.dp)
     ) {
-        Box(modifier = Modifier.padding(20.dp)) { content() }
+        Box(modifier = Modifier.padding(if (previewActive) 14.dp else 20.dp)) { content() }
     }
 }

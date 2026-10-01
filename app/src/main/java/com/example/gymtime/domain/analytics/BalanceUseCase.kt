@@ -3,6 +3,7 @@ package com.example.gymtime.domain.analytics
 import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.MuscleDistribution
+import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -47,6 +48,7 @@ class BalanceUseCase @Inject constructor(
         val now = System.currentTimeMillis()
 
         val allMuscles = muscleGroupDao.getAllMuscleGroupNames()
+            .filterNot { it.isWarmupMuscleGroup() }
         val knownFreshness = rawData.associateBy { it.muscle }
         
         allMuscles.map { muscle ->
@@ -73,6 +75,7 @@ class BalanceUseCase @Inject constructor(
 
     private suspend fun getBodyPartSetCounts(range: BalanceTimeRange): List<MuscleDistribution> {
         val allMuscles = muscleGroupDao.getAllMuscleGroupNames()
+            .filterNot { it.isWarmupMuscleGroup() }
         val now = System.currentTimeMillis()
         val start = range.days?.let { days ->
             Calendar.getInstance().apply {

@@ -22,12 +22,17 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.gymtime.data.db.entity.MuscleGroup
+import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
 import com.example.gymtime.navigation.navigateHomeAndClearStack
 import com.example.gymtime.navigation.navigateBackOrHome
 import com.example.gymtime.ui.components.BackNavigationIcon
 import com.example.gymtime.ui.components.HomeNavigationAction
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.*
+import com.example.gymtime.ui.settings.preview.PreviewMuscleContent
+import com.example.gymtime.ui.settings.preview.PreviewMuscleDelete
+import com.example.gymtime.ui.settings.preview.PreviewMuscleRow
+import com.example.gymtime.ui.settings.preview.PreviewMuscleUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,6 +45,48 @@ fun MuscleGroupManagementScreen(
     val muscleNameInput by viewModel.muscleNameInput.collectAsStateWithLifecycle()
     val validationError by viewModel.validationError.collectAsStateWithLifecycle()
     val deleteCheckResult by viewModel.deleteCheckResult.collectAsStateWithLifecycle()
+    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle()
+    val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
+
+    if (newUiEnabled) {
+        LoggerPreviewTheme {
+            PreviewMuscleContent(
+                state = PreviewMuscleUiState(
+                    groups = muscleGroups.map { PreviewMuscleRow(it.name, it.name.isWarmupMuscleGroup()) },
+                    editingOriginalName = editingMuscle,
+                    nameDraft = muscleNameInput,
+                    validationError = validationError,
+                    deletion = deleteCheckResult?.let { (name, result) ->
+                        when (result) {
+                            DeleteCheckResult.CanDelete -> PreviewMuscleDelete(name)
+                            is DeleteCheckResult.HasExercises -> PreviewMuscleDelete(name, exerciseCount = result.exerciseCount)
+                            is DeleteCheckResult.BlockedByLoggedSets -> PreviewMuscleDelete(name, loggedSetCount = result.setCount)
+                        }
+                    },
+                    saving = isSaving
+                ),
+                onBack = navController::navigateBackOrHome,
+                onHome = navController::navigateHomeAndClearStack,
+                onAdd = viewModel::startAddNew,
+                onEdit = viewModel::startEdit,
+                onDelete = viewModel::checkCanDelete,
+                onNameChange = viewModel::updateMuscleNameInput,
+                onSave = viewModel::saveMuscleGroup,
+                onDismissEditor = viewModel::clearDialog,
+                onConfirmDelete = {
+                    deleteCheckResult?.let { (name, result) ->
+                        when (result) {
+                            DeleteCheckResult.CanDelete -> viewModel.deleteMuscleGroup(name)
+                            is DeleteCheckResult.HasExercises -> viewModel.deleteWithExercises(name)
+                            is DeleteCheckResult.BlockedByLoggedSets -> Unit
+                        }
+                    }
+                },
+                onDismissDelete = viewModel::clearDeleteDialog
+            )
+        }
+        return
+    }
 
     val accentColor = MaterialTheme.colorScheme.primary
     val gradientColors = LocalGradientColors.current
@@ -287,10 +334,11 @@ fun MuscleGroupItem(
     onDelete: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    val isWarmupLibrary = muscleGroup.name.isWarmupMuscleGroup()
 
     GlowCard(
-        onClick = onEdit,
-        onLongClick = { showMenu = true },
+        onClick = { if (!isWarmupLibrary) onEdit() },
+        onLongClick = if (isWarmupLibrary) null else ({ showMenu = true }),
         modifier = Modifier.fillMaxWidth()
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
@@ -301,12 +349,22 @@ fun MuscleGroupItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = muscleGroup.name,
-                    color = LocalAppColors.current.textPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                Column {
+                    Text(
+                        text = muscleGroup.name,
+                        color = LocalAppColors.current.textPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    if (isWarmupLibrary) {
+                        Text(
+                            text = "Exercise library · excluded from metrics",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 3.dp)
+                        )
+                    }
+                }
             }
 
             DropdownMenu(

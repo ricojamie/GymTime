@@ -10,6 +10,8 @@ import com.example.gymtime.ai.NarrativeValidationRules
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.entity.MuscleDistribution
+import com.example.gymtime.data.db.entity.isWarmupLibraryExercise
+import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
 import com.example.gymtime.domain.analytics.AggregateInterval
 import com.example.gymtime.domain.analytics.BalanceTimeRange
 import com.example.gymtime.domain.analytics.BalanceUseCase
@@ -33,6 +35,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
@@ -106,9 +109,11 @@ class AnalyticsViewModel @Inject constructor(
     private var lastDateSensitiveRefreshDate: LocalDate? = null
 
     val allExercises = exerciseDao.getAllExercises()
+        .map { exercises -> exercises.filterNot { it.isWarmupLibraryExercise } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val allMuscleGroups = muscleGroupDao.getAllMuscleGroups()
+        .map { groups -> groups.filterNot { it.name.isWarmupMuscleGroup() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {

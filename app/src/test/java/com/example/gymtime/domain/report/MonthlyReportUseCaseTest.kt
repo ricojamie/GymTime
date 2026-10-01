@@ -52,8 +52,18 @@ class MonthlyReportUseCaseTest {
             end = localDateTime(2026, 3, 1, 0, 10),
             name = "Late February"
         )
+        val warmupOnlyWorkout = workout(
+            id = 3L,
+            start = localDateTime(2026, 2, 20, 9, 0),
+            end = localDateTime(2026, 2, 20, 9, 20),
+            name = "Mobility"
+        )
 
-        coEvery { workoutDao.getAllWorkoutsSync() } returns listOf(januaryStartWorkout, februaryWorkout)
+        coEvery { workoutDao.getAllWorkoutsSync() } returns listOf(
+            januaryStartWorkout,
+            februaryWorkout,
+            warmupOnlyWorkout
+        )
         coEvery { workoutDao.getMuscleSetCountsInRange(any(), any()) } returns listOf(
             MuscleDistribution(muscle = "Legs", setVolume = 2)
         )
@@ -67,7 +77,7 @@ class MonthlyReportUseCaseTest {
                 timestamp = localDateTime(2026, 2, 1, 0, 5)
             ),
             warmupSet(
-                workoutId = januaryStartWorkout.id,
+                workoutId = warmupOnlyWorkout.id,
                 timestamp = localDateTime(2026, 2, 20, 9, 0)
             ),
             incompleteWorkingSet(

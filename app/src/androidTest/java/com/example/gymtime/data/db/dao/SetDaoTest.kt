@@ -9,6 +9,11 @@ import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.*
@@ -126,7 +131,7 @@ class SetDaoTest {
     }
 
     @Test
-    fun getVolumeInRangeReturnsVolumeInTimeRange() = runTest {
+    fun getVolumeInRangeIncludesOnlyCompletedWorkingSetsInTimeRange() = runTest {
         val workoutId = createTestWorkout()
         val now = System.currentTimeMillis()
 
@@ -134,6 +139,19 @@ class SetDaoTest {
             workoutId = workoutId, exerciseId = 1L, weight = 200f, reps = 5,
             rpe = null, durationSeconds = null, distanceMeters = null,
             isWarmup = false, isComplete = true, timestamp = Date(now),
+            note = null, supersetGroupId = null, supersetOrderIndex = 0
+        ))
+
+        setDao.insertSet(Set(
+            workoutId = workoutId, exerciseId = 1L, weight = 300f, reps = 10,
+            rpe = null, durationSeconds = null, distanceMeters = null,
+            isWarmup = false, isComplete = false, timestamp = Date(now),
+            note = null, supersetGroupId = null, supersetOrderIndex = 0
+        ))
+        setDao.insertSet(Set(
+            workoutId = workoutId, exerciseId = 1L, weight = 100f, reps = 10,
+            rpe = null, durationSeconds = null, distanceMeters = null,
+            isWarmup = true, isComplete = true, timestamp = Date(now),
             note = null, supersetGroupId = null, supersetOrderIndex = 0
         ))
 
@@ -145,7 +163,7 @@ class SetDaoTest {
     }
 
     @Test
-    fun getWorkoutVolumeReturnsVolumeForWorkout() = runTest {
+    fun getWorkoutVolumeIncludesOnlyCompletedWorkingSetsForWorkout() = runTest {
         val workoutId = createTestWorkout()
 
         setDao.insertSet(Set(
@@ -161,9 +179,45 @@ class SetDaoTest {
             note = null, supersetGroupId = null, supersetOrderIndex = 0
         ))
 
+        setDao.insertSet(Set(
+            workoutId = workoutId, exerciseId = 1L, weight = 300f, reps = 10,
+            rpe = null, durationSeconds = null, distanceMeters = null,
+            isWarmup = false, isComplete = false, timestamp = Date(),
+            note = null, supersetGroupId = null, supersetOrderIndex = 0
+        ))
+        setDao.insertSet(Set(
+            workoutId = workoutId, exerciseId = 1L, weight = 100f, reps = 10,
+            rpe = null, durationSeconds = null, distanceMeters = null,
+            isWarmup = true, isComplete = true, timestamp = Date(),
+            note = null, supersetGroupId = null, supersetOrderIndex = 0
+        ))
+
         val volume = setDao.getWorkoutVolume(workoutId)
 
         assertEquals(2250f, volume, 0.1f) // (225*5) + (225*5)
+    }
+
+    @Test
+    fun priorPersonalBestsExcludeUnfinishedSetsAndUnfinishedAchievementDates() = runTest {
+        val workoutId = createTestWorkout()
+        val cutoff = System.currentTimeMillis()
+        val completedAt = cutoff - 2000L
+        val completedSet = Set(
+            workoutId = workoutId, exerciseId = 1L, weight = 225f, reps = 8,
+            rpe = null, durationSeconds = null, distanceMeters = null,
+            isWarmup = false, isComplete = true, timestamp = Date(completedAt)
+        )
+        setDao.insertSet(completedSet)
+        setDao.insertSet(completedSet.copy(weight = 300f, isComplete = false, timestamp = Date(cutoff - 3000L)))
+        setDao.insertSet(completedSet.copy(isComplete = false, timestamp = Date(cutoff - 6000L)))
+        setDao.insertSet(completedSet.copy(weight = 400f, isWarmup = true, timestamp = Date(cutoff - 4000L)))
+        setDao.insertSet(completedSet.copy(weight = 500f, timestamp = Date(cutoff + 1000L)))
+
+        val best = setDao.getPersonalBestsWithTimestampsBefore(1L, cutoff).single()
+
+        assertEquals(8, best.reps)
+        assertEquals(225f, best.maxWeight, 0.1f)
+        assertEquals(completedAt, best.firstAchievedAt)
     }
 
     @Test
@@ -236,6 +290,8 @@ class SetDaoTest {
     fun performanceQueryReturnsOnlyCompletedWorkingSets() = runTest {
         val workoutId = createTestWorkout()
         val now = System.currentTimeMillis()
+        val workout = workoutDao.getWorkoutByIdSync(workoutId)!!
+        workoutDao.updateWorkout(workout.copy(endTime = Date(now + 1L)))
         setDao.insertSet(testSet(workoutId, 1L, 100f, 8, timestamp = now - 2L))
         setDao.insertSet(testSet(workoutId, 1L, 200f, 8, isWarmup = true, timestamp = now - 1L))
         setDao.insertSet(testSet(workoutId, 1L, 300f, 8, isComplete = false, timestamp = now))
@@ -244,6 +300,28 @@ class SetDaoTest {
 
         assertEquals(1, result.size)
         assertEquals(100f, result.single().set.weight)
+    }
+
+    @Test
+    fun performanceQueryExcludesActiveAndAbandonedWorkoutsUntilFinished() = runTest {
+        exerciseDao.insertExercise(testExercise)
+        val now = System.currentTimeMillis()
+        val completed = Workout(startTime = Date(now - 1000L), endTime = Date(now), name = null, note = null)
+        val active = completed.copy(endTime = null, name = "Current workout")
+        val abandoned = completed.copy(startTime = Date(now - 100_000L), endTime = null, name = "Abandoned")
+        val finishedId = workoutDao.insertWorkout(completed)
+        val activeId = workoutDao.insertWorkout(active)
+        val abandonedId = workoutDao.insertWorkout(abandoned)
+        setDao.insertSet(testSet(finishedId, 1L, 100f, 8, timestamp = now - 3L))
+        setDao.insertSet(testSet(activeId, 1L, 200f, 8, timestamp = now - 2L))
+        setDao.insertSet(testSet(abandonedId, 1L, 300f, 8, timestamp = now - 1L))
+
+        val beforeFinish = setDao.getPerformanceSetsWithExerciseInRange(now - 10L, now + 10L)
+        assertEquals(listOf(finishedId), beforeFinish.map { it.set.workoutId })
+
+        workoutDao.updateWorkout(active.copy(id = activeId, endTime = Date(now)))
+        val afterFinish = setDao.getPerformanceSetsWithExerciseInRange(now - 10L, now + 10L)
+        assertEquals(listOf(finishedId, activeId), afterFinish.map { it.set.workoutId })
     }
 
     @Test
@@ -260,6 +338,70 @@ class SetDaoTest {
         assertEquals(workoutId, result.single().workoutId)
         assertEquals("Chest", result.single().muscle)
         assertEquals(now - 2L, result.single().timestampMs)
+    }
+
+    @Test
+    fun fullExerciseHistoryIsUncappedAndUsesWorkoutDates() = runTest {
+        exerciseDao.insertExercise(testExercise)
+        exerciseDao.insertExercise(testExercise.copy(id = 2L, name = "Row"))
+        val earlierWorkout = Workout(startTime = Date(1_000L), endTime = Date(2_000L), name = null, note = null)
+        val laterWorkout = Workout(startTime = Date(3_000L), endTime = null, name = null, note = null)
+        val earlierId = workoutDao.insertWorkout(earlierWorkout)
+        val laterId = workoutDao.insertWorkout(laterWorkout)
+        repeat(60) { index ->
+            setDao.insertSet(testSet(earlierId, 1L, 100f, 8, timestamp = 10_000L + index))
+        }
+        // Warmups and unfinished rows are still part of full history, in timestamp order.
+        val warmupId = setDao.insertSet(testSet(laterId, 1L, 45f, 8, isWarmup = true, timestamp = 501L))
+        val unfinishedId = setDao.insertSet(testSet(laterId, 1L, 105f, 8, isComplete = false, timestamp = 500L))
+        setDao.insertSet(testSet(laterId, 2L, 500f, 8, timestamp = 499L))
+
+        val history = setDao.observeFullExerciseHistory(1L).first()
+
+        assertEquals(62, history.size)
+        assertEquals(listOf(unfinishedId, warmupId), history.take(2).map { it.set.id })
+        assertEquals(laterWorkout.startTime, history.first().workoutStartTime)
+        assertNull(history.first().workoutEndTime)
+        assertEquals(earlierWorkout.startTime, history.last().workoutStartTime)
+        assertEquals(earlierWorkout.endTime, history.last().workoutEndTime)
+        assertTrue(history.all { it.set.exerciseId == 1L })
+    }
+
+    @Test
+    fun fullExerciseHistoryReactsToSetEditsWorkoutCompletionAndDeletion() = runBlocking {
+        exerciseDao.insertExercise(testExercise)
+        val workout = Workout(startTime = Date(1_000L), endTime = null, name = null, note = null)
+        val workoutId = workoutDao.insertWorkout(workout)
+        val original = testSet(workoutId, 1L, 100f, 8, timestamp = 1_100L)
+        val setId = setDao.insertSet(original)
+        val observations = Channel<List<ExerciseHistorySet>>(Channel.UNLIMITED)
+        val collection = launch {
+            setDao.observeFullExerciseHistory(1L).collect { observations.send(it) }
+        }
+        suspend fun awaitHistory(predicate: (List<ExerciseHistorySet>) -> Boolean): List<ExerciseHistorySet> =
+            withTimeout(5_000L) {
+                var rows = observations.receive()
+                while (!predicate(rows)) rows = observations.receive()
+                rows
+            }
+        try {
+            assertEquals(100f, awaitHistory { it.size == 1 }.single().set.weight)
+
+            setDao.updateSet(original.copy(id = setId, weight = 110f, rpe = 8f, note = "Edited note"))
+            val updated = awaitHistory { it.singleOrNull()?.set?.weight == 110f }.single().set
+            assertEquals(8f, updated.rpe)
+            assertEquals("Edited note", updated.note)
+
+            val completionTime = Date(2_000L)
+            workoutDao.updateWorkout(workout.copy(id = workoutId, endTime = completionTime))
+            assertEquals(completionTime, awaitHistory { it.singleOrNull()?.workoutEndTime == completionTime }.single().workoutEndTime)
+
+            setDao.deleteSetById(setId)
+            assertTrue(awaitHistory { it.isEmpty() }.isEmpty())
+        } finally {
+            collection.cancel()
+            observations.close()
+        }
     }
 
     private fun testSet(

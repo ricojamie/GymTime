@@ -15,14 +15,21 @@ sealed class Screen(val route: String, val icon: ImageVector) {
     object History : Screen("history", Icons.Filled.History)
     object Library : Screen("library", Icons.AutoMirrored.Filled.MenuBook)
     object Analytics : Screen("analytics", Icons.AutoMirrored.Filled.ShowChart)
-    object ExerciseSelection : Screen("exercise_selection?workoutMode={workoutMode}&supersetMode={supersetMode}&adHocParentId={adHocParentId}&addToSuperset={addToSuperset}", Icons.Filled.Home) {
-        fun createRoute(workoutMode: Boolean = false, supersetMode: Boolean = false, adHocParentId: Long? = null, addToSuperset: Boolean = false) = buildString {
+    object ExerciseSelection : Screen("exercise_selection?workoutMode={workoutMode}&supersetMode={supersetMode}&adHocParentId={adHocParentId}&addToSuperset={addToSuperset}&swapInstanceId={swapInstanceId}", Icons.Filled.Home) {
+        fun createRoute(
+            workoutMode: Boolean = false,
+            supersetMode: Boolean = false,
+            adHocParentId: Long? = null,
+            addToSuperset: Boolean = false,
+            swapInstanceId: Long? = null
+        ) = buildString {
             append("exercise_selection")
             val params = mutableListOf<String>()
             if (workoutMode) params.add("workoutMode=true")
             if (supersetMode) params.add("supersetMode=true")
             adHocParentId?.let { params.add("adHocParentId=$it") }
             if (addToSuperset) params.add("addToSuperset=true")
+            swapInstanceId?.let { params.add("swapInstanceId=$it") }
             if (params.isNotEmpty()) append("?${params.joinToString("&")}")
         }
     }
@@ -34,14 +41,16 @@ sealed class Screen(val route: String, val icon: ImageVector) {
             draftToken?.let { append("?draftToken=$it") }
         }
     }
-    object ExerciseForm : Screen("exercise_form?exerciseId={exerciseId}&fromWorkout={fromWorkout}&fromWorkoutBuilder={fromWorkoutBuilder}&initialName={initialName}", Icons.Filled.Home) { // Create/Edit exercise
+    object ExerciseForm : Screen("exercise_form?exerciseId={exerciseId}&fromWorkout={fromWorkout}&fromWorkoutBuilder={fromWorkoutBuilder}&initialName={initialName}&initialMuscle={initialMuscle}&returnToPicker={returnToPicker}", Icons.Filled.Home) { // Create/Edit exercise
         const val RESULT_CREATED_EXERCISE_ID = "createdExerciseId"
 
         fun createRoute(
             exerciseId: Long? = null,
             fromWorkout: Boolean = false,
             fromWorkoutBuilder: Boolean = false,
-            initialName: String? = null
+            initialName: String? = null,
+            initialMuscle: String? = null,
+            returnToPicker: Boolean = false
         ) = buildString {
             append("exercise_form")
             val params = mutableListOf<String>()
@@ -51,6 +60,10 @@ sealed class Screen(val route: String, val icon: ImageVector) {
             initialName?.trim()?.takeIf { it.isNotEmpty() }?.let {
                 params.add("initialName=${Uri.encode(it)}")
             }
+            initialMuscle?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                params.add("initialMuscle=${Uri.encode(it)}")
+            }
+            if (returnToPicker) params.add("returnToPicker=true")
             if (params.isNotEmpty()) append("?${params.joinToString("&")}")
         }
     }

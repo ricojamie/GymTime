@@ -363,7 +363,7 @@ fun StrengthMomentumDetailSheet(
 
         item {
             Text(
-                text = "Weighted lifts use estimated 1RM; reps-only exercises use reps. At least ${state.minimumSessionsPerSide} matched sessions per side are required.",
+                text = "Each finished workout uses its best working set: estimated 1RM for positive-weight sets of 1–15 reps, or most reps for reps-only exercises. At least ${state.minimumSessionsPerSide} matched workouts per side are required. Higher-rep weighted sets remain in Records and History.",
                 style = MaterialTheme.typography.labelSmall,
                 color = LocalAppColors.current.textTertiary,
                 textAlign = TextAlign.Center,

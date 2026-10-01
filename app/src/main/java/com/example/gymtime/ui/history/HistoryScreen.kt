@@ -44,6 +44,7 @@ import com.example.gymtime.navigation.navigateToWorkoutOverview
 import com.example.gymtime.ui.components.ExerciseIcons
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.*
+import com.example.gymtime.ui.history.preview.PreviewHistoryScreen
 import com.example.gymtime.util.ShareImagePalette
 import java.text.SimpleDateFormat
 import java.util.*
@@ -54,6 +55,17 @@ fun HistoryScreen(
     navController: NavController,
     viewModel: HistoryViewModel = hiltViewModel()
 ) {
+    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
+    if (newUiEnabled) {
+        LoggerPreviewTheme { PreviewHistoryScreen(navController, viewModel) }
+    } else {
+        LegacyHistoryScreen(navController, viewModel)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LegacyHistoryScreen(navController: NavController, viewModel: HistoryViewModel) {
     val workouts by viewModel.allWorkouts.collectAsStateWithLifecycle()
     val selectedWorkout by viewModel.selectedWorkout.collectAsStateWithLifecycle()
     val selectedWorkoutDetails by viewModel.selectedWorkoutDetails.collectAsStateWithLifecycle()
@@ -739,7 +751,8 @@ fun AddToRoutineDialog(
     routines: List<Routine>,
     loadDays: suspend (Long) -> List<RoutineDay>,
     onConfirm: (routineId: Long, replaceDayId: Long?) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onAccentColor: Color = Color.Black
 ) {
     val accentColor = MaterialTheme.colorScheme.primary
     var pickedRoutine by remember { mutableStateOf<Routine?>(null) }
@@ -747,6 +760,7 @@ fun AddToRoutineDialog(
     var dayToReplace by remember { mutableStateOf<RoutineDay?>(null) }
 
     LaunchedEffect(pickedRoutine) {
+        days = null
         days = pickedRoutine?.let { loadDays(it.id) }
     }
 
@@ -772,7 +786,7 @@ fun AddToRoutineDialog(
                     onClick = { onConfirm(day.routineId, day.id) },
                     colors = ButtonDefaults.buttonColors(containerColor = accentColor)
                 ) {
-                    Text("Replace", color = Color.Black, fontWeight = FontWeight.Bold)
+                    Text("Replace", color = onAccentColor, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {

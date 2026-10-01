@@ -11,6 +11,9 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -28,6 +31,7 @@ import com.example.gymtime.ui.components.BackNavigationIcon
 import com.example.gymtime.ui.components.HomeNavigationAction
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.*
+import com.example.gymtime.ui.routine.preview.PreviewRoutineDayStartContent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,20 +39,37 @@ fun RoutineDayStartScreen(
     navController: NavController,
     viewModel: RoutineDayStartViewModel = hiltViewModel()
 ) {
-    val routineName by viewModel.routineName.collectAsStateWithLifecycle(initialValue = "")
-    val daysWithExercises by viewModel.daysWithExercises.collectAsStateWithLifecycle(initialValue = emptyList())
-
-    LaunchedEffect(Unit) {
-        viewModel.startWorkoutEvent.collect { firstExerciseId ->
-            // Navigate to exercise logging for the first exercise
-            // Note: In a real app, we might want a 'Workout Overview' screen first
-            // or pass the workoutId context.
-            // Since I'm limited by the current navigation structure, 
-            // I'll assume navigating to ExerciseLogging with the first exercise is the intention.
-            // The ExerciseLogging screen should ideally know it's part of an active workout (which it does via global state or VM).
-            navController.navigateToWorkoutExercise(firstExerciseId)
+    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val latestOpenWorkout by rememberUpdatedState<(Long) -> Unit>({ navController.navigateToWorkoutExercise(it) })
+    LaunchedEffect(viewModel, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.startWorkoutEvent.collect { firstExerciseId ->
+                runCatching { latestOpenWorkout(firstExerciseId) }
+                    .onSuccess { viewModel.onWorkoutOpened() }
+                    .onFailure { viewModel.onWorkoutNavigationFailed() }
+            }
         }
     }
+    if (newUiEnabled) {
+        val state by viewModel.previewState.collectAsStateWithLifecycle()
+        LoggerPreviewTheme {
+            PreviewRoutineDayStartContent(
+                state = state, onBack = navController::navigateBackOrHome, onHome = navController::navigateHomeAndClearStack,
+                onStartDay = viewModel::startWorkoutFromDay,
+                onEditDay = { navController.navigate(Screen.RoutineDayForm.createRoute(viewModel.routineId, it)) },
+                onAddDay = { navController.navigate(Screen.RoutineDayForm.createRoute(viewModel.routineId)) },
+                onRetry = viewModel::retryLoad, onDismissError = viewModel::dismissError
+            )
+        }
+    } else LegacyRoutineDayStartScreen(navController, viewModel)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LegacyRoutineDayStartScreen(navController: NavController, viewModel: RoutineDayStartViewModel) {
+    val routineName by viewModel.routineName.collectAsStateWithLifecycle(initialValue = "")
+    val daysWithExercises by viewModel.daysWithExercises.collectAsStateWithLifecycle(initialValue = emptyList())
 
     Scaffold(
         topBar = {

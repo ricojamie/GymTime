@@ -7,13 +7,20 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
 import com.example.gymtime.data.db.entity.Exercise
+import com.example.gymtime.data.db.entity.Set
 import kotlinx.coroutines.flow.Flow
+import java.util.Date
 
 data class ExerciseUsageRow(
     @Embedded val exercise: Exercise,
     val allTimeSetCount: Int,
     val recentSetCount: Int,
     val lastUsedMs: Long?
+)
+
+data class ExerciseLastSetRow(
+    @Embedded val set: Set,
+    val workoutStartTime: Date
 )
 
 @Dao
@@ -44,6 +51,41 @@ interface ExerciseDao {
         GROUP BY e.id
     """)
     fun getExercisesWithUsageStats(recentStartMs: Long): Flow<List<ExerciseUsageRow>>
+
+    // Pick the workout before filtering sets so a warmup-only latest visit never
+    // presents an older working set as the user's last workout.
+    @Query("""
+        WITH ranked_workouts AS (
+            SELECT
+                workout_sets.exerciseId,
+                w.id AS workoutId,
+                w.startTime AS workoutStartTime,
+                ROW_NUMBER() OVER (
+                    PARTITION BY workout_sets.exerciseId
+                    ORDER BY w.startTime DESC, w.id DESC
+                ) AS workoutRank
+            FROM (SELECT DISTINCT exerciseId, workoutId FROM sets) workout_sets
+            INNER JOIN workouts w ON w.id = workout_sets.workoutId
+            WHERE w.endTime IS NOT NULL
+        ), ranked_sets AS (
+            SELECT
+                s.id AS setId,
+                rw.workoutStartTime,
+                ROW_NUMBER() OVER (
+                    PARTITION BY s.exerciseId
+                    ORDER BY s.timestamp DESC, s.id DESC
+                ) AS setRank
+            FROM ranked_workouts rw
+            INNER JOIN sets s ON s.workoutId = rw.workoutId AND s.exerciseId = rw.exerciseId
+            WHERE rw.workoutRank = 1 AND s.isWarmup = 0 AND s.isComplete = 1
+        )
+        SELECT s.*, rs.workoutStartTime
+        FROM ranked_sets rs
+        INNER JOIN sets s ON s.id = rs.setId
+        WHERE rs.setRank = 1
+        ORDER BY s.exerciseId
+    """)
+    fun observeLastWorkoutSets(): Flow<List<ExerciseLastSetRow>>
 
     @Query("SELECT * FROM exercises WHERE id = :id")
     fun getExerciseById(id: Long): Flow<Exercise>

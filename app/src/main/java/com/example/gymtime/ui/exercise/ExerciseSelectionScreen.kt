@@ -44,6 +44,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -76,6 +78,8 @@ import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.smartlog.SmartLogBottomSheet
 import com.example.gymtime.ui.theme.IronLogTheme
 import com.example.gymtime.ui.theme.LocalAppColors
+import com.example.gymtime.ui.theme.LoggerPreviewTheme
+import com.example.gymtime.ui.exercise.preview.PreviewExerciseSelectionScreen
 
 private const val TAG = "ExerciseSelectionScreen"
 
@@ -102,6 +106,23 @@ fun ExerciseSelectionContent(
     viewModel: ExerciseSelectionViewModel = hiltViewModel(),
     showNavigationChrome: Boolean = false
 ) {
+    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
+    if (newUiEnabled) {
+        LoggerPreviewTheme {
+            PreviewExerciseSelectionScreen(navController, viewModel, showNavigationChrome)
+        }
+    } else {
+        LegacyExerciseSelectionContent(navController, viewModel, showNavigationChrome)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LegacyExerciseSelectionContent(
+    navController: NavController,
+    viewModel: ExerciseSelectionViewModel,
+    showNavigationChrome: Boolean
+) {
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.supersetStarted.collect { parentId: Long ->
             navController.popBackStack()
@@ -110,6 +131,20 @@ fun ExerciseSelectionContent(
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.exerciseAddedToSuperset.collect { exerciseId: Long ->
             navController.popBackStack()
+        }
+    }
+    val snackbarHostState = remember { SnackbarHostState() }
+    androidx.compose.runtime.LaunchedEffect(viewModel) {
+        viewModel.selectionMessages.collect { snackbarHostState.showSnackbar(it) }
+    }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.swapExerciseEvent.collect { event ->
+            when (event) {
+                is ExerciseSelectionViewModel.SwapExerciseEvent.Success ->
+                    navController.navigateToWorkoutExercise(event.exerciseId)
+                is ExerciseSelectionViewModel.SwapExerciseEvent.Error ->
+                    snackbarHostState.showSnackbar(event.message)
+            }
         }
     }
     val accentColor = MaterialTheme.colorScheme.primary
@@ -126,6 +161,7 @@ fun ExerciseSelectionContent(
 
     // Workout mode state (for navigation after creating exercise)
     val isWorkoutMode by viewModel.isWorkoutMode.collectAsStateWithLifecycle()
+    val isSwapMode = viewModel.isSwapMode
 
     var exerciseToDelete by remember { mutableStateOf<Exercise?>(null) }
     var showSmartLog by remember { mutableStateOf(false) }
@@ -138,7 +174,11 @@ fun ExerciseSelectionContent(
                 TopAppBar(
                     title = {
                         Text(
-                            if (isSupersetMode) "Build Superset" else "Choose Exercise",
+                            when {
+                                isSwapMode -> "Swap Exercise"
+                                isSupersetMode -> "Build Superset"
+                                else -> "Choose Exercise"
+                            },
                             color = LocalAppColors.current.textPrimary,
                             fontWeight = FontWeight.Bold
                         )
@@ -199,7 +239,7 @@ fun ExerciseSelectionContent(
                     onClick = {
                         // In superset selection, pop back so selection state is preserved.
                         // Otherwise honor workout-mode behavior (jump straight to logger).
-                        val fromWorkout = isWorkoutMode && !isSupersetMode && !viewModel.isAddToSupersetMode
+                        val fromWorkout = isWorkoutMode && !isSwapMode && !isSupersetMode && !viewModel.isAddToSupersetMode
                         navController.navigate(Screen.ExerciseForm.createRoute(fromWorkout = fromWorkout))
                     },
                     containerColor = accentColor,
@@ -213,6 +253,7 @@ fun ExerciseSelectionContent(
                 }
             }
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = Color.Transparent
     ) { innerPadding ->
         Column(
@@ -225,7 +266,7 @@ fun ExerciseSelectionContent(
             ExerciseSearchBox(
                 query = searchQuery,
                 onQueryChange = { viewModel.updateSearchQuery(it) },
-                onSmartLogClick = if (!isSupersetMode && !viewModel.isAddToSupersetMode) {
+                onSmartLogClick = if (!isSwapMode && !isSupersetMode && !viewModel.isAddToSupersetMode) {
                     { showSmartLog = true }
                 } else null
             )
@@ -233,13 +274,15 @@ fun ExerciseSelectionContent(
             Spacer(modifier = Modifier.height(12.dp))
 
             // Superset Mode Toggle Row
-            SupersetModeToggle(
-                isSupersetMode = isSupersetMode,
-                selectedCount = selectedForSuperset.size,
-                onToggle = { viewModel.toggleSupersetMode() }
-            )
+            if (!isSwapMode) {
+                SupersetModeToggle(
+                    isSupersetMode = isSupersetMode,
+                    selectedCount = selectedForSuperset.size,
+                    onToggle = { viewModel.toggleSupersetMode() }
+                )
 
-            Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+            }
 
             ExerciseSortChips(
                 selectedMode = sortMode,
@@ -292,7 +335,9 @@ fun ExerciseSelectionContent(
                             isSelected = isSelected,
                             selectionOrder = selectionOrder,
                             onClick = {
-                                if (viewModel.isAddToSupersetMode) {
+                                if (isSwapMode) {
+                                    viewModel.swapPlannedExercise(exercise.id)
+                                } else if (viewModel.isAddToSupersetMode) {
                                     viewModel.toggleExerciseSelection(exercise)
                                 } else if (isSupersetMode) {
                                     viewModel.toggleExerciseSelection(exercise)

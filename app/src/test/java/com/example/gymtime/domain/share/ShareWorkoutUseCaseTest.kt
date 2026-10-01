@@ -12,7 +12,9 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -98,11 +100,40 @@ class ShareWorkoutUseCaseTest {
         assertTrue("45x12 is the true PR", sets[1].isPersonalRecord)
     }
 
+    @Test
+    fun `unfinished heavier set cannot inflate totals or suppress a completed PR`() = runTest {
+        coEvery { setDao.getWorkoutSetsWithExercises(1L) } returns listOf(
+            setInfo(id = 1L, weight = 225f, reps = 8, timestamp = workoutStart + 1_000L),
+            setInfo(id = 2L, weight = 300f, reps = 8, isComplete = false, timestamp = workoutStart + 2_000L)
+        )
+        coEvery {
+            setDao.getPersonalBestsWithTimestampsBefore(1L, workoutStart)
+        } returns listOf(PBWithTimestamp(reps = 8, maxWeight = 200f, firstAchievedAt = 1L))
+
+        val result = useCase.buildShareableWorkout(1L)!!
+
+        assertEquals(1, result.totalWorkingSets)
+        assertEquals(1800f, result.totalVolume, 0.1f)
+        val set = result.exercises.single().sets.single()
+        assertEquals(225f, set.weight!!, 0.1f)
+        assertTrue("Only the completed 225x8 set is eligible for the PR", set.isPersonalRecord)
+    }
+
+    @Test
+    fun `workout with only unfinished sets has nothing to share`() = runTest {
+        coEvery { setDao.getWorkoutSetsWithExercises(1L) } returns listOf(
+            setInfo(id = 1L, weight = 300f, reps = 8, isComplete = false, timestamp = workoutStart + 1_000L)
+        )
+
+        assertNull(useCase.buildShareableWorkout(1L))
+    }
+
     private fun setInfo(
         id: Long,
         weight: Float,
         reps: Int,
         isWarmup: Boolean = false,
+        isComplete: Boolean = true,
         timestamp: Long
     ): SetWithExerciseInfo {
         return SetWithExerciseInfo(
@@ -116,7 +147,7 @@ class ShareWorkoutUseCaseTest {
                 durationSeconds = null,
                 distanceMeters = null,
                 isWarmup = isWarmup,
-                isComplete = true,
+                isComplete = isComplete,
                 timestamp = Date(timestamp)
             ),
             exerciseName = "Bench Press",

@@ -21,10 +21,15 @@ import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
+import com.example.gymtime.data.db.entity.isWarmupLibraryExercise
+import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
 import com.example.gymtime.data.repository.ExerciseRepository
 import com.example.gymtime.data.repository.WorkoutRepository
 import com.example.gymtime.domain.recommendation.ExerciseAttemptRecommendation
 import com.example.gymtime.domain.recommendation.ExerciseAttemptRecommendationUseCase
+import com.example.gymtime.domain.progression.LoggerProgressState
+import com.example.gymtime.domain.progression.buildLoggerProgress
+import com.example.gymtime.domain.progression.loggerRecordLabels
 import com.example.gymtime.service.RestTimerService
 import com.example.gymtime.smartlog.SetDraft
 import com.example.gymtime.smartlog.SmartLogDraftStore
@@ -38,6 +43,8 @@ import com.example.gymtime.wear.WearSessionSnapshot
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -46,6 +53,10 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.Date
@@ -159,7 +170,8 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val routineRepository: RoutineRepository,
     private val recommendationUseCase: ExerciseAttemptRecommendationUseCase,
     private val activeWearSessionRepository: ActiveWearSessionRepository,
-    private val smartLogDraftStore: SmartLogDraftStore
+    private val smartLogDraftStore: SmartLogDraftStore,
+    private val loggerCelebrations: LoggerCelebrationState = LoggerCelebrationState()
 ) : ViewModel() {
 
     private val exerciseId: Long = checkNotNull(savedStateHandle["exerciseId"])
@@ -171,6 +183,7 @@ class ExerciseLoggingViewModel @Inject constructor(
     val isInSupersetMode = supersetManager.isInSupersetMode
     val supersetExercises = supersetManager.supersetExercises
     val currentSupersetIndex = supersetManager.currentExerciseIndex
+    private val supersetExited = MutableStateFlow(false)
 
     // Auto-switch event for superset navigation
     private val _autoSwitchEvent = Channel<Long>(Channel.BUFFERED)
@@ -214,6 +227,35 @@ class ExerciseLoggingViewModel @Inject constructor(
 
     private val _currentWorkout = MutableStateFlow<Workout?>(null)
     val currentWorkout: StateFlow<Workout?> = _currentWorkout
+
+    val newUiEnabled = userPreferencesRepository.newUiEnabled
+    val prCelebration = loggerCelebrations.celebration
+
+    fun dismissPrCelebration(id: Long) = loggerCelebrations.dismiss(id)
+    fun claimPrCelebrationHaptic(id: Long): Boolean = loggerCelebrations.claimHaptic(id)
+
+    // Only collect the full history while the preview is in use. Room invalidates this
+    // flow on inserts, edits, deletes, and workout changes, so records stay current.
+    val previewProgress: StateFlow<LoggerProgressState> = newUiEnabled.flatMapLatest { enabled ->
+        if (!enabled) {
+            flowOf(LoggerProgressState(isLoading = false))
+        } else {
+            combine(_exercise, _currentWorkout) { exercise, workout -> exercise to workout }
+                .flatMapLatest { (exercise, workout) ->
+                    if (exercise == null || workout == null) {
+                        flowOf(LoggerProgressState())
+                    } else {
+                        exerciseRepository.observeFullExerciseHistory(exerciseId).map { history ->
+                            buildLoggerProgress(exercise, history, workout)
+                        }
+                    }
+                }
+        }
+    }.flowOn(Dispatchers.Default).stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        LoggerProgressState()
+    )
 
     private val _loggedSets = MutableStateFlow<List<Set>>(emptyList())
     val loggedSets: StateFlow<List<Set>> = _loggedSets
@@ -274,6 +316,7 @@ class ExerciseLoggingViewModel @Inject constructor(
     // Set editing state
     private val _editingSet = MutableStateFlow<Set?>(null)
     val editingSet: StateFlow<Set?> = _editingSet
+    private var formBeforeEditing: SetFormSnapshot? = null
 
     // Last workout data
     private val _lastWorkoutSets = MutableStateFlow<List<Set>>(emptyList())
@@ -321,6 +364,19 @@ class ExerciseLoggingViewModel @Inject constructor(
     val barWeight = userPreferencesRepository.barWeight
     val loadingSides = userPreferencesRepository.loadingSides
     val availablePlates = userPreferencesRepository.availablePlates
+    val plateInventorySettings = userPreferencesRepository.plateInventorySettings
+
+    fun setPlateInventoryCount(weight: Float, count: Int) {
+        viewModelScope.launch { userPreferencesRepository.setPlateInventoryCount(weight, count) }
+    }
+
+    fun setUsePlateInventory(enabled: Boolean) {
+        viewModelScope.launch { userPreferencesRepository.setUsePlateInventory(enabled) }
+    }
+
+    fun adjustPlateInventoryCount(weight: Float, delta: Int) {
+        viewModelScope.launch { userPreferencesRepository.adjustPlateInventoryCount(weight, delta) }
+    }
 
     // Volume Orb state
     val volumeOrbState: StateFlow<VolumeOrbState> = volumeOrbRepository.orbState
@@ -339,6 +395,12 @@ class ExerciseLoggingViewModel @Inject constructor(
     val previousExerciseId: StateFlow<Long?> = _previousExerciseId
 
     init {
+        // A logger opened outside the active group starts standalone logging.
+        if (supersetManager.isInSupersetMode.value &&
+            !supersetManager.switchToExercise(exerciseId)
+        ) {
+            supersetManager.exitSupersetMode()
+        }
         // Bind to timer service
         val serviceIntent = Intent(context, RestTimerService::class.java)
         context.bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
@@ -355,17 +417,11 @@ class ExerciseLoggingViewModel @Inject constructor(
                     exerciseDefaultRestSeconds = it.defaultRestSeconds
                     _restTime.value = it.defaultRestSeconds
                     _selectedDistanceUnit.value = it.defaultDistanceUnit
+                    setWarmupState(false)
                     _attemptRecommendation.value = runCatching {
                         recommendationUseCase.getRecommendation(it)
                     }.getOrNull()
                     
-                    // Initial sync with SupersetManager if already in a superset (e.g. from blank workout)
-                    if (supersetManager.isInSupersetMode.value) {
-                         val orderIndex = supersetManager.getOrderIndex(exerciseId)
-                         if (orderIndex != -1) {
-                             supersetManager.setCurrentExerciseIndex(orderIndex)
-                         }
-                    }
                     applySmartLogDraftIfAvailable()
                 }
                 Log.d("ExerciseLoggingVM", "Exercise loaded: ${ex?.name}")
@@ -399,7 +455,9 @@ class ExerciseLoggingViewModel @Inject constructor(
         viewModelScope.launch {
             _currentWorkout.filterNotNull().flatMapLatest { workout ->
                 workoutRepository.getWorkoutPlanSummaries(workout.id)
-            }.collectLatest { planItems ->
+            }.combine(supersetExited) { planItems, exited ->
+                planItems to exited
+            }.collectLatest { (planItems, exited) ->
                 val currentItem = planItems.firstOrNull { it.exerciseId == exerciseId }
                 _currentPlanItem.value = currentItem
 
@@ -424,7 +482,7 @@ class ExerciseLoggingViewModel @Inject constructor(
                 }
                 val currentGroupId = currentItem?.supersetGroupId
 
-                if (currentGroupId != null) {
+                if (currentGroupId != null && !exited) {
                     val group = planItems
                         .filter { it.supersetGroupId == currentGroupId }
                         .sortedBy { it.supersetOrderIndex }
@@ -575,7 +633,11 @@ class ExerciseLoggingViewModel @Inject constructor(
     }
 
     fun toggleWarmup() {
-        _isWarmup.value = !_isWarmup.value
+        if (isWarmupLibraryExercise()) {
+            _isWarmup.value = true
+        } else {
+            _isWarmup.value = !_isWarmup.value
+        }
     }
 
     fun updateSetNote(note: String) {
@@ -599,6 +661,11 @@ class ExerciseLoggingViewModel @Inject constructor(
         val parsedInput = validateSetInput(exercise, formSnapshot).parsedInput ?: return
         if (!beginSetPersistence()) return
 
+        // Use the history already loaded by the preview; never hold up a save to fetch records.
+        val progressBeforeSave = previewProgress.value
+        val setsBeforeSave = (progressBeforeSave.sessions.flatMap { it.sets } + _loggedSets.value)
+            .distinctBy { it.id }
+
         viewModelScope.launch {
             try {
                 val newSet = buildLoggedSet(
@@ -609,6 +676,9 @@ class ExerciseLoggingViewModel @Inject constructor(
                 )
 
                 workoutRepository.logSet(newSet)
+                if (!progressBeforeSave.isLoading && progressBeforeSave.workoutId == workout.id) {
+                    loggerCelebrations.celebrate(exercise.name, newSet, loggerRecordLabels(exercise, newSet, setsBeforeSave))
+                }
                 activeWearSessionRepository.confirmSetSaved()
                 onLogSetSavedSuccessfully(
                     exercise = exercise,
@@ -625,14 +695,20 @@ class ExerciseLoggingViewModel @Inject constructor(
     }
 
     fun startEditingSet(set: Set) {
+        if (_isPersistingSet.value) return
+        if (_editingSet.value == null) {
+            formBeforeEditing = captureCurrentFormSnapshot()
+        }
         _editingSet.value = set
         set.distanceUnit?.let { _selectedDistanceUnit.value = it }
         _weight.value = set.weight?.toString() ?: ""
         _calories.value = set.calories?.toString() ?: ""
         _reps.value = set.reps?.toString() ?: ""
+        _rpe.value = set.rpe?.toString() ?: ""
+        _setNote.value = set.note.orEmpty()
         _duration.value = set.durationSeconds?.let { TimeUtils.formatSecondsToHMS(it) } ?: ""
         _distance.value = formatDistanceForEditing(set, _selectedDistanceUnit.value)
-        _isWarmup.value = set.isWarmup
+        setWarmupState(set.isWarmup)
     }
 
     fun saveEditedSet() {
@@ -653,12 +729,12 @@ class ExerciseLoggingViewModel @Inject constructor(
                     distanceValue = parsedInput.distanceValue,
                     distanceUnit = parsedInput.distanceUnit,
                     distanceMeters = parsedInput.distanceMeters,
-                    isWarmup = parsedInput.isWarmup,
+                    isWarmup = exercise.isWarmupLibraryExercise || parsedInput.isWarmup,
                     note = parsedInput.note
                 )
                 workoutRepository.updateSet(updatedSet)
                 Log.d("ExerciseLoggingVM", "Set updated: id=${set.id}")
-                clearEditingStateAndForm()
+                restoreFormAfterEditing()
             } catch (error: Throwable) {
                 Log.e("ExerciseLoggingVM", "Failed to save edited set", error)
             } finally {
@@ -668,14 +744,8 @@ class ExerciseLoggingViewModel @Inject constructor(
     }
 
     fun cancelEditing() {
-        _editingSet.value = null
-        _weight.value = ""
-        _calories.value = ""
-        _reps.value = ""
-        _rpe.value = ""
-        _duration.value = ""
-        _distance.value = ""
-        _isWarmup.value = false
+        if (_isPersistingSet.value || _editingSet.value == null) return
+        restoreFormAfterEditing()
     }
 
     fun cancelSmartLogQueue() {
@@ -762,6 +832,7 @@ class ExerciseLoggingViewModel @Inject constructor(
     }
 
     fun exitSupersetMode() {
+        supersetExited.value = true
         supersetManager.exitSupersetMode()
         Log.d("ExerciseLoggingVM", "Exited superset mode")
     }
@@ -801,8 +872,14 @@ class ExerciseLoggingViewModel @Inject constructor(
         allSets: List<Set>,
         planItems: List<WorkoutPlanSummary> = emptyList()
     ): WorkoutPanelData {
+        val warmupLibraryExerciseIds = overview
+            .filter { it.targetMuscle.isWarmupMuscleGroup() }
+            .mapTo(mutableSetOf()) { it.exerciseId }
         val workingSets = allSets.filter { !it.isWarmup }
-        val setPreviews = workingSets
+        val displaySets = allSets.filter { set ->
+            !set.isWarmup || set.exerciseId in warmupLibraryExerciseIds
+        }
+        val setPreviews = displaySets
             .groupBy { it.exerciseId }
             .mapValues { (_, sets) ->
                 sets.sortedBy { it.timestamp }.map { formatSetPreview(it) }
@@ -835,7 +912,7 @@ class ExerciseLoggingViewModel @Inject constructor(
         val stats = WorkoutStats(
             totalSets = workingSets.size,
             totalVolume = totalVolume,
-            exerciseCount = overview.size,
+            exerciseCount = overview.count { !it.targetMuscle.isWarmupMuscleGroup() },
             duration = duration
         )
 
@@ -898,12 +975,14 @@ class ExerciseLoggingViewModel @Inject constructor(
         val plates = availablePlates.first()
         val bar = barWeight.first()
         val sides = loadingSides.first()
+        val inventory = plateInventorySettings.first()
 
         return PlateCalculator.calculatePlates(
             targetWeight = targetWeight,
             availablePlates = plates,
             barWeight = bar,
-            loadingSides = sides
+            loadingSides = sides,
+            plateInventory = inventory.counts.takeIf { inventory.enabled }
         )
     }
 
@@ -979,7 +1058,7 @@ class ExerciseLoggingViewModel @Inject constructor(
         _duration.value = draft.durationSeconds?.let(TimeUtils::formatSecondsToHMS) ?: ""
         _distance.value = draft.distanceValue?.let(::formatWeightForInput) ?: ""
         draft.distanceUnit?.let { _selectedDistanceUnit.value = it }
-        _isWarmup.value = draft.isWarmup
+        setWarmupState(draft.isWarmup)
         _setNote.value = draft.note.orEmpty()
     }
 
@@ -1014,7 +1093,7 @@ class ExerciseLoggingViewModel @Inject constructor(
         patch.duration?.let { _duration.value = it }
         patch.distance?.let { _distance.value = it }
         patch.calories?.let { _calories.value = it }
-        patch.isWarmup?.let { _isWarmup.value = it }
+        patch.isWarmup?.let(::setWarmupState)
         return true
     }
 
@@ -1108,7 +1187,9 @@ class ExerciseLoggingViewModel @Inject constructor(
         parsedInput: ParsedSetInput,
         timestamp: Date
     ): Set {
-        val supersetGroupId = if (supersetManager.isInSupersetMode.value) {
+        val supersetGroupId = if (supersetManager.isInSupersetMode.value &&
+            supersetManager.isInCurrentSuperset(exercise.id)
+        ) {
             supersetManager.supersetGroupId.value
         } else null
         val supersetOrderIndex = if (supersetGroupId != null) {
@@ -1128,7 +1209,7 @@ class ExerciseLoggingViewModel @Inject constructor(
             distanceValue = parsedInput.distanceValue,
             distanceUnit = parsedInput.distanceUnit,
             distanceMeters = parsedInput.distanceMeters,
-            isWarmup = parsedInput.isWarmup,
+            isWarmup = exercise.isWarmupLibraryExercise || parsedInput.isWarmup,
             isComplete = true,
             timestamp = timestamp,
             note = parsedInput.note,
@@ -1145,6 +1226,7 @@ class ExerciseLoggingViewModel @Inject constructor(
     ) {
         if (
             exercise.logType == LogType.WEIGHT_REPS &&
+            !exercise.isWarmupLibraryExercise &&
             !parsedInput.isWarmup &&
             parsedInput.weight != null &&
             parsedInput.reps != null
@@ -1158,7 +1240,7 @@ class ExerciseLoggingViewModel @Inject constructor(
 
         _rpe.value = ""
         _setNote.value = ""
-        _isWarmup.value = false
+        setWarmupState(false)
 
         advanceSmartLogDraft()
 
@@ -1167,7 +1249,9 @@ class ExerciseLoggingViewModel @Inject constructor(
         }
         resetTimerToDefault()
 
-        if (supersetManager.isInSupersetMode.value) {
+        if (supersetManager.isInSupersetMode.value &&
+            supersetManager.isInCurrentSuperset(exercise.id)
+        ) {
             supersetManager.saveLastLoggedValues(
                 exerciseId,
                 LastLoggedValues(
@@ -1188,16 +1272,27 @@ class ExerciseLoggingViewModel @Inject constructor(
         }
     }
 
-    private fun clearEditingStateAndForm() {
+    private fun restoreFormAfterEditing() {
+        val draft = formBeforeEditing
+        formBeforeEditing = null
         _editingSet.value = null
-        _weight.value = ""
-        _calories.value = ""
-        _reps.value = ""
-        _rpe.value = ""
-        _duration.value = ""
-        _distance.value = ""
-        _isWarmup.value = false
-        _setNote.value = ""
+        if (draft == null) return
+        _weight.value = draft.weight
+        _calories.value = draft.calories
+        _reps.value = draft.reps
+        _rpe.value = draft.rpe
+        _duration.value = draft.duration
+        _distance.value = draft.distance
+        _selectedDistanceUnit.value = draft.distanceUnit
+        setWarmupState(draft.isWarmup)
+        _setNote.value = draft.note
+    }
+
+    private fun isWarmupLibraryExercise(): Boolean =
+        _exercise.value?.isWarmupLibraryExercise == true
+
+    private fun setWarmupState(requestedWarmup: Boolean) {
+        _isWarmup.value = requestedWarmup || isWarmupLibraryExercise()
     }
 
     private fun validateSetInput(

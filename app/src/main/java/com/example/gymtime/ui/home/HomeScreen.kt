@@ -9,15 +9,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
@@ -26,6 +29,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -39,8 +44,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -55,6 +65,8 @@ import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.components.RoutineCard
 import com.example.gymtime.ui.smartlog.SmartLogBottomSheet
 import com.example.gymtime.ui.theme.LocalAppColors
+import com.example.gymtime.ui.theme.LoggerPreviewTheme
+import com.example.gymtime.ui.home.preview.PreviewHomeScreen
 import com.example.gymtime.util.StreakCalculator
 import java.text.NumberFormat
 import java.util.Calendar
@@ -67,7 +79,25 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
     navController: NavController
 ) {
+    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
+    if (newUiEnabled) {
+        LoggerPreviewTheme {
+            PreviewHomeScreen(modifier = modifier, viewModel = viewModel, navController = navController)
+        }
+    } else {
+        LegacyHomeScreen(modifier = modifier, viewModel = viewModel, navController = navController)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LegacyHomeScreen(
+    modifier: Modifier,
+    viewModel: HomeViewModel,
+    navController: NavController
+) {
     val userName by viewModel.userName.collectAsStateWithLifecycle(initialValue = "Athlete")
+    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
     val ongoingWorkout by viewModel.ongoingWorkout.collectAsStateWithLifecycle()
     val hasActiveRoutine by viewModel.hasActiveRoutine.collectAsStateWithLifecycle()
     val activeRoutineName by viewModel.activeRoutineName.collectAsStateWithLifecycle()
@@ -112,11 +142,26 @@ fun HomeScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             HomeHeader(userName = userName, modifier = Modifier.weight(1f))
-            IconButton(onClick = { navController.navigate(Screen.Settings.route) }) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Settings",
-                    tint = MaterialTheme.colorScheme.primary
+            Column(horizontalAlignment = Alignment.End) {
+                Row {
+                    IconButton(onClick = { navController.navigate(Screen.ThemeSettings.route) }) {
+                        Icon(
+                            imageVector = Icons.Default.Palette,
+                            contentDescription = "Choose your colors",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    IconButton(onClick = { navController.navigate(Screen.Settings.route) }) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                NewUiPreviewToggle(
+                    enabled = newUiEnabled,
+                    onEnabledChange = viewModel::setNewUiEnabled
                 )
             }
         }
@@ -225,7 +270,7 @@ fun HomeScreen(
             },
             text = {
                 Text(
-                    text = "Compares up to your 3 most recent completed strength sessions with the same number of preceding sessions for each exercise. At least 2 sessions per side are required. Weighted lifts use the average estimated strength of the top 3 working sets; reps-only exercises use the top 3 rep counts. Warmups, unfinished sets, cardio, timed, distance, and calorie exercises are excluded. Exercise changes are combined equally within each muscle, and Legs remains one combined region. Weekly volume is shown only as context.",
+                    text = "Compares up to your 3 most recent completed strength workouts with the same number of preceding workouts for each exercise. At least 2 workouts per side are required. Each workout uses its best valid working set: estimated one-rep max for positive-weight sets of 1–15 reps, or most repetitions for reps-only exercises. The recent and previous scores are medians of those workout scores. Higher-rep weighted sets stay in Records and History but are excluded from estimated strength. Warmups, unfinished sets and workouts, cardio, timed, distance, and calorie exercises are excluded. Exercise changes are combined equally within each muscle, and Legs remains one combined region. Weekly volume is shown only as context.",
                     color = LocalAppColors.current.textSecondary,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -283,6 +328,46 @@ fun HomeScreen(
                 showSmartLog = false
                 navController.navigate(Screen.ExerciseForm.createRoute(fromWorkout = true, initialName = name))
             }
+        )
+    }
+}
+
+@Composable
+internal fun NewUiPreviewToggle(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val appColors = LocalAppColors.current
+    val accent = MaterialTheme.colorScheme.primary
+    val onAccent = if (accent.luminance() > 0.179f) Color.Black else Color.White
+
+    Row(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .toggleable(
+                value = enabled,
+                role = Role.Switch,
+                onValueChange = onEnabledChange
+            )
+            .semantics { contentDescription = "Try our new UI!" }
+            .padding(start = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "New UI",
+            style = MaterialTheme.typography.labelSmall,
+            color = appColors.textSecondary,
+            maxLines = 1
+        )
+        Switch(
+            checked = enabled,
+            onCheckedChange = null,
+            modifier = Modifier.scale(0.7f),
+            colors = SwitchDefaults.colors(
+                checkedTrackColor = accent,
+                checkedThumbColor = onAccent
+            )
         )
     }
 }

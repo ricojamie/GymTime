@@ -33,6 +33,10 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -69,7 +73,8 @@ fun RulerSliderInput(
     centered: Boolean = false,
     lastValue: Int? = null,
     goalValue: Int? = null,
-    bestValue: Int? = null
+    bestValue: Int? = null,
+    compact: Boolean = false
 ) {
     val colors = LocalAppColors.current
     val accent = MaterialTheme.colorScheme.primary
@@ -108,12 +113,13 @@ fun RulerSliderInput(
 
     val activeValue = currentInt ?: initialValue ?: lastValue ?: bestValue ?: goalValue ?: lo
     val activeValueState by rememberUpdatedState(activeValue)
+    val onValueChangeState by rememberUpdatedState(onValueChange)
 
     var trackWidthPx by remember { mutableStateOf(0f) }
     var dragStartX by remember { mutableStateOf(0f) }
     var dragStartValue by remember { mutableStateOf<Int?>(null) }
-    val sidePadPx = with(density) { 16.dp.toPx() }
-    val visibleStepCount = 20f
+    val sidePadPx = with(density) { (if (compact) 8.dp else 16.dp).toPx() }
+    val visibleStepCount = if (compact) 12f else 20f
 
     fun tickSpacing(width: Float): Float {
         val usableWidth = (width - sidePadPx * 2f).coerceAtLeast(1f)
@@ -151,6 +157,15 @@ fun RulerSliderInput(
         }
     }
     labelPaint.textSize = with(density) { 11.sp.toPx() }
+    val readoutFontSize = if (compact) {
+        when {
+            displayText.length <= 3 -> 28.sp
+            displayText.length == 4 -> 23.sp
+            else -> 18.sp
+        }
+    } else {
+        28.sp
+    }
 
     Card(
         modifier = modifier,
@@ -160,7 +175,7 @@ fun RulerSliderInput(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = if (compact) 8.dp else 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             // Header
@@ -175,22 +190,32 @@ fun RulerSliderInput(
                     color = colors.textTertiary,
                     letterSpacing = 1.sp
                 )
-                Text(
-                    text = "tap to type",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.textTertiary.copy(alpha = 0.7f),
-                    fontSize = 11.sp,
-                    modifier = Modifier.clickable { startEditing() }
-                )
+                if (compact) {
+                    if (unitSuffix.isNotEmpty()) {
+                        Text(
+                            text = unitSuffix,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = colors.textSecondary
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "tap to type",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.textTertiary.copy(alpha = 0.7f),
+                        fontSize = 11.sp,
+                        modifier = Modifier.clickable { startEditing() }
+                    )
+                }
             }
 
             // Readout with +/- nudge chips
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+                horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 16.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                NudgeChip(symbol = "-", colors.textTertiary) {
+                NudgeChip(symbol = "-", tint = colors.textTertiary, compact = compact, label = "Decrease $label by $step") {
                     val base = currentInt ?: lastValue ?: bestValue ?: lo
                     onValueChange((base - step).coerceAtLeast(minValue).toString())
                 }
@@ -198,7 +223,7 @@ fun RulerSliderInput(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 38.dp)
+                        .heightIn(min = if (compact) 48.dp else 38.dp)
                 ) {
                     BasicTextField(
                         value = value,
@@ -206,20 +231,22 @@ fun RulerSliderInput(
                         textStyle = MaterialTheme.typography.displaySmall.copy(
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
-                            fontSize = 28.sp,
+                            fontSize = readoutFontSize,
                             color = colors.textPrimary
                         ),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
                         keyboardActions = androidx.compose.foundation.text.KeyboardActions(
                             onDone = { focusManager.clearFocus() }
                         ),
                         cursorBrush = SolidColor(colors.cursor),
                         singleLine = true,
                         modifier = Modifier
-                            .fillMaxSize()
+                            .fillMaxWidth()
+                            .heightIn(min = if (compact) 48.dp else 38.dp)
                             .alpha(if (editorFocused) 1f else 0f)
                             .focusRequester(focusRequester)
                             .onFocusChanged { editorFocused = it.isFocused }
+                            .semantics { contentDescription = label }
                     )
                     if (!editorFocused) {
                         Row(
@@ -228,15 +255,16 @@ fun RulerSliderInput(
                                 .clip(RoundedCornerShape(12.dp))
                                 .clickable { startEditing() },
                             horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.Bottom
+                            verticalAlignment = if (compact) Alignment.CenterVertically else Alignment.Bottom
                         ) {
                             Text(
                                 text = displayText.ifBlank { "0" },
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 28.sp,
-                                color = if (displayText.isBlank()) colors.textTertiary.copy(alpha = 0.35f) else colors.textPrimary
+                                fontSize = readoutFontSize,
+                                maxLines = 1,
+                                color = if (displayText.isBlank() && !compact) colors.textTertiary.copy(alpha = 0.35f) else colors.textPrimary
                             )
-                            if (unitSuffix.isNotEmpty()) {
+                            if (unitSuffix.isNotEmpty() && !compact) {
                                 Text(
                                     text = " $unitSuffix",
                                     fontSize = 13.sp,
@@ -248,7 +276,7 @@ fun RulerSliderInput(
                     }
                 }
 
-                NudgeChip(symbol = "+", colors.textTertiary) {
+                NudgeChip(symbol = "+", tint = colors.textTertiary, compact = compact, label = "Increase $label by $step") {
                     val base = currentInt ?: lastValue ?: bestValue ?: lo
                     onValueChange((base + step).toString())
                 }
@@ -258,12 +286,16 @@ fun RulerSliderInput(
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(38.dp)
+                    .height(if (compact) 48.dp else 38.dp)
                     .onSizeChanged { trackWidthPx = it.width.toFloat() }
-                    .pointerInput(step) {
-                        detectTapGestures { offset -> onValueChange(valueFromX(offset.x).toString()) }
+                    .semantics {
+                        contentDescription = "$label ruler"
+                        stateDescription = "$displayText $unitSuffix".trim()
                     }
-                    .pointerInput(step) {
+                    .pointerInput(step, compact, minValue, density.density) {
+                        detectTapGestures { offset -> onValueChangeState(valueFromX(offset.x).toString()) }
+                    }
+                    .pointerInput(step, compact, minValue, density.density) {
                         detectHorizontalDragGestures(
                             onDragStart = { offset ->
                                 dragStartX = offset.x
@@ -277,7 +309,7 @@ fun RulerSliderInput(
                             // Tape-style drag: the ruler follows your finger, so swiping
                             // right lowers the value and swiping left raises it.
                             val nextValue = valueFromOffset(baseValue, dragStartX - change.position.x, trackWidthPx)
-                            onValueChange(nextValue.toString())
+                            onValueChangeState(nextValue.toString())
                         }
                     }
             ) {
@@ -312,16 +344,20 @@ fun RulerSliderInput(
                             cap = StrokeCap.Round
                         )
                         if (isMajor) {
-                            drawContext.canvas.nativeCanvas.drawText(
-                                v.toString(), x, size.height - 3.dp.toPx(), labelPaint
-                            )
+                            val tickLabel = v.toString()
+                            val halfLabelWidth = labelPaint.measureText(tickLabel) / 2f
+                            if (!compact || (x - halfLabelWidth >= 0f && x + halfLabelWidth <= width)) {
+                                drawContext.canvas.nativeCanvas.drawText(
+                                    tickLabel, x, size.height - 3.dp.toPx(), labelPaint
+                                )
+                            }
                         }
                     }
                     tickIndex++
                 }
 
                 // Last-time marker (gray line)
-                if (lastValue != null) {
+                if (!compact && lastValue != null) {
                     val lx = xFor(lastValue, width)
                     if (visibleX(lx)) drawLine(
                         color = colors.textTertiary,
@@ -333,7 +369,7 @@ fun RulerSliderInput(
                 }
 
                 // Best marker (teal line)
-                if (bestValue != null) {
+                if (!compact && bestValue != null) {
                     val bx = xFor(bestValue, width)
                     if (visibleX(bx)) drawLine(
                         color = BestColor,
@@ -345,7 +381,7 @@ fun RulerSliderInput(
                 }
 
                 // Goal marker (amber line)
-                if (goalValue != null) {
+                if (!compact && goalValue != null) {
                     val gx = xFor(goalValue, width)
                     if (visibleX(gx)) drawLine(
                         color = GoalColor,
@@ -366,8 +402,8 @@ fun RulerSliderInput(
                 )
             }
 
-            // Legend
-            Row(
+            // Compact inputs have their record and last-workout context in the screen's cards.
+            if (!compact) Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically
@@ -382,13 +418,20 @@ fun RulerSliderInput(
 }
 
 @Composable
-private fun NudgeChip(symbol: String, tint: Color, onClick: () -> Unit) {
+private fun NudgeChip(
+    symbol: String,
+    tint: Color,
+    compact: Boolean,
+    label: String,
+    onClick: () -> Unit
+) {
     Box(
         modifier = Modifier
-            .size(28.dp)
+            .size(if (compact) 48.dp else 28.dp)
             .clip(CircleShape)
             .background(tint.copy(alpha = 0.10f))
-            .clickable(onClick = onClick),
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label },
         contentAlignment = Alignment.Center
     ) {
         Text(text = symbol, color = tint, fontSize = 16.sp, fontWeight = FontWeight.Bold)

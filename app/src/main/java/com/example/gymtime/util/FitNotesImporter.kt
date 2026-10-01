@@ -8,6 +8,7 @@ import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
+import com.example.gymtime.data.db.entity.WARMUP_MUSCLE_GROUP
 import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
@@ -257,6 +258,7 @@ class FitNotesImporter @Inject constructor(
             "legs", "quads", "quadriceps", "hamstrings", "glutes", "calves" -> "Legs"
             "core", "abs", "abdominals" -> "Core"
             "cardio" -> "Cardio"
+            "warmup", "warmups", "warm up", "warm-up" -> WARMUP_MUSCLE_GROUP
             else -> category.replaceFirstChar { it.uppercase() }
         }
     }

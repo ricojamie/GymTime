@@ -81,6 +81,7 @@ import com.example.gymtime.ui.theme.LocalAppColors
 import com.example.gymtime.ui.theme.ThemeColors
 import com.example.gymtime.ui.theme.ThemeFontOption
 import com.example.gymtime.ui.theme.ThemePreset
+import com.example.gymtime.ui.settings.preview.PreviewThemeSettingsScreen
 import kotlin.math.atan2
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -89,6 +90,15 @@ fun ThemeSettingsScreen(
     navController: NavController,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
+    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
+    if (newUiEnabled) {
+        PreviewThemeSettingsScreen(
+            viewModel = viewModel,
+            onBack = navController::navigateBackOrHome,
+            onHome = navController::navigateHomeAndClearStack
+        )
+        return
+    }
     val themeColor by viewModel.themeColor.collectAsStateWithLifecycle(initialValue = ThemePreset.SUMMER_SHRED.storageKey)
     val customThemeColor by viewModel.customThemeColor.collectAsStateWithLifecycle(initialValue = null)
     val themeFont by viewModel.themeFont.collectAsStateWithLifecycle(initialValue = ThemeFontOption.BEBAS_NEUE.storageKey)

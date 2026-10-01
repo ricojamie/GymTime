@@ -22,6 +22,7 @@ import com.example.gymtime.data.db.entity.Routine
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.*
+import com.example.gymtime.ui.routine.preview.PreviewRoutineBrowseContent
 
 /**
  * Routine library content for the Library screen's Routines tab.
@@ -32,6 +33,25 @@ fun RoutineLibraryContent(
     navController: NavController,
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
+    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
+    if (newUiEnabled) {
+        val state by viewModel.routinePreviewState.collectAsStateWithLifecycle()
+        LoggerPreviewTheme {
+            PreviewRoutineBrowseContent(
+                state = state, embedded = true,
+                onCreate = { navController.navigate(Screen.RoutineForm.createRoute()) },
+                onOpen = { navController.navigate(Screen.RoutineDetail.createRoute(it)) },
+                onSetActive = viewModel::setActiveRoutine,
+                onRename = { navController.navigate(Screen.RoutineForm.createRoute(it)) },
+                onDuplicate = viewModel::duplicateRoutine, onDelete = viewModel::deleteRoutineById,
+                onRetry = viewModel::retryRoutines, onDismissError = viewModel::dismissRoutineError
+            )
+        }
+    } else LegacyRoutineLibraryContent(navController, viewModel)
+}
+
+@Composable
+private fun LegacyRoutineLibraryContent(navController: NavController, viewModel: LibraryViewModel) {
     val routines by viewModel.routines.collectAsStateWithLifecycle(initialValue = emptyList())
     val activeRoutineId by viewModel.activeRoutineId.collectAsStateWithLifecycle(initialValue = null)
     val canCreateMore by viewModel.canCreateMoreRoutines.collectAsStateWithLifecycle()

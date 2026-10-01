@@ -1,10 +1,13 @@
 package com.example.gymtime.ui.settings
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.entity.MuscleGroup
+import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,18 +26,24 @@ sealed class DeleteCheckResult {
 @HiltViewModel
 class MuscleGroupManagementViewModel @Inject constructor(
     private val muscleGroupDao: MuscleGroupDao,
-    private val exerciseDao: ExerciseDao
+    private val exerciseDao: ExerciseDao,
+    userPreferencesRepository: UserPreferencesRepository,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
+
+    val newUiEnabled = userPreferencesRepository.newUiEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val muscleGroups: StateFlow<List<MuscleGroup>> = muscleGroupDao.getAllMuscleGroups()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Dialog state: null = closed, "" = add mode, non-empty = edit mode (original name)
-    private val _editingMuscle = MutableStateFlow<String?>(null)
-    val editingMuscle: StateFlow<String?> = _editingMuscle.asStateFlow()
+    val editingMuscle: StateFlow<String?> = savedStateHandle.getStateFlow("editing_muscle", null)
 
-    private val _muscleNameInput = MutableStateFlow("")
-    val muscleNameInput: StateFlow<String> = _muscleNameInput.asStateFlow()
+    val muscleNameInput: StateFlow<String> = savedStateHandle.getStateFlow("muscle_name_input", "")
+
+    private val _isSaving = MutableStateFlow(false)
+    val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
 
     private val _validationError = MutableStateFlow<String?>(null)
     val validationError: StateFlow<String?> = _validationError.asStateFlow()
@@ -43,20 +52,21 @@ class MuscleGroupManagementViewModel @Inject constructor(
     val deleteCheckResult: StateFlow<Pair<String, DeleteCheckResult>?> = _deleteCheckResult.asStateFlow()
 
     fun startAddNew() {
-        _editingMuscle.value = ""
-        _muscleNameInput.value = ""
+        savedStateHandle["editing_muscle"] = ""
+        savedStateHandle["muscle_name_input"] = ""
         _validationError.value = null
     }
 
     fun startEdit(name: String) {
-        _editingMuscle.value = name
-        _muscleNameInput.value = name
+        if (name.isWarmupMuscleGroup()) return
+        savedStateHandle["editing_muscle"] = name
+        savedStateHandle["muscle_name_input"] = name
         _validationError.value = null
     }
 
     fun clearDialog() {
-        _editingMuscle.value = null
-        _muscleNameInput.value = ""
+        savedStateHandle.set<String?>("editing_muscle", null)
+        savedStateHandle["muscle_name_input"] = ""
         _validationError.value = null
     }
 
@@ -65,51 +75,66 @@ class MuscleGroupManagementViewModel @Inject constructor(
     }
 
     fun updateMuscleNameInput(input: String) {
-        _muscleNameInput.value = input
+        savedStateHandle["muscle_name_input"] = input
         _validationError.value = null
     }
 
     fun saveMuscleGroup() {
-        val trimmedName = _muscleNameInput.value.trim()
-        val editingName = _editingMuscle.value
+        if (_isSaving.value) return
+        val trimmedName = muscleNameInput.value.trim()
+        val editingName = editingMuscle.value
 
         if (trimmedName.length < 2) {
             _validationError.value = "Name must be at least 2 characters"
             return
         }
+        if (trimmedName.isWarmupMuscleGroup()) {
+            _validationError.value = "Warmups is a built-in library category"
+            return
+        }
 
+        _isSaving.value = true
         viewModelScope.launch {
-            // Check for duplicates (case-insensitive)
-            val exists = muscleGroupDao.muscleGroupExists(trimmedName)
-            val isRename = editingName?.isNotEmpty() == true && editingName.equals(trimmedName, ignoreCase = true)
+            try {
+                // Check for duplicates (case-insensitive)
+                val exists = muscleGroupDao.muscleGroupExists(trimmedName)
+                val isRename = editingName?.isNotEmpty() == true && editingName.equals(trimmedName, ignoreCase = true)
 
-            if (exists > 0 && !isRename) {
-                _validationError.value = "A muscle group with this name already exists"
-                return@launch
-            }
-
-            if (editingName.isNullOrEmpty()) {
-                // Add new
-                muscleGroupDao.insertMuscleGroup(MuscleGroup(trimmedName))
-            } else {
-                // Rename: update exercises first, then delete old and insert new
-                if (!editingName.equals(trimmedName, ignoreCase = true)) {
-                    exerciseDao.updateExercisesTargetMuscle(editingName, trimmedName)
-                    muscleGroupDao.deleteMuscleGroupByName(editingName)
-                    muscleGroupDao.insertMuscleGroup(MuscleGroup(trimmedName))
-                } else if (editingName != trimmedName) {
-                    // Case change only - just update exercises and recreate muscle group
-                    exerciseDao.updateExercisesTargetMuscle(editingName, trimmedName)
-                    muscleGroupDao.deleteMuscleGroupByName(editingName)
-                    muscleGroupDao.insertMuscleGroup(MuscleGroup(trimmedName))
+                if (exists > 0 && !isRename) {
+                    _validationError.value = "A muscle group with this name already exists"
+                    return@launch
                 }
-            }
 
-            clearDialog()
+                if (editingName.isNullOrEmpty()) {
+                    // Add new
+                    muscleGroupDao.insertMuscleGroup(MuscleGroup(trimmedName))
+                } else {
+                    // Rename: update exercises first, then delete old and insert new
+                    if (!editingName.equals(trimmedName, ignoreCase = true)) {
+                        exerciseDao.updateExercisesTargetMuscle(editingName, trimmedName)
+                        muscleGroupDao.deleteMuscleGroupByName(editingName)
+                        muscleGroupDao.insertMuscleGroup(MuscleGroup(trimmedName))
+                    } else if (editingName != trimmedName) {
+                        // Case change only - just update exercises and recreate muscle group
+                        exerciseDao.updateExercisesTargetMuscle(editingName, trimmedName)
+                        muscleGroupDao.deleteMuscleGroupByName(editingName)
+                        muscleGroupDao.insertMuscleGroup(MuscleGroup(trimmedName))
+                    }
+                }
+
+                clearDialog()
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _validationError.value = "Couldn't save this body part. Please try again."
+            } finally {
+                _isSaving.value = false
+            }
         }
     }
 
     fun checkCanDelete(name: String) {
+        if (name.isWarmupMuscleGroup()) return
         viewModelScope.launch {
             val setCount = muscleGroupDao.getLoggedSetCountForMuscle(name)
             if (setCount > 0) {
@@ -128,6 +153,7 @@ class MuscleGroupManagementViewModel @Inject constructor(
     }
 
     fun deleteMuscleGroup(name: String) {
+        if (name.isWarmupMuscleGroup()) return
         viewModelScope.launch {
             muscleGroupDao.deleteMuscleGroupByName(name)
             clearDeleteDialog()
@@ -135,6 +161,7 @@ class MuscleGroupManagementViewModel @Inject constructor(
     }
 
     fun deleteWithExercises(name: String) {
+        if (name.isWarmupMuscleGroup()) return
         viewModelScope.launch {
             // Update exercises to have no muscle group (or you could delete them)
             // For safety, we'll just clear the targetMuscle field by setting to "Uncategorized"

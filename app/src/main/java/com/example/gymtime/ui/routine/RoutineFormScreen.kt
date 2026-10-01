@@ -9,6 +9,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.activity.compose.BackHandler
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -27,6 +31,9 @@ import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.components.HomeNavigationAction
 import com.example.gymtime.ui.components.rememberGuardedNavigationActions
 import com.example.gymtime.ui.theme.*
+import com.example.gymtime.ui.routine.preview.PreviewRoutineFormContent
+import com.example.gymtime.ui.routine.preview.RoutineFormUiState
+import com.example.gymtime.ui.routine.preview.RoutineFormsTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,10 +41,20 @@ fun RoutineFormScreen(
     navController: NavController,
     viewModel: RoutineFormViewModel = hiltViewModel()
 ) {
+    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle()
+    RoutineFormsTheme { RoutineFormScreenBody(navController, viewModel, newUiEnabled) }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RoutineFormScreenBody(navController: NavController, viewModel: RoutineFormViewModel, newUiEnabled: Boolean) {
     val routineName by viewModel.routineName.collectAsStateWithLifecycle()
     val isEditMode by viewModel.isEditMode.collectAsStateWithLifecycle()
     val isSaveEnabled by viewModel.isSaveEnabled.collectAsStateWithLifecycle()
     val hasUnsavedChanges by viewModel.hasUnsavedChanges.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
     val accentColor = MaterialTheme.colorScheme.primary
     val navigationActions = rememberGuardedNavigationActions(
         hasUnsavedChanges = hasUnsavedChanges,
@@ -45,14 +62,28 @@ fun RoutineFormScreen(
         onHome = navController::navigateHomeAndClearStack
     )
 
-    LaunchedEffect(Unit) {
+    BackHandler(enabled = isSaving) { /* Keep the draft on screen until its save finishes. */ }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val latestEditMode by rememberUpdatedState(isEditMode)
+    LaunchedEffect(viewModel, navController, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
         viewModel.saveSuccessEvent.collect { routineId ->
-            if (isEditMode) {
+            if (latestEditMode) {
                 navController.navigateUp()
             } else {
                 navController.navigateToNewRoutineDetail(routineId)
             }
         }
+        }
+    }
+
+    if (newUiEnabled) {
+            PreviewRoutineFormContent(
+                state = RoutineFormUiState(routineName, isEditMode, isLoading, isSaving, isSaveEnabled, error),
+                onName = viewModel::updateRoutineName, onSave = viewModel::saveRoutine,
+                onRetry = viewModel::retryLoad, onBack = navigationActions.back, onHome = navigationActions.home
+            )
+        return
     }
 
     Scaffold(
@@ -94,6 +125,11 @@ fun RoutineFormScreen(
                 .padding(horizontal = 16.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            if (isLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (error != null && isEditMode && !isSaveEnabled) {
+                TextButton(onClick = viewModel::retryLoad) { Text("Reload routine") }
+            }
             Text(
                 text = "ROUTINE NAME",
                 fontSize = 12.sp,

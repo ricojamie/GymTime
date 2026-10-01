@@ -27,6 +27,7 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     val userName = userPreferencesRepository.userName
+    val newUiEnabled = userPreferencesRepository.newUiEnabled
     val themeColor = userPreferencesRepository.themeColor
     val customThemeColor = userPreferencesRepository.customThemeColor
     val themeFont = userPreferencesRepository.themeFont
@@ -45,6 +46,19 @@ class SettingsViewModel @Inject constructor(
     val barWeight = userPreferencesRepository.barWeight
     val loadingSides = userPreferencesRepository.loadingSides
     val availablePlates = userPreferencesRepository.availablePlates
+    val plateInventorySettings = userPreferencesRepository.plateInventorySettings
+
+    fun setPlateInventoryCount(weight: Float, count: Int) {
+        viewModelScope.launch { userPreferencesRepository.setPlateInventoryCount(weight, count) }
+    }
+
+    fun setUsePlateInventory(enabled: Boolean) {
+        viewModelScope.launch { userPreferencesRepository.setUsePlateInventory(enabled) }
+    }
+
+    fun adjustPlateInventoryCount(weight: Float, delta: Int) {
+        viewModelScope.launch { userPreferencesRepository.adjustPlateInventoryCount(weight, delta) }
+    }
 
     fun setUserName(name: String) {
         viewModelScope.launch {
@@ -176,6 +190,10 @@ class SettingsViewModel @Inject constructor(
         _importState.value = ImportState.Idle
     }
 
+    fun reportFitNotesFileError(message: String) {
+        _importState.value = ImportState.Error(message)
+    }
+
     // IronLog Export State
     sealed class ExportState {
         object Idle : ExportState()
@@ -203,6 +221,10 @@ class SettingsViewModel @Inject constructor(
         _exportState.value = ExportState.Idle
     }
 
+    fun reportExportFileError(message: String) {
+        _exportState.value = ExportState.Error(message)
+    }
+
     // IronLog Import State
     sealed class IronLogImportState {
         object Idle : IronLogImportState()
@@ -228,5 +250,9 @@ class SettingsViewModel @Inject constructor(
 
     fun clearIronLogImportState() {
         _ironLogImportState.value = IronLogImportState.Idle
+    }
+
+    fun reportIronLogFileError(message: String) {
+        _ironLogImportState.value = IronLogImportState.Error(message)
     }
 }

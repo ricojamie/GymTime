@@ -41,6 +41,7 @@ class HomeViewModelTest {
         strengthMomentumUseCase = mockk(relaxed = true)
 
         every { userPreferencesRepository.userName } returns flowOf("Test User")
+        every { userPreferencesRepository.newUiEnabled } returns flowOf(false)
         every { userPreferencesRepository.bestStreak } returns flowOf(0)
         every { userPreferencesRepository.restDaysPerWeek } returns flowOf(2)
         every { workoutRepository.getOngoingWorkoutFlow() } returns flowOf(null)

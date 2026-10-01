@@ -4,6 +4,7 @@ import com.example.gymtime.data.db.dao.AnalyticsInsightSetRow
 import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.WorkoutDao
+import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.DayOfWeek
@@ -69,7 +70,9 @@ class WeeklyAnalyticsInsightUseCase @Inject constructor(
             now = now,
             currentWeekStart = currentWeekStart,
             rows = rows,
-            knownMuscleNames = muscleGroupDao.getAllMuscleGroupNames().toSet()
+            knownMuscleNames = muscleGroupDao.getAllMuscleGroupNames()
+                .filterNot { it.isWarmupMuscleGroup() }
+                .toSet()
         )
 
         persistentPushPullGap(context)?.let { return@withContext it }

@@ -55,10 +55,25 @@ class MonthlyReportUseCase @Inject constructor(
         )
 
         val allWorkouts = workoutDao.getAllWorkoutsSync()
+        val periodSets = setDao.getSetsWithExerciseInRange(periodStartMs, periodEndMs)
+        val workingSets = periodSets.filter { !it.set.isWarmup }
+        val completedWorkingSets = workingSets.filter { it.set.isComplete }
+        val previousWorkingSets = setDao
+            .getSetsWithExerciseInRange(previousStartMs, previousEndMs)
+            .filter { !it.set.isWarmup }
+        val workoutIdsWithWorkingSets = workingSets.mapTo(mutableSetOf()) { it.set.workoutId }
+        val previousWorkoutIdsWithWorkingSets = previousWorkingSets
+            .mapTo(mutableSetOf()) { it.set.workoutId }
         val workouts = allWorkouts
-            .filter { it.startTime.time in periodStartMs..periodEndMs && it.endTime != null }
+            .filter {
+                it.startTime.time in periodStartMs..periodEndMs &&
+                    it.endTime != null &&
+                    it.id in workoutIdsWithWorkingSets
+            }
         val previousWorkouts = allWorkouts.filter {
-            it.startTime.time in previousStartMs..previousEndMs && it.endTime != null
+            it.startTime.time in previousStartMs..previousEndMs &&
+                it.endTime != null &&
+                it.id in previousWorkoutIdsWithWorkingSets
         }
 
         val ratings = workouts.mapNotNull { it.rating }
@@ -70,17 +85,11 @@ class MonthlyReportUseCase @Inject constructor(
             .map { it.muscle }
             .take(3)
 
-        val periodSets = setDao.getSetsWithExerciseInRange(periodStartMs, periodEndMs)
-        val workingSets = periodSets.filter { !it.set.isWarmup }
-        val completedWorkingSets = workingSets.filter { it.set.isComplete }
         val totalVolume = workingSets.sumOf { info ->
             ((info.set.weight ?: 0f) * (info.set.reps ?: 0)).toDouble()
         }.toFloat()
         val exerciseCount = workingSets.map { it.set.exerciseId }.distinct().size
 
-        val previousWorkingSets = setDao
-            .getSetsWithExerciseInRange(previousStartMs, previousEndMs)
-            .filter { !it.set.isWarmup }
         val previousTotalVolume = previousWorkingSets.sumOf { info ->
             ((info.set.weight ?: 0f) * (info.set.reps ?: 0)).toDouble()
         }.toFloat()

@@ -258,6 +258,7 @@ class TrendUseCase @Inject constructor(
     ): List<TrendPoint> {
         val snapshots = workoutDao.getRatedWorkoutSetInfo(startDate, endDate)
             .toRatedSnapshots()
+            .filter { it.hasWorkingRows() }
             .mapNotNull { snapshot ->
                 val filteredRows = snapshot.filteredWorkingRows(muscleGroup, exerciseId)
                 val hasFilter = (muscleGroup != null && muscleGroup != "All") || exerciseId != null
@@ -360,6 +361,8 @@ private data class TrendRatedSnapshot(
     val rating: Int,
     val rows: List<RatedWorkoutSetInfo>
 ) {
+    fun hasWorkingRows(): Boolean = workingRows().isNotEmpty()
+
     fun filteredWorkingRows(muscleGroup: String?, exerciseId: Long?): List<RatedWorkoutSetInfo> {
         return workingRows().filter { row ->
             val muscleMatches = muscleGroup == null || muscleGroup == "All" || row.targetMuscle == muscleGroup

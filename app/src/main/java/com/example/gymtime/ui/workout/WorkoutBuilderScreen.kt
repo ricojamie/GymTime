@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,10 +31,14 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -64,6 +69,8 @@ import com.example.gymtime.ui.components.BackNavigationIcon
 import com.example.gymtime.ui.components.HomeNavigationAction
 import com.example.gymtime.ui.components.rememberGuardedNavigationActions
 import com.example.gymtime.ui.theme.LocalAppColors
+import com.example.gymtime.ui.theme.LocalLoggerActionColors
+import com.example.gymtime.ui.theme.LocalLoggerPreviewThemeActive
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,6 +78,10 @@ fun WorkoutBuilderScreen(
     navController: NavController,
     viewModel: WorkoutBuilderViewModel = hiltViewModel()
 ) {
+    val previewActive = LocalLoggerPreviewThemeActive.current
+    val action = LocalLoggerActionColors.current
+    val actionFill = if (previewActive) action.fill else MaterialTheme.colorScheme.primary
+    val actionForeground = if (previewActive) action.onFill else Color.Black
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedMuscle by viewModel.selectedMuscle.collectAsStateWithLifecycle()
     val selectedIds by viewModel.selectedExerciseIds.collectAsStateWithLifecycle()
@@ -119,7 +130,11 @@ fun WorkoutBuilderScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Plan a Workout", fontWeight = FontWeight.Bold)
+                        Text(
+                            "Plan a Workout",
+                            fontWeight = FontWeight.Bold,
+                            style = if (previewActive) MaterialTheme.typography.titleLarge else LocalTextStyle.current
+                        )
                         Text(
                             "One-time plan · not saved as a routine",
                             style = MaterialTheme.typography.bodySmall,
@@ -139,8 +154,8 @@ fun WorkoutBuilderScreen(
         bottomBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = LocalAppColors.current.surfaceCards,
-                shadowElevation = 12.dp
+                color = if (previewActive) MaterialTheme.colorScheme.surfaceContainerLow else LocalAppColors.current.surfaceCards,
+                shadowElevation = if (previewActive) 1.dp else 12.dp
             ) {
                 Button(
                     onClick = viewModel::startWorkout,
@@ -148,18 +163,18 @@ fun WorkoutBuilderScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
-                        .height(56.dp),
-                    shape = RoundedCornerShape(12.dp),
+                        .then(if (previewActive) Modifier.heightIn(min = 56.dp) else Modifier.height(56.dp)),
+                    shape = RoundedCornerShape(if (previewActive) 18.dp else 12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = Color.Black
+                        containerColor = actionFill,
+                        contentColor = actionForeground
                     )
                 ) {
                     if (isStarting) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(22.dp),
                             strokeWidth = 2.dp,
-                            color = Color.Black
+                            color = if (previewActive) LocalContentColor.current else actionForeground
                         )
                     } else {
                         Text(
@@ -191,12 +206,13 @@ fun WorkoutBuilderScreen(
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(76.dp),
-                    shape = RoundedCornerShape(12.dp),
+                        .then(if (previewActive) Modifier.heightIn(min = 76.dp) else Modifier.height(76.dp)),
+                    shape = RoundedCornerShape(if (previewActive) 20.dp else 12.dp),
                     color = LocalAppColors.current.surfaceCards,
-                    border = BorderStroke(1.dp, LocalAppColors.current.textTertiary.copy(alpha = 0.25f))
+                    border = BorderStroke(1.dp, if (previewActive) MaterialTheme.colorScheme.outlineVariant else LocalAppColors.current.textTertiary.copy(alpha = 0.25f)),
+                    shadowElevation = if (previewActive) 1.dp else 0.dp
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
+                    Box(modifier = if (previewActive) Modifier.padding(12.dp) else Modifier, contentAlignment = Alignment.Center) {
                         Text(
                             "Tap exercises below to build your session.",
                             color = LocalAppColors.current.textSecondary
@@ -226,7 +242,8 @@ fun WorkoutBuilderScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 label = { Text("Search exercises") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                shape = if (previewActive) RoundedCornerShape(18.dp) else OutlinedTextFieldDefaults.shape
             )
             OutlinedButton(
                 onClick = {
@@ -239,8 +256,9 @@ fun WorkoutBuilderScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
-                shape = RoundedCornerShape(12.dp)
+                    .padding(top = 8.dp)
+                    .then(if (previewActive) Modifier.heightIn(min = 48.dp) else Modifier),
+                shape = RoundedCornerShape(if (previewActive) 18.dp else 12.dp)
             ) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
@@ -253,14 +271,18 @@ fun WorkoutBuilderScreen(
                     FilterChip(
                         selected = selectedMuscle == null,
                         onClick = { viewModel.selectMuscle(null) },
-                        label = { Text("All") }
+                        label = { Text("All") },
+                        modifier = if (previewActive) Modifier.heightIn(min = 48.dp) else Modifier,
+                        shape = if (previewActive) RoundedCornerShape(16.dp) else FilterChipDefaults.shape
                     )
                 }
                 items(availableMuscles) { muscle ->
                     FilterChip(
                         selected = selectedMuscle == muscle,
                         onClick = { viewModel.selectMuscle(muscle) },
-                        label = { Text(muscle) }
+                        label = { Text(muscle) },
+                        modifier = if (previewActive) Modifier.heightIn(min = 48.dp) else Modifier,
+                        shape = if (previewActive) RoundedCornerShape(16.dp) else FilterChipDefaults.shape
                     )
                 }
             }
@@ -277,10 +299,11 @@ fun WorkoutBuilderScreen(
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(120.dp),
-                    shape = RoundedCornerShape(12.dp),
+                        .then(if (previewActive) Modifier.heightIn(min = 120.dp) else Modifier.height(120.dp)),
+                    shape = RoundedCornerShape(if (previewActive) 20.dp else 12.dp),
                     color = LocalAppColors.current.surfaceCards,
-                    border = BorderStroke(1.dp, LocalAppColors.current.textTertiary.copy(alpha = 0.25f))
+                    border = BorderStroke(1.dp, if (previewActive) MaterialTheme.colorScheme.outlineVariant else LocalAppColors.current.textTertiary.copy(alpha = 0.25f)),
+                    shadowElevation = if (previewActive) 1.dp else 0.dp
                 ) {
                     Box(
                         modifier = Modifier.padding(horizontal = 20.dp),
@@ -327,11 +350,13 @@ private fun SelectedExerciseCard(
     onMoveForward: () -> Unit,
     onRemove: () -> Unit
 ) {
+    val previewActive = LocalLoggerPreviewThemeActive.current
     Surface(
         modifier = Modifier.width(190.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.65f))
+        shape = RoundedCornerShape(if (previewActive) 18.dp else 12.dp),
+        color = if (previewActive) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = if (previewActive) 0.4f else 0.65f)),
+        shadowElevation = if (previewActive) 1.dp else 0.dp
     ) {
         Column(modifier = Modifier.padding(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -349,15 +374,15 @@ private fun SelectedExerciseCard(
                     color = LocalAppColors.current.textPrimary,
                     fontWeight = FontWeight.Bold
                 )
-                IconButton(onClick = onRemove, modifier = Modifier.size(30.dp)) {
+                IconButton(onClick = onRemove, modifier = Modifier.size(if (previewActive) 48.dp else 30.dp)) {
                     Icon(Icons.Default.Close, contentDescription = "Remove ${exercise.name}", modifier = Modifier.size(18.dp))
                 }
             }
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                IconButton(onClick = onMoveBack, enabled = canMoveBack, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onMoveBack, enabled = canMoveBack, modifier = Modifier.size(if (previewActive) 48.dp else 32.dp)) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Move earlier")
                 }
-                IconButton(onClick = onMoveForward, enabled = canMoveForward, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onMoveForward, enabled = canMoveForward, modifier = Modifier.size(if (previewActive) 48.dp else 32.dp)) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Move later")
                 }
             }
@@ -371,19 +396,23 @@ private fun ExercisePickerRow(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
+    val previewActive = LocalLoggerPreviewThemeActive.current
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = if (isSelected) {
+        modifier = Modifier.fillMaxWidth().then(if (previewActive) Modifier.heightIn(min = 64.dp) else Modifier),
+        shape = RoundedCornerShape(if (previewActive) 18.dp else 12.dp),
+        color = if (previewActive && isSelected) {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        } else if (isSelected) {
             MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
         } else {
             LocalAppColors.current.surfaceCards
         },
         border = BorderStroke(
             1.dp,
-            if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-        )
+            if (isSelected) MaterialTheme.colorScheme.primary else if (previewActive) MaterialTheme.colorScheme.outlineVariant else Color.Transparent
+        ),
+        shadowElevation = if (previewActive) 1.dp else 0.dp
     ) {
         Row(
             modifier = Modifier

@@ -21,6 +21,11 @@ import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.BackHandler
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +46,10 @@ import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.components.HomeNavigationAction
 import com.example.gymtime.ui.components.rememberGuardedNavigationActions
 import com.example.gymtime.ui.theme.*
+import com.example.gymtime.ui.routine.preview.PreviewRoutineDayFormContent
+import com.example.gymtime.ui.routine.preview.RoutineDayFormUiState
+import com.example.gymtime.ui.routine.preview.RoutineDayFormActions
+import com.example.gymtime.ui.routine.preview.RoutineFormsTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,6 +57,13 @@ fun RoutineDayFormScreen(
     navController: NavController,
     viewModel: RoutineDayFormViewModel = hiltViewModel()
 ) {
+    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle()
+    RoutineFormsTheme { RoutineDayFormScreenBody(navController, viewModel, newUiEnabled) }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RoutineDayFormScreenBody(navController: NavController, viewModel: RoutineDayFormViewModel, newUiEnabled: Boolean) {
     val dayName by viewModel.dayName.collectAsStateWithLifecycle()
     val selectedExercises by viewModel.selectedExercises.collectAsStateWithLifecycle(initialValue = emptyList())
     val availableExercises by viewModel.availableExercises.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -60,8 +76,14 @@ fun RoutineDayFormScreen(
     val isSaveEnabled by viewModel.isSaveEnabled.collectAsStateWithLifecycle()
     val hasUnsavedChanges by viewModel.hasUnsavedChanges.collectAsStateWithLifecycle()
     val supersetLinks by viewModel.supersetLinks.collectAsStateWithLifecycle()
+    val notes by viewModel.notes.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+    val pickerQuery by viewModel.pickerQuery.collectAsStateWithLifecycle()
+    val pickerMuscle by viewModel.pickerMuscle.collectAsStateWithLifecycle()
 
-    var showExercisePicker by remember { mutableStateOf(false) }
+    var showExercisePicker by rememberSaveable { mutableStateOf(false) }
     val accentColor = MaterialTheme.colorScheme.primary
     val navigationActions = rememberGuardedNavigationActions(
         hasUnsavedChanges = hasUnsavedChanges,
@@ -69,10 +91,39 @@ fun RoutineDayFormScreen(
         onHome = navController::navigateHomeAndClearStack
     )
 
-    LaunchedEffect(Unit) {
+    BackHandler(enabled = isSaving) { /* Prevent leaving while the complete day is being saved. */ }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(viewModel, navController, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
         viewModel.saveSuccessEvent.collect {
             navController.navigateUp()
         }
+        }
+    }
+
+    if (newUiEnabled) {
+            PreviewRoutineDayFormContent(
+                state = RoutineDayFormUiState(
+                    name = dayName, editing = isEditMode, loading = isLoading, saving = isSaving,
+                    canSave = isSaveEnabled, error = error, exercises = selectedExercises,
+                    availableExercises = availableExercises, selectedIds = selectedExerciseIds,
+                    sets = targetSets, repMin = targetRepMin, repMax = targetRepMax,
+                    rest = targetRestSeconds, notes = notes, links = supersetLinks,
+                    pickerOpen = showExercisePicker, pickerQuery = pickerQuery, pickerMuscle = pickerMuscle
+                ),
+                actions = RoutineDayFormActions(
+                    name = viewModel::updateDayName, sets = viewModel::updateTargetSets,
+                    repMin = viewModel::updateTargetRepMin, repMax = viewModel::updateTargetRepMax,
+                    rest = viewModel::updateTargetRestSeconds, notes = viewModel::updateExerciseNotes,
+                    move = viewModel::moveExercise, remove = viewModel::removeExercise,
+                    link = viewModel::toggleSupersetLink, toggleExercise = viewModel::toggleExercise,
+                    pickerQuery = viewModel::updatePickerQuery, pickerMuscle = viewModel::updatePickerMuscle,
+                    openPicker = { showExercisePicker = true }, closePicker = { showExercisePicker = false },
+                    save = viewModel::saveDay, retry = viewModel::retryLoad,
+                    back = navigationActions.back, home = navigationActions.home
+                )
+            )
+        return
     }
 
     Scaffold(
@@ -124,6 +175,11 @@ fun RoutineDayFormScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            if (isLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (error != null && selectedExercises.isEmpty() && isEditMode) {
+                TextButton(onClick = viewModel::retryLoad) { Text("Reload day") }
+            }
             // Name Input
             GlowCard(onClick = {}, modifier = Modifier.fillMaxWidth()) {
                 BasicTextField(

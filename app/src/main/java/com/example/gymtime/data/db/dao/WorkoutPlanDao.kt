@@ -27,6 +27,7 @@ data class WorkoutPlanSummary(
     val exerciseName: String,
     val targetMuscle: String,
     val setCount: Int,
+    val anySetCount: Int = setCount,
     val bestWeight: Float?,
     val totalVolume: Float,
     val orderIndex: Int,
@@ -77,6 +78,7 @@ interface WorkoutPlanDao {
         SELECT * FROM workout_exercise_instances
         WHERE workoutId = :workoutId
           AND exerciseId = :exerciseId
+          AND isSkipped = 0
         ORDER BY orderIndex ASC
         LIMIT 1
     """)
@@ -97,6 +99,7 @@ interface WorkoutPlanDao {
             e.name as exerciseName,
             e.targetMuscle as targetMuscle,
             COUNT(CASE WHEN s.isWarmup = 0 AND s.isComplete = 1 THEN s.id END) as setCount,
+            COUNT(s.id) as anySetCount,
             MAX(CASE WHEN s.isWarmup = 0 AND s.isComplete = 1 THEN s.weight END) as bestWeight,
             COALESCE(SUM(CASE WHEN s.isWarmup = 0 AND s.isComplete = 1 AND s.weight IS NOT NULL AND s.reps IS NOT NULL THEN s.weight * s.reps ELSE 0 END), 0) as totalVolume,
             wei.orderIndex as orderIndex,
@@ -113,6 +116,7 @@ interface WorkoutPlanDao {
         INNER JOIN exercises e ON e.id = wei.exerciseId
         LEFT JOIN sets s ON s.workoutId = wei.workoutId AND s.exerciseId = wei.exerciseId
         WHERE wei.workoutId = :workoutId
+          AND wei.isSkipped = 0
         GROUP BY wei.id
         ORDER BY wei.orderIndex ASC
     """)

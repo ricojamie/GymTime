@@ -92,6 +92,15 @@ interface SetDao {
     @Query("SELECT * FROM sets WHERE exerciseId = :exerciseId ORDER BY timestamp DESC")
     fun getSetsForExercise(exerciseId: Long): Flow<List<Set>>
 
+    @Query("""
+        SELECT s.*, w.startTime AS workoutStartTime, w.endTime AS workoutEndTime
+        FROM sets s
+        INNER JOIN workouts w ON s.workoutId = w.id
+        WHERE s.exerciseId = :exerciseId
+        ORDER BY w.startTime DESC, s.timestamp ASC, s.id ASC
+    """)
+    fun observeFullExerciseHistory(exerciseId: Long): Flow<List<ExerciseHistorySet>>
+
     @Query("SELECT * FROM sets WHERE exerciseId = :exerciseId ORDER BY timestamp DESC LIMIT 1")
     suspend fun getLatestSetForExercise(exerciseId: Long): Set?
 
@@ -256,11 +265,13 @@ interface SetDao {
               AND weight IS NOT NULL
               AND reps IS NOT NULL
               AND isWarmup = 0
+              AND isComplete = 1
               AND timestamp < :beforeTimestamp
             GROUP BY reps
         ) s2 ON s1.reps = s2.reps AND s1.weight = s2.maxWeight
         WHERE s1.exerciseId = :exerciseId
           AND s1.isWarmup = 0
+          AND s1.isComplete = 1
           AND s1.timestamp < :beforeTimestamp
         GROUP BY s1.reps, s1.weight
         HAVING s1.timestamp = MIN(s1.timestamp)
@@ -297,6 +308,9 @@ interface SetDao {
     // Get set count for a workout
     @Query("SELECT COUNT(*) FROM sets WHERE workoutId = :workoutId")
     suspend fun getSetCountForWorkout(workoutId: Long): Int
+
+    @Query("SELECT COUNT(*) FROM sets WHERE workoutId = :workoutId AND exerciseId = :exerciseId")
+    suspend fun getSetCountForWorkoutExercise(workoutId: Long, exerciseId: Long): Int
 
     // Get all sets for a workout with exercise info
     @Query("""
@@ -428,7 +442,9 @@ interface SetDao {
             e.logType as logType
         FROM sets s
         INNER JOIN exercises e ON s.exerciseId = e.id
+        INNER JOIN workouts w ON s.workoutId = w.id
         WHERE s.timestamp BETWEEN :startDate AND :endDate
+          AND w.endTime IS NOT NULL
           AND s.isWarmup = 0
           AND s.isComplete = 1
         ORDER BY s.timestamp ASC
@@ -468,6 +484,7 @@ interface SetDao {
         WHERE s.weight IS NOT NULL
           AND s.reps IS NOT NULL
           AND s.isWarmup = 0
+          AND s.isComplete = 1
           AND s.timestamp >= :startMs
           AND s.timestamp < :endMs
     """)
@@ -481,6 +498,7 @@ interface SetDao {
           AND s.weight IS NOT NULL
           AND s.reps IS NOT NULL
           AND s.isWarmup = 0
+          AND s.isComplete = 1
     """)
     suspend fun getWorkoutVolume(workoutId: Long): Float
 

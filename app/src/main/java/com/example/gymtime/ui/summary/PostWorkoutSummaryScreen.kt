@@ -21,6 +21,9 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -34,7 +37,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.example.gymtime.navigation.Screen
 import com.example.gymtime.navigation.navigateHomeAndClearStack
 import com.example.gymtime.ui.ai.OnDeviceAiDownloadCard
 import com.example.gymtime.ui.components.GlowCard
@@ -42,14 +44,86 @@ import com.example.gymtime.ui.components.VolumeOrb
 import com.example.gymtime.ui.components.OrbSize
 import com.example.gymtime.ui.components.rememberGuardedNavigationActions
 import com.example.gymtime.ui.theme.*
+import com.example.gymtime.ui.summary.preview.PreviewPostWorkoutSummaryContent
 import com.example.gymtime.util.ShareImagePalette
 import java.text.NumberFormat
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 @Composable
 fun PostWorkoutSummaryScreen(
     navController: NavController,
     viewModel: PostWorkoutSummaryViewModel = hiltViewModel()
+) {
+    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val latestNavigateHome by rememberUpdatedState<() -> Unit>({ navController.navigateHomeAndClearStack() })
+    LaunchedEffect(viewModel, lifecycleOwner, context) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            launch { viewModel.navigationEvent.collect { latestNavigateHome() } }
+            launch {
+                viewModel.shareEvent.collect { payload ->
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "image/png"
+                        putExtra(Intent.EXTRA_STREAM, payload.imageUri)
+                        putExtra(Intent.EXTRA_TEXT, payload.text)
+                        clipData = ClipData.newUri(context.contentResolver, "Workout summary", payload.imageUri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    runCatching { context.startActivity(Intent.createChooser(send, "Share workout")) }
+                        .onFailure { Toast.makeText(context, "Couldn't open sharing. Try again.", Toast.LENGTH_SHORT).show() }
+                }
+            }
+            launch {
+                viewModel.copyEvent.collect { text ->
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Workout summary", text))
+                    Toast.makeText(context, "Workout copied", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+    if (newUiEnabled) {
+        LoggerPreviewTheme { PreviewSummaryScreen(viewModel) }
+    } else {
+        LegacyPostWorkoutSummaryScreen(viewModel)
+    }
+}
+
+/** Route wiring supplies persistence and guarded navigation to the plain summary content. */
+@Composable
+private fun PreviewSummaryScreen(viewModel: PostWorkoutSummaryViewModel) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val colors = MaterialTheme.colorScheme
+    val action = LocalLoggerActionColors.current
+    val sharePalette = remember(colors, action) {
+        ShareImagePalette(
+            background = colors.background.toArgb(), card = colors.surface.toArgb(),
+            accent = action.fill.toArgb(), accentSoft = colors.primaryContainer.toArgb(),
+            textPrimary = colors.onSurface.toArgb(), textMuted = colors.onSurfaceVariant.toArgb(),
+            onAccent = action.onFill.toArgb()
+        )
+    }
+    val navigation = rememberGuardedNavigationActions(
+        hasUnsavedChanges = state.hasUnsavedFeedback && !state.isSaving,
+        onBack = viewModel::skipAndFinish,
+        onHome = viewModel::skipAndFinish,
+        dialogTitle = "Leave without saving feedback?",
+        dialogMessage = "Your workout is already saved. Only your unsaved rating and session note will be discarded."
+    )
+    PreviewPostWorkoutSummaryContent(
+        state = state, onRating = viewModel::updateRating, onNote = viewModel::updateRatingNote,
+        onDone = viewModel::saveAndFinish, onSkip = navigation.home,
+        onRetry = viewModel::retryLoadStats,
+        onShare = { viewModel.onShareClicked(sharePalette) }, onCopy = viewModel::onCopyClicked,
+        optionalSetup = { OnDeviceAiDownloadCard() }
+    )
+}
+
+@Composable
+private fun LegacyPostWorkoutSummaryScreen(
+    viewModel: PostWorkoutSummaryViewModel
 ) {
     val workoutStats by viewModel.workoutStats.collectAsStateWithLifecycle()
     val selectedRating by viewModel.selectedRating.collectAsStateWithLifecycle()
@@ -58,10 +132,10 @@ fun PostWorkoutSummaryScreen(
     val volumeOrbState by viewModel.volumeOrbState.collectAsStateWithLifecycle()
     val sessionContribution by viewModel.sessionContribution.collectAsStateWithLifecycle()
     val recap by viewModel.recap.collectAsStateWithLifecycle()
+    val summaryState by viewModel.uiState.collectAsStateWithLifecycle()
     val accentColor = MaterialTheme.colorScheme.primary
     val appColors = LocalAppColors.current
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.US) }
-    val context = LocalContext.current
     val sharePalette = remember(accentColor, appColors) {
         ShareImagePalette(
             background = appColors.backgroundCanvas.toArgb(),
@@ -74,41 +148,12 @@ fun PostWorkoutSummaryScreen(
         )
     }
     val navigationActions = rememberGuardedNavigationActions(
-        hasUnsavedChanges = selectedRating != null || ratingNote.isNotBlank(),
+        hasUnsavedChanges = summaryState.hasUnsavedFeedback && !isSaving,
         onBack = viewModel::skipAndFinish,
         onHome = viewModel::skipAndFinish,
         dialogTitle = "Leave without saving feedback?",
         dialogMessage = "Your workout is already saved, but its rating and note will be discarded."
     )
-
-    // Observe navigation event
-    LaunchedEffect(Unit) {
-        viewModel.navigationEvent.collect {
-            navController.navigateHomeAndClearStack()
-        }
-    }
-
-    // Launch system share sheet when the ViewModel emits a generated image.
-    LaunchedEffect(Unit) {
-        viewModel.shareEvent.collect { payload ->
-            val send = Intent(Intent.ACTION_SEND).apply {
-                type = "image/png"
-                putExtra(Intent.EXTRA_STREAM, payload.imageUri)
-                putExtra(Intent.EXTRA_TEXT, payload.text)
-                clipData = ClipData.newUri(context.contentResolver, "Workout summary", payload.imageUri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            context.startActivity(Intent.createChooser(send, "Share workout"))
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.copyEvent.collect { text ->
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(ClipData.newPlainText("Workout summary", text))
-            Toast.makeText(context, "Workout copied", Toast.LENGTH_SHORT).show()
-        }
-    }
 
     Box(
         modifier = Modifier
@@ -374,6 +419,9 @@ fun PostWorkoutSummaryScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             // Done Button
+            summaryState.saveError?.let { error ->
+                Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 8.dp))
+            }
             Button(
                 onClick = { viewModel.saveAndFinish() },
                 modifier = Modifier
@@ -384,7 +432,7 @@ fun PostWorkoutSummaryScreen(
                     contentColor = Color.Black
                 ),
                 shape = RoundedCornerShape(12.dp),
-                enabled = !isSaving
+                enabled = !isSaving && workoutStats != null && !summaryState.isLoading
             ) {
                 if (isSaving) {
                     CircularProgressIndicator(
@@ -405,7 +453,7 @@ fun PostWorkoutSummaryScreen(
 
             // Skip Button
             TextButton(
-                onClick = { viewModel.skipAndFinish() },
+                onClick = navigationActions.home,
                 enabled = !isSaving
             ) {
                 Text(

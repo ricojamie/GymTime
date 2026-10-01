@@ -78,7 +78,7 @@ class StrengthMomentumUseCaseTest {
     }
 
     @Test
-    fun `stronger secondary sets register without adding set count`() = runTest {
+    fun `stronger secondary sets keep strength steady when best set is unchanged`() = runTest {
         val recent = listOf(1, 5).flatMap { day ->
             listOf(9, 9, 9).mapIndexed { index, reps ->
                 strengthSet(weight = 60f, reps = reps, daysAgo = day, muscle = "Shoulders", setIndex = index)
@@ -93,8 +93,67 @@ class StrengthMomentumUseCaseTest {
 
         val shoulders = resultFor("Shoulders")
 
-        assertTrue(shoulders.percentChange!! >= 2f)
-        assertTrue(shoulders.direction == MomentumDirection.UP || shoulders.direction == MomentumDirection.STRONG_UP)
+        assertEquals(0f, shoulders.percentChange)
+        assertEquals(MomentumDirection.FLAT, shoulders.direction)
+    }
+
+    @Test
+    fun `adding weaker backoff sets cannot make unchanged best lift regress`() = runTest {
+        val recent = listOf(1, 5).flatMap { day ->
+            listOf(
+                strengthSet(weight = 100f, reps = 10, daysAgo = day),
+                strengthSet(weight = 100f, reps = 5, daysAgo = day, setIndex = 1),
+                strengthSet(weight = 100f, reps = 5, daysAgo = day, setIndex = 2)
+            )
+        }
+        val baseline = sessionSeries(weight = 100f, reps = 10, daysAgo = listOf(15, 19))
+        stubSets(recent + baseline)
+
+        val chest = resultFor("Chest")
+
+        assertEquals(0f, chest.percentChange)
+        assertEquals(MomentumDirection.FLAT, chest.direction)
+    }
+
+    @Test
+    fun `more reps at the same weight improve estimated strength`() = runTest {
+        stubSets(
+            sessionSeries(weight = 100f, reps = 10, daysAgo = listOf(1, 5)) +
+                sessionSeries(weight = 100f, reps = 8, daysAgo = listOf(15, 19))
+        )
+
+        val chest = resultFor("Chest")
+
+        assertEquals(5.3f, chest.percentChange)
+        assertEquals(MomentumDirection.STRONG_UP, chest.direction)
+    }
+
+    @Test
+    fun `weighted sets above fifteen reps cannot build an estimated strength baseline`() = runTest {
+        stubSets(sessionSeries(weight = 100f, reps = 20, daysAgo = listOf(1, 5, 15, 19)))
+
+        val chest = resultFor("Chest")
+
+        assertNull(chest.percentChange)
+        assertEquals(MomentumDataStatus.BUILDING_BASELINE, chest.status)
+    }
+
+    @Test
+    fun `invalid or high rep noise does not inflate eligible session scores`() = runTest {
+        val valid = sessionSeries(weight = 100f, reps = 8, daysAgo = listOf(1, 5, 15, 19))
+        val noise = listOf(1, 5).flatMap { day ->
+            listOf(
+                strengthSet(weight = 300f, reps = 20, daysAgo = day, setIndex = 1),
+                strengthSet(weight = Float.POSITIVE_INFINITY, reps = 5, daysAgo = day, setIndex = 2),
+                strengthSet(weight = Float.NaN, reps = 5, daysAgo = day, setIndex = 3)
+            )
+        }
+        stubSets(valid + noise)
+
+        val chest = resultFor("Chest")
+
+        assertEquals(0f, chest.percentChange)
+        assertEquals(MomentumDirection.FLAT, chest.direction)
     }
 
     @Test

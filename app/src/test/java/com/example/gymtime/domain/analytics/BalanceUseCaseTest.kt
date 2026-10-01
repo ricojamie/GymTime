@@ -79,12 +79,16 @@ class BalanceUseCaseTest {
 
     @Test
     fun `getMuscleFreshness treats never trained muscles as Fresh`() = runTest {
-        coEvery { workoutDao.getMuscleLastTrainedDates() } returns emptyList()
+        coEvery { muscleGroupDao.getAllMuscleGroupNames() } returns testMuscleGroups + "Warmups"
+        coEvery { workoutDao.getMuscleLastTrainedDates() } returns listOf(
+            MuscleFreshness("Warmups", System.currentTimeMillis())
+        )
 
         val result = balanceUseCase.getMuscleFreshness()
         val chestStatus = result.find { it.muscle == "Chest" }
 
         assertEquals(RecoveryStatus.FRESH, chestStatus?.status)
         assertEquals(999, chestStatus?.daysSince)
+        assertEquals(null, result.find { it.muscle == "Warmups" })
     }
 }

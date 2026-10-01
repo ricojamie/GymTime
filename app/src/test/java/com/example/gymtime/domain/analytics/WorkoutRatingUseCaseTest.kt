@@ -91,6 +91,24 @@ class WorkoutRatingUseCaseTest {
     }
 
     @Test
+    fun `workouts containing only warmup activity are excluded from rating metrics`() = runTest {
+        coEvery { workoutDao.getRatedWorkoutSetInfo(any(), any()) } returns listOf(
+            row(
+                workoutId = 1L,
+                daysAgo = 1,
+                rating = 5,
+                muscle = "Warmups",
+                isWarmup = true
+            )
+        )
+
+        val result = useCase.getRatingStats(now)
+
+        assertEquals(null, result.weekAverageRating)
+        assertEquals(0, result.ratedWorkoutCount)
+    }
+
+    @Test
     fun `unrated workouts are absent from dao input and produce empty stats`() = runTest {
         coEvery { workoutDao.getRatedWorkoutSetInfo(any(), any()) } returns emptyList()
 

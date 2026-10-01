@@ -14,6 +14,7 @@ import com.example.gymtime.data.db.entity.RoutineDay
 import com.example.gymtime.data.AddToRoutineResult
 import com.example.gymtime.data.RepeatWorkoutResult
 import com.example.gymtime.data.RoutineRepository
+import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.repository.WorkoutRepository
 import com.example.gymtime.domain.share.ShareWorkoutUseCase
 import com.example.gymtime.util.ShareImagePalette
@@ -30,6 +31,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 
 private const val TAG = "HistoryViewModel"
@@ -41,8 +44,17 @@ class HistoryViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val routineRepository: RoutineRepository,
     private val shareWorkoutUseCase: ShareWorkoutUseCase,
-    private val workoutShareImageGenerator: WorkoutShareImageGenerator
+    private val workoutShareImageGenerator: WorkoutShareImageGenerator,
+    preferencesRepository: UserPreferencesRepository
 ) : ViewModel() {
+
+    val newUiEnabled = preferencesRepository.newUiEnabled
+    private var detailJob: Job? = null
+    private var historyJob: Job? = null
+    private val _historyError = MutableStateFlow<String?>(null)
+    val historyError = _historyError.asStateFlow()
+    private val _detailError = MutableStateFlow<String?>(null)
+    val detailError = _detailError.asStateFlow()
 
     // Navigation event for resuming workout
     private val _resumeWorkoutEvent = Channel<Long>(Channel.BUFFERED)
@@ -82,37 +94,56 @@ class HistoryViewModel @Inject constructor(
     }
 
     private fun loadWorkouts() {
+        historyJob?.cancel()
+        _historyError.value = null
         _isLoading.value = true
-        viewModelScope.launch {
+        historyJob = viewModelScope.launch {
             try {
                 workoutDao.getWorkoutsWithMuscles().collect { workouts ->
                     _allWorkouts.value = workouts
                     Log.d(TAG, "Loaded ${workouts.size} workouts")
                     _isLoading.value = false
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading workouts", e)
+                _historyError.value = "Couldn't load your history. Try again."
                 _isLoading.value = false
             }
         }
     }
 
+    fun retryLoadWorkouts() = loadWorkouts()
+
     fun selectWorkout(workout: WorkoutWithMuscles) {
-        viewModelScope.launch {
+        detailJob?.cancel()
+        _selectedWorkoutDetails.value = null
+        _detailError.value = null
+        _selectedWorkout.value = workout
+        detailJob = viewModelScope.launch {
             try {
-                _selectedWorkout.value = workout
                 val details = setDao.getWorkoutSetsWithExercises(workout.workout.id)
-                _selectedWorkoutDetails.value = details
+                if (_selectedWorkout.value?.workout?.id == workout.workout.id) {
+                    _selectedWorkoutDetails.value = details
+                }
                 Log.d(TAG, "Selected workout ${workout.workout.id} with ${details.size} sets")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading workout details", e)
+                if (_selectedWorkout.value?.workout?.id == workout.workout.id) {
+                    _detailError.value = "Couldn't load the sets. Try again."
+                }
             }
         }
     }
 
     fun clearSelection() {
+        detailJob?.cancel()
         _selectedWorkout.value = null
         _selectedWorkoutDetails.value = null
+        _detailError.value = null
     }
 
     fun deleteWorkout(workoutId: Long) {

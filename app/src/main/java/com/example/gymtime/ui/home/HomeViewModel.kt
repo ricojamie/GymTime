@@ -15,14 +15,18 @@ import com.example.gymtime.domain.analytics.StrengthMomentumUseCase
 import com.example.gymtime.util.StreakCalculator
 import com.example.gymtime.util.TimeFormatter
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -30,6 +34,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Date
@@ -56,6 +61,7 @@ class HomeViewModel @Inject constructor(
     private val deviceZoneId = ZoneId.systemDefault()
 
     val userName: Flow<String> = userPreferencesRepository.userName
+    val newUiEnabled: Flow<Boolean> = userPreferencesRepository.newUiEnabled
     val ongoingWorkout: StateFlow<Workout?> = workoutRepository.getOngoingWorkoutFlow().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -108,6 +114,16 @@ class HomeViewModel @Inject constructor(
     private val _startRoutineWorkoutEvent = Channel<WorkoutStartResult>(Channel.BUFFERED)
     val startRoutineWorkoutEvent = _startRoutineWorkoutEvent.receiveAsFlow()
 
+    private val _createRoutineEvent = Channel<Unit>(Channel.BUFFERED)
+    val createRoutineEvent = _createRoutineEvent.receiveAsFlow()
+
+    private val _homeMessage = Channel<String>(Channel.BUFFERED)
+    val homeMessage = _homeMessage.receiveAsFlow()
+
+    private val _routineStarting = MutableStateFlow(false)
+    val routineStarting: StateFlow<Boolean> = _routineStarting.asStateFlow()
+    private var createRoutineRequestJob: Job? = null
+
     private val _weeklyVolume = MutableStateFlow(0f)
     val weeklyVolume: StateFlow<Float> = _weeklyVolume.asStateFlow()
 
@@ -139,6 +155,11 @@ class HomeViewModel @Inject constructor(
 
     private val _strengthMomentum = MutableStateFlow(StrengthMomentumState())
     val strengthMomentum: StateFlow<StrengthMomentumState> = _strengthMomentum.asStateFlow()
+    private val _strengthMomentumLoading = MutableStateFlow(false)
+    val strengthMomentumLoading: StateFlow<Boolean> = _strengthMomentumLoading.asStateFlow()
+    private val _strengthMomentumError = MutableStateFlow<String?>(null)
+    val strengthMomentumError: StateFlow<String?> = _strengthMomentumError.asStateFlow()
+    private var strengthMomentumLoadJob: Job? = null
     private var lastDateSensitiveRefreshDate: LocalDate? = null
 
     init {
@@ -146,10 +167,46 @@ class HomeViewModel @Inject constructor(
     }
 
     fun startNextRoutineWorkout() {
+        if (_routineStarting.value) return
+        _routineStarting.value = true
         viewModelScope.launch {
-            routineRepository.startNextRoutineWorkout()?.let {
-                _startRoutineWorkoutEvent.send(it)
+            try {
+                val result = routineRepository.startNextRoutineWorkout()
+                if (result != null) {
+                    _startRoutineWorkoutEvent.send(result)
+                } else {
+                    _homeMessage.send("Choose a routine with a workout day to get started.")
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _homeMessage.send("Couldn't start this routine. Please try again.")
+            } finally {
+                _routineStarting.value = false
             }
+        }
+    }
+
+    fun requestCreateRoutine() {
+        if (createRoutineRequestJob?.isActive == true) return
+        createRoutineRequestJob = viewModelScope.launch {
+            try {
+                if (routineRepository.getAllRoutines().first().size >= RoutineRepository.MAX_ROUTINES) {
+                    _homeMessage.send("You can have up to ${RoutineRepository.MAX_ROUTINES} routines. Remove one to create another.")
+                } else {
+                    _createRoutineEvent.send(Unit)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _homeMessage.send("Couldn't open a new routine. Please try again.")
+            }
+        }
+    }
+
+    fun setNewUiEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setNewUiEnabled(enabled)
         }
     }
 
@@ -178,13 +235,30 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun loadStrengthMomentum() {
-        viewModelScope.launch {
+        strengthMomentumLoadJob?.cancel()
+        _strengthMomentumLoading.value = true
+        _strengthMomentumError.value = null
+        strengthMomentumLoadJob = viewModelScope.launch {
             try {
-                _strengthMomentum.value = strengthMomentumUseCase.getStrengthMomentum()
+                val momentum = strengthMomentumUseCase.getStrengthMomentum()
+                ensureActive()
+                _strengthMomentum.value = momentum
+            } catch (error: CancellationException) {
+                throw error
             } catch (_: Exception) {
-                _strengthMomentum.value = StrengthMomentumState()
+                if (isActive) {
+                    _strengthMomentumError.value = "Couldn't update strength trends. Please try again."
+                }
+            } finally {
+                if (isActive) {
+                    _strengthMomentumLoading.value = false
+                }
             }
         }
+    }
+
+    fun retryStrengthMomentum() {
+        loadStrengthMomentum()
     }
 
     private fun loadLastYearVolume() {

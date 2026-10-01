@@ -13,6 +13,9 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,6 +38,8 @@ import com.example.gymtime.ui.components.BackNavigationIcon
 import com.example.gymtime.ui.components.HomeNavigationAction
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.LocalAppColors
+import com.example.gymtime.ui.theme.LoggerPreviewTheme
+import com.example.gymtime.ui.routine.preview.PreviewRoutineDetailContent
 import com.example.gymtime.util.TimeFormatter
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -46,6 +51,39 @@ fun RoutineDetailScreen(
     navController: NavController,
     viewModel: RoutineDetailViewModel = hiltViewModel()
 ) {
+    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val latestOpenWorkout by rememberUpdatedState<(Long) -> Unit>({ navController.navigateToWorkoutExercise(it) })
+    LaunchedEffect(viewModel, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.startWorkoutEvent.collect { firstExerciseId ->
+                runCatching { latestOpenWorkout(firstExerciseId) }
+                    .onSuccess { viewModel.onWorkoutOpened() }
+                    .onFailure { viewModel.onWorkoutNavigationFailed() }
+            }
+        }
+    }
+    if (newUiEnabled) {
+        val state by viewModel.previewState.collectAsStateWithLifecycle()
+        LoggerPreviewTheme {
+            PreviewRoutineDetailContent(
+                state = state, onBack = navController::navigateBackOrHome, onHome = navController::navigateHomeAndClearStack,
+                onRename = { navController.navigate(Screen.RoutineForm.createRoute(viewModel.routineId)) },
+                onUseRoutine = viewModel::setActive, onClearRoutine = viewModel::clearActive,
+                onCreateDay = { navController.navigate(Screen.RoutineDayForm.createRoute(viewModel.routineId)) },
+                onStartDay = viewModel::startWorkoutFromDay,
+                onEditDay = { navController.navigate(Screen.RoutineDayForm.createRoute(viewModel.routineId, it)) },
+                onSetNextDay = viewModel::setNextDay, onDuplicateDay = viewModel::duplicateDay,
+                onMoveDay = viewModel::moveDay, onDeleteDay = viewModel::deleteDay,
+                onRefreshStats = viewModel::refreshStats, onRetryLoad = viewModel::retryLoad, onDismissError = viewModel::dismissError
+            )
+        }
+    } else LegacyRoutineDetailScreen(navController, viewModel)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LegacyRoutineDetailScreen(navController: NavController, viewModel: RoutineDetailViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val stats by viewModel.stats.collectAsStateWithLifecycle()
     val routine = uiState.routine
@@ -55,12 +93,6 @@ fun RoutineDetailScreen(
     var dayToDelete by remember { mutableStateOf<RoutineDay?>(null) }
     var showTopMenu by remember { mutableStateOf(false) }
     val accentColor = MaterialTheme.colorScheme.primary
-
-    LaunchedEffect(Unit) {
-        viewModel.startWorkoutEvent.collect { firstExerciseId ->
-            navController.navigateToWorkoutExercise(firstExerciseId)
-        }
-    }
 
     Scaffold(
         topBar = {

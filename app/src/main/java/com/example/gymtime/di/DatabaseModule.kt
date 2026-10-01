@@ -17,6 +17,7 @@ import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.MuscleGroup
+import com.example.gymtime.data.db.entity.WARMUP_MUSCLE_GROUP
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -345,11 +346,13 @@ object DatabaseModule {
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
+                installWarmupLibraryPolicy(db)
                 Log.d(TAG, "Room.Callback.onCreate called - database created for first time")
             }
 
             override fun onOpen(db: SupportSQLiteDatabase) {
                 super.onOpen(db)
+                installWarmupLibraryPolicy(db)
                 Log.d(TAG, "Room.Callback.onOpen called - database opened")
             }
         }).build()
@@ -378,9 +381,13 @@ object DatabaseModule {
             if (existingMuscleGroups.isEmpty()) {
                 Log.d(TAG, "Seeding muscle groups...")
                 val muscleGroups = listOf(
-                    "Back", "Biceps", "Chest", "Core", "Legs", "Shoulders", "Triceps", "Cardio"
+                    "Back", "Biceps", "Chest", "Core", "Legs", "Shoulders", "Triceps", "Cardio",
+                    WARMUP_MUSCLE_GROUP
                 ).map { MuscleGroup(it) }
                 muscleGroupDao.insertAll(muscleGroups)
+            } else {
+                // Warmups is a system library category and must also reach existing installs.
+                muscleGroupDao.insertMuscleGroup(MuscleGroup(WARMUP_MUSCLE_GROUP))
             }
 
             Log.d(TAG, "populateInitialData: Checking how many exercises are in the database...")
@@ -449,6 +456,78 @@ object DatabaseModule {
         } catch (e: Exception) {
             Log.e(TAG, "Error during seed population", e)
         }
+    }
+
+    /**
+     * Treat the Warmups body-part category as library-only activity. The triggers keep
+     * every write path safe (phone logger, Wear, edits, and imports), while the backfill
+     * covers exercises that are moved into the category after they already have history.
+     */
+    private fun installWarmupLibraryPolicy(database: SupportSQLiteDatabase) {
+        val normalizedTarget =
+            "LOWER(REPLACE(REPLACE(TRIM(targetMuscle), ' ', ''), '-', ''))"
+        val normalizedNewTarget =
+            "LOWER(REPLACE(REPLACE(TRIM(NEW.targetMuscle), ' ', ''), '-', ''))"
+
+        database.execSQL(
+            """UPDATE exercises
+                SET targetMuscle = '$WARMUP_MUSCLE_GROUP'
+                WHERE $normalizedTarget IN ('warmup', 'warmups')
+                  AND targetMuscle != '$WARMUP_MUSCLE_GROUP'
+            """.trimIndent()
+        )
+        database.execSQL(
+            """DELETE FROM muscle_groups
+                WHERE LOWER(REPLACE(REPLACE(TRIM(name), ' ', ''), '-', ''))
+                    IN ('warmup', 'warmups')
+                  AND name != '$WARMUP_MUSCLE_GROUP'
+            """.trimIndent()
+        )
+        database.execSQL(
+            """UPDATE sets
+                SET isWarmup = 1
+                WHERE isWarmup = 0
+                  AND exerciseId IN (
+                      SELECT id FROM exercises
+                      WHERE $normalizedTarget IN ('warmup', 'warmups')
+                  )
+            """.trimIndent()
+        )
+        database.execSQL(
+            """CREATE TRIGGER IF NOT EXISTS enforce_warmup_library_set_insert
+                AFTER INSERT ON sets
+                WHEN EXISTS (
+                    SELECT 1 FROM exercises
+                    WHERE id = NEW.exerciseId
+                      AND $normalizedTarget IN ('warmup', 'warmups')
+                )
+                BEGIN
+                    UPDATE sets SET isWarmup = 1 WHERE id = NEW.id;
+                END
+            """.trimIndent()
+        )
+        database.execSQL(
+            """CREATE TRIGGER IF NOT EXISTS enforce_warmup_library_set_update
+                AFTER UPDATE OF exerciseId, isWarmup ON sets
+                WHEN NEW.isWarmup = 0 AND EXISTS (
+                    SELECT 1 FROM exercises
+                    WHERE id = NEW.exerciseId
+                      AND $normalizedTarget IN ('warmup', 'warmups')
+                )
+                BEGIN
+                    UPDATE sets SET isWarmup = 1 WHERE id = NEW.id;
+                END
+            """.trimIndent()
+        )
+        database.execSQL(
+            """CREATE TRIGGER IF NOT EXISTS backfill_warmup_library_exercise_update
+                AFTER UPDATE OF targetMuscle ON exercises
+                WHEN $normalizedNewTarget IN ('warmup', 'warmups')
+                BEGIN
+                    UPDATE sets SET isWarmup = 1 WHERE exerciseId = NEW.id;
+                END
+            """.trimIndent()
+        )
     }
 
     @Provides

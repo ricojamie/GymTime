@@ -36,12 +36,15 @@ class UserPreferencesRepository @Inject constructor(
 
         // Plate calculator preferences
         val AVAILABLE_PLATES = stringPreferencesKey("available_plates")
+        val PLATE_INVENTORY = stringPreferencesKey("plate_inventory")
+        val USE_PLATE_INVENTORY = booleanPreferencesKey("use_plate_inventory")
         val BAR_WEIGHT = androidx.datastore.preferences.core.floatPreferencesKey("bar_weight")
         val LOADING_SIDES = androidx.datastore.preferences.core.intPreferencesKey("loading_sides")
 
         // Display preferences
         val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
         val DARK_MODE = booleanPreferencesKey("dark_mode")
+        val NEW_UI_ENABLED = booleanPreferencesKey("new_ui_enabled")
 
         // Streak tracking
         val BEST_STREAK = intPreferencesKey("best_streak")
@@ -116,6 +119,19 @@ class UserPreferencesRepository @Inject constructor(
             preferences[PreferencesKeys.BAR_WEIGHT] ?: 45f
         }
 
+    /** Counts and toggle come from one emission so calculators never combine stale stock and mode. */
+    val plateInventorySettings: Flow<PlateInventorySettings> = context.dataStore.data
+        .map { preferences ->
+            PlateInventorySettings(
+                counts = PlateInventoryPreferences.decode(preferences[PreferencesKeys.PLATE_INVENTORY]),
+                enabled = preferences[PreferencesKeys.USE_PLATE_INVENTORY] ?: false
+            )
+        }
+
+    val plateInventory: Flow<Map<Float, Int>> = plateInventorySettings.map { it.counts }
+
+    val usePlateInventory: Flow<Boolean> = plateInventorySettings.map { it.enabled }
+
     val loadingSides: Flow<Int> = context.dataStore.data
         .map { preferences ->
             preferences[PreferencesKeys.LOADING_SIDES] ?: 2
@@ -129,6 +145,11 @@ class UserPreferencesRepository @Inject constructor(
     val darkMode: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[PreferencesKeys.DARK_MODE] ?: true
+        }
+
+    val newUiEnabled: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.NEW_UI_ENABLED] ?: false
         }
 
     val bestStreak: Flow<Int> = context.dataStore.data
@@ -231,6 +252,27 @@ class UserPreferencesRepository @Inject constructor(
         }
     }
 
+    suspend fun setPlateInventoryCount(weight: Float, count: Int) {
+        context.dataStore.edit { preferences ->
+            PlateInventoryPreferences.updateCount(preferences[PreferencesKeys.PLATE_INVENTORY], weight, count)
+                ?.let { preferences[PreferencesKeys.PLATE_INVENTORY] = it }
+        }
+    }
+
+    /** Atomic increment/decrement also keeps rapid taps on the same denomination. */
+    suspend fun adjustPlateInventoryCount(weight: Float, delta: Int) {
+        context.dataStore.edit { preferences ->
+            PlateInventoryPreferences.adjustCount(preferences[PreferencesKeys.PLATE_INVENTORY], weight, delta)
+                ?.let { preferences[PreferencesKeys.PLATE_INVENTORY] = it }
+        }
+    }
+
+    suspend fun setUsePlateInventory(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.USE_PLATE_INVENTORY] = enabled
+        }
+    }
+
     suspend fun setLoadingSides(sides: Int) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.LOADING_SIDES] = sides
@@ -246,6 +288,12 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun setDarkMode(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.DARK_MODE] = enabled
+        }
+    }
+
+    suspend fun setNewUiEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.NEW_UI_ENABLED] = enabled
         }
     }
 

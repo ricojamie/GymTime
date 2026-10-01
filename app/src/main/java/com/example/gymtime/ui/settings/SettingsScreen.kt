@@ -32,6 +32,7 @@ import com.example.gymtime.navigation.navigateHomeAndClearStack
 import com.example.gymtime.navigation.navigateBackOrHome
 import com.example.gymtime.ui.components.BackNavigationIcon
 import com.example.gymtime.ui.components.HomeNavigationAction
+import com.example.gymtime.ui.settings.preview.PreviewSettingsScreen
 import com.example.gymtime.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,6 +41,20 @@ fun SettingsScreen(
     navController: NavController,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
+    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
+    if (newUiEnabled) {
+        LoggerPreviewTheme {
+            PreviewSettingsScreen(
+                viewModel = viewModel,
+                onBack = navController::navigateBackOrHome,
+                onHome = navController::navigateHomeAndClearStack,
+                onTheme = { navController.navigate(com.example.gymtime.navigation.Screen.ThemeSettings.route) },
+                onMonthlyReport = { navController.navigate(com.example.gymtime.navigation.Screen.MonthlyReport.route) },
+                onMuscleGroups = { navController.navigate(com.example.gymtime.navigation.Screen.MuscleGroupManagement.route) }
+            )
+        }
+        return
+    }
     val userName by viewModel.userName.collectAsStateWithLifecycle(initialValue = "Athlete")
     val themeColor by viewModel.themeColor.collectAsStateWithLifecycle(initialValue = "lime")
     val timerAutoStart by viewModel.timerAutoStart.collectAsStateWithLifecycle(initialValue = true)
@@ -869,12 +884,14 @@ fun SettingsScreen(
             text = {
                 Column {
                     Text(
-                        "Plan It, Load It, Lift It 💪",
+                        "Logging, Progression, and Training Insights 💪",
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
+                        "📈 Training insights and progression\n" +
+                        "Explore your training trends and progression alongside the refreshed workout logger.\n\n" +
                         "🧱 Build a one-off workout\n" +
                         "Start a new workout, choose every exercise you plan to do, then move forward or back through your plan while logging. No routine required.\n\n" +
                         "🔁 Supersets switch correctly\n" +

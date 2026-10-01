@@ -27,6 +27,7 @@ import com.example.gymtime.ui.components.BackNavigationIcon
 import com.example.gymtime.ui.components.HomeNavigationAction
 import com.example.gymtime.ui.components.GlowCard
 import com.example.gymtime.ui.theme.*
+import com.example.gymtime.ui.routine.preview.PreviewRoutineBrowseContent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,6 +35,27 @@ fun RoutineListScreen(
     navController: NavController,
     viewModel: RoutineListViewModel = hiltViewModel()
 ) {
+    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
+    if (newUiEnabled) {
+        val state by viewModel.previewState.collectAsStateWithLifecycle()
+        LoggerPreviewTheme {
+            PreviewRoutineBrowseContent(
+                state = state,
+                onCreate = { navController.navigate(Screen.RoutineForm.createRoute()) },
+                onOpen = { navController.navigate(Screen.RoutineDetail.createRoute(it)) },
+                onSetActive = viewModel::setActiveRoutine,
+                onRename = { navController.navigate(Screen.RoutineForm.createRoute(it)) },
+                onDuplicate = viewModel::duplicateRoutine, onDelete = viewModel::deleteRoutineById,
+                onRetry = viewModel::retryLoad, onDismissError = viewModel::dismissError,
+                onBack = navController::navigateBackOrHome, onHome = navController::navigateHomeAndClearStack
+            )
+        }
+    } else LegacyRoutineListScreen(navController, viewModel)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LegacyRoutineListScreen(navController: NavController, viewModel: RoutineListViewModel) {
     val routines by viewModel.routines.collectAsStateWithLifecycle(initialValue = emptyList())
     val activeRoutineId by viewModel.activeRoutineId.collectAsStateWithLifecycle(initialValue = null)
     val canCreateMore by viewModel.canCreateMoreRoutines.collectAsStateWithLifecycle()

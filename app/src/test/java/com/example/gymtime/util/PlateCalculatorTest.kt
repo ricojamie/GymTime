@@ -279,4 +279,161 @@ class PlateCalculatorTest {
         assertEquals(45f, result.totalWeight)
         assertFalse(result.isExact)
     }
+
+    @Test
+    fun `finite inventory finds non greedy exact combination`() {
+        val inventory = mapOf(9f to 1, 6f to 2)
+        val result = PlateCalculator.calculatePlates(12f, listOf(9f, 6f), 0f, 1, inventory)
+
+        assertEquals(listOf(6f, 6f), result.platesPerSide)
+        assertEquals(12f, result.totalWeight)
+        assertTrue(result.isExact)
+        assertWithinInventory(result, inventory, 1)
+    }
+
+    @Test
+    fun `bounded closest load can exceed target when smallest plate stock is exhausted`() {
+        val inventory = mapOf(10f to 1, 1f to 1)
+        val result = PlateCalculator.calculatePlates(7f, listOf(10f, 1f), 0f, 1, inventory)
+
+        assertEquals(listOf(10f), result.platesPerSide)
+        assertEquals(10f, result.totalWeight)
+        assertFalse(result.isExact)
+        assertWithinInventory(result, inventory, 1)
+    }
+
+    @Test
+    fun `odd inventory count cannot be mirrored on both sides`() {
+        val inventory = mapOf(45f to 3)
+        val result = PlateCalculator.calculatePlates(225f, listOf(45f), 45f, 2, inventory)
+
+        assertEquals(listOf(45f), result.platesPerSide)
+        assertEquals(135f, result.totalWeight)
+        assertFalse(result.isExact)
+        assertWithinInventory(result, inventory, 2)
+    }
+
+    @Test
+    fun `single sided inventory uses all individual plates`() {
+        val inventory = mapOf(45f to 3)
+        val result = PlateCalculator.calculatePlates(180f, listOf(45f), 45f, 1, inventory)
+
+        assertEquals(listOf(45f, 45f, 45f), result.platesPerSide)
+        assertEquals(180f, result.totalWeight)
+        assertTrue(result.isExact)
+        assertWithinInventory(result, inventory, 1)
+    }
+
+    @Test
+    fun `empty missing zero or disabled stock cannot be loaded`() {
+        listOf(emptyMap(), mapOf(45f to 0), mapOf(45f to -10), mapOf(25f to 10)).forEach { inventory ->
+            val result = PlateCalculator.calculatePlates(135f, listOf(45f), 45f, 2, inventory)
+            assertTrue(result.platesPerSide.isEmpty())
+            assertEquals(45f, result.totalWeight)
+            assertFalse(result.isExact)
+        }
+    }
+
+    @Test
+    fun `finite stock tie chooses lower weight and exact solutions use fewest plates`() {
+        val tie = PlateCalculator.calculatePlates(9f, listOf(12f, 6f), 0f, 1, mapOf(12f to 1, 6f to 1))
+        assertEquals(6f, tie.totalWeight)
+        val inventory = mapOf(6f to 2, 4f to 3, 3f to 4)
+        val minimum = PlateCalculator.calculatePlates(12f, listOf(6f, 4f, 3f), 0f, 1, inventory)
+        assertEquals(listOf(6f, 6f), minimum.platesPerSide)
+        assertWithinInventory(minimum, inventory, 1)
+    }
+
+    @Test
+    fun `canonical plate aliases do not duplicate stock and invalid weights are rejected`() {
+        val inventory = mapOf(2.501f to 6, 2.499f to 2, Float.NaN to 100, Float.POSITIVE_INFINITY to 100)
+        assertEquals(mapOf(2.5f to 2), PlateCalculator.sanitizePlateInventory(inventory))
+        assertEquals(listOf(2.5f), PlateCalculator.sanitizePlateOptions(listOf(2.501f, 2.499f)))
+        val result = PlateCalculator.calculatePlates(10f, listOf(2.501f, 2.499f), 0f, 2, inventory)
+        assertEquals(listOf(2.5f), result.platesPerSide)
+        assertEquals(5f, result.totalWeight)
+    }
+
+    @Test
+    fun `extreme inventory quantities and loading sides are bounded without overflow`() {
+        val result = PlateCalculator.calculatePlates(
+            Float.MAX_VALUE, listOf(1f, Float.MAX_VALUE), Float.NaN, Int.MAX_VALUE,
+            mapOf(1f to Int.MAX_VALUE, Float.MAX_VALUE to Int.MAX_VALUE)
+        )
+        assertEquals(List(6) { 1f }, result.platesPerSide)
+        assertEquals(96f, result.totalWeight)
+        assertEquals(PlateCalculator.MAX_PLATE_COUNT, PlateCalculator.sanitizePlateInventory(mapOf(1f to Int.MAX_VALUE))[1f])
+    }
+
+    @Test
+    fun `manual loading helpers conserve stock and retain unlimited mode`() {
+        val inventory = mapOf(45f to 3, 2.5f to 4)
+        assertEquals(1, PlateCalculator.maxPlatesPerSide(45f, 2, inventory))
+        assertEquals(3, PlateCalculator.maxPlatesPerSide(45f, 1, inventory))
+        assertEquals(0, PlateCalculator.maxPlatesPerSide(25f, 2, inventory))
+        assertFalse(PlateCalculator.canAddPlate(listOf(45f), 45f, 2, inventory))
+        assertTrue(PlateCalculator.canAddPlate(listOf(2.5f), 2.5f, 2, inventory))
+        assertTrue(PlateCalculator.canAddPlate(List(20) { 45f }, 45f, 2, null))
+        assertFalse(PlateCalculator.canAddPlate(emptyList(), Float.NaN, 2, null))
+    }
+
+    @Test
+    fun `bounded solver matches exhaustive search without exceeding any stock`() {
+        val options = listOf(9f, 6f, 4f)
+        for (sides in 1..2) {
+            for (nines in 0..3) for (sixes in 0..3) for (fours in 0..3) {
+                val inventory = mapOf(9f to nines, 6f to sixes, 4f to fours)
+                val achievable = buildList {
+                    for (a in 0..nines / sides) for (b in 0..sixes / sides) for (c in 0..fours / sides) {
+                        add((a * 9 + b * 6 + c * 4) * sides to a + b + c)
+                    }
+                }
+                for (target in 0..30) {
+                    val best = achievable.minWith(
+                        compareBy<Pair<Int, Int>> { kotlin.math.abs(it.first - target) }
+                            .thenBy { if (it.first <= target) 0 else 1 }
+                            .thenBy { it.second }
+                    )
+                    val result = PlateCalculator.calculatePlates(target.toFloat(), options, 0f, sides, inventory)
+                    assertEquals("target=$target sides=$sides inventory=$inventory", best.first.toFloat(), result.totalWeight)
+                    assertEquals(best.second, result.platesPerSide.size)
+                    assertWithinInventory(result, inventory, sides)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `maximum total is actual attainable load rather than clamped overshoot`() {
+        val result = PlateCalculator.calculatePlates(10_000f, listOf(6f), 0f, 1, null)
+        assertEquals(9_996f, result.totalWeight)
+        assertFalse(result.isExact)
+        assertEquals(result.totalWeight, result.platesPerSide.sum() + 0f)
+    }
+
+    @Test
+    fun `more than sixty four denominations preserve smallest exact option in unlimited mode`() {
+        val options = (65..130).map { it.toFloat() } + 1f
+        assertEquals(options.size, PlateCalculator.sanitizePlateOptions(options).size)
+        val result = PlateCalculator.calculatePlates(1f, options, 0f, 1)
+        assertEquals(listOf(1f), result.platesPerSide)
+        assertTrue(result.isExact)
+    }
+
+    @Test
+    fun `more than sixty four denominations preserve smallest exact option with finite stock`() {
+        val options = (65..130).map { it.toFloat() } + 1f
+        val inventory = options.associateWith { 1 }
+        val result = PlateCalculator.calculatePlates(1f, options, 0f, 1, inventory)
+        assertEquals(listOf(1f), result.platesPerSide)
+        assertTrue(result.isExact)
+        assertWithinInventory(result, inventory, 1)
+    }
+
+    private fun assertWithinInventory(loadout: PlateLoadout, inventory: Map<Float, Int>, sides: Int) {
+        val stock = PlateCalculator.sanitizePlateInventory(inventory)
+        loadout.platesPerSide.groupingBy { it }.eachCount().forEach { (plate, count) ->
+            assertTrue("$plate uses $count per side with $sides sides; stock=$stock", count * sides <= (stock[plate] ?: 0))
+        }
+    }
 }

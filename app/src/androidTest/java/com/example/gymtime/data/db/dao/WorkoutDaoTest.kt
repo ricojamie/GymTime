@@ -8,7 +8,9 @@ import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
+import com.example.gymtime.data.db.entity.WorkoutExerciseInstance
 import com.example.gymtime.data.VolumeOrbRepository
+import com.example.gymtime.data.repository.WorkoutPlanEditResult
 import com.example.gymtime.data.repository.WorkoutRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -106,6 +108,144 @@ class WorkoutDaoTest {
         assertEquals(secondExercise.id, start.firstExerciseId)
         assertEquals(listOf(secondExercise.id, testExercise.id), plan.map { it.exerciseId })
         assertEquals(listOf(0, 1), plan.map { it.orderIndex })
+    }
+
+    @Test
+    fun swapWorkoutPlanExercisePreservesSlotTargetsWithoutEditingRoutine() = runTest {
+        val replacement = testExercise.copy(id = 2L, name = "Front Squat")
+        exerciseDao.insertExercise(testExercise)
+        exerciseDao.insertExercise(replacement)
+        val workoutId = workoutDao.insertWorkout(
+            Workout(startTime = Date(), endTime = null, name = "Leg Day", note = null)
+        )
+        val instanceId = workoutPlanDao.insertInstance(
+            WorkoutExerciseInstance(
+                workoutId = workoutId,
+                exerciseId = testExercise.id,
+                routineExerciseId = 44L,
+                orderIndex = 2,
+                plannedSets = 4,
+                repMin = 6,
+                repMax = 8,
+                restSeconds = 120,
+                notes = "Controlled eccentric",
+                supersetGroupId = "group-a",
+                supersetOrderIndex = 1
+            )
+        )
+
+        val result = workoutRepository().swapWorkoutPlanExercise(instanceId, replacement.id)
+        val updated = workoutPlanDao.getInstanceById(instanceId)!!
+
+        assertEquals(WorkoutPlanEditResult.Updated, result)
+        assertEquals(replacement.id, updated.exerciseId)
+        assertNull(updated.routineExerciseId)
+        assertTrue(updated.addedDuringWorkout)
+        assertEquals(4, updated.plannedSets)
+        assertEquals(6, updated.repMin)
+        assertEquals(8, updated.repMax)
+        assertEquals("group-a", updated.supersetGroupId)
+        assertEquals(1, updated.supersetOrderIndex)
+    }
+
+    @Test
+    fun removeWorkoutPlanExerciseRefusesToHideLoggedSets() = runTest {
+        exerciseDao.insertExercise(testExercise)
+        val workoutId = workoutDao.insertWorkout(
+            Workout(startTime = Date(), endTime = null, name = "Leg Day", note = null)
+        )
+        val instanceId = workoutPlanDao.insertInstance(
+            WorkoutExerciseInstance(
+                workoutId = workoutId,
+                exerciseId = testExercise.id,
+                orderIndex = 0
+            )
+        )
+        setDao.insertSet(
+            Set(
+                workoutId = workoutId,
+                exerciseId = testExercise.id,
+                weight = 225f,
+                reps = 5,
+                rpe = 8f,
+                durationSeconds = null,
+                distanceMeters = null,
+                isWarmup = true,
+                isComplete = true,
+                timestamp = Date()
+            )
+        )
+
+        val result = workoutRepository().removeWorkoutPlanExercise(instanceId)
+        val summary = workoutPlanDao.getWorkoutPlanSummaries(workoutId).first().single()
+
+        assertEquals(WorkoutPlanEditResult.HasLoggedSets, result)
+        assertNotNull(workoutPlanDao.getInstanceById(instanceId))
+        assertEquals(0, summary.setCount)
+        assertEquals(1, summary.anySetCount)
+    }
+
+    @Test
+    fun removeWorkoutPlanExerciseDissolvesSingleMemberSuperset() = runTest {
+        val secondExercise = testExercise.copy(id = 2L, name = "Leg Press")
+        exerciseDao.insertExercise(testExercise)
+        exerciseDao.insertExercise(secondExercise)
+        val workoutId = workoutDao.insertWorkout(
+            Workout(startTime = Date(), endTime = null, name = "Leg Day", note = null)
+        )
+        val firstId = workoutPlanDao.insertInstance(
+            WorkoutExerciseInstance(
+                workoutId = workoutId,
+                exerciseId = testExercise.id,
+                orderIndex = 0,
+                supersetGroupId = "group-a"
+            )
+        )
+        val secondId = workoutPlanDao.insertInstance(
+            WorkoutExerciseInstance(
+                workoutId = workoutId,
+                exerciseId = secondExercise.id,
+                orderIndex = 1,
+                supersetGroupId = "group-a",
+                supersetOrderIndex = 1
+            )
+        )
+
+        val result = workoutRepository().removeWorkoutPlanExercise(secondId)
+        val remaining = workoutPlanDao.getInstanceById(firstId)!!
+
+        assertEquals(WorkoutPlanEditResult.Removed, result)
+        assertTrue(workoutPlanDao.getInstanceById(secondId)!!.isSkipped)
+        assertNull(remaining.supersetGroupId)
+        assertEquals(0, remaining.supersetOrderIndex)
+    }
+
+    @Test
+    fun removingLastSlotKeepsPlanEditableForANewExercise() = runTest {
+        val replacement = testExercise.copy(id = 2L, name = "Front Squat")
+        exerciseDao.insertExercise(testExercise)
+        exerciseDao.insertExercise(replacement)
+        val workoutId = workoutDao.insertWorkout(
+            Workout(startTime = Date(), endTime = null, name = "Leg Day", note = null)
+        )
+        val removedId = workoutPlanDao.insertInstance(
+            WorkoutExerciseInstance(
+                workoutId = workoutId,
+                exerciseId = testExercise.id,
+                orderIndex = 0
+            )
+        )
+        val repository = workoutRepository()
+
+        assertEquals(WorkoutPlanEditResult.Removed, repository.removeWorkoutPlanExercise(removedId))
+        val added = repository.ensureWorkoutPlanInstance(workoutId, replacement.id)
+
+        assertNotNull(added)
+        assertEquals(replacement.id, added?.exerciseId)
+        assertEquals(
+            listOf(replacement.id),
+            workoutPlanDao.getWorkoutPlanSummaries(workoutId).first().map { it.exerciseId }
+        )
     }
 
     @Test
@@ -437,6 +577,39 @@ class WorkoutDaoTest {
         assertEquals(2, dailyVolumes.first { it.date == july2 }.workingSetCount)
     }
 
+    @Test
+    fun workoutHistoryTotalsExcludeUnfinishedSetsAndWarmups() = runTest {
+        exerciseDao.insertExercise(testExercise)
+        exerciseDao.insertExercise(testExercise.copy(id = 2L, name = "Row", targetMuscle = "Back"))
+        val workoutId = insertCompletedWorkout(Date(), Date(), "Mixed entries")
+        val emptyWorkoutId = insertCompletedWorkout(Date(), Date(), "No entries")
+        val completed = Set(
+            workoutId = workoutId,
+            exerciseId = testExercise.id,
+            weight = 200f,
+            reps = 5,
+            rpe = null,
+            durationSeconds = null,
+            distanceMeters = null,
+            isWarmup = false,
+            isComplete = true,
+            timestamp = Date()
+        )
+        setDao.insertSet(completed)
+        setDao.insertSet(completed.copy(weight = null, reps = 10))
+        setDao.insertSet(completed.copy(exerciseId = 2L, isComplete = false, weight = 300f, reps = 10))
+        setDao.insertSet(completed.copy(exerciseId = 2L, isWarmup = true))
+
+        val summaries = workoutDao.getWorkoutsWithMuscles().first()
+        val summary = summaries.single { it.workout.id == workoutId }
+        assertEquals(2, summary.workingSetCount ?: 0)
+        assertEquals(1000f, summary.totalVolume ?: 0f, 0.001f)
+        assertEquals(listOf("Legs"), summary.muscleGroups)
+        val empty = summaries.single { it.workout.id == emptyWorkoutId }
+        assertEquals(0, empty.workingSetCount ?: 0)
+        assertEquals(0f, empty.totalVolume ?: 0f, 0.001f)
+    }
+
     private suspend fun insertCompletedWorkout(startTime: Date, endTime: Date, name: String): Long {
         return workoutDao.insertWorkout(
             Workout(
@@ -484,4 +657,13 @@ class WorkoutDaoTest {
                 .toInstant()
         )
     }
+
+    private fun workoutRepository() = WorkoutRepository(
+        database = database,
+        workoutDao = workoutDao,
+        setDao = setDao,
+        routineDao = database.routineDao(),
+        workoutPlanDao = workoutPlanDao,
+        volumeOrbRepository = VolumeOrbRepository(setDao)
+    )
 }

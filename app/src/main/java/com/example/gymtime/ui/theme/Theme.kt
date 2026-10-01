@@ -5,6 +5,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -72,10 +73,11 @@ fun IronLogTheme(
     darkMode: Boolean = true,
     themeFontKey: String = ThemeFontOption.BEBAS_NEUE.storageKey,
     customFontUri: String? = null,
+    newUiEnabled: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val baseColors = if (darkMode) DarkAppColors else LightAppColors
-    val appColors = baseColors.copy(
+    val legacyAppColors = baseColors.copy(
         cursor = resolveCursorColor(
             accent = appColorScheme.primaryAccent,
             background = baseColors.backgroundCanvas,
@@ -87,7 +89,21 @@ fun IronLogTheme(
         customFontUri = customFontUri
     )
 
-    val dynamicColorScheme = if (darkMode) {
+    val previewScheme = remember(appColorScheme.primaryAccent, darkMode) {
+        loggerPreviewColorScheme(appColorScheme.primaryAccent, darkMode)
+    }
+    val appColors = if (newUiEnabled) {
+        remember(previewScheme) { loggerPreviewAppColors(previewScheme) }
+    } else {
+        legacyAppColors
+    }
+    val actionColors = remember(appColorScheme.primaryAccent) {
+        loggerActionColors(appColorScheme.primaryAccent)
+    }
+
+    val dynamicColorScheme = if (newUiEnabled) {
+        previewScheme
+    } else if (darkMode) {
         darkColorScheme(
             primary = appColorScheme.primaryAccent,
             secondary = appColorScheme.primaryAccent,
@@ -115,7 +131,9 @@ fun IronLogTheme(
         )
     }
 
-    val gradientColors = if (darkMode) {
+    val gradientColors = if (newUiEnabled) {
+        previewScheme.background to previewScheme.surfaceContainerLow
+    } else if (darkMode) {
         Pair(appColorScheme.gradientStart, appColorScheme.gradientEnd)
     } else {
         Pair(appColorScheme.lightGradientStart, appColorScheme.lightGradientEnd)
@@ -123,7 +141,9 @@ fun IronLogTheme(
 
     CompositionLocalProvider(
         LocalGradientColors provides gradientColors,
-        LocalAppColors provides appColors
+        LocalAppColors provides appColors,
+        LocalLoggerActionColors provides actionColors,
+        LocalLoggerPreviewThemeActive provides newUiEnabled
     ) {
         MaterialTheme(
             colorScheme = dynamicColorScheme,
