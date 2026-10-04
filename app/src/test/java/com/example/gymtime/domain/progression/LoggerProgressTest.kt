@@ -240,6 +240,92 @@ class LoggerProgressTest {
         assertTrue(loggerRecordLabels(exercise, tied, listOf(original)).isEmpty())
     }
 
+    @Test
+    fun `first current set below previous weight and reps does not earn a PR`() {
+        val previous = set(1, 1, 200f, 10)
+        val candidate = set(2, 2, 100f, 8)
+
+        assertNoCurrentSetRecord(candidate, listOf(previous))
+    }
+
+    @Test
+    fun `matching previous weight with fewer reps does not earn a PR`() {
+        val previous = set(1, 1, 200f, 10)
+        val candidate = set(2, 2, 200f, 8)
+
+        assertNoCurrentSetRecord(candidate, listOf(previous))
+    }
+
+    @Test
+    fun `improving exact rep bucket does not earn a PR when another lift dominates it`() {
+        val stronger = set(1, 1, 200f, 10)
+        val previousAtSameReps = set(2, 2, 100f, 8)
+        val candidate = set(3, 3, 150f, 8)
+
+        assertNoCurrentSetRecord(candidate, listOf(previousAtSameReps, stronger))
+    }
+
+    @Test
+    fun `first eligible estimate does not earn a PR below an existing high rep lift`() {
+        val previous = set(1, 1, 200f, 20)
+        val candidate = set(2, 2, 100f, 8)
+
+        assertNoCurrentSetRecord(candidate, listOf(previous))
+    }
+
+    @Test
+    fun `same weight with more reps still earns a current workout PR`() {
+        val previous = set(1, 1, 100f, 8)
+        val candidate = set(2, 2, 100f, 10)
+
+        assertCurrentSetRecord(candidate, listOf(previous))
+    }
+
+    @Test
+    fun `heavier weight with same reps still earns a current workout PR`() {
+        val previous = set(1, 1, 100f, 8)
+        val candidate = set(2, 2, 110f, 8)
+
+        assertCurrentSetRecord(candidate, listOf(previous))
+    }
+
+    @Test
+    fun `warmup and incomplete history do not block a genuine current workout PR`() {
+        val previous = set(1, 1, 100f, 8)
+        val warmup = set(2, 1, 300f, 20).copy(isWarmup = true)
+        val incomplete = set(3, 1, 400f, 20).copy(isComplete = false)
+        val candidate = set(4, 2, 110f, 8)
+
+        assertCurrentSetRecord(candidate, listOf(incomplete, previous, warmup))
+    }
+
+    @Test
+    fun `first ever working set keeps its baseline record labels`() {
+        val candidate = set(1, 1, 100f, 8)
+
+        assertCurrentSetRecord(candidate, emptyList())
+    }
+
+    private fun assertNoCurrentSetRecord(candidate: Set, previousSets: List<Set>) {
+        assertTrue(loggerRecordLabels(exercise, candidate, previousSets).isEmpty())
+        val result = progressWithCurrentSetFirst(candidate, previousSets)
+        assertFalse(result.setRecordLabels.containsKey(candidate.id))
+    }
+
+    private fun assertCurrentSetRecord(candidate: Set, previousSets: List<Set>) {
+        val labels = loggerRecordLabels(exercise, candidate, previousSets)
+        assertEquals(listOf("Heaviest set", "Best at ${candidate.reps} reps", "Estimated 1RM"), labels)
+        val result = progressWithCurrentSetFirst(candidate, previousSets)
+        assertEquals(labels, result.setRecordLabels[candidate.id])
+    }
+
+    private fun progressWithCurrentSetFirst(candidate: Set, previousSets: List<Set>) =
+        buildLoggerProgress(
+            exercise,
+            listOf(row(candidate, completed = false)) + previousSets.map { row(it) },
+            workout(candidate.workoutId)
+        )
+
     private fun workout(id: Long) = Workout(
         id = id, startTime = Date(id * 100_000), endTime = null, name = null, note = null
     )

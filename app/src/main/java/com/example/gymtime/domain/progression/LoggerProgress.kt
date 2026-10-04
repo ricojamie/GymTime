@@ -169,14 +169,19 @@ private class LoggerRecordTracker(private val exercise: Exercise) {
                 val weight = set.weight?.takeIf { it.isFinite() && it >= 0f }
                 val reps = set.reps?.takeIf { it > 0 }
                 if (weight != null && reps != null) {
-                    val previousWeight = bestByReps[reps]
-                    if (previousWeight == null || weight > previousWeight) {
+                    // A lift achieved for more reps also sets the baseline at this rep count.
+                    val previousWeight = bestByReps.asSequence()
+                        .filter { it.key >= reps }
+                        .maxOfOrNull { it.value }
+                    val improvesWeightAtReps = previousWeight == null || weight > previousWeight
+                    if (improvesWeightAtReps) {
                         add("Best at $reps reps")
-                        bestByReps[reps] = weight
                     }
+                    bestByReps[reps] = maxOf(bestByReps[reps] ?: weight, weight)
                     val estimate = StrengthPerformanceCalculator.estimatedOneRepMax(set)
                     if (estimate != null && (estimatedMax == null || estimate > estimatedMax!!)) {
-                        add("Estimated 1RM")
+                        // Higher-rep history may dominate this lift without an eligible estimate.
+                        if (improvesWeightAtReps) add("Estimated 1RM")
                         estimatedMax = estimate
                     }
                 }
