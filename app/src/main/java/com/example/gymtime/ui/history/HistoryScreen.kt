@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Replay
@@ -184,6 +185,9 @@ private fun LegacyHistoryScreen(navController: NavController, viewModel: History
     if (selectedWorkout != null && selectedWorkoutDetails != null) {
         ModalBottomSheet(
             onDismissRequest = { viewModel.clearSelection() },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            sheetGesturesEnabled = false,
+            dragHandle = null,
             containerColor = LocalAppColors.current.surfaceCards,
             scrimColor = Color.Black.copy(alpha = 0.32f)
         ) {
@@ -381,7 +385,7 @@ fun WorkoutDetailsSheet(
 
     Column(
         modifier = modifier
-            .fillMaxWidth()
+            .fillMaxWidth().fillMaxHeight(0.93f)
             .background(LocalAppColors.current.surfaceCards)
             .padding(bottom = 32.dp)
     ) {
@@ -399,6 +403,7 @@ fun WorkoutDetailsSheet(
             ) {
                 Text(
                     formatWorkoutDateTime(workout.workout.startTime),
+                    modifier = Modifier.weight(1f),
                     color = LocalAppColors.current.textPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
@@ -417,6 +422,9 @@ fun WorkoutDetailsSheet(
                             )
                         }
                     }
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Filled.Close, "Close workout details")
                 }
             }
 

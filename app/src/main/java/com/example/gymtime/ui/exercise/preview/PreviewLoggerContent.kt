@@ -8,8 +8,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -24,15 +22,16 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set as WorkoutSet
 import com.example.gymtime.data.db.entity.isWarmupLibraryExercise
-import com.example.gymtime.ui.components.RulerSliderInput
+import com.example.gymtime.ui.exercise.LoggingInputs
+import com.example.gymtime.ui.exercise.LoggingInput
+import com.example.gymtime.ui.exercise.LoggingKeypad
+import com.example.gymtime.ui.exercise.inputFields
 import com.example.gymtime.ui.theme.LocalLoggerActionColors
 import com.example.gymtime.ui.exercise.LoggerCelebration
 import com.example.gymtime.util.TimeFormatter
@@ -97,6 +96,7 @@ fun PreviewLoggerContent(
     val focus = LocalFocusManager.current
     var showMenu by remember { mutableStateOf(false) }
     var showSetDetails by rememberSaveable(state.exercise?.id) { mutableStateOf(false) }
+    var activeInput by rememberSaveable(state.exercise?.id, state.exercise?.logType, state.editingSetId) { mutableStateOf<LoggerField?>(null) }
     val warmupSets = state.sets.filter { it.isWarmup }
     val workingSets = state.sets.filterNot { it.isWarmup }
     val hasWorkingSet = workingSets.any { it.isComplete }
@@ -109,6 +109,12 @@ fun PreviewLoggerContent(
             showSetDetails = state.fields.note.isNotBlank() || state.fields.rpe.isNotBlank()
             listState.animateScrollToItem(0)
         }
+    }
+    activeInput?.let { field ->
+        val order = state.exercise?.logType?.inputFields().orEmpty() + if (showSetDetails) listOf(LoggerField.RPE) else emptyList()
+        LoggingKeypad(field, state.fields, order, onFieldChange, { activeInput = it },
+            canLog = state.canLog && !state.saving, editing = state.editingSetId != null,
+            onLog = { onAction(LoggerAction.LOG) })
     }
     Box(modifier.fillMaxSize()) {
     Scaffold(
@@ -226,7 +232,7 @@ fun PreviewLoggerContent(
                     }
                 } }
                 item(key = "inputs") {
-                    LoggerInputs(exercise.logType, state.fields, onFieldChange)
+                    LoggingInputs(exercise.logType, state.fields) { focus.clearFocus(); activeInput = it }
                     if (exercise.logType.usesDistanceUnit) {
                         var unitMenu by remember { mutableStateOf(false) }
                         Box {
@@ -262,12 +268,7 @@ fun PreviewLoggerContent(
                                 value = state.fields.note, onValueChange = { onFieldChange(LoggerField.NOTE, it) },
                                 label = { Text("Set note") }, modifier = Modifier.fillMaxWidth(), maxLines = 3
                             )
-                            OutlinedTextField(
-                                value = state.fields.rpe, onValueChange = { onFieldChange(LoggerField.RPE, it) },
-                                label = { Text("RPE (optional, 1–10)") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-                                keyboardActions = KeyboardActions(onDone = { focus.clearFocus() })
-                            )
+                            LoggingInput(LoggerField.RPE, state.fields, { focus.clearFocus(); activeInput = it }, Modifier.fillMaxWidth())
                         }
                     }
                 }
@@ -392,59 +393,6 @@ private fun ToolButton(label: String, icon: androidx.compose.ui.graphics.vector.
 }
 
 @Composable
-private fun LoggerInputs(logType: LogType, fields: LoggerFields, onChange: (LoggerField, String) -> Unit) {
-    val inputs = when (logType) {
-        LogType.WEIGHT_REPS -> listOf(LoggerField.WEIGHT, LoggerField.REPS)
-        LogType.REPS_ONLY -> listOf(LoggerField.REPS)
-        LogType.DURATION -> listOf(LoggerField.DURATION)
-        LogType.WEIGHT_DISTANCE -> listOf(LoggerField.WEIGHT, LoggerField.DISTANCE)
-        LogType.DISTANCE_TIME -> listOf(LoggerField.DISTANCE, LoggerField.DURATION)
-        LogType.WEIGHT_TIME -> listOf(LoggerField.WEIGHT, LoggerField.DURATION)
-        LogType.CALORIES_TIME -> listOf(LoggerField.CALORIES, LoggerField.DURATION)
-    }
-    BoxWithConstraints {
-        val stack = maxWidth < 328.dp || LocalDensity.current.fontScale > 1.3f
-        if (stack) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                inputs.forEach { NumericInput(it, fields, onChange, Modifier.fillMaxWidth()) }
-            }
-        } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                inputs.forEach { NumericInput(it, fields, onChange, Modifier.weight(1f)) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NumericInput(field: LoggerField, fields: LoggerFields, onChange: (LoggerField, String) -> Unit, modifier: Modifier) {
-    if (field == LoggerField.WEIGHT || field == LoggerField.REPS) {
-        RulerSliderInput(
-            label = if (field == LoggerField.WEIGHT) "WEIGHT / lb" else "REPS",
-            value = if (field == LoggerField.WEIGHT) fields.weight else fields.reps,
-            onValueChange = { onChange(field, it) }, step = if (field == LoggerField.WEIGHT) 5 else 1,
-            minValue = if (field == LoggerField.WEIGHT) 0 else 1,
-            centered = field == LoggerField.WEIGHT, compact = true, modifier = modifier
-        )
-    } else {
-        val focus = LocalFocusManager.current
-        val (label, value) = when (field) {
-            LoggerField.DURATION -> "Time (mm:ss)" to fields.duration
-            LoggerField.DISTANCE -> "Distance (${fields.distanceUnit.shortLabel})" to fields.distance
-            else -> "Calories" to fields.calories
-        }
-        OutlinedTextField(
-            value = value, onValueChange = { onChange(field, it) }, label = { Text(label) },
-            modifier = modifier.heightIn(min = 96.dp), singleLine = true,
-            textStyle = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-            keyboardOptions = KeyboardOptions(keyboardType = if (field == LoggerField.DURATION) KeyboardType.Text else KeyboardType.Decimal, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
-            shape = RoundedCornerShape(16.dp)
-        )
-    }
-}
-
-@Composable
 private fun CompactSetRow(set: WorkoutSet, number: Int, onEdit: (WorkoutSet) -> Unit, onDelete: (WorkoutSet) -> Unit, onNote: (WorkoutSet) -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
@@ -486,7 +434,7 @@ private val LogType.usesDistanceUnit: Boolean
 private val DistanceUnit.displayName: String
     get() = name.lowercase().replaceFirstChar { it.uppercase() }
 
-private val DistanceUnit.shortLabel: String
+internal val DistanceUnit.shortLabel: String
     get() = when (this) {
         DistanceUnit.METERS -> "m"
         DistanceUnit.KILOMETERS -> "km"

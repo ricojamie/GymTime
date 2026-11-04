@@ -73,6 +73,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -117,9 +118,6 @@ import com.example.gymtime.ui.theme.appTextFieldColors
 import com.example.gymtime.util.PlateCalculator
 import com.example.gymtime.util.TimeUtils
 import com.example.gymtime.util.TimeFormatter
-import com.example.gymtime.ui.components.InputCard
-import com.example.gymtime.ui.components.RulerSliderInput
-import com.example.gymtime.ui.components.TimeInputCard
 import com.example.gymtime.ui.smartlog.SmartLogBottomSheet
 import kotlin.math.roundToInt
 import com.example.gymtime.ui.exercise.preview.*
@@ -263,7 +261,6 @@ private fun ExerciseLoggingScreenBody(
 
     // Get best set data for inline "Best:" display
     val bestWeight by viewModel.bestWeight.collectAsStateWithLifecycle()
-    val bestReps by viewModel.bestReps.collectAsStateWithLifecycle()
     // "Last time" values for the slider markers
     val lastWeight by viewModel.lastWeight.collectAsStateWithLifecycle()
     val lastReps by viewModel.lastReps.collectAsStateWithLifecycle()
@@ -273,6 +270,23 @@ private fun ExerciseLoggingScreenBody(
 
     // Timer countdown is now handled by RestTimerService (persistent notification)
     // No need for LaunchedEffect - service manages countdown and vibration
+
+    val submitSet: () -> Unit = {
+        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        if (editingSet != null) viewModel.saveEditedSet() else viewModel.logSet(startTimerAfterSave = timerAutoStart)
+    }
+
+    val changeField: (LoggerField, String) -> Unit = { field, value ->
+        when (field) {
+            LoggerField.WEIGHT -> viewModel.updateWeight(value)
+            LoggerField.REPS -> viewModel.updateReps(value)
+            LoggerField.DURATION -> viewModel.updateDuration(value)
+            LoggerField.DISTANCE -> viewModel.updateDistance(value)
+            LoggerField.CALORIES -> viewModel.updateCalories(value)
+            LoggerField.RPE -> viewModel.updateRpe(value)
+            LoggerField.NOTE -> viewModel.updateSetNote(value)
+        }
+    }
 
     if (newUiEnabled) {
         val progress by viewModel.previewProgress.collectAsStateWithLifecycle()
@@ -316,17 +330,7 @@ private fun ExerciseLoggingScreenBody(
                 workoutId = currentWorkout?.id,
                 celebration = celebration?.takeIf { it.expiresAt > SystemClock.elapsedRealtime() }
             ),
-            onFieldChange = { field, value ->
-                when (field) {
-                    LoggerField.WEIGHT -> viewModel.updateWeight(value)
-                    LoggerField.REPS -> viewModel.updateReps(value)
-                    LoggerField.DURATION -> viewModel.updateDuration(value)
-                    LoggerField.DISTANCE -> viewModel.updateDistance(value)
-                    LoggerField.CALORIES -> viewModel.updateCalories(value)
-                    LoggerField.RPE -> viewModel.updateRpe(value)
-                    LoggerField.NOTE -> viewModel.updateSetNote(value)
-                }
-            },
+            onFieldChange = changeField,
             onDistanceUnitChange = viewModel::updateSelectedDistanceUnit,
             onSelectExercise = { navigateToLoggerExercise(it) },
             onEditSet = viewModel::startEditingSet,
@@ -354,10 +358,7 @@ private fun ExerciseLoggingScreenBody(
                     LoggerAction.SMART_LOG -> showSmartLog = true
                     LoggerAction.CANCEL_SMART_LOG -> viewModel.cancelSmartLogQueue()
                     LoggerAction.TOGGLE_WARMUP -> viewModel.toggleWarmup()
-                    LoggerAction.LOG -> {
-                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        if (editingSet != null) viewModel.saveEditedSet() else viewModel.logSet(startTimerAfterSave = timerAutoStart)
-                    }
+                    LoggerAction.LOG -> submitSet()
                     LoggerAction.CANCEL_EDIT -> viewModel.cancelEditing()
                     LoggerAction.DISMISS_PR -> celebration?.let { viewModel.dismissPrCelebration(it.id) }
                     LoggerAction.TIMER -> showTimerDialog = true
@@ -376,6 +377,17 @@ private fun ExerciseLoggingScreenBody(
             )
         }
     } else {
+    val logType = exercise?.logType ?: LogType.WEIGHT_REPS
+    val fields = LoggerFields(weight, reps, duration, distance, calories, rpe, distanceUnit = selectedDistanceUnit)
+    var activeInput by rememberSaveable(exercise?.id, logType, editingSet?.id) { mutableStateOf<LoggerField?>(null) }
+    activeInput?.let { field ->
+        LoggingKeypad(field, fields, logType.inputFields(), changeField, { activeInput = it },
+            canLog = viewModel.isCurrentInputValid() && !isPersistingSet, editing = editingSet != null,
+            onLog = submitSet,
+            lastValue = if (field == LoggerField.WEIGHT) lastWeight else lastReps,
+            bestValue = if (field == LoggerField.WEIGHT) bestWeight?.toFloatOrNull()?.roundToInt() else null,
+            goalValue = if (field == LoggerField.REPS) exercise?.repTarget else null)
+    }
     Scaffold(
         topBar = {
             exercise?.let { ex ->
@@ -626,186 +638,7 @@ private fun ExerciseLoggingScreenBody(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // Input Fields - Dynamic based on exercise LogType.
-            // Weight & reps use the drag-to-set RulerSliderInput; other types keep card inputs.
-            when (exercise?.logType) {
-                LogType.WEIGHT_REPS -> {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        RulerSliderInput(
-                            label = "WEIGHT",
-                            value = weight,
-                            onValueChange = { viewModel.updateWeight(it) },
-                            modifier = Modifier.fillMaxWidth(),
-                            step = 5,
-                            unitSuffix = "lbs",
-                            centered = true,
-                            lastValue = lastWeight,
-                            bestValue = bestWeight?.toFloatOrNull()?.roundToInt()
-                        )
-                        RulerSliderInput(
-                            label = "REPS",
-                            value = reps,
-                            onValueChange = { viewModel.updateReps(it) },
-                            modifier = Modifier.fillMaxWidth(),
-                            step = 1,
-                            unitSuffix = "reps",
-                            lastValue = lastReps,
-                            goalValue = exercise?.repTarget
-                        )
-                    }
-                }
-                LogType.REPS_ONLY -> {
-                    RulerSliderInput(
-                        label = "REPS",
-                        value = reps,
-                        onValueChange = { viewModel.updateReps(it) },
-                        modifier = Modifier.fillMaxWidth(),
-                        step = 1,
-                        unitSuffix = "reps",
-                        lastValue = lastReps,
-                        goalValue = exercise?.repTarget
-                    )
-                }
-                LogType.DURATION -> {
-                    TimeInputCard(
-                        label = "DURATION (HH:MM:SS)",
-                        value = duration,
-                        onValueChange = { viewModel.updateDuration(it) },
-                        modifier = Modifier.fillMaxWidth(),
-                        lastValue = null,
-                        lastLabel = "BEST"
-                    )
-                }
-                LogType.WEIGHT_DISTANCE -> {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        RulerSliderInput(
-                            label = "WEIGHT",
-                            value = weight,
-                            onValueChange = { viewModel.updateWeight(it) },
-                            modifier = Modifier.fillMaxWidth(),
-                            step = 5,
-                            unitSuffix = "lbs",
-                            centered = true,
-                            lastValue = lastWeight,
-                            bestValue = bestWeight?.toFloatOrNull()?.roundToInt()
-                        )
-                        InputCard(
-                            label = "DISTANCE (${selectedDistanceUnit.shortLabel})",
-                            value = distance,
-                            onValueChange = { viewModel.updateDistance(it) },
-                            modifier = Modifier.fillMaxWidth(),
-                            lastValue = null,
-                            lastLabel = "BEST"
-                        )
-                    }
-                }
-                LogType.DISTANCE_TIME -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        InputCard(
-                            label = "DISTANCE (${selectedDistanceUnit.shortLabel})",
-                            value = distance,
-                            onValueChange = { viewModel.updateDistance(it) },
-                            modifier = Modifier.weight(1f),
-                            lastValue = null,
-                            lastLabel = "BEST"
-                        )
-                        TimeInputCard(
-                            label = "TIME (HH:MM:SS)",
-                            value = duration,
-                            onValueChange = { viewModel.updateDuration(it) },
-                            modifier = Modifier.weight(1f),
-                            lastValue = null,
-                            lastLabel = "BEST"
-                        )
-                    }
-                }
-                LogType.WEIGHT_TIME -> {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        RulerSliderInput(
-                            label = "WEIGHT",
-                            value = weight,
-                            onValueChange = { viewModel.updateWeight(it) },
-                            modifier = Modifier.fillMaxWidth(),
-                            step = 5,
-                            unitSuffix = "lbs",
-                            centered = true,
-                            lastValue = lastWeight,
-                            bestValue = bestWeight?.toFloatOrNull()?.roundToInt()
-                        )
-                        TimeInputCard(
-                            label = "TIME (HH:MM:SS)",
-                            value = duration,
-                            onValueChange = { viewModel.updateDuration(it) },
-                            modifier = Modifier.fillMaxWidth(),
-                            lastValue = null,
-                            lastLabel = "BEST"
-                        )
-                    }
-                }
-                LogType.CALORIES_TIME -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        InputCard(
-                            label = "CALORIES",
-                            value = calories,
-                            onValueChange = { viewModel.updateCalories(it) },
-                            modifier = Modifier.weight(1f),
-                            lastValue = null,
-                            lastLabel = "BEST"
-                        )
-                        TimeInputCard(
-                            label = "TIME (HH:MM:SS)",
-                            value = duration,
-                            onValueChange = { viewModel.updateDuration(it) },
-                            modifier = Modifier.weight(1f),
-                            lastValue = null,
-                            lastLabel = "BEST"
-                        )
-                    }
-                }
-                null -> {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        RulerSliderInput(
-                            label = "WEIGHT",
-                            value = weight,
-                            onValueChange = { viewModel.updateWeight(it) },
-                            modifier = Modifier.fillMaxWidth(),
-                            step = 5,
-                            unitSuffix = "lbs",
-                            centered = true,
-                            lastValue = lastWeight,
-                            bestValue = bestWeight?.toFloatOrNull()?.roundToInt()
-                        )
-                        RulerSliderInput(
-                            label = "REPS",
-                            value = reps,
-                            onValueChange = { viewModel.updateReps(it) },
-                            modifier = Modifier.fillMaxWidth(),
-                            step = 1,
-                            unitSuffix = "reps",
-                            lastValue = lastReps,
-                            goalValue = exercise?.repTarget
-                        )
-                    }
-                }
-            }
+            LoggingInputs(logType, fields) { activeInput = it }
 
             if (exercise?.logType.usesDistanceUnit) {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1069,10 +902,7 @@ private fun ExerciseLoggingScreenBody(
                         Text("Cancel")
                     }
                     Button(
-                        onClick = {
-                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                            viewModel.saveEditedSet()
-                        },
+                        onClick = submitSet,
                         modifier = Modifier
                             .weight(1f)
                             .height(56.dp),
@@ -1096,12 +926,7 @@ private fun ExerciseLoggingScreenBody(
             } else {
                 // Normal mode - show LOG SET button
                 LogSetButton(
-                    onClick = {
-                        if (isLogSetEnabled) {
-                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                            viewModel.logSet(startTimerAfterSave = timerAutoStart)
-                        }
-                    },
+                    onClick = submitSet,
                     enabled = isLogSetEnabled
                 )
             }

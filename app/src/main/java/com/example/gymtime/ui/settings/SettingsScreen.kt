@@ -890,6 +890,8 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
+                        "⌨️ Smoother workout logging\n" +
+                        "Updated number entry, logging controls, and workout-history details.\n\n" +
                         "🏆 More accurate personal records\n" +
                         "Higher-rep lifts now count toward lower-rep baselines, preventing misleading record celebrations.\n\n" +
                         "📈 Training insights and progression\n" +

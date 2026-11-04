@@ -73,10 +73,12 @@ class PreviewLoggerContentTest {
         var loggedFields: LoggerFields? = null
         setLogger(state, onAction = { if (it == LoggerAction.LOG) loggedFields = state.value.fields })
 
-        reveal(hasContentDescription("Increase WEIGHT / lb by 5"))
-        composeRule.onNodeWithContentDescription("Increase WEIGHT / lb by 5").performClick()
-        reveal(hasContentDescription("Increase REPS by 1"))
-        composeRule.onNodeWithContentDescription("Increase REPS by 1").performClick()
+        reveal(hasContentDescription("WEIGHT / lb"))
+        composeRule.onNodeWithContentDescription("WEIGHT / lb").performClick()
+        composeRule.onNodeWithText("+").performClick()
+        composeRule.onNodeWithText("Next").performClick()
+        composeRule.onNodeWithText("+").performClick()
+        composeRule.onNodeWithText("Done").performClick()
         reveal(hasText("Log set"))
         composeRule.onNodeWithText("Log set").performClick()
 
@@ -85,6 +87,62 @@ class PreviewLoggerContentTest {
             assertEquals("9", loggedFields?.reps)
             assertEquals("140", state.value.fields.weight)
             assertEquals("9", state.value.fields.reps)
+        }
+    }
+
+    @Test
+    fun fractionalEntrySurvivesDialAndLogsFromKeypad() {
+        val state = mutableStateOf(sampleState())
+        var logged: LoggerFields? = null
+        setLogger(state, onAction = { if (it == LoggerAction.LOG) logged = state.value.fields })
+        reveal(hasContentDescription("WEIGHT / lb"))
+        composeRule.onNodeWithContentDescription("WEIGHT / lb ruler").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("WEIGHT / lb").performClick()
+        listOf("2", "2", ".", "5").forEach(::pressKey)
+        composeRule.onNodeWithText("+").performClick()
+        composeRule.runOnIdle { assertEquals("27.5", state.value.fields.weight) }
+        composeRule.onNodeWithText("Dial").performClick()
+        composeRule.onNodeWithContentDescription("WEIGHT / lb ruler").assertIsDisplayed()
+        composeRule.onNodeWithText("−").performClick()
+        composeRule.onNodeWithText("Keypad").performClick()
+        composeRule.onNodeWithText("Next").performClick()
+        composeRule.onNodeWithText("1").performClick()
+        composeRule.onNodeWithText("2").performClick()
+        composeRule.onNodeWithContentDescription("Backspace").performClick()
+        composeRule.onNode(hasText("Log set") and hasAnyAncestor(isDialog())).performClick()
+        composeRule.runOnIdle {
+            assertEquals("22.5", logged?.weight)
+            assertEquals("1", logged?.reps)
+        }
+    }
+
+    @Test
+    fun draggingTheRepsDialUpdatesTheSameValueAsTheKeypad() {
+        val state = mutableStateOf(sampleState())
+        setLogger(state)
+        reveal(hasContentDescription("REPS"))
+        composeRule.onNodeWithContentDescription("REPS").performClick()
+        composeRule.onNodeWithText("Dial").performClick()
+        composeRule.onNodeWithContentDescription("REPS ruler").performTouchInput { swipeLeft() }
+        val dialValue = composeRule.runOnIdle { state.value.fields.reps.toInt() }
+        assertTrue(dialValue > 8)
+        composeRule.onNodeWithText("Keypad").performClick()
+        composeRule.onNodeWithText("−").performClick()
+        composeRule.runOnIdle { assertEquals(dialValue - 1, state.value.fields.reps.toInt()) }
+    }
+
+    @Test
+    fun distanceNextOpensTimeAndAcceptsMinutesAndSeconds() {
+        val state = mutableStateOf(sampleState().copy(exercise = sampleExercise(LogType.DISTANCE_TIME)))
+        setLogger(state)
+        reveal(hasText("Distance (m)"))
+        composeRule.onNodeWithText("Distance (m)").performClick()
+        composeRule.onNodeWithText("Next").performClick()
+        listOf("1", ":", "3", "0").forEach(::pressKey)
+        composeRule.onNodeWithText("Done").performClick()
+        composeRule.runOnIdle {
+            assertEquals("100", state.value.fields.distance)
+            assertEquals("1:30", state.value.fields.duration)
         }
     }
 
@@ -159,14 +217,23 @@ class PreviewLoggerContentTest {
         val state = mutableStateOf(sampleState())
         setLogger(state, width = 300, fontScale = 1.5f)
 
-        reveal(hasContentDescription("Increase REPS by 1"))
-        val weight = composeRule.onNodeWithContentDescription("Increase WEIGHT / lb by 5").fetchSemanticsNode().boundsInRoot
-        val reps = composeRule.onNodeWithContentDescription("Increase REPS by 1").fetchSemanticsNode().boundsInRoot
+        reveal(hasContentDescription("REPS"))
+        val weight = composeRule.onNodeWithContentDescription("WEIGHT / lb").fetchSemanticsNode().boundsInRoot
+        val reps = composeRule.onNodeWithContentDescription("REPS").fetchSemanticsNode().boundsInRoot
         val minimum = with(composeRule.density) { 48.dp.toPx() }
-        assertTrue("Weight input must precede reps vertically", weight.bottom <= reps.top)
-        assertTrue("Weight nudge must retain a 48dp touch target", weight.width >= minimum - 1f && weight.height >= minimum - 1f)
-        assertTrue("Reps nudge must retain a 48dp touch target", reps.width >= minimum - 1f && reps.height >= minimum - 1f)
-        composeRule.onNodeWithContentDescription("Increase REPS by 1").assertIsDisplayed().performClick()
+        assertTrue("Weight should precede reps vertically", weight.bottom <= reps.top)
+        assertTrue("Reps field should be at least 48dp tall", reps.height >= minimum - 1f)
+        composeRule.onNodeWithContentDescription("REPS").performClick()
+        val plus = composeRule.onNodeWithText("+").fetchSemanticsNode().boundsInRoot
+        val minus = composeRule.onNodeWithText("−").fetchSemanticsNode().boundsInRoot
+        val digit = composeRule.onNodeWithText("1").fetchSemanticsNode().boundsInRoot
+        listOf(plus, minus).forEach { bounds ->
+            assertEquals(digit.width, bounds.width, 1f)
+            assertEquals(digit.height, bounds.height, 1f)
+            assertTrue(bounds.height >= minimum - 1f)
+        }
+        composeRule.onNodeWithText("+").performClick()
+        composeRule.onNodeWithText("Done").performClick()
         composeRule.runOnIdle { assertEquals("9", state.value.fields.reps) }
         saveScreenshot("preview-logger-narrow-large-font")
     }
@@ -189,7 +256,7 @@ class PreviewLoggerContentTest {
             composeRule.runOnIdle { state.value = state.value.copy(exercise = sampleExercise(type).copy(id = type.ordinal + 1L)) }
             fields.forEach { field ->
                 reveal(field)
-                composeRule.onNode(field and hasSetTextAction()).assertExists()
+                composeRule.onNode(field and hasClickAction()).assertExists()
             }
             if (type == LogType.WEIGHT_DISTANCE || type == LogType.DISTANCE_TIME) {
                 reveal(hasText("Distance: Meters"))
@@ -297,6 +364,10 @@ class PreviewLoggerContentTest {
         composeRule.onNodeWithText("185 lb × 8 reps").assertDoesNotExist()
         composeRule.onNodeWithText("Progress").performClick()
         composeRule.onNodeWithText("205 lb × 8 reps").assertIsDisplayed()
+    }
+
+    private fun pressKey(label: String) {
+        composeRule.onNode(hasText(label) and hasAnyAncestor(isDialog()) and !hasSetTextAction()).performClick()
     }
 
     private fun reveal(matcher: SemanticsMatcher) {

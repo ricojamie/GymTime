@@ -1,6 +1,5 @@
 package com.example.gymtime.ui.history.preview
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -54,6 +53,8 @@ fun PreviewWorkoutDetailsSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetGesturesEnabled = false,
+        dragHandle = null,
         containerColor = scheme.background, contentColor = scheme.onBackground
     ) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(0.93f)) {
@@ -197,7 +198,7 @@ private fun HistoryExerciseGroup(workoutId: Long, sets: List<SetWithExerciseInfo
     val scheme = MaterialTheme.colorScheme
     Surface(shape = RoundedCornerShape(20.dp), color = scheme.surface, contentColor = scheme.onSurface,
         border = BorderStroke(1.dp, scheme.outlineVariant)) {
-        Column(Modifier.fillMaxWidth().animateContentSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Surface(shape = RoundedCornerShape(12.dp), color = scheme.primaryContainer, contentColor = scheme.onPrimaryContainer) {
                     Icon(ExerciseIcons.getIconForMuscle(first.targetMuscle), null, modifier = Modifier.padding(10.dp).size(20.dp))
