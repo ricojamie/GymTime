@@ -1,5 +1,6 @@
 package com.example.gymtime.ui.workout
 
+import androidx.lifecycle.SavedStateHandle
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.repository.ExerciseRepository
@@ -10,13 +11,18 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -30,6 +36,7 @@ class WorkoutBuilderViewModelTest {
 
     private val exerciseRepository: ExerciseRepository = mockk()
     private val workoutRepository: WorkoutRepository = mockk()
+    private lateinit var savedStateHandle: SavedStateHandle
     private lateinit var viewModel: WorkoutBuilderViewModel
 
     private val bench = exercise(1L, "Bench Press", "Chest")
@@ -38,8 +45,9 @@ class WorkoutBuilderViewModelTest {
 
     @Before
     fun setup() {
+        savedStateHandle = SavedStateHandle()
         every { exerciseRepository.getAllExercises() } returns flowOf(listOf(bench, row, squat))
-        viewModel = WorkoutBuilderViewModel(exerciseRepository, workoutRepository)
+        viewModel = WorkoutBuilderViewModel(exerciseRepository, workoutRepository, savedStateHandle)
     }
 
     @Test
@@ -89,6 +97,50 @@ class WorkoutBuilderViewModelTest {
         assertEquals(expected, startEvent.await())
         assertTrue(viewModel.errorMessage.value == null)
         coVerify(exactly = 1) { workoutRepository.startPlannedWorkout(listOf(row.id, bench.id)) }
+    }
+
+    @Test
+    fun `start workout sets isStarting synchronously, blocks double-tap, and clears only on open or failure`() = runTest {
+        viewModel.toggleExercise(bench.id)
+        val gate = CompletableDeferred<WorkoutStartResult>()
+        coEvery { workoutRepository.startPlannedWorkout(listOf(bench.id)) } coAnswers { gate.await() }
+
+        viewModel.startWorkout()
+        assertTrue(viewModel.isStarting.value)
+        viewModel.startWorkout()
+        runCurrent()
+        coVerify(exactly = 1) { workoutRepository.startPlannedWorkout(any()) }
+
+        val expected = WorkoutStartResult(workoutId = 42L, firstExerciseId = bench.id)
+        gate.complete(expected)
+        advanceUntilIdle()
+        assertTrue(viewModel.isStarting.value)
+        assertEquals(expected, viewModel.workoutStarted.first())
+
+        viewModel.onWorkoutOpened()
+        assertFalse(viewModel.isStarting.value)
+
+        coEvery { workoutRepository.startPlannedWorkout(listOf(bench.id)) } throws IllegalStateException("Active workout exists")
+        viewModel.startWorkout()
+        advanceUntilIdle()
+        assertFalse(viewModel.isStarting.value)
+        assertNotNull(viewModel.errorMessage.value)
+
+        viewModel.clearError()
+        assertNull(viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun `selections, search query, and muscle filter survive SavedStateHandle recreation`() = runTest {
+        viewModel.updateSearchQuery("press")
+        viewModel.selectMuscle("Chest")
+        viewModel.toggleExercise(squat.id)
+        viewModel.toggleExercise(bench.id)
+
+        val restored = WorkoutBuilderViewModel(exerciseRepository, workoutRepository, savedStateHandle)
+        assertEquals("press", restored.searchQuery.value)
+        assertEquals("Chest", restored.selectedMuscle.value)
+        assertEquals(listOf(squat.id, bench.id), restored.selectedExerciseIds.value)
     }
 
     private fun exercise(id: Long, name: String, muscle: String) = Exercise(

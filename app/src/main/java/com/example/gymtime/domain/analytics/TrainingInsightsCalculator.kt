@@ -92,12 +92,18 @@ object TrainingInsightsCalculator {
         val name = metadata?.name ?: sample?.exerciseName ?: "Exercise $id"
         val muscle = canonicalMuscle(metadata?.targetMuscle ?: sample?.targetMuscle ?: "Uncategorized")
         val logType = metadata?.logType ?: sample?.logType ?: LogType.WEIGHT_REPS
-        val sets = rows.map { setDto(it.set, it.logType) }
-        val bySetId = sets.associateBy { it.id }
+        val computedRows = rows.map { row ->
+            val metricsMap = metrics(row.set, row.logType)
+            val e1rm = if (row.logType == LogType.WEIGHT_REPS) {
+                metricsMap[estimateMetric]?.toFloat()
+            } else null
+            ComputedRow(row = row, setDto = setDto(row.set, e1rm), metrics = metricsMap)
+        }
+        val sets = computedRows.map { it.setDto }
         val allRecords = linkedMapOf<TrainingInsightMetric, TrainingInsightRecord>()
-        rows.forEach { row ->
-            val set = bySetId.getValue(row.set.id)
-            metrics(row.set, row.logType).forEach { (metric, value) ->
+        computedRows.forEach { entry ->
+            val set = entry.setDto
+            entry.metrics.forEach { (metric, value) ->
                 val prior = allRecords[metric]
                 if (prior == null || value > prior.value) {
                     allRecords[metric] = TrainingInsightRecord(metric, value, set)
@@ -111,29 +117,30 @@ object TrainingInsightsCalculator {
                 }
             }
         }
-        val history = rows.groupBy { it.set.workoutId }.map { (workoutId, sessionRows) ->
+        val entriesByWorkout = computedRows.groupBy { it.row.set.workoutId }
+        val history = entriesByWorkout.map { (workoutId, sessionEntries) ->
             val workout = workouts.getValue(workoutId)
             TrainingInsightSession(workoutId, workout.name, workout.startTime.time,
-                sessionRows.maxOf { it.set.timestamp.time }, sessionRows.map { bySetId.getValue(it.set.id) })
-        }.sortedByDescending { it.timestampMs }
-        val metric = primaryMetric(logType, rows)
-        val sessionPoints = if (metric == null) emptyList() else rows.groupBy { it.set.workoutId }.mapNotNull { (workoutId, sessionRows) ->
-            val best = sessionRows.mapNotNull { row ->
-                metrics(row.set, row.logType)[metric]?.let { value -> row to value }
-            }.maxWithOrNull(compareBy<Pair<SetWithExercisePerformanceInfo, Double>> { it.second }
-                .thenBy { it.first.set.timestamp.time }.thenBy { it.first.set.id }) ?: return@mapNotNull null
-            TrainingInsightChartPoint(workoutId, sessionRows.maxOf { it.set.timestamp.time },
-                best.second, bySetId.getValue(best.first.set.id))
+                sessionEntries.maxOf { it.row.set.timestamp.time }, sessionEntries.map { it.setDto })
+        }.sortedWith(compareByDescending<TrainingInsightSession> { it.timestampMs }.thenByDescending { it.workoutId })
+        val metric = primaryMetric(logType, computedRows)
+        val sessionPoints = if (metric == null) emptyList() else entriesByWorkout.mapNotNull { (workoutId, sessionEntries) ->
+            val best = sessionEntries.mapNotNull { entry ->
+                entry.metrics[metric]?.let { value -> entry to value }
+            }.maxWithOrNull(compareBy<Pair<ComputedRow, Double>> { it.second }
+                .thenBy { it.first.row.set.timestamp.time }.thenBy { it.first.row.set.id }) ?: return@mapNotNull null
+            TrainingInsightChartPoint(workoutId, sessionEntries.maxOf { it.row.set.timestamp.time },
+                best.second, best.first.setDto)
         }.sortedWith(compareBy({ it.timestampMs }, { it.workoutId }))
         val chart = sessionPoints.filter { period.containsCurrent(it.timestampMs) }
         val latest = sessionPoints.lastOrNull()
-        val latestSessionRows = history.firstOrNull()?.workoutId?.let { workoutId -> rows.filter { it.set.workoutId == workoutId } }.orEmpty()
-        val actualMetric = actualBestMetric(logType, latestSessionRows)
-        val actualBest = actualMetric?.let { selectedMetric -> latestSessionRows.mapNotNull { row ->
-            metrics(row.set, row.logType)[selectedMetric]?.let { value -> row to value }
-        }.maxWithOrNull(compareBy<Pair<SetWithExercisePerformanceInfo, Double>> { it.second }
-            .thenBy { it.first.set.reps ?: 0 }.thenBy { it.first.set.durationSeconds ?: 0 }
-            .thenBy { it.first.set.timestamp.time }.thenBy { it.first.set.id }) }
+        val latestSessionEntries = history.firstOrNull()?.workoutId?.let { entriesByWorkout[it] }.orEmpty()
+        val actualMetric = actualBestMetric(logType, latestSessionEntries)
+        val actualBest = actualMetric?.let { selectedMetric -> latestSessionEntries.mapNotNull { entry ->
+            entry.metrics[selectedMetric]?.let { value -> entry to value }
+        }.maxWithOrNull(compareBy<Pair<ComputedRow, Double>> { it.second }
+            .thenBy { it.first.row.set.reps ?: 0 }.thenBy { it.first.row.set.durationSeconds ?: 0 }
+            .thenBy { it.first.row.set.timestamp.time }.thenBy { it.first.row.set.id }) }
         val comparable = metric?.kind == TrainingInsightMetricKind.ESTIMATED_ONE_REP_MAX ||
             logType == LogType.REPS_ONLY && metric?.kind == TrainingInsightMetricKind.REPS
         val comparisonPoints = sessionPoints.filter {
@@ -151,7 +158,7 @@ object TrainingInsightsCalculator {
         return TrainingInsightExercise(id, name, muscle, logType, metadata?.isStarred == true,
             sets.count { period.containsCurrent(it.timestampMs) }, sets.count { period.containsPrevious(it.timestampMs) },
             sets.size, sets.maxOfOrNull { it.timestampMs },
-            TrainingInsightProgress(metric, actualBest?.let { bySetId.getValue(it.first.set.id) }, actualBest?.second,
+            TrainingInsightProgress(metric, actualBest?.first?.setDto, actualBest?.second,
                 sampleChart(chart), chart.size, comparison, explanation, actualMetric, latest?.set, latest?.value),
             allRecords.values.sortedWith(compareBy({ it.metric.kind.ordinal }, { it.metric.reps ?: 0 }, { it.metric.unit })), history)
     }
@@ -170,8 +177,19 @@ object TrainingInsightsCalculator {
         val descending = points.asReversed()
         val recent = median(descending.take(count).map { it.value })
         val baseline = median(descending.drop(count).take(count).map { it.value })
+        if (!recent.isFinite() || !baseline.isFinite() || baseline <= 0.0) {
+            return TrainingInsightComparison(
+                TrainingInsightProgressStatus.NO_COMPARABLE_DATA, 0, 0, null, null, null, null
+            )
+        }
+        val rawPercent = (recent - baseline) / baseline * 100.0
+        if (!rawPercent.isFinite()) {
+            return TrainingInsightComparison(
+                TrainingInsightProgressStatus.NO_COMPARABLE_DATA, 0, 0, null, null, null, null
+            )
+        }
         // Match Home's displayed precision and direction threshold.
-        val percent = (((recent - baseline) / baseline * 100.0) * 10.0).roundToInt() / 10.0
+        val percent = (rawPercent * 10.0).roundToInt() / 10.0
         return TrainingInsightComparison(TrainingInsightProgressStatus.READY, count, count, recent, baseline,
             percent, when { percent >= 2.0 -> TrainingInsightDirection.UP
                 percent <= -2.0 -> TrainingInsightDirection.DOWN
@@ -188,8 +206,11 @@ object TrainingInsightsCalculator {
             .filterNot { it.isWarmupMuscleGroup() }.map(::canonicalMuscle).distinctBy { it.lowercase(Locale.US) }
             .sortedWith(compareBy<String> { defaultMuscles.indexOf(it).takeIf { index -> index >= 0 } ?: Int.MAX_VALUE }
                 .thenBy { it.lowercase(Locale.US) })
+        val contributorsByMuscle = exercises
+            .filter { it.totalWorkingSets > 0 }
+            .groupBy { it.muscle.lowercase(Locale.US) }
         return names.map { name ->
-            val contributors = exercises.filter { it.muscle.equals(name, ignoreCase = true) && it.totalWorkingSets > 0 }
+            val contributors = contributorsByMuscle[name.lowercase(Locale.US)].orEmpty()
                 .map { TrainingInsightMuscleContribution(it.id, it.name, it.currentWorkingSets,
                     it.previousWorkingSets, it.totalWorkingSets, it.latestTimestampMs) }
                 .sortedWith(compareByDescending<TrainingInsightMuscleContribution> { it.currentWorkingSets }
@@ -218,7 +239,7 @@ object TrainingInsightsCalculator {
             val start = maxOf(week.atStartOfDay(zone).toInstant().toEpochMilli(), period.currentStartMs)
             val end = minOf(next.atStartOfDay(zone).toInstant().toEpochMilli(), period.currentEndMs)
             if (start < end) weeks += TrainingInsightWeek(date(start, zone), date(end - 1, zone),
-                completed.count { it.startTime.time >= start && it.startTime.time < end },
+                current.count { it.startTime.time >= start && it.startTime.time < end },
                 week == currentWeekStart, start != week.atStartOfDay(zone).toInstant().toEpochMilli() ||
                     end != next.atStartOfDay(zone).toInstant().toEpochMilli())
             week = next
@@ -242,28 +263,30 @@ object TrainingInsightsCalculator {
         }
     }.take(2)
 
-    private fun primaryMetric(type: LogType, rows: List<SetWithExercisePerformanceInfo>): TrainingInsightMetric? {
-        if (rows.isEmpty()) return null
+    private fun primaryMetric(type: LogType, entries: List<ComputedRow>): TrainingInsightMetric? {
+        if (entries.isEmpty()) return null
         return when (type) {
             LogType.WEIGHT_REPS -> when {
-                rows.any { StrengthPerformanceCalculator.estimatedOneRepMax(it.set) != null } -> estimateMetric
-                rows.any { (it.set.weight ?: 0f) > 0f } -> weightMetric
+                entries.any { it.setDto.estimatedOneRepMax != null } -> estimateMetric
+                entries.any { (it.row.set.weight ?: 0f) > 0f } -> weightMetric
                 else -> repsMetric
             }
             LogType.REPS_ONLY -> repsMetric
             LogType.DURATION, LogType.WEIGHT_TIME -> durationMetric
-            LogType.WEIGHT_DISTANCE, LogType.DISTANCE_TIME -> distance(rows.last().set)?.first
+            LogType.WEIGHT_DISTANCE, LogType.DISTANCE_TIME ->
+                entries.last().metrics.keys.firstOrNull { it.kind == TrainingInsightMetricKind.DISTANCE }
             LogType.CALORIES_TIME -> caloriesMetric
         }
     }
 
-    private fun actualBestMetric(type: LogType, rows: List<SetWithExercisePerformanceInfo>): TrainingInsightMetric? {
-        if (rows.isEmpty()) return null
+    private fun actualBestMetric(type: LogType, entries: List<ComputedRow>): TrainingInsightMetric? {
+        if (entries.isEmpty()) return null
         return when (type) {
-            LogType.WEIGHT_REPS -> if (rows.any { (it.set.weight ?: 0f) > 0f }) weightMetric else repsMetric
+            LogType.WEIGHT_REPS -> if (entries.any { (it.row.set.weight ?: 0f) > 0f }) weightMetric else repsMetric
             LogType.REPS_ONLY -> repsMetric
             LogType.DURATION -> durationMetric
-            LogType.WEIGHT_DISTANCE, LogType.DISTANCE_TIME -> distance(rows.last().set)?.first
+            LogType.WEIGHT_DISTANCE, LogType.DISTANCE_TIME ->
+                entries.last().metrics.keys.firstOrNull { it.kind == TrainingInsightMetricKind.DISTANCE }
             LogType.WEIGHT_TIME -> weightMetric
             LogType.CALORIES_TIME -> caloriesMetric
         }
@@ -328,11 +351,19 @@ object TrainingInsightsCalculator {
         return TrainingInsightMetric(TrainingInsightMetricKind.DISTANCE, "Longest distance", "m", distanceUnit = DistanceUnit.METERS) to value.toDouble()
     }
 
-    private fun setDto(set: Set, type: LogType) = TrainingInsightSet(set.id, set.workoutId, set.timestamp.time,
+    private data class ComputedRow(
+        val row: SetWithExercisePerformanceInfo,
+        val setDto: TrainingInsightSet,
+        val metrics: Map<TrainingInsightMetric, Double>
+    )
+
+    private fun setDto(set: Set, estimatedOneRepMax: Float?) = TrainingInsightSet(
+        set.id, set.workoutId, set.timestamp.time,
         set.weight?.takeIf { it.isFinite() }, set.reps, set.durationSeconds,
         set.distanceValue?.takeIf { it.isFinite() }, set.distanceUnit, set.distanceMeters?.takeIf { it.isFinite() },
         set.calories?.takeIf { it.isFinite() }, set.note,
-        if (type == LogType.WEIGHT_REPS) StrengthPerformanceCalculator.estimatedOneRepMax(set) else null)
+        estimatedOneRepMax
+    )
 
     private fun sampleChart(points: List<TrainingInsightChartPoint>): List<TrainingInsightChartPoint> {
         if (points.size <= MAX_CHART_POINTS) return points

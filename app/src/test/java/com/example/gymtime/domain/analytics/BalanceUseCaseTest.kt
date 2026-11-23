@@ -2,9 +2,11 @@ package com.example.gymtime.domain.analytics
 
 import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.dao.WorkoutDao
+import com.example.gymtime.data.db.entity.MuscleDistribution
 import com.example.gymtime.data.db.entity.MuscleFreshness
 import com.example.gymtime.util.TestDispatcherRule
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -12,6 +14,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -90,5 +93,39 @@ class BalanceUseCaseTest {
         assertEquals(RecoveryStatus.FRESH, chestStatus?.status)
         assertEquals(999, chestStatus?.daysSince)
         assertEquals(null, result.find { it.muscle == "Warmups" })
+    }
+
+    @Test
+    fun `getMuscleFreshness clamps future timestamps to 0 days and matches case-insensitively`() = runTest {
+        val fixedNow = 1_750_000_000_000L
+        val timedUseCase = BalanceUseCase(workoutDao, muscleGroupDao, ZoneId.of("UTC")) { fixedNow }
+        coEvery { workoutDao.getMuscleLastTrainedDates() } returns listOf(
+            MuscleFreshness("chest", fixedNow + TimeUnit.DAYS.toMillis(2))
+        )
+
+        val result = timedUseCase.getMuscleFreshness()
+        val chest = result.first { it.muscle == "Chest" }
+
+        assertEquals(0, chest.daysSince)
+        assertEquals(RecoveryStatus.FATIGUED, chest.status)
+    }
+
+    @Test
+    fun `getMuscleDistribution merges case variants and uses range query for 30 days`() = runTest {
+        val fixedNow = 1_750_000_000_000L
+        val timedUseCase = BalanceUseCase(workoutDao, muscleGroupDao, ZoneId.of("UTC")) { fixedNow }
+        coEvery { workoutDao.getMuscleSetCountsInRange(any(), any()) } returns listOf(
+            MuscleDistribution("chest", 4),
+            MuscleDistribution("Chest", 6),
+            MuscleDistribution("Warmups", 10)
+        )
+
+        val distribution = timedUseCase.getMuscleDistribution(BalanceTimeRange.THIRTY_DAYS)
+
+        assertEquals(1, distribution.size)
+        assertEquals("Chest", distribution.single().muscle)
+        assertEquals(10, distribution.single().setVolume)
+        coVerify(exactly = 1) { workoutDao.getMuscleSetCountsInRange(any(), fixedNow) }
+        coVerify(exactly = 0) { workoutDao.getMuscleSetCountsLast30Days() }
     }
 }

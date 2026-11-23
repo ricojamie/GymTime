@@ -20,6 +20,7 @@ data class WearDeliveryState(
     val isPhoneConnected: Boolean = false,
     val isDraftPending: Boolean = false,
     val isSetLogPending: Boolean = false,
+    val canRetrySetLog: Boolean = false,
     val lastError: String? = null
 )
 
@@ -28,8 +29,7 @@ data class WearDeliveryState(
  *
  * Drafts are coalesced and retried while this instance is alive. A set-log request is sent at
  * most once after MessageClient reports success, then remains pending until the phone publishes a
- * save confirmation or advances away from that set. This avoids the most common duplicate-set case
- * without pretending that MessageClient provides a durable, exactly-once queue.
+ * save confirmation, advances away from that set, or times out waiting for confirmation.
  */
 class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
 
@@ -44,6 +44,21 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
             startGeneration
         }
         refreshConnectedNodes(generation)
+    }
+    private val setLogConfirmationTimeout = Runnable {
+        val timedOut = synchronized(stateLock) {
+            if (!started || !setLogTransportAccepted || pendingSetKey == null) {
+                false
+            } else {
+                clearPendingSetLocked()
+                lastError = "Phone did not confirm save; tap again to retry"
+                publishDeliveryStateLocked()
+                true
+            }
+        }
+        if (timedOut) {
+            Log.w(TAG, "Timed out waiting for phone set save confirmation")
+        }
     }
 
     private val _session = MutableStateFlow(WearSession())
@@ -61,6 +76,8 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
     private var liveDataEventGeneration = 0L
     private var connectedNodes: List<Node> = emptyList()
     private var connectionStateKnown = false
+    private var isPhoneConnected = false
+    private var lastError: String? = null
 
     private var lastSeenSaveConfirmationId = 0L
     private var hasSeenSaveConfirmation = false
@@ -74,13 +91,21 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
     private var connectionRetryScheduled = false
 
     fun start() {
+        var shouldArmConfirmationTimeout = false
         val generation = synchronized(stateLock) {
             if (started) return
             started = true
             connectionStateKnown = false
+            isPhoneConnected = false
             liveDataEventGeneration = 0L
             connectionRetryDelayMillis = INITIAL_CONNECTION_RETRY_DELAY_MILLIS
+            shouldArmConfirmationTimeout = setLogTransportAccepted && pendingSetKey != null
+            publishDeliveryStateLocked()
             ++startGeneration
+        }
+
+        if (shouldArmConfirmationTimeout) {
+            scheduleConfirmationTimeout()
         }
 
         dataClient.addListener(this)
@@ -115,16 +140,19 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
         synchronized(stateLock) {
             if (!started) return
             started = false
+            inFlight = null
             connectionStateKnown = false
+            isPhoneConnected = false
             connectedNodes = emptyList()
             connectionRetryDelayMillis = INITIAL_CONNECTION_RETRY_DELAY_MILLIS
             connectionRetryScheduled = false
             ++startGeneration
+            publishDeliveryStateLocked()
         }
 
         dataClient.removeListener(this)
         retryHandler.removeCallbacks(connectionRetry)
-        updateDeliveryState(isPhoneConnected = false)
+        retryHandler.removeCallbacks(setLogConfirmationTimeout)
     }
 
     override fun onDataChanged(events: DataEventBuffer) {
@@ -155,52 +183,65 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
     }
 
     fun updateDraft(session: WearSession) {
-        _session.value = session
         val command = OutboundCommand(
             path = WearContract.MESSAGE_UPDATE_DRAFT,
             payload = session.toDataMap().toByteArray(),
             type = CommandType.DRAFT
         )
         synchronized(stateLock) {
+            _session.value = session
             latestLocalDraft = session
             queuedDraft = command
+            publishDeliveryStateLocked()
         }
-        updateDeliveryState()
         flushOutbox()
     }
 
     fun logSet(session: WearSession) {
         if (!session.active || session.workoutId < 0L || session.exerciseId < 0L || !session.canLog) {
-            updateDeliveryState(lastError = "This set is not ready to log")
+            synchronized(stateLock) {
+                lastError = "This set is not ready to log"
+                publishDeliveryStateLocked()
+            }
             return
         }
 
         val setKey = session.setKey()
-        val shouldSend = synchronized(stateLock) {
-            if (pendingSetKey != null) {
-                false
-            } else {
-                pendingSetKey = setKey
-                setLogTransportAccepted = false
-                queuedSetLog = OutboundCommand(
-                    path = WearContract.MESSAGE_LOG_SET,
-                    payload = session.toDataMap().toByteArray(),
-                    type = CommandType.LOG_SET
-                )
-                // LOG_SET carries the complete draft, so an unsent draft would only add latency.
-                if (inFlight?.type != CommandType.DRAFT) queuedDraft = null
-                true
+        val shouldFlush = synchronized(stateLock) {
+            when {
+                pendingSetKey == null -> {
+                    pendingSetKey = setKey
+                    setLogTransportAccepted = false
+                    queuedSetLog = OutboundCommand(
+                        path = WearContract.MESSAGE_LOG_SET,
+                        payload = session.toDataMap().toByteArray(),
+                        type = CommandType.LOG_SET
+                    )
+                    // LOG_SET carries the complete draft, so an unsent draft would only add latency.
+                    if (inFlight?.type != CommandType.DRAFT) queuedDraft = null
+                    lastError = null
+                    publishDeliveryStateLocked()
+                    true
+                }
+                // A failed or queued transport remains retryable with the latest draft payload,
+                // whereas a request already accepted by MessageClient is never resent before ack/timeout.
+                !setLogTransportAccepted && queuedSetLog != null && inFlight == null -> {
+                    queuedSetLog = OutboundCommand(
+                        path = WearContract.MESSAGE_LOG_SET,
+                        payload = session.toDataMap().toByteArray(),
+                        type = CommandType.LOG_SET
+                    )
+                    if (inFlight?.type != CommandType.DRAFT) queuedDraft = null
+                    lastError = null
+                    publishDeliveryStateLocked()
+                    true
+                }
+                else -> false
             }
         }
 
-        updateDeliveryState()
-        if (shouldSend) {
+        if (shouldFlush) {
             flushOutbox()
-        } else {
-            // A failed transport remains queued. A second tap is an explicit retry, while a request
-            // already accepted by MessageClient is deliberately never resent before confirmation.
-            val retryQueuedTransport = synchronized(stateLock) { queuedSetLog != null }
-            if (retryQueuedTransport) flushOutbox()
         }
     }
 
@@ -218,7 +259,7 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
 
     private fun handleSessionSnapshot(session: WearSession, emitSaveConfirmation: Boolean) {
         var shouldEmitConfirmation = false
-        var resolvedSession = session
+        var shouldCancelTimeout = false
 
         synchronized(stateLock) {
             val confirmationId = session.setSaveConfirmationId
@@ -228,16 +269,20 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
             } else if (confirmationId > 0L && confirmationId != lastSeenSaveConfirmationId) {
                 lastSeenSaveConfirmationId = confirmationId
                 shouldEmitConfirmation = emitSaveConfirmation
-                if (setLogTransportAccepted) clearPendingSetLocked()
+                if (setLogTransportAccepted) {
+                    clearPendingSetLocked()
+                    shouldCancelTimeout = true
+                }
             }
 
             val pendingKey = pendingSetKey
             if (pendingKey != null && (!session.active || session.setKey() != pendingKey)) {
                 clearPendingSetLocked()
+                shouldCancelTimeout = true
             }
 
             val localDraft = latestLocalDraft
-            resolvedSession = when {
+            val resolvedSession = when {
                 localDraft == null -> session
                 !session.active || session.setKey() != localDraft.setKey() -> {
                     latestLocalDraft = null
@@ -250,17 +295,22 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
                 }
                 else -> session.withDraftFrom(localDraft)
             }
+
+            _session.value = resolvedSession
+            lastError = null
+            publishDeliveryStateLocked()
         }
 
-        _session.value = resolvedSession
-        updateDeliveryState(lastError = null)
+        if (shouldCancelTimeout) {
+            retryHandler.removeCallbacks(setLogConfirmationTimeout)
+        }
         if (shouldEmitConfirmation) _setSavedEvents.tryEmit(Unit)
     }
 
     private fun clearPendingSetLocked() {
         pendingSetKey = null
         setLogTransportAccepted = false
-        if (inFlight?.type != CommandType.LOG_SET) queuedSetLog = null
+        queuedSetLog = null
     }
 
     private fun flushOutbox() {
@@ -276,7 +326,8 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
                     .sortedWith(compareByDescending<Node> { it.isNearby }.thenBy { it.id })
                     .first()
                 inFlight = command
-                node to command
+                publishDeliveryStateLocked()
+                Triple(node, command, startGeneration)
             }
         }
 
@@ -285,55 +336,70 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
             return
         }
 
-        val (node, command) = selection
+        val (node, command, generation) = selection
         messageClient.sendMessage(node.id, command.path, command.payload)
-            .addOnSuccessListener { finishDelivery(command, succeeded = true) }
+            .addOnSuccessListener { finishDelivery(command, generation, succeeded = true) }
             .addOnFailureListener { error ->
                 Log.w(TAG, "Unable to send Wear command ${command.path}", error)
-                finishDelivery(command, succeeded = false)
+                finishDelivery(command, generation, succeeded = false)
             }
     }
 
-    private fun finishDelivery(command: OutboundCommand, succeeded: Boolean) {
-        synchronized(stateLock) {
-            if (inFlight !== command) return
+    private fun finishDelivery(command: OutboundCommand, generation: Long, succeeded: Boolean) {
+        var shouldScheduleTimeout = false
+        val accepted = synchronized(stateLock) {
+            if (!started || generation != startGeneration || inFlight !== command) return
             inFlight = null
             if (succeeded) {
                 when (command.type) {
                     CommandType.DRAFT -> if (queuedDraft === command) queuedDraft = null
                     CommandType.LOG_SET -> {
-                        if (pendingSetKey != null) setLogTransportAccepted = true
+                        if (pendingSetKey != null) {
+                            setLogTransportAccepted = true
+                            shouldScheduleTimeout = true
+                        }
                         if (queuedSetLog === command) queuedSetLog = null
                     }
                 }
+                lastError = null
             } else {
                 connectedNodes = emptyList()
                 connectionStateKnown = false
+                isPhoneConnected = false
+                lastError = "Could not reach the phone; tap again to retry"
             }
+            publishDeliveryStateLocked()
+            succeeded
         }
 
-        updateDeliveryState(
-            lastError = if (succeeded) null else "Could not reach the phone; tap again to retry"
-        )
-        if (succeeded) {
+        if (shouldScheduleTimeout) {
+            scheduleConfirmationTimeout()
+        }
+        if (accepted) {
             flushOutbox()
         } else {
             scheduleConnectionRefresh()
         }
     }
 
+    private fun scheduleConfirmationTimeout() {
+        retryHandler.removeCallbacks(setLogConfirmationTimeout)
+        retryHandler.postDelayed(setLogConfirmationTimeout, SET_SAVE_ACK_TIMEOUT_MILLIS)
+    }
+
     private fun sendTransient(path: String, dataMap: DataMap) {
-        val cachedNode = synchronized(stateLock) {
-            connectedNodes
+        val (cachedNode, generation) = synchronized(stateLock) {
+            if (!started) return
+            val node = connectedNodes
                 .sortedWith(compareByDescending<Node> { it.isNearby }.thenBy { it.id })
                 .firstOrNull()
+            node to startGeneration
         }
         if (cachedNode != null) {
-            sendTransientToNode(cachedNode, path, dataMap)
+            sendTransientToNode(cachedNode, generation, path, dataMap)
             return
         }
 
-        val generation = synchronized(stateLock) { startGeneration }
         nodeClient.connectedNodes
             .addOnSuccessListener { nodes ->
                 if (!isCurrentGeneration(generation)) return@addOnSuccessListener
@@ -342,22 +408,42 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
                     .sortedWith(compareByDescending<Node> { it.isNearby }.thenBy { it.id })
                     .firstOrNull()
                 if (node == null) {
-                    updateDeliveryState(lastError = "Phone is not connected")
+                    synchronized(stateLock) {
+                        if (started && generation == startGeneration) {
+                            lastError = "Phone is not connected"
+                            publishDeliveryStateLocked()
+                        }
+                    }
                 } else {
-                    sendTransientToNode(node, path, dataMap)
+                    sendTransientToNode(node, generation, path, dataMap)
                 }
             }
             .addOnFailureListener { error ->
-                updateDeliveryState(lastError = "Unable to check phone connection")
+                synchronized(stateLock) {
+                    if (started && generation == startGeneration) {
+                        lastError = "Unable to check phone connection"
+                        publishDeliveryStateLocked()
+                    }
+                }
                 Log.w(TAG, "Unable to find connected phone", error)
             }
     }
 
-    private fun sendTransientToNode(node: Node, path: String, dataMap: DataMap) {
+    private fun sendTransientToNode(node: Node, generation: Long, path: String, dataMap: DataMap) {
         messageClient.sendMessage(node.id, path, dataMap.toByteArray())
-            .addOnSuccessListener { updateDeliveryState(lastError = null) }
+            .addOnSuccessListener {
+                synchronized(stateLock) {
+                    if (!started || generation != startGeneration) return@addOnSuccessListener
+                    lastError = null
+                    publishDeliveryStateLocked()
+                }
+            }
             .addOnFailureListener { error ->
-                updateDeliveryState(lastError = "Could not reach the phone")
+                synchronized(stateLock) {
+                    if (!started || generation != startGeneration) return@addOnFailureListener
+                    lastError = "Could not reach the phone"
+                    publishDeliveryStateLocked()
+                }
                 Log.w(TAG, "Unable to send Wear command $path", error)
             }
     }
@@ -367,19 +453,18 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
             if (!started || generation != startGeneration) return
             connectedNodes = nodes
             connectionStateKnown = true
+            isPhoneConnected = nodes.isNotEmpty()
+            lastError = if (nodes.isEmpty()) "Phone is not connected" else null
             if (nodes.isNotEmpty()) {
                 connectionRetryDelayMillis = INITIAL_CONNECTION_RETRY_DELAY_MILLIS
             }
             connectionRetryScheduled = false
+            publishDeliveryStateLocked()
             true
         }
         if (!isCurrent) return
 
         retryHandler.removeCallbacks(connectionRetry)
-        updateDeliveryState(
-            isPhoneConnected = nodes.isNotEmpty(),
-            lastError = if (nodes.isEmpty()) "Phone is not connected" else null
-        )
         if (nodes.isNotEmpty()) {
             flushOutbox()
         } else {
@@ -392,16 +477,21 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
         nodeClient.connectedNodes
             .addOnSuccessListener { nodes -> updateConnectedNodes(nodes, generation) }
             .addOnFailureListener { error ->
-                if (!isCurrentGeneration(generation)) return@addOnFailureListener
-                synchronized(stateLock) {
-                    connectedNodes = emptyList()
-                    connectionStateKnown = false
+                val handled = synchronized(stateLock) {
+                    if (!started || generation != startGeneration) {
+                        false
+                    } else {
+                        connectedNodes = emptyList()
+                        connectionStateKnown = false
+                        isPhoneConnected = false
+                        lastError = "Unable to check phone connection"
+                        publishDeliveryStateLocked()
+                        true
+                    }
                 }
-                updateDeliveryState(
-                    isPhoneConnected = false,
-                    lastError = "Unable to check phone connection"
-                )
-                scheduleConnectionRefresh()
+                if (handled) {
+                    scheduleConnectionRefresh()
+                }
                 Log.w(TAG, "Unable to find connected phone", error)
             }
     }
@@ -419,21 +509,16 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
         retryHandler.postDelayed(connectionRetry, retryDelayMillis)
     }
 
-    private fun updateDeliveryState(
-        isPhoneConnected: Boolean? = null,
-        lastError: String? = _deliveryState.value.lastError
-    ) {
-        val (draftPending, setPending) = synchronized(stateLock) {
-            Pair(
-                queuedDraft != null || inFlight?.type == CommandType.DRAFT,
-                pendingSetKey != null
-            )
-        }
-        val previous = _deliveryState.value
+    private fun publishDeliveryStateLocked() {
+        val canRetry = pendingSetKey != null &&
+            !setLogTransportAccepted &&
+            queuedSetLog != null &&
+            inFlight == null
         _deliveryState.value = WearDeliveryState(
-            isPhoneConnected = isPhoneConnected ?: previous.isPhoneConnected,
-            isDraftPending = draftPending,
-            isSetLogPending = setPending,
+            isPhoneConnected = isPhoneConnected,
+            isDraftPending = queuedDraft != null || inFlight?.type == CommandType.DRAFT,
+            isSetLogPending = pendingSetKey != null,
+            canRetrySetLog = canRetry,
             lastError = lastError
         )
     }
@@ -491,5 +576,6 @@ class WearSessionClient(context: Context) : DataClient.OnDataChangedListener {
         private const val TAG = "WearSessionClient"
         private const val INITIAL_CONNECTION_RETRY_DELAY_MILLIS = 5_000L
         private const val MAX_CONNECTION_RETRY_DELAY_MILLIS = 60_000L
+        private const val SET_SAVE_ACK_TIMEOUT_MILLIS = 6_000L
     }
 }

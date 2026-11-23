@@ -80,7 +80,8 @@ class WorkoutDaoTest {
         val workoutId = workoutDao.insertWorkout(workout)
         val retrieved = workoutDao.getWorkoutById(workoutId).first()
 
-        assertEquals("Morning Workout", retrieved.name)
+        assertNotNull(retrieved)
+        assertEquals("Morning Workout", retrieved!!.name)
         assertEquals("Felt good", retrieved.note)
     }
 
@@ -99,7 +100,7 @@ class WorkoutDaoTest {
         )
 
         val start = repository.startPlannedWorkout(listOf(secondExercise.id, testExercise.id))
-        val workout = workoutDao.getWorkoutById(start.workoutId).first()
+        val workout = workoutDao.getWorkoutById(start.workoutId).first()!!
         val plan = workoutPlanDao.getInstancesForWorkout(start.workoutId).first()
 
         assertFalse(workout.startedFromRoutine)
@@ -307,7 +308,7 @@ class WorkoutDaoTest {
         )
 
         workoutDao.updateWorkout(updatedWorkout)
-        val retrieved = workoutDao.getWorkoutById(workoutId).first()
+        val retrieved = workoutDao.getWorkoutById(workoutId).first()!!
 
         assertEquals(5, retrieved.rating)
         assertEquals("Great session!", retrieved.ratingNote)
@@ -608,6 +609,171 @@ class WorkoutDaoTest {
         val empty = summaries.single { it.workout.id == emptyWorkoutId }
         assertEquals(0, empty.workingSetCount ?: 0)
         assertEquals(0f, empty.totalVolume ?: 0f, 0.001f)
+    }
+
+    @Test
+    fun getWorkoutByIdEmitsNullWhenMissingAndQueriesExcludeIncompleteSets() = runTest {
+        assertNull(workoutDao.getWorkoutById(9999L).first())
+
+        exerciseDao.insertExercise(testExercise)
+        val routineId = database.routineDao().insertRoutine(
+            com.example.gymtime.data.db.entity.Routine(name = "PPL", isActive = true)
+        )
+        val dayId = database.routineDao().insertRoutineDay(
+            com.example.gymtime.data.db.entity.RoutineDay(routineId = routineId, name = "Legs", orderIndex = 0)
+        )
+        val now = System.currentTimeMillis()
+        val ratedEmptyWorkoutId = workoutDao.insertWorkout(
+            Workout(startTime = Date(now - 2_000L), endTime = Date(now - 1_000L), name = "Rated", note = null, rating = 4)
+        )
+        val routineWorkoutId = workoutDao.insertWorkout(
+            Workout(
+                startTime = Date(now - 500L),
+                endTime = Date(now),
+                name = "Legs",
+                note = null,
+                rating = 5,
+                routineDayId = dayId,
+                routineId = routineId,
+                startedFromRoutine = true
+            )
+        )
+        setDao.insertSet(
+            Set(
+                workoutId = ratedEmptyWorkoutId,
+                exerciseId = testExercise.id,
+                weight = 300f,
+                reps = 10,
+                rpe = null,
+                durationSeconds = null,
+                distanceMeters = null,
+                isWarmup = false,
+                isComplete = false,
+                timestamp = Date(now - 1_500L)
+            )
+        )
+        setDao.insertSet(
+            Set(
+                workoutId = routineWorkoutId,
+                exerciseId = testExercise.id,
+                weight = 225f,
+                reps = 5,
+                rpe = null,
+                durationSeconds = null,
+                distanceMeters = null,
+                isWarmup = false,
+                isComplete = true,
+                timestamp = Date(now - 200L)
+            )
+        )
+        setDao.insertSet(
+            Set(
+                workoutId = routineWorkoutId,
+                exerciseId = testExercise.id,
+                weight = 405f,
+                reps = 5,
+                rpe = null,
+                durationSeconds = null,
+                distanceMeters = null,
+                isWarmup = false,
+                isComplete = false,
+                timestamp = Date(now - 100L)
+            )
+        )
+
+        assertEquals(1, workoutDao.getMuscleSetCountsLast30Days().single().setVolume)
+        assertEquals(1, workoutDao.getMuscleSetCountsInRange(now - 10_000L, now + 10_000L).single().setVolume)
+        val ratedRows = workoutDao.getRatedWorkoutSetInfo(now - 10_000L, now + 10_000L)
+        assertEquals(2, ratedRows.size)
+        assertNull(ratedRows.first { it.workoutId == ratedEmptyWorkoutId }.setId)
+        assertEquals(225f, ratedRows.first { it.workoutId == routineWorkoutId }.weight ?: 0f, 0.01f)
+
+        val routineWorkouts = workoutDao.getCompletedWorkoutsForRoutine(routineId)
+        assertEquals(1125f, routineWorkouts.single().totalVolume, 0.01f)
+        assertEquals(1, routineWorkouts.single().workingSetCount)
+        assertEquals(1, workoutDao.getWorkingSetsForRoutine(routineId).size)
+    }
+
+    @Test
+    fun reopenWorkoutRejectsConcurrentActiveAndFinishDoesNotOverwriteOrRewindRoutine() = runTest {
+        exerciseDao.insertExercise(testExercise)
+        val routineDao = database.routineDao()
+        val routineId = routineDao.insertRoutine(
+            com.example.gymtime.data.db.entity.Routine(name = "Split", isActive = true, nextDayOrderIndex = 0)
+        )
+        val day1Id = routineDao.insertRoutineDay(
+            com.example.gymtime.data.db.entity.RoutineDay(routineId = routineId, name = "Day 1", orderIndex = 0)
+        )
+        val day2Id = routineDao.insertRoutineDay(
+            com.example.gymtime.data.db.entity.RoutineDay(routineId = routineId, name = "Day 2", orderIndex = 1)
+        )
+        val day3Id = routineDao.insertRoutineDay(
+            com.example.gymtime.data.db.entity.RoutineDay(routineId = routineId, name = "Day 3", orderIndex = 2)
+        )
+        val originalEnd = Date(2_000L)
+        val olderWorkoutId = workoutDao.insertWorkout(
+            Workout(
+                startTime = Date(1_000L),
+                endTime = originalEnd,
+                name = "Day 1",
+                note = null,
+                routineDayId = day1Id,
+                routineId = routineId,
+                startedFromRoutine = true
+            )
+        )
+        workoutPlanDao.insertInstance(
+            WorkoutExerciseInstance(workoutId = olderWorkoutId, exerciseId = testExercise.id, orderIndex = 0)
+        )
+        insertWorkingSet(olderWorkoutId, Date(1_500L), 200f, 5)
+
+        val newerWorkoutId = workoutDao.insertWorkout(
+            Workout(
+                startTime = Date(3_000L),
+                endTime = Date(4_000L),
+                name = "Day 2",
+                note = null,
+                routineDayId = day2Id,
+                routineId = routineId,
+                startedFromRoutine = true
+            )
+        )
+        workoutPlanDao.insertInstance(
+            WorkoutExerciseInstance(workoutId = newerWorkoutId, exerciseId = testExercise.id, orderIndex = 0)
+        )
+        insertWorkingSet(newerWorkoutId, Date(3_500L), 215f, 5)
+        routineDao.updateNextDayOrderIndex(routineId, 2) // Day 3 is up next
+
+        val orbRepo = VolumeOrbRepository(setDao)
+        val repo = WorkoutRepository(database, workoutDao, setDao, routineDao, workoutPlanDao, orbRepo)
+
+        // Idempotent finishWorkout must not overwrite historical endTime.
+        repo.finishWorkout(olderWorkoutId)
+        assertEquals(originalEnd, workoutDao.getWorkoutByIdSync(olderWorkoutId)!!.endTime)
+        assertEquals(2, routineDao.getRoutineByIdSync(routineId)!!.nextDayOrderIndex)
+
+        // Finishing a reopened older routine workout must not rewind nextDayOrderIndex back to Day 2.
+        repo.reopenWorkout(olderWorkoutId)
+        assertNull(workoutDao.getWorkoutByIdSync(olderWorkoutId)!!.endTime)
+
+        // Trying to reopen another workout while olderWorkoutId is open must fail cleanly.
+        var blocked = false
+        try {
+            repo.reopenWorkout(newerWorkoutId)
+        } catch (_: IllegalStateException) {
+            blocked = true
+        }
+        assertTrue(blocked)
+
+        repo.finishWorkout(olderWorkoutId)
+        assertEquals(2, routineDao.getRoutineByIdSync(routineId)!!.nextDayOrderIndex)
+
+        val stats = repo.calculateWorkoutStats(
+            Workout(startTime = Date(10_000L), endTime = Date(5_000L), name = null, note = null),
+            emptyList()
+        )
+        assertEquals("0m", stats.duration)
+        assertNotEquals(0L, day3Id)
     }
 
     private suspend fun insertCompletedWorkout(startTime: Date, endTime: Date, name: String): Long {

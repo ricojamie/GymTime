@@ -31,6 +31,7 @@ object PlateCalculator {
     private const val MIN_SUPPORTED_PLATE = 0.01f
     private const val MAX_SUPPORTED_PLATE = 1_000f
     private const val MAX_LOADING_SIDES = 16
+    private const val UNREACHABLE = Int.MAX_VALUE / 4
 
     /**
      * Calculate plates needed to reach target weight
@@ -73,28 +74,42 @@ object PlateCalculator {
         // Solve in hundredths of a pound so arbitrary enabled denominations remain
         // deterministic. Each selected plate is mirrored across loadingSides.
         val targetPlateUnits = toUnits(safeTargetWeight - safeBarWeight)
-        val optionUnits = plateOptions.associateWith { plate ->
-            max(1, toUnits(plate * safeLoadingSides))
+        val rawOptionUnits = IntArray(plateOptions.size) { index ->
+            max(1, toUnits(plateOptions[index] * safeLoadingSides))
         }
-        val unitDivisor = optionUnits.values.reduce(::greatestCommonDivisor)
-        val normalizedOptionUnits = optionUnits.mapValues { (_, units) -> units / unitDivisor }
+        var unitDivisor = rawOptionUnits[0]
+        for (i in 1 until rawOptionUnits.size) {
+            unitDivisor = greatestCommonDivisor(unitDivisor, rawOptionUnits[i])
+        }
+        val normalizedOptionUnits = IntArray(plateOptions.size) { index ->
+            rawOptionUnits[index] / unitDivisor
+        }
+        var minNormalizedUnit = normalizedOptionUnits[0]
+        var maxNormalizedUnit = normalizedOptionUnits[0]
+        for (i in 1 until normalizedOptionUnits.size) {
+            val u = normalizedOptionUnits[i]
+            if (u < minNormalizedUnit) minNormalizedUnit = u
+            if (u > maxNormalizedUnit) maxNormalizedUnit = u
+        }
+
         val normalizedTarget = targetPlateUnits.toDouble() / unitDivisor
         val maximumLoadUnits = toUnits(MAX_SUPPORTED_WEIGHT - safeBarWeight) / unitDivisor
-        val availablePerSide = plateOptions.map { plate ->
-            (inventory?.get(plate) ?: 0) / safeLoadingSides
+        val availablePerSide = IntArray(plateOptions.size) { index ->
+            (inventory?.get(plateOptions[index]) ?: 0) / safeLoadingSides
         }
         val searchLimit = if (inventory == null) {
-            min(maximumLoadUnits, ceil(normalizedTarget).toInt() + (normalizedOptionUnits.values.minOrNull() ?: 0))
+            min(maximumLoadUnits, ceil(normalizedTarget).toInt() + minNormalizedUnit)
         } else {
             // A finite supply of the smallest plate may run out. The closest load
             // above the target can be as far as one largest stocked plate away.
-            val inventoryUnits = plateOptions.indices.sumOf { index ->
-                normalizedOptionUnits.getValue(plateOptions[index]).toLong() * availablePerSide[index]
+            var inventoryUnits = 0L
+            for (index in plateOptions.indices) {
+                inventoryUnits += normalizedOptionUnits[index].toLong() * availablePerSide[index]
             }
             minOf(
                 maximumLoadUnits.toLong(),
                 inventoryUnits,
-                ceil(normalizedTarget).toLong() + normalizedOptionUnits.values.max()
+                ceil(normalizedTarget).toLong() + maxNormalizedUnit
             ).toInt()
         }
         val selectedPlates = if (inventory == null) {
@@ -118,20 +133,19 @@ object PlateCalculator {
 
     private fun solveUnlimited(
         plateOptions: List<Float>,
-        normalizedOptionUnits: Map<Float, Int>,
+        normalizedOptionUnits: IntArray,
         targetPlateUnits: Int,
         unitDivisor: Int,
         searchLimit: Int
     ): List<Float> {
-        val unreachable = Int.MAX_VALUE / 4
-        val minimumPlateCount = IntArray(searchLimit + 1) { unreachable }
+        val minimumPlateCount = IntArray(searchLimit + 1) { UNREACHABLE }
         val previousAmount = IntArray(searchLimit + 1) { -1 }
         val previousPlateIndex = IntArray(searchLimit + 1) { -1 }
         minimumPlateCount[0] = 0
 
         for (amount in 1..searchLimit) {
-            plateOptions.forEachIndexed { index, plate ->
-                val plateUnits = normalizedOptionUnits.getValue(plate)
+            for (index in normalizedOptionUnits.indices) {
+                val plateUnits = normalizedOptionUnits[index]
                 if (plateUnits <= amount && minimumPlateCount[amount - plateUnits] + 1 < minimumPlateCount[amount]) {
                     minimumPlateCount[amount] = minimumPlateCount[amount - plateUnits] + 1
                     previousAmount[amount] = amount - plateUnits
@@ -140,15 +154,12 @@ object PlateCalculator {
             }
         }
 
-        val bestAmount = (0..searchLimit)
-            .asSequence()
-            .filter { minimumPlateCount[it] < unreachable }
-            .minWithOrNull(
-                compareBy<Int> { abs(it * unitDivisor - targetPlateUnits) }
-                    // If two loads are equally close, prefer the safer lower load.
-                    .thenBy { if (it * unitDivisor <= targetPlateUnits) 0 else 1 }
-                    .thenBy { minimumPlateCount[it] }
-            ) ?: 0
+        val bestAmount = selectBestAmount(
+            minimumCounts = minimumPlateCount,
+            targetPlateUnits = targetPlateUnits,
+            unitDivisor = unitDivisor,
+            searchLimit = searchLimit
+        )
 
         return buildList {
             var amount = bestAmount
@@ -159,7 +170,52 @@ object PlateCalculator {
                 amount = previousAmount[amount]
             }
         }.sortedDescending()
+    }
 
+    private fun selectBestAmount(
+        minimumCounts: IntArray,
+        targetPlateUnits: Int,
+        unitDivisor: Int,
+        searchLimit: Int
+    ): Int {
+        var hasBest = false
+        var bestAmount = 0
+        var bestDistance = 0
+        var bestSidePreference = 0
+        var bestCount = UNREACHABLE
+
+        for (amount in 0..searchLimit) {
+            val count = minimumCounts[amount]
+            if (count >= UNREACHABLE) continue
+
+            val loadedUnits = amount * unitDivisor
+            val distance = abs(loadedUnits - targetPlateUnits)
+            val sidePreference = if (loadedUnits <= targetPlateUnits) 0 else 1
+
+            val isBetter = !hasBest || when {
+                distance < bestDistance -> true
+                distance > bestDistance -> false
+                sidePreference < bestSidePreference -> true
+                sidePreference > bestSidePreference -> false
+                else -> count < bestCount
+            }
+            if (isBetter) {
+                hasBest = true
+                bestAmount = amount
+                bestDistance = distance
+                bestSidePreference = sidePreference
+                bestCount = count
+            }
+        }
+        return bestAmount
+    }
+
+    private class BoundedScratch(capacity: Int) {
+        val left = IntArray(capacity)
+        val right = IntArray(capacity)
+        val work = IntArray(capacity)
+        val queueIndices = IntArray(capacity)
+        val queueScores = IntArray(capacity)
     }
 
     /**
@@ -169,44 +225,64 @@ object PlateCalculator {
      */
     private fun solveBounded(
         plateOptions: List<Float>,
-        optionUnits: Map<Float, Int>,
-        availablePerSide: List<Int>,
+        units: IntArray,
+        availablePerSide: IntArray,
         targetPlateUnits: Int,
         unitDivisor: Int,
         searchLimit: Int
     ): List<Float> {
-        val units = plateOptions.map { optionUnits.getValue(it) }
-        val unreachable = Int.MAX_VALUE / 4
-        val minimumCounts = boundedMinimumCounts(units, availablePerSide, 0, plateOptions.size, searchLimit)
-        val bestAmount = (0..searchLimit).asSequence()
-            .filter { minimumCounts[it] < unreachable }
-            .minWithOrNull(
-                compareBy<Int> { abs(it * unitDivisor - targetPlateUnits) }
-                    .thenBy { if (it * unitDivisor <= targetPlateUnits) 0 else 1 }
-                    .thenBy { minimumCounts[it] }
-            ) ?: 0
+        val scratch = BoundedScratch(searchLimit + 1)
+        boundedMinimumCountsInto(
+            target = scratch.left,
+            scratch = scratch,
+            optionUnits = units,
+            capacities = availablePerSide,
+            startIndex = 0,
+            endIndex = plateOptions.size,
+            searchLimit = searchLimit
+        )
+        val bestAmount = selectBestAmount(
+            minimumCounts = scratch.left,
+            targetPlateUnits = targetPlateUnits,
+            unitDivisor = unitDivisor,
+            searchLimit = searchLimit
+        )
         return buildList {
-            reconstructBounded(plateOptions, units, availablePerSide, 0, plateOptions.size, bestAmount, this)
+            reconstructBounded(
+                plates = plateOptions,
+                units = units,
+                capacities = availablePerSide,
+                startIndex = 0,
+                endIndex = plateOptions.size,
+                amount = bestAmount,
+                scratch = scratch,
+                result = this
+            )
         }.sortedDescending()
     }
 
-    private fun boundedMinimumCounts(
-        optionUnits: List<Int>,
-        capacities: List<Int>,
+    private fun boundedMinimumCountsInto(
+        target: IntArray,
+        scratch: BoundedScratch,
+        optionUnits: IntArray,
+        capacities: IntArray,
         startIndex: Int,
         endIndex: Int,
         searchLimit: Int
-    ): IntArray {
-        val unreachable = Int.MAX_VALUE / 4
-        var previous = IntArray(searchLimit + 1) { unreachable }.also { it[0] = 0 }
-        var current = IntArray(searchLimit + 1)
-        val queueIndices = IntArray(searchLimit + 1)
-        val queueScores = IntArray(searchLimit + 1)
+    ) {
+        target[0] = 0
+        for (i in 1..searchLimit) target[i] = UNREACHABLE
+
+        var previous = target
+        var current = scratch.work
+        val queueIndices = scratch.queueIndices
+        val queueScores = scratch.queueScores
+
         for (plateIndex in startIndex until endIndex) {
             val units = optionUnits[plateIndex]
             val capacity = capacities[plateIndex]
             if (capacity == 0 || units > searchLimit) continue
-            current.fill(unreachable)
+            for (i in 0..searchLimit) current[i] = UNREACHABLE
             for (residue in 0..min(units - 1, searchLimit)) {
                 var head = 0
                 var tail = 0
@@ -214,7 +290,7 @@ object PlateCalculator {
                 var amount = residue
                 while (amount <= searchLimit) {
                     while (head < tail && queueIndices[head] < ordinal - capacity) head++
-                    if (previous[amount] < unreachable) {
+                    if (previous[amount] < UNREACHABLE) {
                         val score = previous[amount] - ordinal
                         // Equal-cost loads prefer fewer of this (smaller) plate.
                         while (head < tail && queueScores[tail - 1] >= score) tail--
@@ -233,16 +309,20 @@ object PlateCalculator {
             previous = current
             current = swap
         }
-        return previous
+
+        if (previous !== target) {
+            System.arraycopy(previous, 0, target, 0, searchLimit + 1)
+        }
     }
 
     private fun reconstructBounded(
         plates: List<Float>,
-        units: List<Int>,
-        capacities: List<Int>,
+        units: IntArray,
+        capacities: IntArray,
         startIndex: Int,
         endIndex: Int,
         amount: Int,
+        scratch: BoundedScratch,
         result: MutableList<Float>
     ) {
         if (amount == 0 || startIndex >= endIndex) return
@@ -253,35 +333,37 @@ object PlateCalculator {
             return
         }
         val middle = (startIndex + endIndex) / 2
-        // Split arrays live only inside this helper; recursive branches retain no
-        // amount-sized arrays from earlier reconstruction levels.
-        val leftAmount = findBoundedSplit(units, capacities, startIndex, middle, endIndex, amount)
-        reconstructBounded(plates, units, capacities, startIndex, middle, leftAmount, result)
-        reconstructBounded(plates, units, capacities, middle, endIndex, amount - leftAmount, result)
+        val leftAmount = findBoundedSplit(units, capacities, startIndex, middle, endIndex, amount, scratch)
+        reconstructBounded(plates, units, capacities, startIndex, middle, leftAmount, scratch, result)
+        reconstructBounded(plates, units, capacities, middle, endIndex, amount - leftAmount, scratch, result)
     }
 
     private fun findBoundedSplit(
-        units: List<Int>,
-        capacities: List<Int>,
+        units: IntArray,
+        capacities: IntArray,
         startIndex: Int,
         middle: Int,
         endIndex: Int,
-        amount: Int
+        amount: Int,
+        scratch: BoundedScratch
     ): Int {
-        val unreachable = Int.MAX_VALUE / 4
-        val left = boundedMinimumCounts(units, capacities, startIndex, middle, amount)
-        val right = boundedMinimumCounts(units, capacities, middle, endIndex, amount)
+        boundedMinimumCountsInto(scratch.left, scratch, units, capacities, startIndex, middle, amount)
+        boundedMinimumCountsInto(scratch.right, scratch, units, capacities, middle, endIndex, amount)
+        val left = scratch.left
+        val right = scratch.right
         var bestAmount = 0
-        var bestCount = unreachable
+        var bestCount = UNREACHABLE
         for (leftAmount in 0..amount) {
-            if (left[leftAmount] >= unreachable || right[amount - leftAmount] >= unreachable) continue
-            val count = left[leftAmount] + right[amount - leftAmount]
+            val leftCount = left[leftAmount]
+            val rightCount = right[amount - leftAmount]
+            if (leftCount >= UNREACHABLE || rightCount >= UNREACHABLE) continue
+            val count = leftCount + rightCount
             if (count <= bestCount) {
                 bestCount = count
                 bestAmount = leftAmount
             }
         }
-        check(bestCount < unreachable)
+        check(bestCount < UNREACHABLE)
         return bestAmount
     }
 

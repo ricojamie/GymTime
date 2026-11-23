@@ -37,15 +37,6 @@ data class SetWithExercisePerformanceInfo(
     val logType: LogType
 )
 
-// Data class for personal records (analytics)
-data class PersonalRecordData(
-    val exerciseId: Long,
-    val exerciseName: String,
-    val weight: Float,
-    val reps: Int,
-    val timestamp: java.util.Date
-)
-
 // Data class for volume by muscle (analytics)
 data class MuscleVolumeData(
     val muscle: String,
@@ -106,13 +97,22 @@ interface SetDao {
 
     // Get sets from the LAST completed workout for this exercise (excluding current workout)
     @Query("""
+        WITH target_workout AS (
+            SELECT w.id
+            FROM workouts w
+            INNER JOIN sets s ON s.workoutId = w.id
+            WHERE s.exerciseId = :exerciseId
+              AND s.workoutId != :currentWorkoutId
+              AND w.endTime IS NOT NULL
+              AND s.isComplete = 1
+            ORDER BY w.startTime DESC, w.id DESC
+            LIMIT 1
+        )
         SELECT s.* FROM sets s
-        INNER JOIN workouts w ON s.workoutId = w.id
+        INNER JOIN target_workout tw ON s.workoutId = tw.id
         WHERE s.exerciseId = :exerciseId
-          AND s.workoutId != :currentWorkoutId
-          AND w.endTime IS NOT NULL
-        ORDER BY w.startTime DESC, s.timestamp ASC
-        LIMIT 20
+          AND s.isComplete = 1
+        ORDER BY s.timestamp ASC, s.id ASC
     """)
     suspend fun getLastWorkoutSetsForExercise(
         exerciseId: Long,
@@ -131,10 +131,7 @@ interface SetDao {
             MIN(s.timestamp) as firstSetTimestamp,
             MAX(s.supersetGroupId) as supersetGroupId
         FROM exercises e
-        LEFT JOIN sets s ON e.id = s.exerciseId AND s.workoutId = :workoutId
-        WHERE e.id IN (
-            SELECT DISTINCT exerciseId FROM sets WHERE workoutId = :workoutId
-        )
+        INNER JOIN sets s ON e.id = s.exerciseId AND s.workoutId = :workoutId
         GROUP BY e.id
         ORDER BY MIN(s.timestamp) ASC
     """)
@@ -199,6 +196,7 @@ interface SetDao {
         WHERE exerciseId = :exerciseId
           AND weight IS NOT NULL
           AND isWarmup = 0
+          AND isComplete = 1
         ORDER BY weight DESC, reps DESC
         LIMIT 1
     """)
@@ -212,6 +210,7 @@ interface SetDao {
         WHERE exerciseId = :exerciseId
           AND weight IS NOT NULL
           AND isWarmup = 0
+          AND isComplete = 1
           AND timestamp < :beforeTimestamp
         ORDER BY weight DESC, reps DESC
         LIMIT 1
@@ -225,6 +224,7 @@ interface SetDao {
           AND weight IS NOT NULL
           AND reps IS NOT NULL
           AND isWarmup = 0
+          AND isComplete = 1
         GROUP BY reps
     """)
     suspend fun getPersonalBestsByReps(exerciseId: Long): List<RepMaxRecord>
@@ -234,7 +234,7 @@ interface SetDao {
         SELECT
             s1.reps as reps,
             s1.weight as maxWeight,
-            s1.timestamp as firstAchievedAt
+            MIN(s1.timestamp) as firstAchievedAt
         FROM sets s1
         INNER JOIN (
             SELECT reps, MAX(weight) as maxWeight
@@ -243,12 +243,13 @@ interface SetDao {
               AND weight IS NOT NULL
               AND reps IS NOT NULL
               AND isWarmup = 0
+              AND isComplete = 1
             GROUP BY reps
         ) s2 ON s1.reps = s2.reps AND s1.weight = s2.maxWeight
         WHERE s1.exerciseId = :exerciseId
           AND s1.isWarmup = 0
+          AND s1.isComplete = 1
         GROUP BY s1.reps, s1.weight
-        HAVING s1.timestamp = MIN(s1.timestamp)
     """)
     suspend fun getPersonalBestsWithTimestamps(exerciseId: Long): List<PBWithTimestamp>
 
@@ -256,7 +257,7 @@ interface SetDao {
         SELECT
             s1.reps as reps,
             s1.weight as maxWeight,
-            s1.timestamp as firstAchievedAt
+            MIN(s1.timestamp) as firstAchievedAt
         FROM sets s1
         INNER JOIN (
             SELECT reps, MAX(weight) as maxWeight
@@ -274,7 +275,6 @@ interface SetDao {
           AND s1.isComplete = 1
           AND s1.timestamp < :beforeTimestamp
         GROUP BY s1.reps, s1.weight
-        HAVING s1.timestamp = MIN(s1.timestamp)
     """)
     suspend fun getPersonalBestsWithTimestampsBefore(
         exerciseId: Long,
@@ -288,6 +288,7 @@ interface SetDao {
           AND weight IS NOT NULL
           AND reps IS NOT NULL
           AND isWarmup = 0
+          AND isComplete = 1
         ORDER BY timestamp DESC
         LIMIT 100
     """)
@@ -342,6 +343,7 @@ interface SetDao {
         WHERE s.weight IS NOT NULL
           AND s.reps IS NOT NULL
           AND s.isWarmup = 0
+          AND s.isComplete = 1
           AND s.timestamp BETWEEN :startDate AND :endDate
     """)
     suspend fun getTotalVolume(startDate: Long, endDate: Long): Float?
@@ -352,33 +354,12 @@ interface SetDao {
         WHERE weight IS NOT NULL
           AND reps IS NOT NULL
           AND isWarmup = 0
+          AND isComplete = 1
           AND timestamp BETWEEN :startDate AND :endDate
         ORDER BY weight DESC
         LIMIT 50
     """)
     suspend fun getTopSetsForE1RM(startDate: Long, endDate: Long): List<Set>
-
-    // Enhanced personal records (all exercises)
-    @Query("""
-        SELECT
-            e.id as exerciseId,
-            e.name as exerciseName,
-            s.weight as weight,
-            s.reps as reps,
-            s.timestamp as timestamp
-        FROM exercises e
-        INNER JOIN (
-            SELECT exerciseId, MAX(weight) as maxWeight
-            FROM sets
-            WHERE weight IS NOT NULL AND isWarmup = 0
-            GROUP BY exerciseId
-        ) max_sets ON e.id = max_sets.exerciseId
-        INNER JOIN sets s ON s.exerciseId = e.id AND s.weight = max_sets.maxWeight
-        WHERE s.isWarmup = 0
-        GROUP BY e.id
-        ORDER BY s.timestamp DESC
-    """)
-    suspend fun getAllPersonalRecords(): List<PersonalRecordData>
 
     // Volume by muscle and week (for volume chart)
     @Query("""
@@ -391,6 +372,7 @@ interface SetDao {
         WHERE s.weight IS NOT NULL
           AND s.reps IS NOT NULL
           AND s.isWarmup = 0
+          AND s.isComplete = 1
           AND s.timestamp BETWEEN :startDate AND :endDate
         GROUP BY e.targetMuscle, week
         ORDER BY week ASC
@@ -507,26 +489,6 @@ interface SetDao {
     // Get all sets in a superset group (for viewing superset history)
     @Query("SELECT * FROM sets WHERE supersetGroupId = :groupId ORDER BY timestamp")
     suspend fun getSetsInSuperset(groupId: String): List<Set>
-
-    // Get volume excluding supersets (for analytics filtering)
-    @Query("""
-        SELECT COALESCE(SUM(weight * reps), 0) FROM sets
-        WHERE supersetGroupId IS NULL
-          AND isWarmup = 0
-          AND timestamp >= :startMs
-          AND timestamp < :endMs
-    """)
-    suspend fun getVolumeExcludingSupersets(startMs: Long, endMs: Long): Float
-
-    // Get volume from supersets only (for analytics filtering)
-    @Query("""
-        SELECT COALESCE(SUM(weight * reps), 0) FROM sets
-        WHERE supersetGroupId IS NOT NULL
-          AND isWarmup = 0
-          AND timestamp >= :startMs
-          AND timestamp < :endMs
-    """)
-    suspend fun getVolumeFromSupersets(startMs: Long, endMs: Long): Float
 
     // Get distinct superset groups in a date range (for analytics)
     @Query("""

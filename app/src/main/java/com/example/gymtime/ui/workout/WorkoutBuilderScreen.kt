@@ -1,11 +1,14 @@
 package com.example.gymtime.ui.workout
 
-import androidx.compose.foundation.BorderStroke
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,29 +20,21 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -51,26 +46,35 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.navigation.navigateBackOrHome
 import com.example.gymtime.navigation.navigateHomeAndClearStack
+import com.example.gymtime.navigation.navigateResumed
 import com.example.gymtime.navigation.navigateToWorkoutExercise
-import com.example.gymtime.ui.components.BackNavigationIcon
-import com.example.gymtime.ui.components.HomeNavigationAction
+import com.example.gymtime.ui.components.IronLogCard
+import com.example.gymtime.ui.components.IronLogDivider
+import com.example.gymtime.ui.components.IronLogEmptyState
+import com.example.gymtime.ui.components.IronLogPrimaryButton
+import com.example.gymtime.ui.components.IronLogSecondaryButton
+import com.example.gymtime.ui.components.IronLogSectionHeader
 import com.example.gymtime.ui.components.rememberGuardedNavigationActions
-import com.example.gymtime.ui.theme.LocalAppColors
-import com.example.gymtime.ui.theme.LocalLoggerActionColors
-import com.example.gymtime.ui.theme.LocalLoggerPreviewThemeActive
+import com.example.gymtime.ui.theme.IronLogRadius
+import com.example.gymtime.ui.theme.IronLogSpace
+import com.example.gymtime.ui.theme.IronLogType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,10 +82,7 @@ fun WorkoutBuilderScreen(
     navController: NavController,
     viewModel: WorkoutBuilderViewModel = hiltViewModel()
 ) {
-    val previewActive = LocalLoggerPreviewThemeActive.current
-    val action = LocalLoggerActionColors.current
-    val actionFill = if (previewActive) action.fill else MaterialTheme.colorScheme.primary
-    val actionForeground = if (previewActive) action.onFill else Color.Black
+    val scheme = MaterialTheme.colorScheme
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedMuscle by viewModel.selectedMuscle.collectAsStateWithLifecycle()
     val selectedIds by viewModel.selectedExerciseIds.collectAsStateWithLifecycle()
@@ -91,30 +92,38 @@ fun WorkoutBuilderScreen(
     val isStarting by viewModel.isStarting.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+
     val navigationActions = rememberGuardedNavigationActions(
-        hasUnsavedChanges = selectedIds.isNotEmpty(),
+        hasUnsavedChanges = selectedIds.isNotEmpty() && !isStarting,
         onBack = navController::navigateBackOrHome,
         onHome = navController::navigateHomeAndClearStack,
         dialogTitle = "Discard workout plan?",
         dialogMessage = "The exercises selected for this one-time workout will be lost."
     )
-    val builderBackStackEntry = remember(navController) {
-        navController.getBackStackEntry(Screen.WorkoutBuilder.route)
-    }
+    BackHandler(enabled = isStarting) { /* Wait for workout creation to finish. */ }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val builderBackStackEntry = (lifecycleOwner as? NavBackStackEntry)
+        ?: remember(navController) { navController.getBackStackEntry(Screen.WorkoutBuilder.route) }
     val createdExerciseId by builderBackStackEntry.savedStateHandle
         .getStateFlow<Long?>(Screen.ExerciseForm.RESULT_CREATED_EXERCISE_ID, null)
         .collectAsStateWithLifecycle()
 
     LaunchedEffect(createdExerciseId) {
         createdExerciseId?.let { exerciseId ->
-            viewModel.addExercise(exerciseId)
             builderBackStackEntry.savedStateHandle[Screen.ExerciseForm.RESULT_CREATED_EXERCISE_ID] = null
+            viewModel.addExercise(exerciseId)
         }
     }
 
-    LaunchedEffect(Unit) {
-        viewModel.workoutStarted.collect { start ->
-            navController.navigateToWorkoutExercise(start.firstExerciseId)
+    val latestOpenWorkout by rememberUpdatedState<(Long) -> Unit> { navController.navigateToWorkoutExercise(it) }
+    LaunchedEffect(viewModel, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.workoutStarted.collect { start ->
+                runCatching { latestOpenWorkout(start.firstExerciseId) }
+                    .onSuccess { viewModel.onWorkoutOpened() }
+                    .onFailure { viewModel.onWorkoutNavigationFailed() }
+            }
         }
     }
 
@@ -126,105 +135,124 @@ fun WorkoutBuilderScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = scheme.background,
+        contentColor = scheme.onBackground,
         topBar = {
             TopAppBar(
                 title = {
                     Column {
                         Text(
-                            "Plan a Workout",
-                            fontWeight = FontWeight.Bold,
-                            style = if (previewActive) MaterialTheme.typography.titleLarge else LocalTextStyle.current
+                            text = "Plan a Workout",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
                         )
                         Text(
-                            "One-time plan · not saved as a routine",
+                            text = "One-time plan · not saved as a routine",
                             style = MaterialTheme.typography.bodySmall,
-                            color = LocalAppColors.current.textSecondary
+                            color = scheme.onSurfaceVariant
                         )
                     }
                 },
                 navigationIcon = {
-                    BackNavigationIcon(navigationActions.back)
+                    IconButton(
+                        onClick = navigationActions.back,
+                        enabled = !isStarting,
+                        modifier = Modifier.size(IronLogSpace.TouchTargetMin)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = if (!isStarting) scheme.onSurface else scheme.onSurfaceVariant.copy(alpha = 0.45f)
+                        )
+                    }
                 },
                 actions = {
-                    HomeNavigationAction(navigationActions.home)
+                    IconButton(
+                        onClick = navigationActions.home,
+                        enabled = !isStarting,
+                        modifier = Modifier.size(IronLogSpace.TouchTargetMin)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Home,
+                            contentDescription = "Home",
+                            tint = if (!isStarting) scheme.primary else scheme.onSurfaceVariant.copy(alpha = 0.45f)
+                        )
+                    }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                windowInsets = WindowInsets(0, 0, 0, 0),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = scheme.background)
             )
         },
         bottomBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = if (previewActive) MaterialTheme.colorScheme.surfaceContainerLow else LocalAppColors.current.surfaceCards,
-                shadowElevation = if (previewActive) 1.dp else 12.dp
+                color = scheme.surfaceContainerLow,
+                contentColor = scheme.onSurface,
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp
             ) {
-                Button(
-                    onClick = viewModel::startWorkout,
-                    enabled = selectedIds.isNotEmpty() && !isStarting,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .then(if (previewActive) Modifier.heightIn(min = 56.dp) else Modifier.height(56.dp)),
-                    shape = RoundedCornerShape(if (previewActive) 18.dp else 12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = actionFill,
-                        contentColor = actionForeground
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    IronLogDivider(insetStart = 0.dp)
+                    IronLogPrimaryButton(
+                        text = when {
+                            isStarting -> "Starting…"
+                            selectedIds.isEmpty() -> "Choose Exercises"
+                            else -> "Start Workout · ${selectedIds.size} ${if (selectedIds.size == 1) "exercise" else "exercises"}"
+                        },
+                        onClick = viewModel::startWorkout,
+                        enabled = selectedIds.isNotEmpty() && !isStarting,
+                        loading = isStarting,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                horizontal = IronLogSpace.ScreenHorizontal,
+                                vertical = IronLogSpace.ItemGap
+                            )
                     )
-                ) {
-                    if (isStarting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(22.dp),
-                            strokeWidth = 2.dp,
-                            color = if (previewActive) LocalContentColor.current else actionForeground
-                        )
-                    } else {
-                        Text(
-                            if (selectedIds.isEmpty()) "Choose Exercises" else "Start Workout · ${selectedIds.size} exercises",
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
                 }
             }
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = Color.Transparent
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp)
+                .consumeWindowInsets(paddingValues)
+                .padding(horizontal = IronLogSpace.ScreenHorizontal)
         ) {
-            Text(
-                "YOUR PLAN",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
+            IronLogSectionHeader(
+                title = "Your plan",
+                modifier = Modifier.padding(top = IronLogSpace.CompactGap)
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(IronLogSpace.CompactGap))
 
             if (selectedExercises.isEmpty()) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(if (previewActive) Modifier.heightIn(min = 76.dp) else Modifier.height(76.dp)),
-                    shape = RoundedCornerShape(if (previewActive) 20.dp else 12.dp),
-                    color = LocalAppColors.current.surfaceCards,
-                    border = BorderStroke(1.dp, if (previewActive) MaterialTheme.colorScheme.outlineVariant else LocalAppColors.current.textTertiary.copy(alpha = 0.25f)),
-                    shadowElevation = if (previewActive) 1.dp else 0.dp
+                IronLogCard(
+                    showBorder = true,
+                    shape = IronLogRadius.CardShape,
+                    contentPadding = PaddingValues(IronLogSpace.ItemGap),
+                    modifier = Modifier.heightIn(min = 72.dp)
                 ) {
-                    Box(modifier = if (previewActive) Modifier.padding(12.dp) else Modifier, contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            "Tap exercises below to build your session.",
-                            color = LocalAppColors.current.textSecondary
+                            text = "Tap exercises below to build your session.",
+                            color = scheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium
                         )
                     }
                 }
             } else {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
                     itemsIndexed(selectedExercises, key = { _, exercise -> exercise.id }) { index, exercise ->
                         SelectedExerciseCard(
                             exercise = exercise,
                             position = index + 1,
+                            enabled = !isStarting,
                             canMoveBack = index > 0,
                             canMoveForward = index < selectedExercises.lastIndex,
                             onMoveBack = { viewModel.moveExercise(exercise.id, -1) },
@@ -235,7 +263,7 @@ fun WorkoutBuilderScreen(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(IronLogSpace.CardPadding))
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = viewModel::updateSearchQuery,
@@ -243,97 +271,81 @@ fun WorkoutBuilderScreen(
                 singleLine = true,
                 label = { Text("Search exercises") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                shape = if (previewActive) RoundedCornerShape(18.dp) else OutlinedTextFieldDefaults.shape
+                shape = IronLogRadius.ControlShape
             )
-            OutlinedButton(
+            Spacer(Modifier.height(IronLogSpace.CompactGap))
+            IronLogSecondaryButton(
+                text = "Create New Exercise",
                 onClick = {
-                    navController.navigate(
+                    navController.navigateResumed(
                         Screen.ExerciseForm.createRoute(
                             fromWorkoutBuilder = true,
                             initialName = searchQuery
                         )
                     )
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp)
-                    .then(if (previewActive) Modifier.heightIn(min = 48.dp) else Modifier),
-                shape = RoundedCornerShape(if (previewActive) 18.dp else 12.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Create New Exercise", fontWeight = FontWeight.Bold)
-            }
-            Spacer(Modifier.height(10.dp))
+                enabled = !isStarting,
+                outlined = true,
+                leadingIcon = Icons.Default.Add,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(IronLogSpace.CompactGap))
 
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
+                item(key = "all-muscles") {
                     FilterChip(
                         selected = selectedMuscle == null,
                         onClick = { viewModel.selectMuscle(null) },
                         label = { Text("All") },
-                        modifier = if (previewActive) Modifier.heightIn(min = 48.dp) else Modifier,
-                        shape = if (previewActive) RoundedCornerShape(16.dp) else FilterChipDefaults.shape
+                        modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin),
+                        shape = IronLogRadius.ControlShape
                     )
                 }
-                items(availableMuscles) { muscle ->
+                items(availableMuscles, key = { it }) { muscle ->
                     FilterChip(
                         selected = selectedMuscle == muscle,
-                        onClick = { viewModel.selectMuscle(muscle) },
+                        onClick = { viewModel.selectMuscle(if (selectedMuscle == muscle) null else muscle) },
                         label = { Text(muscle) },
-                        modifier = if (previewActive) Modifier.heightIn(min = 48.dp) else Modifier,
-                        shape = if (previewActive) RoundedCornerShape(16.dp) else FilterChipDefaults.shape
+                        modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin),
+                        shape = IronLogRadius.ControlShape
                     )
                 }
             }
 
-            Text(
-                "EXERCISES",
-                modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
-                style = MaterialTheme.typography.labelLarge,
-                color = LocalAppColors.current.textTertiary,
-                fontWeight = FontWeight.Bold
+            IronLogSectionHeader(
+                title = "Exercises",
+                modifier = Modifier.padding(top = IronLogSpace.CompactGap, bottom = IronLogSpace.CompactGap)
             )
 
             if (filteredExercises.isEmpty()) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(if (previewActive) Modifier.heightIn(min = 120.dp) else Modifier.height(120.dp)),
-                    shape = RoundedCornerShape(if (previewActive) 20.dp else 12.dp),
-                    color = LocalAppColors.current.surfaceCards,
-                    border = BorderStroke(1.dp, if (previewActive) MaterialTheme.colorScheme.outlineVariant else LocalAppColors.current.textTertiary.copy(alpha = 0.25f)),
-                    shadowElevation = if (previewActive) 1.dp else 0.dp
+                IronLogCard(
+                    showBorder = true,
+                    shape = IronLogRadius.CardShape,
+                    contentPadding = PaddingValues(0.dp)
                 ) {
-                    Box(
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (searchQuery.isNotBlank() || selectedMuscle != null) {
-                                "No exercises match this filter. Clear it or try a different search."
-                            } else {
-                                "No exercises available yet. Create one above to add it to this workout."
-                            },
-                            color = LocalAppColors.current.textSecondary,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-                    }
+                    IronLogEmptyState(
+                        title = "No matching exercises",
+                        body = if (searchQuery.isNotBlank() || selectedMuscle != null) {
+                            "Clear your search or muscle filter to see all exercises."
+                        } else {
+                            "Create an exercise above to add it to this workout."
+                        }
+                    )
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap),
+                    contentPadding = PaddingValues(bottom = IronLogSpace.ItemGap)
                 ) {
                     items(filteredExercises, key = { it.id }) { exercise ->
-                        val isSelected = exercise.id in selectedIds
                         ExercisePickerRow(
                             exercise = exercise,
-                            isSelected = isSelected,
+                            isSelected = exercise.id in selectedIds,
+                            enabled = !isStarting,
                             onClick = { viewModel.toggleExercise(exercise.id) }
                         )
                     }
-                    item { Spacer(Modifier.height(12.dp)) }
                 }
             }
         }
@@ -344,47 +356,67 @@ fun WorkoutBuilderScreen(
 private fun SelectedExerciseCard(
     exercise: Exercise,
     position: Int,
+    enabled: Boolean,
     canMoveBack: Boolean,
     canMoveForward: Boolean,
     onMoveBack: () -> Unit,
     onMoveForward: () -> Unit,
     onRemove: () -> Unit
 ) {
-    val previewActive = LocalLoggerPreviewThemeActive.current
-    Surface(
-        modifier = Modifier.width(190.dp),
-        shape = RoundedCornerShape(if (previewActive) 18.dp else 12.dp),
-        color = if (previewActive) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = if (previewActive) 0.4f else 0.65f)),
-        shadowElevation = if (previewActive) 1.dp else 0.dp
+    val scheme = MaterialTheme.colorScheme
+    IronLogCard(
+        modifier = Modifier.width(204.dp),
+        highlighted = true,
+        showBorder = true,
+        shape = IronLogRadius.CardShape,
+        contentPadding = PaddingValues(horizontal = IronLogSpace.ItemGap, vertical = IronLogSpace.CompactGap),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        Column(modifier = Modifier.padding(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "$position",
-                    modifier = Modifier.padding(end = 8.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "$position",
+                modifier = Modifier.padding(end = IronLogSpace.CompactGap),
+                style = IronLogType.tabular(MaterialTheme.typography.labelLarge),
+                color = scheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = exercise.name,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            IconButton(
+                onClick = onRemove,
+                enabled = enabled,
+                modifier = Modifier.size(IronLogSpace.TouchTargetMin)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Remove ${exercise.name}",
+                    modifier = Modifier.size(18.dp)
                 )
-                Text(
-                    exercise.name,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = LocalAppColors.current.textPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-                IconButton(onClick = onRemove, modifier = Modifier.size(if (previewActive) 48.dp else 30.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Remove ${exercise.name}", modifier = Modifier.size(18.dp))
-                }
             }
-            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                IconButton(onClick = onMoveBack, enabled = canMoveBack, modifier = Modifier.size(if (previewActive) 48.dp else 32.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Move earlier")
-                }
-                IconButton(onClick = onMoveForward, enabled = canMoveForward, modifier = Modifier.size(if (previewActive) 48.dp else 32.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Move later")
-                }
+        }
+        Row(
+            horizontalArrangement = Arrangement.End,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            IconButton(
+                onClick = onMoveBack,
+                enabled = enabled && canMoveBack,
+                modifier = Modifier.size(IronLogSpace.TouchTargetMin)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Move earlier")
+            }
+            IconButton(
+                onClick = onMoveForward,
+                enabled = enabled && canMoveForward,
+                modifier = Modifier.size(IronLogSpace.TouchTargetMin)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Move later")
             }
         }
     }
@@ -394,44 +426,41 @@ private fun SelectedExerciseCard(
 private fun ExercisePickerRow(
     exercise: Exercise,
     isSelected: Boolean,
+    enabled: Boolean,
     onClick: () -> Unit
 ) {
-    val previewActive = LocalLoggerPreviewThemeActive.current
-    Surface(
+    val scheme = MaterialTheme.colorScheme
+    IronLogCard(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().then(if (previewActive) Modifier.heightIn(min = 64.dp) else Modifier),
-        shape = RoundedCornerShape(if (previewActive) 18.dp else 12.dp),
-        color = if (previewActive && isSelected) {
-            MaterialTheme.colorScheme.surfaceContainerHigh
-        } else if (isSelected) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-        } else {
-            LocalAppColors.current.surfaceCards
-        },
-        border = BorderStroke(
-            1.dp,
-            if (isSelected) MaterialTheme.colorScheme.primary else if (previewActive) MaterialTheme.colorScheme.outlineVariant else Color.Transparent
-        ),
-        shadowElevation = if (previewActive) 1.dp else 0.dp
+        enabled = enabled,
+        highlighted = isSelected,
+        showBorder = true,
+        shape = IronLogRadius.CardShape,
+        contentPadding = PaddingValues(horizontal = IronLogSpace.CardPadding, vertical = IronLogSpace.RowVertical),
+        modifier = Modifier.heightIn(min = 64.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(exercise.name, color = LocalAppColors.current.textPrimary, fontWeight = FontWeight.Bold)
                 Text(
-                    exercise.targetMuscle,
+                    text = exercise.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = exercise.targetMuscle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = LocalAppColors.current.textSecondary
+                    color = scheme.onSurfaceVariant
                 )
             }
             Icon(
-                if (isSelected) Icons.Default.Check else Icons.Default.Add,
+                imageVector = if (isSelected) Icons.Default.Check else Icons.Default.Add,
                 contentDescription = if (isSelected) "Selected" else "Add ${exercise.name}",
-                tint = MaterialTheme.colorScheme.primary
+                tint = scheme.primary
             )
         }
     }

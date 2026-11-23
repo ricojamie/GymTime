@@ -64,4 +64,21 @@ class LinearRegressionTest {
             assertEquals(expected, trend[i], epsilon)
         }
     }
+
+    @Test
+    fun `non-finite inputs return null from fit and empty from trendValues`() {
+        assertNull(LinearRegression.fit(listOf(10f, Float.NaN, 30f)))
+        assertNull(LinearRegression.fit(listOf(10f, Float.POSITIVE_INFINITY, 30f)))
+        assertNull(LinearRegression.fit(listOf(10f, Float.NEGATIVE_INFINITY)))
+        assertTrue(LinearRegression.trendValues(listOf(10f, Float.NaN, 30f)).isEmpty())
+        assertTrue(LinearRegression.trendValues(listOf(10f, Float.POSITIVE_INFINITY)).isEmpty())
+    }
+
+    @Test
+    fun `large constant offset preserves centered OLS precision`() {
+        val values = listOf(1_000_000f, 1_000_002f, 1_000_004f, 1_000_006f)
+        val line = LinearRegression.fit(values)!!
+        assertEquals(2f, line.slope, 0.01f)
+        assertEquals(1_000_000f, line.intercept, 0.5f)
+    }
 }

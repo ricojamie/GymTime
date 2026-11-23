@@ -1,753 +1,92 @@
 package com.example.gymtime.ui.history
 
-import android.content.Intent
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.widget.Toast
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Replay
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.gymtime.data.RoutineRepository
 import com.example.gymtime.data.db.entity.Routine
 import com.example.gymtime.data.db.entity.RoutineDay
-import com.example.gymtime.data.db.entity.Set
-import com.example.gymtime.data.db.entity.WorkoutWithMuscles
-import com.example.gymtime.data.db.dao.SetWithExerciseInfo
-import com.example.gymtime.navigation.Screen
-import com.example.gymtime.navigation.navigateToWorkoutExercise
-import com.example.gymtime.navigation.navigateToWorkoutOverview
-import com.example.gymtime.ui.components.ExerciseIcons
-import com.example.gymtime.ui.components.GlowCard
-import com.example.gymtime.ui.theme.*
+import com.example.gymtime.ui.components.IronLogDivider
 import com.example.gymtime.ui.history.preview.PreviewHistoryScreen
-import com.example.gymtime.util.ShareImagePalette
-import java.text.SimpleDateFormat
-import java.util.*
+import com.example.gymtime.ui.theme.IronLogRadius
+import com.example.gymtime.ui.theme.IronLogSpace
+import com.example.gymtime.ui.theme.LocalLoggerActionColors
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
     navController: NavController,
     viewModel: HistoryViewModel = hiltViewModel()
 ) {
-    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
-    if (newUiEnabled) {
-        LoggerPreviewTheme { PreviewHistoryScreen(navController, viewModel) }
-    } else {
-        LegacyHistoryScreen(navController, viewModel)
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun LegacyHistoryScreen(navController: NavController, viewModel: HistoryViewModel) {
-    val workouts by viewModel.allWorkouts.collectAsStateWithLifecycle()
-    val selectedWorkout by viewModel.selectedWorkout.collectAsStateWithLifecycle()
-    val selectedWorkoutDetails by viewModel.selectedWorkoutDetails.collectAsStateWithLifecycle()
-    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-    val accentColor = MaterialTheme.colorScheme.primary
-    val appColors = LocalAppColors.current
-    val context = LocalContext.current
-    val sharePalette = remember(accentColor, appColors) {
-        ShareImagePalette(
-            background = appColors.backgroundCanvas.toArgb(),
-            card = appColors.surfaceCards.toArgb(),
-            accent = accentColor.toArgb(),
-            accentSoft = accentColor.copy(alpha = 0.18f).toArgb(),
-            textPrimary = appColors.textPrimary.toArgb(),
-            textMuted = appColors.textTertiary.toArgb(),
-            onAccent = Color.Black.toArgb()
-        )
-    }
-
-    // Handle resume workout navigation
-    LaunchedEffect(Unit) {
-        viewModel.resumeWorkoutEvent.collect { workoutId ->
-            navController.navigateToWorkoutOverview()
-        }
-    }
-
-    // Handle repeat workout navigation (fresh copy of a past workout)
-    LaunchedEffect(Unit) {
-        viewModel.repeatWorkoutEvent.collect { firstExerciseId ->
-            navController.navigateToWorkoutExercise(firstExerciseId)
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.userMessage.collect { message ->
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    // Workout being added to a routine via the picker dialog (null = dialog hidden)
-    var addToRoutineWorkoutId by remember { mutableStateOf<Long?>(null) }
-
-    // Launch system share sheet when the ViewModel emits a generated image.
-    LaunchedEffect(Unit) {
-        viewModel.shareEvent.collect { payload ->
-            val send = Intent(Intent.ACTION_SEND).apply {
-                type = "image/png"
-                putExtra(Intent.EXTRA_STREAM, payload.imageUri)
-                putExtra(Intent.EXTRA_TEXT, payload.text)
-                clipData = ClipData.newUri(context.contentResolver, "Workout summary", payload.imageUri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            context.startActivity(Intent.createChooser(send, "Share workout"))
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.copyEvent.collect { text ->
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(ClipData.newPlainText("Workout summary", text))
-            Toast.makeText(context, "Workout copied", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Workout History",
-                        color = LocalAppColors.current.textPrimary,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                )
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .background(LocalAppColors.current.backgroundCanvas)
-        ) {
-            if (isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = accentColor)
-                }
-            } else if (workouts.isEmpty()) {
-                EmptyHistoryState(navController)
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(top = 12.dp, start = 16.dp, end = 16.dp, bottom = 100.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(workouts) { workout ->
-                        WorkoutCard(
-                            workout = workout,
-                            onTap = { viewModel.selectWorkout(workout) },
-                            onDelete = { viewModel.deleteWorkout(workout.workout.id) }
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    // Bottom sheet for workout details
-    if (selectedWorkout != null && selectedWorkoutDetails != null) {
-        ModalBottomSheet(
-            onDismissRequest = { viewModel.clearSelection() },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            sheetGesturesEnabled = false,
-            dragHandle = null,
-            containerColor = LocalAppColors.current.surfaceCards,
-            scrimColor = Color.Black.copy(alpha = 0.32f)
-        ) {
-            WorkoutDetailsSheet(
-                workout = selectedWorkout!!,
-                sets = selectedWorkoutDetails!!,
-                onDismiss = { viewModel.clearSelection() },
-                onResumeWorkout = { viewModel.resumeWorkout(selectedWorkout!!.workout.id) },
-                onCopyWorkout = { viewModel.copyWorkout(selectedWorkout!!.workout.id) },
-                onShareWorkout = { viewModel.shareWorkout(selectedWorkout!!.workout.id, sharePalette) },
-                onRepeatWorkout = { viewModel.repeatWorkout(selectedWorkout!!.workout.id) },
-                onAddToRoutine = { addToRoutineWorkoutId = selectedWorkout!!.workout.id }
-            )
-        }
-    }
-
-    addToRoutineWorkoutId?.let { workoutId ->
-        val routines by viewModel.allRoutines.collectAsStateWithLifecycle()
-        AddToRoutineDialog(
-            routines = routines,
-            loadDays = { routineId -> viewModel.getDaysForRoutine(routineId) },
-            onConfirm = { routineId, replaceDayId ->
-                viewModel.addWorkoutToRoutine(workoutId, routineId, replaceDayId)
-                addToRoutineWorkoutId = null
-            },
-            onDismiss = { addToRoutineWorkoutId = null }
-        )
-    }
+    PreviewHistoryScreen(navController, viewModel)
 }
 
 @Composable
-fun WorkoutCard(
-    workout: WorkoutWithMuscles,
-    onTap: () -> Unit,
-    onDelete: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var showDeleteDialog by remember { mutableStateOf(false) }
-
-    GlowCard(
-        modifier = modifier.fillMaxWidth(),
-        onClick = onTap,
-        onLongClick = { showDeleteDialog = true }
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Muscle groups
-            if (workout.muscleGroups.isNotEmpty()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    workout.muscleGroups.take(3).forEach { muscle ->
-                        MuscleGroupTag(muscle)
-                    }
-                    if (workout.muscleGroups.size > 3) {
-                        Text(
-                            "+${workout.muscleGroups.size - 3}",
-                            color = LocalAppColors.current.textTertiary,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-            }
-
-            // Date and time
-            Text(
-                formatWorkoutDateTime(workout.workout.startTime),
-                color = LocalAppColors.current.textPrimary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
-            )
-
-            // Volume and Sets row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Volume
-                val volume = workout.totalVolume?.toInt() ?: 0
-                if (volume > 0) {
-                    Text(
-                        text = "${formatVolume(volume)} lbs",
-                        color = LocalAppColors.current.textSecondary,
-                        fontSize = 12.sp
-                    )
-                }
-
-                // Working sets
-                val setCount = workout.workingSetCount ?: 0
-                if (setCount > 0) {
-                    Text(
-                        text = "$setCount sets",
-                        color = LocalAppColors.current.textSecondary,
-                        fontSize = 12.sp
-                    )
-                }
-            }
-
-            // Duration and rating row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Duration if available
-                if (workout.workout.endTime != null) {
-                    val durationMinutes = ((workout.workout.endTime!!.time - workout.workout.startTime.time) / 1000 / 60).toInt()
-                    Text(
-                        "$durationMinutes min",
-                        color = LocalAppColors.current.textTertiary,
-                        fontSize = 12.sp
-                    )
-                } else {
-                    Spacer(modifier = Modifier.width(1.dp))
-                }
-
-                // Flame rating if available
-                workout.workout.rating?.let { rating ->
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        repeat(rating) {
-                            Text(
-                                text = "\uD83D\uDD25",
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Delete confirmation dialog
-    if (showDeleteDialog) {
-        DeleteWorkoutDialog(
-            onConfirm = {
-                onDelete()
-                showDeleteDialog = false
-            },
-            onDismiss = { showDeleteDialog = false }
-        )
-    }
-}
-
-@Composable
-fun MuscleGroupTag(muscleGroup: String) {
-    val themeColor = MaterialTheme.colorScheme.primary
-
-    Surface(
-        modifier = Modifier
-            .height(24.dp)
-            .padding(vertical = 2.dp),
-        shape = RoundedCornerShape(4.dp),
-        color = themeColor.copy(alpha = 0.15f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, themeColor)
-    ) {
-        Box(
-            modifier = Modifier
-                .padding(horizontal = 6.dp, vertical = 2.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                muscleGroup.uppercase(),
-                color = themeColor,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.5.sp
-            )
-        }
-    }
-}
-
-@Composable
-fun WorkoutDetailsSheet(
-    workout: WorkoutWithMuscles,
-    sets: List<SetWithExerciseInfo>,
-    onDismiss: () -> Unit,
-    onResumeWorkout: () -> Unit = {},
-    onCopyWorkout: () -> Unit = {},
-    onShareWorkout: () -> Unit = {},
-    onRepeatWorkout: () -> Unit = {},
-    onAddToRoutine: () -> Unit = {},
-    modifier: Modifier = Modifier
-) {
-    val accentColor = MaterialTheme.colorScheme.primary
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth().fillMaxHeight(0.93f)
-            .background(LocalAppColors.current.surfaceCards)
-            .padding(bottom = 32.dp)
-    ) {
-        // Header
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    formatWorkoutDateTime(workout.workout.startTime),
-                    modifier = Modifier.weight(1f),
-                    color = LocalAppColors.current.textPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                // Flame rating if available
-                workout.workout.rating?.let { rating ->
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        repeat(rating) {
-                            Text(
-                                text = "\uD83D\uDD25",
-                                fontSize = 16.sp
-                            )
-                        }
-                    }
-                }
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Filled.Close, "Close workout details")
-                }
-            }
-
-            if (workout.workout.endTime != null) {
-                val durationMinutes = ((workout.workout.endTime!!.time - workout.workout.startTime.time) / 1000 / 60).toInt()
-                val timeRange = "${SimpleDateFormat("h:mm a", Locale.getDefault()).format(workout.workout.startTime)} - ${SimpleDateFormat("h:mm a", Locale.getDefault()).format(workout.workout.endTime!!)}"
-                Text(
-                    timeRange,
-                    color = LocalAppColors.current.textTertiary,
-                    fontSize = 12.sp
-                )
-                Text(
-                    "$durationMinutes minutes",
-                    color = LocalAppColors.current.textTertiary,
-                    fontSize = 12.sp
-                )
-            }
-
-            // Resume + Share row
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = onResumeWorkout,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = accentColor
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        "Resume This Workout",
-                        color = Color.Black,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                OutlinedIconButton(
-                    onClick = onCopyWorkout,
-                    modifier = Modifier.size(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, accentColor)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.ContentCopy,
-                        contentDescription = "Copy workout text",
-                        tint = accentColor
-                    )
-                }
-                OutlinedIconButton(
-                    onClick = onShareWorkout,
-                    modifier = Modifier.size(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, accentColor)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Share,
-                        contentDescription = "Share workout",
-                        tint = accentColor
-                    )
-                }
-            }
-
-            // Repeat + Add to Routine row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = onRepeatWorkout,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, accentColor)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Replay,
-                        contentDescription = null,
-                        tint = accentColor,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Repeat", color = accentColor, fontWeight = FontWeight.SemiBold)
-                }
-                OutlinedButton(
-                    onClick = onAddToRoutine,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, accentColor)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
-                        contentDescription = null,
-                        tint = accentColor,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Add to Routine", color = accentColor, fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-
-        HorizontalDivider(
-            color = LocalAppColors.current.textTertiary.copy(alpha = 0.2f),
-            thickness = 1.dp
-        )
-
-        // Exercises list
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Group sets by exercise
-            val groupedByExercise = sets.groupBy { it.exerciseName }
-
-            items(groupedByExercise.size) { index ->
-                val (exerciseName, exerciseSets) = groupedByExercise.entries.toList()[index]
-                ExerciseSetGroup(exerciseName, exerciseSets)
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-        }
-    }
-}
-
-@Composable
-fun ExerciseSetGroup(
-    exerciseName: String,
-    sets: List<SetWithExerciseInfo>,
-    modifier: Modifier = Modifier
-) {
-    val muscleGroup = sets.firstOrNull()?.targetMuscle ?: "Other"
-    val accentColor = MaterialTheme.colorScheme.primary
-
-    // Find the best (heaviest) working set for this exercise in this workout
-    val bestSet = sets
-        .filter { !it.set.isWarmup && it.set.weight != null }
-        .maxByOrNull { it.set.weight ?: 0f }
-
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF0D0D0D)
-        ),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Header with icon
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Muscle group icon
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(
-                            accentColor.copy(alpha = 0.15f),
-                            RoundedCornerShape(8.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = ExerciseIcons.getIconForMuscle(muscleGroup),
-                        contentDescription = muscleGroup,
-                        tint = accentColor,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        exerciseName,
-                        color = LocalAppColors.current.textPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        muscleGroup,
-                        color = LocalAppColors.current.textTertiary,
-                        fontSize = 11.sp
-                    )
-                }
-
-                // Set count badge
-                Text(
-                    text = "${sets.count { !it.set.isWarmup }} sets",
-                    color = LocalAppColors.current.textTertiary,
-                    fontSize = 11.sp
-                )
-            }
-
-            // Sets list
-            sets.forEachIndexed { index, setInfo ->
-                val isBestSet = setInfo == bestSet
-                SetRow(
-                    set = setInfo.set,
-                    setNumber = index + 1,
-                    isBestSet = isBestSet
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun SetRow(
-    set: Set,
-    setNumber: Int = 0,
-    isBestSet: Boolean = false,
-    modifier: Modifier = Modifier
-) {
-    val accentColor = MaterialTheme.colorScheme.primary
-    val setText = buildString {
-        if (set.weight != null) append("${set.weight.toInt()} lbs")
-        if (set.reps != null) {
-            if (set.weight != null) append(" × ")
-            append("${set.reps} reps")
-        }
-    }
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(
-                if (isBestSet && !set.isWarmup) {
-                    Modifier
-                        .background(
-                            accentColor.copy(alpha = 0.1f),
-                            RoundedCornerShape(6.dp)
-                        )
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                } else {
-                    Modifier.padding(start = 8.dp, top = 2.dp, bottom = 2.dp)
-                }
-            ),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "$setNumber.",
-                color = LocalAppColors.current.textTertiary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = setText,
-                color = if (set.isWarmup) LocalAppColors.current.textTertiary else if (isBestSet) accentColor else LocalAppColors.current.textSecondary,
-                fontSize = 12.sp,
-                fontWeight = if (isBestSet && !set.isWarmup) FontWeight.SemiBold else FontWeight.Normal
-            )
-        }
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (isBestSet && !set.isWarmup) {
-                Text(
-                    text = "BEST",
-                    color = Color.Black,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier
-                        .background(accentColor, RoundedCornerShape(3.dp))
-                        .padding(horizontal = 4.dp, vertical = 1.dp)
-                )
-            }
-            if (set.isWarmup) {
-                Text(
-                    "WU",
-                    color = accentColor,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .background(
-                            accentColor.copy(alpha = 0.2f),
-                            RoundedCornerShape(3.dp)
-                        )
-                        .padding(horizontal = 4.dp, vertical = 1.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun DeleteWorkoutDialog(
+internal fun DeleteWorkoutDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val scheme = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Delete Workout?") },
-        text = { Text("This workout will be permanently removed.") },
+        shape = IronLogRadius.CardShape,
+        containerColor = scheme.surface,
+        titleContentColor = scheme.onSurface,
+        textContentColor = scheme.onSurfaceVariant,
+        title = {
+            Text(
+                text = "Delete Workout?",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Text(
+                text = "This workout will be permanently removed.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        },
         confirmButton = {
             Button(
                 onClick = onConfirm,
+                shape = IronLogRadius.ControlShape,
+                modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = androidx.compose.material3.MaterialTheme.colorScheme.error
+                    containerColor = scheme.error,
+                    contentColor = scheme.onError
                 )
             ) {
-                Text("Delete")
+                Text("Delete", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
+            ) {
                 Text("Cancel")
             }
         }
@@ -755,14 +94,14 @@ fun DeleteWorkoutDialog(
 }
 
 @Composable
-fun AddToRoutineDialog(
+internal fun AddToRoutineDialog(
     routines: List<Routine>,
     loadDays: suspend (Long) -> List<RoutineDay>,
     onConfirm: (routineId: Long, replaceDayId: Long?) -> Unit,
-    onDismiss: () -> Unit,
-    onAccentColor: Color = Color.Black
+    onDismiss: () -> Unit
 ) {
-    val accentColor = MaterialTheme.colorScheme.primary
+    val scheme = MaterialTheme.colorScheme
+    val actionColors = LocalLoggerActionColors.current
     var pickedRoutine by remember { mutableStateOf<Routine?>(null) }
     var days by remember { mutableStateOf<List<RoutineDay>?>(null) }
     var dayToReplace by remember { mutableStateOf<RoutineDay?>(null) }
@@ -772,77 +111,94 @@ fun AddToRoutineDialog(
         days = pickedRoutine?.let { loadDays(it.id) }
     }
 
-    // Step 3: confirm replacing an existing day
     dayToReplace?.let { day ->
         AlertDialog(
             onDismissRequest = { dayToReplace = null },
+            shape = IronLogRadius.CardShape,
+            containerColor = scheme.surface,
+            titleContentColor = scheme.onSurface,
+            textContentColor = scheme.onSurfaceVariant,
             title = {
                 Text(
-                    "Replace '${day.name}'?",
-                    color = LocalAppColors.current.textPrimary,
+                    text = "Replace '${day.name}'?",
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Text(
-                    "All exercises in this day will be replaced with the ones from this workout.",
-                    color = LocalAppColors.current.textSecondary
+                    text = "All exercises in this day will be replaced with the ones from this workout.",
+                    style = MaterialTheme.typography.bodyMedium
                 )
             },
             confirmButton = {
                 Button(
                     onClick = { onConfirm(day.routineId, day.id) },
-                    colors = ButtonDefaults.buttonColors(containerColor = accentColor)
+                    shape = IronLogRadius.ControlShape,
+                    modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = actionColors.fill,
+                        contentColor = actionColors.onFill
+                    )
                 ) {
-                    Text("Replace", color = onAccentColor, fontWeight = FontWeight.Bold)
+                    Text("Replace", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { dayToReplace = null }) {
-                    Text("Cancel", color = LocalAppColors.current.textTertiary)
+                TextButton(
+                    onClick = { dayToReplace = null },
+                    modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
+                ) {
+                    Text("Cancel")
                 }
-            },
-            containerColor = LocalAppColors.current.surfaceCards
+            }
         )
         return
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = IronLogRadius.CardShape,
+        containerColor = scheme.surface,
+        titleContentColor = scheme.onSurface,
+        textContentColor = scheme.onSurfaceVariant,
         title = {
             Text(
                 text = pickedRoutine?.let { "Add to '${it.name}'" } ?: "Add to Routine",
-                color = LocalAppColors.current.textPrimary,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
         },
         text = {
             val routine = pickedRoutine
             if (routine == null) {
-                // Step 1: pick a routine
                 if (routines.isEmpty()) {
                     Text(
-                        "No routines yet. Create one from the Library tab first.",
-                        color = LocalAppColors.current.textSecondary
+                        text = "No routines yet. Create one from the Library tab first.",
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 } else {
                     LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
-                        items(routines) { r ->
-                            Text(
-                                text = r.name,
-                                color = LocalAppColors.current.textPrimary,
-                                fontSize = 15.sp,
+                        items(routines, key = { it.id }) { item ->
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { pickedRoutine = r }
-                                    .padding(vertical = 12.dp)
-                            )
-                            HorizontalDivider(color = LocalAppColors.current.textTertiary.copy(alpha = 0.15f))
+                                    .heightIn(min = IronLogSpace.TouchTargetMin)
+                                    .clickable { pickedRoutine = item }
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Text(
+                                    text = item.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = scheme.onSurface
+                                )
+                            }
+                            IronLogDivider(insetStart = 0.dp)
                         }
                     }
                 }
             } else {
-                // Step 2: add as new day, or replace an existing day
                 val loadedDays = days
                 if (loadedDays == null) {
                     Box(
@@ -851,45 +207,51 @@ fun AddToRoutineDialog(
                             .padding(vertical = 16.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(color = accentColor)
+                        CircularProgressIndicator(color = scheme.primary)
                     }
                 } else {
-                    val routineFull = loadedDays.size >= com.example.gymtime.data.RoutineRepository.MAX_DAYS_PER_ROUTINE
+                    val routineFull = loadedDays.size >= RoutineRepository.MAX_DAYS_PER_ROUTINE
                     LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
-                        item {
+                        item(key = "add-new-day") {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .heightIn(min = IronLogSpace.TouchTargetMin)
                                     .clickable(enabled = !routineFull) { onConfirm(routine.id, null) }
                                     .padding(vertical = 12.dp)
                             ) {
                                 Text(
                                     text = "Add as new day",
-                                    color = if (routineFull) LocalAppColors.current.textTertiary else accentColor,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (routineFull) scheme.onSurfaceVariant else scheme.primary
                                 )
                                 if (routineFull) {
                                     Text(
                                         text = "Routine is full — replace a day instead",
-                                        color = LocalAppColors.current.textTertiary,
-                                        fontSize = 12.sp
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = scheme.onSurfaceVariant
                                     )
                                 }
                             }
-                            HorizontalDivider(color = LocalAppColors.current.textTertiary.copy(alpha = 0.15f))
+                            IronLogDivider(insetStart = 0.dp)
                         }
-                        items(loadedDays) { day ->
-                            Text(
-                                text = "Replace: ${day.name}",
-                                color = LocalAppColors.current.textPrimary,
-                                fontSize = 15.sp,
+                        items(loadedDays, key = { it.id }) { day ->
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .heightIn(min = IronLogSpace.TouchTargetMin)
                                     .clickable { dayToReplace = day }
-                                    .padding(vertical = 12.dp)
-                            )
-                            HorizontalDivider(color = LocalAppColors.current.textTertiary.copy(alpha = 0.15f))
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Text(
+                                    text = "Replace: ${day.name}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = scheme.onSurface
+                                )
+                            }
+                            IronLogDivider(insetStart = 0.dp)
                         }
                     }
                 }
@@ -897,72 +259,14 @@ fun AddToRoutineDialog(
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = {
-                if (pickedRoutine != null) pickedRoutine = null else onDismiss()
-            }) {
-                Text(
-                    if (pickedRoutine != null) "Back" else "Cancel",
-                    color = LocalAppColors.current.textTertiary
-                )
-            }
-        },
-        containerColor = LocalAppColors.current.surfaceCards
-    )
-}
-
-@Composable
-fun EmptyHistoryState(navController: NavController) {
-    val accentColor = MaterialTheme.colorScheme.primary
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(LocalAppColors.current.backgroundCanvas),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier.padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(
-                "No Workouts Yet",
-                color = LocalAppColors.current.textPrimary,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Text(
-                "Start logging to see your workout history here.",
-                color = LocalAppColors.current.textTertiary,
-                fontSize = 14.sp,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-
-            Button(
-                onClick = { navController.navigate("exercise_selection") },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = accentColor
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
+            TextButton(
+                onClick = {
+                    if (pickedRoutine != null) pickedRoutine = null else onDismiss()
+                },
+                modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
             ) {
-                Text(
-                    "Start Your First Workout",
-                    color = Color.Black,
-                    fontWeight = FontWeight.Bold
-                )
+                Text(if (pickedRoutine != null) "Back" else "Cancel")
             }
         }
-    }
-}
-
-fun formatWorkoutDateTime(date: Date): String {
-    val dateFormat = SimpleDateFormat("EEEE, MMM d", Locale.getDefault())
-    val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
-    return "${dateFormat.format(date)} • ${timeFormat.format(date)}"
-}
-
-fun formatVolume(volume: Int): String {
-    return java.text.NumberFormat.getNumberInstance(Locale.US).format(volume)
+    )
 }

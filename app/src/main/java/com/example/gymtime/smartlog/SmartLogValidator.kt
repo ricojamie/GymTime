@@ -2,6 +2,9 @@ package com.example.gymtime.smartlog
 
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
+import com.example.gymtime.data.db.entity.isWarmupLibraryExercise
+import java.math.BigDecimal
+import java.math.RoundingMode
 import javax.inject.Inject
 
 class SmartLogValidator @Inject constructor() {
@@ -17,22 +20,34 @@ class SmartLogValidator @Inject constructor() {
             val prefix = if (parsed.sets.size == 1) "Set" else "Set ${index + 1}"
             validateFinitePositive(raw.weight, "$prefix weight", errors)
             validatePositive(raw.reps, "$prefix reps", errors)
-            validateFinitePositive(raw.rpe, "$prefix RPE", errors, allowZero = false)
-            if (raw.rpe != null && raw.rpe !in 1f..10f) errors += "$prefix RPE must be between 1 and 10."
+            if (raw.rpe != null && (!raw.rpe.isFinite() || raw.rpe !in 1f..10f)) {
+                errors += "$prefix RPE must be between 1 and 10."
+            }
             validatePositive(raw.durationSeconds, "$prefix duration", errors)
             validateFinitePositive(raw.distanceValue, "$prefix distance", errors)
             validateFinitePositive(raw.calories, "$prefix calories", errors)
 
-            val weight = raw.weight?.let {
+            val weight = raw.weight?.let { rawWeight ->
                 if (raw.weightUnit == WeightUnit.KILOGRAMS) {
                     notices += "Kilograms were converted to pounds."
-                    it * KG_TO_LB
-                } else it
+                    if (rawWeight.isFinite() && rawWeight > 0f) {
+                        val converted = convertKgToLb(rawWeight)
+                        if (!converted.isFinite()) {
+                            errors += "$prefix weight is too large."
+                        }
+                        converted
+                    } else {
+                        rawWeight
+                    }
+                } else {
+                    rawWeight
+                }
             }
             val normalized = raw.copy(
                 weight = weight,
                 weightUnit = weight?.let { WeightUnit.POUNDS },
                 distanceUnit = raw.distanceValue?.let { raw.distanceUnit ?: exercise.defaultDistanceUnit },
+                isWarmup = raw.isWarmup || exercise.isWarmupLibraryExercise,
                 note = raw.note?.trim()?.takeIf { it.isNotEmpty() }
             )
             validateShape(exercise.logType, normalized, prefix, errors)
@@ -44,6 +59,12 @@ class SmartLogValidator @Inject constructor() {
             draft = ValidatedSmartLogDraft(exercise, validated, notices.toList())
         )
     }
+
+    private fun convertKgToLb(kg: Float): Float =
+        BigDecimal.valueOf(kg.toDouble())
+            .multiply(KG_TO_LB_DECIMAL)
+            .setScale(2, RoundingMode.HALF_UP)
+            .toFloat()
 
     private fun validateShape(logType: LogType, set: SetDraft, prefix: String, errors: MutableList<String>) {
         fun require(value: Any?, field: String) {
@@ -105,5 +126,6 @@ class SmartLogValidator @Inject constructor() {
     companion object {
         const val MAX_QUEUED_SETS = 20
         const val KG_TO_LB = 2.20462f
+        private val KG_TO_LB_DECIMAL = BigDecimal("2.20462")
     }
 }

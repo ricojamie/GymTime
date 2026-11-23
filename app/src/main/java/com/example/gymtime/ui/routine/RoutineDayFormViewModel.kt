@@ -4,16 +4,23 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.RoutineRepository
-import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.entity.Exercise
-import com.example.gymtime.data.db.entity.RoutineDay
 import com.example.gymtime.data.db.entity.RoutineExercise
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 
@@ -28,32 +35,53 @@ private data class RoutineDayDraft(
     val notes: Map<Long, String> = emptyMap()
 ) : java.io.Serializable
 
+internal fun canMoveRoutineExerciseBlock(
+    index: Int,
+    delta: Int,
+    links: Set<Int>,
+    totalSize: Int
+): Boolean {
+    if (index !in 0 until totalSize || totalSize <= 1) return false
+    return when {
+        delta < 0 -> {
+            var blockStart = index
+            while (blockStart > 0 && (blockStart - 1) in links) blockStart--
+            blockStart > 0
+        }
+        delta > 0 -> {
+            var blockEnd = index
+            while (blockEnd < totalSize - 1 && blockEnd in links) blockEnd++
+            blockEnd < totalSize - 1
+        }
+        else -> false
+    }
+}
+
 @HiltViewModel
 class RoutineDayFormViewModel @Inject constructor(
     private val routineRepository: RoutineRepository,
     private val exerciseDao: ExerciseDao,
-    private val savedStateHandle: SavedStateHandle,
-    preferencesRepository: UserPreferencesRepository
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    // Retrieve routineId as Long (NavType.LongType)
     private val routineId: Long = savedStateHandle.get<Long>("routineId") ?: 0L
-    
-    // Retrieve dayId as String (NavType.StringType) -> convert to Long
     private val dayId: Long? = savedStateHandle.get<String>("dayId")?.toLongOrNull()
     private val restoredDraft = savedStateHandle.get<RoutineDayDraft>("dayDraft")
-    val newUiEnabled = preferencesRepository.newUiEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     private val _isLoading = MutableStateFlow(dayId != null && restoredDraft == null)
-    val isLoading = _isLoading.asStateFlow()
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
     private val _isSaving = MutableStateFlow(false)
-    val isSaving = _isSaving.asStateFlow()
+    val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
+
     private val _error = MutableStateFlow<String?>(null)
-    val error = _error.asStateFlow()
+    val error: StateFlow<String?> = _error.asStateFlow()
+
     private val _notes = MutableStateFlow(restoredDraft?.notes ?: emptyMap())
-    val notes = _notes.asStateFlow()
-    val pickerQuery = savedStateHandle.getStateFlow("pickerQuery", "")
-    val pickerMuscle = savedStateHandle.getStateFlow("pickerMuscle", "")
+    val notes: StateFlow<Map<Long, String>> = _notes.asStateFlow()
+
+    val pickerQuery: StateFlow<String> = savedStateHandle.getStateFlow("pickerQuery", "")
+    val pickerMuscle: StateFlow<String> = savedStateHandle.getStateFlow("pickerMuscle", "")
     fun updatePickerQuery(value: String) { savedStateHandle["pickerQuery"] = value }
     fun updatePickerMuscle(value: String) { savedStateHandle["pickerMuscle"] = value }
 
@@ -63,7 +91,6 @@ class RoutineDayFormViewModel @Inject constructor(
     private val _selectedExerciseIds = MutableStateFlow(restoredDraft?.exerciseOrder?.toSet() ?: emptySet())
     val selectedExerciseIds: StateFlow<Set<Long>> = _selectedExerciseIds.asStateFlow()
 
-    // Maintain exercise order
     private val _selectedExerciseOrder = MutableStateFlow(restoredDraft?.exerciseOrder ?: emptyList())
 
     private val _targetSets = MutableStateFlow(restoredDraft?.targetSets ?: emptyMap())
@@ -78,8 +105,6 @@ class RoutineDayFormViewModel @Inject constructor(
     private val _targetRestSeconds = MutableStateFlow(restoredDraft?.targetRestSeconds ?: emptyMap())
     val targetRestSeconds: StateFlow<Map<Long, String>> = _targetRestSeconds.asStateFlow()
 
-    // Track which exercise index is linked as a superset with the next one
-    // e.g., if set contains 0, index 0 and 1 are linked.
     private val _supersetLinks = MutableStateFlow(restoredDraft?.supersetLinks ?: emptySet())
     val supersetLinks: StateFlow<Set<Int>> = _supersetLinks.asStateFlow()
 
@@ -110,6 +135,10 @@ class RoutineDayFormViewModel @Inject constructor(
         savedStateHandle.get<RoutineDayDraft>("dayBaseline") ?: if (dayId == null) RoutineDayDraft() else null
     )
 
+    val canEdit: StateFlow<Boolean> = _baselineDraft
+        .map { it != null }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, dayId == null || restoredDraft != null)
+
     val hasUnsavedChanges: StateFlow<Boolean> = combine(
         currentDraft,
         _baselineDraft
@@ -121,7 +150,8 @@ class RoutineDayFormViewModel @Inject constructor(
         _selectedExerciseOrder,
         exerciseDao.getAllExercises()
     ) { orderedIds, allExercises ->
-        orderedIds.mapNotNull { id -> allExercises.find { it.id == id } }
+        val byId = allExercises.associateBy { it.id }
+        orderedIds.mapNotNull(byId::get)
     }
 
     val availableExercises: Flow<List<Exercise>> = exerciseDao.getAllExercises()
@@ -130,9 +160,12 @@ class RoutineDayFormViewModel @Inject constructor(
 
     val isSaveEnabled: StateFlow<Boolean> = combine(
         _dayName,
-        _selectedExerciseIds, _isLoading, _isSaving
-    ) { name, exercises, loading, saving ->
-        name.isNotBlank() && exercises.isNotEmpty() && !loading && !saving && _baselineDraft.value != null
+        _selectedExerciseIds,
+        _isLoading,
+        _isSaving,
+        _baselineDraft
+    ) { name, exercises, loading, saving, baseline ->
+        name.isNotBlank() && exercises.isNotEmpty() && !loading && !saving && baseline != null
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private val _saveSuccessEvent = Channel<Unit>(Channel.BUFFERED)
@@ -151,7 +184,9 @@ class RoutineDayFormViewModel @Inject constructor(
         }
     }
 
-    fun retryLoad() { if (dayId != null && !_isSaving.value) loadDay() }
+    fun retryLoad() {
+        if (dayId != null && !_isSaving.value) loadDay()
+    }
 
     private fun loadDay() {
         if (dayId == null) return
@@ -163,57 +198,66 @@ class RoutineDayFormViewModel @Inject constructor(
                     ?: throw IllegalStateException("This day no longer exists.")
                 require(loaded.day.routineId == routineId) { "This day no longer belongs to this routine." }
                 loaded.let {
-                        _dayName.value = it.day.name
-                        val exercises = it.exercises.sortedBy { it.routineExercise.orderIndex }
-                        _selectedExerciseIds.value = exercises.map { it.exercise.id }.toSet()
-                        _selectedExerciseOrder.value = exercises.map { it.exercise.id }
-                        _targetSets.value = exercises.associate { exercise ->
-                            exercise.exercise.id to exercise.routineExercise.targetSets.toString()
-                        }
-                        _targetRepMin.value = exercises.associate { exercise ->
-                            exercise.exercise.id to (exercise.routineExercise.targetRepsMin?.toString() ?: "")
-                        }
-                        _targetRepMax.value = exercises.associate { exercise ->
-                            exercise.exercise.id to (exercise.routineExercise.targetRepsMax?.toString() ?: "")
-                        }
-                        _targetRestSeconds.value = exercises.associate { exercise ->
-                            exercise.exercise.id to (exercise.routineExercise.targetRestSeconds?.toString() ?: "")
-                        }
-                        _notes.value = exercises.associate { exercise -> exercise.exercise.id to exercise.routineExercise.notes.orEmpty() }
-                        
-                        // Reconstruct superset links
-                        val links = mutableSetOf<Int>()
-                        exercises.forEachIndexed { index, exercise ->
-                            if (index < exercises.size - 1) {
-                                val currentGroup = exercise.routineExercise.supersetGroupId
-                                val nextGroup = exercises[index + 1].routineExercise.supersetGroupId
-                                if (currentGroup != null && currentGroup == nextGroup) {
-                                    links.add(index)
-                                }
+                    _dayName.value = it.day.name
+                    val exercises = it.exercises.sortedBy { item -> item.routineExercise.orderIndex }
+                    _selectedExerciseIds.value = exercises.map { item -> item.exercise.id }.toSet()
+                    _selectedExerciseOrder.value = exercises.map { item -> item.exercise.id }
+                    _targetSets.value = exercises.associate { exercise ->
+                        exercise.exercise.id to exercise.routineExercise.targetSets.toString()
+                    }
+                    _targetRepMin.value = exercises.associate { exercise ->
+                        exercise.exercise.id to (exercise.routineExercise.targetRepsMin?.toString() ?: "")
+                    }
+                    _targetRepMax.value = exercises.associate { exercise ->
+                        exercise.exercise.id to (exercise.routineExercise.targetRepsMax?.toString() ?: "")
+                    }
+                    _targetRestSeconds.value = exercises.associate { exercise ->
+                        exercise.exercise.id to (exercise.routineExercise.targetRestSeconds?.toString() ?: "")
+                    }
+                    _notes.value = exercises.associate { exercise ->
+                        exercise.exercise.id to exercise.routineExercise.notes.orEmpty()
+                    }
+
+                    val links = mutableSetOf<Int>()
+                    exercises.forEachIndexed { index, exercise ->
+                        if (index < exercises.size - 1) {
+                            val currentGroup = exercise.routineExercise.supersetGroupId
+                            val nextGroup = exercises[index + 1].routineExercise.supersetGroupId
+                            if (currentGroup != null && currentGroup == nextGroup) {
+                                links.add(index)
                             }
                         }
-                        _supersetLinks.value = links
+                    }
+                    _supersetLinks.value = links
 
-                        _baselineDraft.value = RoutineDayDraft(
-                            name = it.day.name,
-                            exerciseOrder = exercises.map { item -> item.exercise.id },
-                            targetSets = _targetSets.value,
-                            targetRepMin = _targetRepMin.value,
-                            targetRepMax = _targetRepMax.value,
-                            targetRestSeconds = _targetRestSeconds.value,
-                            supersetLinks = links,
-                            notes = _notes.value
-                        )
+                    _baselineDraft.value = RoutineDayDraft(
+                        name = it.day.name,
+                        exerciseOrder = exercises.map { item -> item.exercise.id },
+                        targetSets = _targetSets.value,
+                        targetRepMin = _targetRepMin.value,
+                        targetRepMax = _targetRepMax.value,
+                        targetRestSeconds = _targetRestSeconds.value,
+                        supersetLinks = links,
+                        notes = _notes.value
+                    )
                 }
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { _error.value = failure.message ?: "Couldn't load this day. Try again." }
-            finally { _isLoading.value = false }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                _error.value = failure.message ?: "Couldn't load this day. Try again."
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
+    private fun canMutateDraft(): Boolean =
+        !_isLoading.value && !_isSaving.value && _baselineDraft.value != null
+
     fun updateDayName(name: String) {
-        if (_isLoading.value || _isSaving.value) return
+        if (!canMutateDraft()) return
         _dayName.value = name
+        _error.value = null
     }
 
     fun toggleExercise(exerciseId: Long) {
@@ -225,7 +269,7 @@ class RoutineDayFormViewModel @Inject constructor(
     }
 
     fun addExercise(exerciseId: Long) {
-        if (_isLoading.value || _isSaving.value) return
+        if (!canMutateDraft()) return
         if (!_selectedExerciseIds.value.contains(exerciseId)) {
             _selectedExerciseIds.value = _selectedExerciseIds.value + exerciseId
             _selectedExerciseOrder.value = _selectedExerciseOrder.value + exerciseId
@@ -239,7 +283,7 @@ class RoutineDayFormViewModel @Inject constructor(
     }
 
     fun removeExercise(exerciseId: Long) {
-        if (_isLoading.value || _isSaving.value) return
+        if (!canMutateDraft()) return
         if (_selectedExerciseIds.value.contains(exerciseId)) {
             val index = _selectedExerciseOrder.value.indexOf(exerciseId)
             _selectedExerciseIds.value = _selectedExerciseIds.value - exerciseId
@@ -249,20 +293,13 @@ class RoutineDayFormViewModel @Inject constructor(
             _targetRepMax.value = _targetRepMax.value - exerciseId
             _targetRestSeconds.value = _targetRestSeconds.value - exerciseId
             _notes.value = _notes.value - exerciseId
-            
-            // Re-adjust superset links when an exercise is removed
+
             val currentLinks = _supersetLinks.value.toMutableSet()
             val newLinks = mutableSetOf<Int>()
-            
-            // This is a bit complex: if we remove index i, 
-            // any link at i-1 is broken (because i is gone),
-            // and any link at i is broken (because i is gone).
-            // Links > i need to shift down by 1.
             currentLinks.forEach { linkIndex ->
                 when {
                     linkIndex < index - 1 -> newLinks.add(linkIndex)
                     linkIndex > index -> newLinks.add(linkIndex - 1)
-                    // index or index-1 are ignored
                 }
             }
             _supersetLinks.value = newLinks
@@ -274,11 +311,12 @@ class RoutineDayFormViewModel @Inject constructor(
      * Superset pairs move as a single unit so linked exercises stay adjacent.
      */
     fun moveExercise(exerciseId: Long, delta: Int) {
-        if (_isLoading.value || _isSaving.value) return
+        if (!canMutateDraft()) return
         val order = _selectedExerciseOrder.value
         val links = _supersetLinks.value
+        val index = order.indexOf(exerciseId)
+        if (!canMoveRoutineExerciseBlock(index, delta, links, order.size)) return
 
-        // Keep imported linked groups adjacent too; the editor creates pairs, but never splits saved groups.
         val blocks = mutableListOf<List<Int>>()
         var i = 0
         while (i < order.size) {
@@ -288,7 +326,7 @@ class RoutineDayFormViewModel @Inject constructor(
             i++
         }
 
-        val blockIndex = blocks.indexOfFirst { block -> block.any { order[it] == exerciseId } }
+        val blockIndex = blocks.indexOfFirst { block -> index in block }
         val targetIndex = blockIndex + delta
         if (blockIndex == -1 || targetIndex !in blocks.indices) return
 
@@ -307,63 +345,62 @@ class RoutineDayFormViewModel @Inject constructor(
     }
 
     fun toggleSupersetLink(index: Int) {
-        if (_isLoading.value || _isSaving.value || index !in 0 until (_selectedExerciseOrder.value.size - 1)) return
+        if (!canMutateDraft() || index !in 0 until (_selectedExerciseOrder.value.size - 1)) return
         val currentLinks = _supersetLinks.value.toMutableSet()
         if (currentLinks.contains(index)) {
             currentLinks.remove(index)
         } else {
-            // Enforce 2-exercise limit for supersets
-            // A link at 'index' connects exercise 'index' and 'index + 1'.
-            // To prevent > 2 exercises, we check if 'index - 1' or 'index + 1' are already linked.
             val isPrevLinked = index > 0 && currentLinks.contains(index - 1)
             val isNextLinked = currentLinks.contains(index + 1)
-            
             if (!isPrevLinked && !isNextLinked) {
                 currentLinks.add(index)
             } else {
-                // Could emit an error event here if we had a UI for it
-                return 
+                return
             }
         }
         _supersetLinks.value = currentLinks
     }
-    
-    fun isExerciseSelected(exerciseId: Long): Boolean {
-        return _selectedExerciseIds.value.contains(exerciseId)
-    }
+
+    fun isExerciseSelected(exerciseId: Long): Boolean = _selectedExerciseIds.value.contains(exerciseId)
 
     fun updateTargetSets(exerciseId: Long, value: String) {
-        if (_isLoading.value || _isSaving.value) return
+        if (!canMutateDraft()) return
         _targetSets.value = _targetSets.value + (exerciseId to value.filter { it.isDigit() }.take(2))
     }
 
     fun updateTargetRepMin(exerciseId: Long, value: String) {
-        if (_isLoading.value || _isSaving.value) return
+        if (!canMutateDraft()) return
         _targetRepMin.value = _targetRepMin.value + (exerciseId to value.filter { it.isDigit() }.take(3))
+        _error.value = null
     }
 
     fun updateTargetRepMax(exerciseId: Long, value: String) {
-        if (_isLoading.value || _isSaving.value) return
+        if (!canMutateDraft()) return
         _targetRepMax.value = _targetRepMax.value + (exerciseId to value.filter { it.isDigit() }.take(3))
+        _error.value = null
     }
 
     fun updateTargetRestSeconds(exerciseId: Long, value: String) {
-        if (_isLoading.value || _isSaving.value) return
+        if (!canMutateDraft()) return
         _targetRestSeconds.value = _targetRestSeconds.value + (exerciseId to value.filter { it.isDigit() }.take(4))
     }
 
     fun updateExerciseNotes(exerciseId: Long, value: String) {
-        if (_isLoading.value || _isSaving.value) return
+        if (!canMutateDraft()) return
         _notes.value = _notes.value + (exerciseId to value)
     }
 
     fun saveDay() {
-        if (_isLoading.value || _isSaving.value || _baselineDraft.value == null) return
+        if (!canMutateDraft()) return
         val draft = RoutineDayDraft(
-            name = _dayName.value.trim(), exerciseOrder = _selectedExerciseOrder.value,
-            targetSets = _targetSets.value, targetRepMin = _targetRepMin.value,
-            targetRepMax = _targetRepMax.value, targetRestSeconds = _targetRestSeconds.value,
-            supersetLinks = _supersetLinks.value, notes = _notes.value
+            name = _dayName.value.trim(),
+            exerciseOrder = _selectedExerciseOrder.value,
+            targetSets = _targetSets.value,
+            targetRepMin = _targetRepMin.value,
+            targetRepMax = _targetRepMax.value,
+            targetRestSeconds = _targetRestSeconds.value,
+            supersetLinks = _supersetLinks.value,
+            notes = _notes.value
         )
         if (draft.name.isBlank() || draft.exerciseOrder.isEmpty()) return
         val invalidRange = draft.exerciseOrder.any { id ->
@@ -398,7 +435,9 @@ class RoutineDayFormViewModel @Inject constructor(
             while (start > 0 && draft.supersetLinks.contains(start - 1)) start--
             val linked = start != index || draft.supersetLinks.contains(index)
             RoutineExercise(
-                routineDayId = dayId ?: 0L, exerciseId = id, orderIndex = index,
+                routineDayId = dayId ?: 0L,
+                exerciseId = id,
+                orderIndex = index,
                 targetSets = draft.targetSets[id]?.toIntOrNull()?.coerceAtLeast(1) ?: 3,
                 targetRepsMin = draft.targetRepMin[id]?.toIntOrNull(),
                 targetRepsMax = draft.targetRepMax[id]?.toIntOrNull(),

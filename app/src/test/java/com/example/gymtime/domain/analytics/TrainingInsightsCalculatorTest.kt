@@ -345,6 +345,17 @@ class TrainingInsightsCalculatorTest {
         assertTrue(result.observations.isEmpty())
     }
 
+    @Test
+    fun `reps only history handles large valid counts and deterministic session tie breaking`() {
+        val rows = listOf(
+            row(id = 1, workoutId = 1, type = LogType.REPS_ONLY, reps = 10, at = ago(5)),
+            row(id = 2, workoutId = 2, type = LogType.REPS_ONLY, reps = 10, at = ago(5))
+        )
+        val exercise = calculate(source(rows)).exercises.single()
+
+        assertEquals(listOf(2L, 1L), exercise.history.map { it.workoutId })
+    }
+
     private fun calculate(source: TrainingInsightsSource) = TrainingInsightsCalculator.calculate(source, 28, now, zone)
     private fun ago(days: Int) = now.minus(Duration.ofDays(days.toLong())).toEpochMilli()
 

@@ -15,6 +15,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.util.Calendar
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -96,6 +98,33 @@ class ConsistencyUseCaseTest {
     }
 
     @Test
+    fun `getHeatMapData excludes zero-volume days from percentile thresholds`() = runTest {
+        val zone = ZoneId.of("UTC")
+        val nowZdt = ZonedDateTime.of(2026, 6, 15, 12, 0, 0, 0, zone)
+        val zonedUseCase = ConsistencyUseCase(workoutDao, setDao, userPreferencesRepository, zone) {
+            nowZdt.toInstant().toEpochMilli()
+        }
+
+        val dayMs = { daysAgo: Long -> nowZdt.minusDays(daysAgo).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli() }
+        coEvery { workoutDao.getDailyVolumeForHeatMap() } returns listOf(
+            DailyVolume(0f, dayMs(10), workingSetCount = 4),
+            DailyVolume(0f, dayMs(9), workingSetCount = 4),
+            DailyVolume(0f, dayMs(8), workingSetCount = 4),
+            DailyVolume(0f, dayMs(7), workingSetCount = 4),
+            DailyVolume(0f, dayMs(6), workingSetCount = 4),
+            DailyVolume(100f, dayMs(3), workingSetCount = 5),
+            DailyVolume(200f, dayMs(2), workingSetCount = 5),
+            DailyVolume(300f, dayMs(1), workingSetCount = 5)
+        )
+
+        val result = zonedUseCase.getHeatMapData()
+
+        assertEquals(1, result.first { it.date == dayMs(3) }.level)
+        assertEquals(2, result.first { it.date == dayMs(2) }.level)
+        assertEquals(3, result.first { it.date == dayMs(1) }.level)
+    }
+
+    @Test
     fun `getConsistencyStats calculates score based on active weeks`() = runTest {
         val now = System.currentTimeMillis()
         val oneWeekAgo = now - (1000L * 60 * 60 * 24 * 7)
@@ -121,6 +150,44 @@ class ConsistencyUseCaseTest {
         assertEquals(expectedScore, result.consistencyScore)
         assertEquals(3, result.ytdWorkouts)
         assertEquals(300f, result.ytdVolume)
+    }
+
+    @Test
+    fun `getConsistencyStats clamps 52 Sunday-Saturday weeks at 100 and ignores future weeks`() = runTest {
+        val zone = ZoneId.of("UTC")
+        // 2026-05-17 is Sunday.
+        val sundayNoon = ZonedDateTime.of(2026, 5, 17, 12, 0, 0, 0, zone)
+        val zonedUseCase = ConsistencyUseCase(workoutDao, setDao, userPreferencesRepository, zone) {
+            sundayNoon.toInstant().toEpochMilli()
+        }
+
+        // 55 past weeks + 1 future week
+        val rawData = (-1..54).map { weeksAgo ->
+            DailyVolume(100f, sundayNoon.minusWeeks(weeksAgo.toLong()).toInstant().toEpochMilli())
+        }
+        coEvery { workoutDao.getDailyVolumeForHeatMap() } returns rawData
+        coEvery { workoutDao.getWorkoutDatesWithWorkingSets() } returns emptyList()
+        coEvery { userPreferencesRepository.restDaysPerWeek } returns flowOf(2)
+        coEvery { userPreferencesRepository.bestStreak } returns flowOf(0)
+        coEvery { workoutDao.getYearToDateWorkoutCount() } returns 52
+        coEvery { setDao.getTotalVolume(any(), any()) } returns 5200f
+
+        val result = zonedUseCase.getConsistencyStats()
+        assertEquals(100, result.consistencyScore)
+
+        // Saturday May 16 and Sunday May 17 are in different Sun-Sat weeks (2 active weeks),
+        // while Sunday May 17 and Monday May 18 are in the same Sun-Sat week.
+        val mondayNoon = ZonedDateTime.of(2026, 5, 18, 12, 0, 0, 0, zone)
+        val mondayUseCase = ConsistencyUseCase(workoutDao, setDao, userPreferencesRepository, zone) {
+            mondayNoon.toInstant().toEpochMilli()
+        }
+        coEvery { workoutDao.getDailyVolumeForHeatMap() } returns listOf(
+            DailyVolume(100f, ZonedDateTime.of(2026, 5, 16, 10, 0, 0, 0, zone).toInstant().toEpochMilli()),
+            DailyVolume(100f, ZonedDateTime.of(2026, 5, 17, 10, 0, 0, 0, zone).toInstant().toEpochMilli()),
+            DailyVolume(100f, ZonedDateTime.of(2026, 5, 18, 10, 0, 0, 0, zone).toInstant().toEpochMilli())
+        )
+        val boundaryStats = mondayUseCase.getConsistencyStats()
+        assertEquals(((2f / 52f) * 100).toInt(), boundaryStats.consistencyScore)
     }
 
     @Test

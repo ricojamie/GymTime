@@ -1,8 +1,11 @@
 package com.example.gymtime.ui.theme
 
 import android.graphics.Typeface as AndroidTypeface
+import android.net.Uri
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -12,6 +15,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.Typeface
 import androidx.compose.ui.unit.sp
 import com.example.gymtime.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+private val BebasNeueFontFamily = FontFamily(Font(R.font.bebas_neue_regular))
+private val OswaldFontFamily = FontFamily(Font(R.font.oswald_variable))
+private val RalewayFontFamily = FontFamily(Font(R.font.raleway_variable))
+private val SpaceGroteskFontFamily = FontFamily(Font(R.font.space_grotesk_variable))
+private val PacificoFontFamily = FontFamily(Font(R.font.pacifico_regular))
+
+/** Returns the cached built-in [FontFamily] for a [ThemeFontOption]. */
+fun fontFamilyForOption(option: ThemeFontOption): FontFamily = when (option) {
+    ThemeFontOption.BEBAS_NEUE -> BebasNeueFontFamily
+    ThemeFontOption.OSWALD -> OswaldFontFamily
+    ThemeFontOption.RALEWAY -> RalewayFontFamily
+    ThemeFontOption.SPACE_GROTESK -> SpaceGroteskFontFamily
+    ThemeFontOption.PACIFICO -> PacificoFontFamily
+    ThemeFontOption.CUSTOM -> FontFamily.Default
+}
 
 @Composable
 fun rememberAppTypography(
@@ -19,30 +40,47 @@ fun rememberAppTypography(
     customFontUri: String?
 ): Typography {
     val context = LocalContext.current
+    val appContext = context.applicationContext
+    val fontOption = remember(themeFontKey) { ThemeFontOption.fromStorageKey(themeFontKey) }
 
-    val fontFamily = remember(themeFontKey, customFontUri) {
-        when (ThemeFontOption.fromStorageKey(themeFontKey)) {
-            ThemeFontOption.BEBAS_NEUE -> FontFamily(Font(R.font.bebas_neue_regular))
-            ThemeFontOption.OSWALD -> FontFamily(Font(R.font.oswald_variable))
-            ThemeFontOption.RALEWAY -> FontFamily(Font(R.font.raleway_variable))
-            ThemeFontOption.SPACE_GROTESK -> FontFamily(Font(R.font.space_grotesk_variable))
-            ThemeFontOption.PACIFICO -> FontFamily(Font(R.font.pacifico_regular))
-            ThemeFontOption.CUSTOM -> {
-                customFontUri
-                    ?.let { uri ->
-                        runCatching {
-                            context.contentResolver.openFileDescriptor(android.net.Uri.parse(uri), "r")?.use { pfd ->
-                                val typeface = AndroidTypeface.Builder(pfd.fileDescriptor).build()
-                                FontFamily(Typeface(typeface))
-                            }
-                        }.getOrNull()
+    val customFontState by produceState<Pair<String?, FontFamily?>?>(
+        initialValue = null,
+        key1 = fontOption,
+        key2 = customFontUri,
+        key3 = appContext
+    ) {
+        if (fontOption != ThemeFontOption.CUSTOM || customFontUri.isNullOrBlank()) {
+            value = null
+            return@produceState
+        }
+        val loadedFamily = withContext(Dispatchers.IO) {
+            runCatching {
+                val parsedUri = Uri.parse(customFontUri)
+                appContext.contentResolver.openFileDescriptor(parsedUri, "r")?.use { pfd ->
+                    AndroidTypeface.Builder(pfd.fileDescriptor).build()?.let { typeface ->
+                        FontFamily(Typeface(typeface))
                     }
-                    ?: FontFamily(Font(R.font.bebas_neue_regular))
+                }
+            }.getOrNull()
+        }
+        value = customFontUri to loadedFamily
+    }
+
+    val fontFamily = remember(fontOption, customFontUri, customFontState) {
+        when (fontOption) {
+            ThemeFontOption.BEBAS_NEUE -> BebasNeueFontFamily
+            ThemeFontOption.OSWALD -> OswaldFontFamily
+            ThemeFontOption.RALEWAY -> RalewayFontFamily
+            ThemeFontOption.SPACE_GROTESK -> SpaceGroteskFontFamily
+            ThemeFontOption.PACIFICO -> PacificoFontFamily
+            ThemeFontOption.CUSTOM -> {
+                val loaded = customFontState?.takeIf { it.first == customFontUri }?.second
+                loaded ?: BebasNeueFontFamily
             }
         }
     }
 
-    return appTypography(fontFamily)
+    return remember(fontFamily) { appTypography(fontFamily) }
 }
 
 private fun appTypography(fontFamily: FontFamily): Typography {

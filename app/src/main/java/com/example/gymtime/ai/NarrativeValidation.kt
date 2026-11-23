@@ -48,16 +48,30 @@ class NarrativeOutputValidator @Inject constructor() {
             return NarrativeValidationResult.Invalid("Narrative contains an unsupported number")
         }
 
-        val allowedNames = rules.allowedNames.map { it.lowercase(Locale.ROOT) }.toSet()
-        val unsupportedName = rules.knownNames
-            .sortedByDescending(String::length)
-            .firstOrNull { known ->
-                known.isNotBlank() &&
-                    text.contains(known, ignoreCase = true) &&
-                    known.lowercase(Locale.ROOT) !in allowedNames
+        val allowedNames = rules.allowedNames
+            .asSequence()
+            .map { it.replace(WHITESPACE, " ").trim().lowercase(Locale.ROOT) }
+            .filter { it.isNotEmpty() }
+            .toSet()
+        val candidateNames = (rules.allowedNames + rules.knownNames)
+            .asSequence()
+            .map { it.replace(WHITESPACE, " ").trim() }
+            .filter { it.isNotEmpty() }
+            .distinctBy { it.lowercase(Locale.ROOT) }
+            .sortedByDescending { it.length }
+            .toList()
+
+        // Match longest names first on Unicode token boundaries and mask allowed occurrences
+        // before checking shorter names (so e.g. "Upper Chest" does not trip "Chest", and
+        // "comeback"/"score" do not trip "Back"/"Core").
+        var remaining = text
+        for (name in candidateNames) {
+            val pattern = Regex("(?iu)(?<![\\p{L}\\p{N}])${Regex.escape(name)}(?![\\p{L}\\p{N}])")
+            if (!pattern.containsMatchIn(remaining)) continue
+            if (name.lowercase(Locale.ROOT) !in allowedNames) {
+                return NarrativeValidationResult.Invalid("Narrative contains an unsupported name")
             }
-        if (unsupportedName != null) {
-            return NarrativeValidationResult.Invalid("Narrative contains an unsupported name")
+            remaining = pattern.replace(remaining) { " ".repeat(it.value.length) }
         }
 
         return NarrativeValidationResult.Valid(text)
@@ -74,8 +88,8 @@ class NarrativeOutputValidator @Inject constructor() {
     private companion object {
         val WHITESPACE = Regex("\\s+")
         val WORD = Regex("[\\p{L}\\p{N}]+(?:['’-][\\p{L}\\p{N}]+)*")
-        val SENTENCE_END = Regex("[.!?]+")
-        val NUMBER = Regex("(?<![\\p{L}\\d])[-+]?\\d[\\d,]*(?:\\.\\d+)?%?")
+        val SENTENCE_END = Regex("(?:\\.(?!\\d)|[!?])+")
+        val NUMBER = Regex("(?<![\\d.,+-])[-+]?(?:\\d[\\d,]*(?:\\.\\d+)?|\\.\\d+)%?")
     }
 }
 

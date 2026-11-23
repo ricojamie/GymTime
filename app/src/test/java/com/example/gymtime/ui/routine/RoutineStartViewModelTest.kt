@@ -2,7 +2,6 @@ package com.example.gymtime.ui.routine
 
 import androidx.lifecycle.SavedStateHandle
 import com.example.gymtime.data.RoutineRepository
-import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.db.dao.RoutineDayWithExercises
 import com.example.gymtime.data.db.entity.Routine
 import com.example.gymtime.data.db.entity.RoutineDay
@@ -16,7 +15,6 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -34,7 +32,6 @@ import org.junit.Test
 class RoutineStartViewModelTest {
     @get:Rule val dispatcherRule = TestDispatcherRule()
     private val repository: RoutineRepository = mockk(relaxed = true)
-    private val preferences: UserPreferencesRepository = mockk { every { newUiEnabled } returns flowOf(true) }
     private val statsUseCase: RoutineStatsUseCase = mockk {
         coEvery { getStats(1L) } returns RoutineStats(0, null, null, 0f, null, emptyList())
     }
@@ -51,7 +48,7 @@ class RoutineStartViewModelTest {
         prepare()
         val result = CompletableDeferred<WorkoutStartResult?>()
         coEvery { repository.startRoutineDay(2L) } coAnswers { result.await() }
-        val vm = RoutineDayStartViewModel(repository, SavedStateHandle(mapOf("routineId" to 1L)), preferences)
+        val vm = RoutineDayStartViewModel(repository, SavedStateHandle(mapOf("routineId" to 1L)))
         vm.startWorkoutFromDay(2L)
         vm.startWorkoutFromDay(2L)
         runCurrent()
@@ -72,7 +69,7 @@ class RoutineStartViewModelTest {
         prepare()
         val result = CompletableDeferred<WorkoutStartResult?>()
         coEvery { repository.startRoutineDay(2L) } coAnswers { result.await() }
-        val vm = RoutineDetailViewModel(repository, statsUseCase, SavedStateHandle(mapOf("routineId" to 1L)), preferences)
+        val vm = RoutineDetailViewModel(repository, statsUseCase, SavedStateHandle(mapOf("routineId" to 1L)))
         vm.startWorkoutFromDay(2L)
         vm.startWorkoutFromDay(2L)
         runCurrent()
@@ -88,7 +85,7 @@ class RoutineStartViewModelTest {
     @Test fun `chooser start failure is visible and a second attempt can succeed`() = runTest {
         prepare()
         coEvery { repository.startRoutineDay(2L) } throws IllegalStateException("Storage unavailable")
-        val vm = RoutineDayStartViewModel(repository, SavedStateHandle(mapOf("routineId" to 1L)), preferences)
+        val vm = RoutineDayStartViewModel(repository, SavedStateHandle(mapOf("routineId" to 1L)))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.previewState.collect {} }
         vm.startWorkoutFromDay(2L)
         advanceUntilIdle()
@@ -104,7 +101,7 @@ class RoutineStartViewModelTest {
     @Test fun `detail start failure is visible and a second attempt can succeed`() = runTest {
         prepare()
         coEvery { repository.startRoutineDay(2L) } returns null
-        val vm = RoutineDetailViewModel(repository, statsUseCase, SavedStateHandle(mapOf("routineId" to 1L)), preferences)
+        val vm = RoutineDetailViewModel(repository, statsUseCase, SavedStateHandle(mapOf("routineId" to 1L)))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.previewState.collect {} }
         vm.startWorkoutFromDay(2L)
         advanceUntilIdle()
@@ -117,10 +114,32 @@ class RoutineStartViewModelTest {
         assertNull(vm.previewState.value.actionError)
     }
 
+    @Test fun `chooser surfaces active workout conflict message from repository`() = runTest {
+        prepare()
+        coEvery { repository.startRoutineDay(2L) } throws IllegalStateException("Finish your current workout first")
+        val vm = RoutineDayStartViewModel(repository, SavedStateHandle(mapOf("routineId" to 1L)))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.previewState.collect {} }
+        vm.startWorkoutFromDay(2L)
+        advanceUntilIdle()
+        assertEquals("Finish your current workout first", vm.previewState.value.startError)
+        assertNull(vm.previewState.value.startingDayId)
+    }
+
+    @Test fun `detail surfaces active workout conflict message from repository`() = runTest {
+        prepare()
+        coEvery { repository.startRoutineDay(2L) } throws IllegalStateException("Finish your current workout first")
+        val vm = RoutineDetailViewModel(repository, statsUseCase, SavedStateHandle(mapOf("routineId" to 1L)))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.previewState.collect {} }
+        vm.startWorkoutFromDay(2L)
+        advanceUntilIdle()
+        assertEquals("Finish your current workout first", vm.previewState.value.actionError)
+        assertNull(vm.previewState.value.startingDayId)
+    }
+
     @Test fun `a day from another routine cannot start from the chooser`() = runTest {
         prepare()
         every { repository.getRoutineDayWithExercises(2L) } returns flowOf(day.copy(day = day.day.copy(routineId = 99L)))
-        val vm = RoutineDayStartViewModel(repository, SavedStateHandle(mapOf("routineId" to 1L)), preferences)
+        val vm = RoutineDayStartViewModel(repository, SavedStateHandle(mapOf("routineId" to 1L)))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.previewState.collect {} }
         vm.startWorkoutFromDay(2L)
         advanceUntilIdle()

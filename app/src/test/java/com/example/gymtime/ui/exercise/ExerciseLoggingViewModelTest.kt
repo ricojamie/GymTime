@@ -1,44 +1,54 @@
 package com.example.gymtime.ui.exercise
 
 import android.content.Context
+import android.content.ServiceConnection
 import androidx.lifecycle.SavedStateHandle
-import com.example.gymtime.data.RoutineRepository
-import com.example.gymtime.data.UserPreferencesRepository
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.PlateInventorySettings
-import com.example.gymtime.data.VolumeOrbRepository
+import com.example.gymtime.data.UserPreferencesRepository
+import com.example.gymtime.data.db.dao.ExerciseHistorySet
 import com.example.gymtime.data.db.dao.WorkoutPlanSummary
 import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
-import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.db.entity.WARMUP_MUSCLE_GROUP
+import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.repository.ExerciseRepository
 import com.example.gymtime.data.repository.WorkoutRepository
-import com.example.gymtime.domain.recommendation.ExerciseAttemptRecommendationUseCase
+import com.example.gymtime.service.RestTimerService
 import com.example.gymtime.smartlog.SetDraft
 import com.example.gymtime.smartlog.SmartLogDraftStore
 import com.example.gymtime.smartlog.ValidatedSmartLogDraft
 import com.example.gymtime.util.TestDispatcherRule
 import com.example.gymtime.wear.ActiveWearSessionRepository
-import com.example.gymtime.wear.WearSessionSnapshot
 import com.example.gymtime.wear.WearDraftPatch
+import com.example.gymtime.wear.WearSessionSnapshot
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -59,15 +69,13 @@ class ExerciseLoggingViewModelTest {
     private val exerciseRepository: ExerciseRepository = mockk()
     private val workoutRepository: WorkoutRepository = mockk()
     private val userPreferencesRepository: UserPreferencesRepository = mockk(relaxed = true)
-    private val volumeOrbRepository: VolumeOrbRepository = mockk(relaxed = true)
     private val supersetManager = SupersetManager()
-    private val routineRepository: RoutineRepository = mockk()
-    private val recommendationUseCase: ExerciseAttemptRecommendationUseCase = mockk()
     private val activeWearSessionRepository: ActiveWearSessionRepository = mockk(relaxed = true)
     private val smartLogDraftStore = SmartLogDraftStore()
     private val wearDraftPatches = MutableSharedFlow<WearDraftPatch>()
     private val wearLogRequests = MutableSharedFlow<WearDraftPatch?>()
     private val plateInventorySettings = MutableStateFlow(PlateInventorySettings(emptyMap(), false))
+    private val createdViewModels = mutableListOf<ExerciseLoggingViewModel>()
 
     private lateinit var viewModel: ExerciseLoggingViewModel
 
@@ -100,8 +108,8 @@ class ExerciseLoggingViewModelTest {
         every { userPreferencesRepository.availablePlates } returns MutableStateFlow(listOf(45f, 25f, 10f, 5f, 2.5f))
         plateInventorySettings.value = PlateInventorySettings(emptyMap(), false)
         every { userPreferencesRepository.plateInventorySettings } returns plateInventorySettings
+        every { exerciseRepository.observeFullExerciseHistory(any()) } returns flowOf(emptyList())
 
-        every { volumeOrbRepository.orbState } returns MutableStateFlow(mockk(relaxed = true))
         every { activeWearSessionRepository.draftPatches } returns wearDraftPatches
         every { activeWearSessionRepository.logRequests } returns wearLogRequests
         every { activeWearSessionRepository.beginPublishing() } returns 42L
@@ -111,8 +119,19 @@ class ExerciseLoggingViewModelTest {
         every { activeWearSessionRepository.confirmSetSaved() } just Runs
         coEvery { workoutRepository.logSet(any()) } just Runs
         coEvery { workoutRepository.updateSet(any()) } just Runs
+        coEvery { workoutRepository.deleteSet(any()) } just Runs
+        coEvery { workoutRepository.finishWorkout(any()) } just Runs
 
         viewModel = buildViewModel()
+    }
+
+    @After
+    fun tearDown() = runTest {
+        createdViewModels.forEach { it.stopWearPublishing() }
+        val jobs = createdViewModels.mapNotNull { it.viewModelScope.coroutineContext[Job] }
+        jobs.forEach { it.cancel() }
+        jobs.joinAll()
+        createdViewModels.clear()
     }
 
     @Test
@@ -241,11 +260,78 @@ class ExerciseLoggingViewModelTest {
     }
 
     @Test
+    fun `explicit exit survives switching to another exercise in the same planned superset`() = runTest {
+        advanceUntilIdle()
+        val second = testExercise.copy(id = 2L)
+        every { exerciseRepository.getExercise(2L) } returns flowOf(second)
+        val plans = listOf(
+            planSummary(11L, 1L, "Bench", 0).copy(supersetGroupId = "planned"),
+            planSummary(12L, 2L, "Row", 1).copy(supersetGroupId = "planned", supersetOrderIndex = 1)
+        )
+        val vmB = buildViewModel(exercise = second, planItems = plans)
+        advanceUntilIdle()
+        assertTrue(vmB.isInSupersetMode.value)
+
+        vmB.exitSupersetMode()
+        advanceUntilIdle()
+
+        val vmA = buildViewModel(exercise = testExercise, planItems = plans)
+        advanceUntilIdle()
+
+        assertFalse(vmA.isInSupersetMode.value)
+        assertEquals(2L, vmA.nextExerciseId.value)
+    }
+
+    @Test
+    fun `overview dissolving planned superset exits superset mode while ad-hoc superset stays active`() = runTest {
+        advanceUntilIdle()
+        val second = testExercise.copy(id = 2L)
+        every { exerciseRepository.getExercise(2L) } returns flowOf(second)
+        val plans = MutableStateFlow(listOf(
+            planSummary(11L, 1L, "Bench", 0).copy(supersetGroupId = "planned"),
+            planSummary(12L, 2L, "Row", 1).copy(supersetGroupId = "planned", supersetOrderIndex = 1)
+        ))
+        val planned = buildViewModel(exercise = testExercise)
+        every { workoutRepository.getWorkoutPlanSummaries(testWorkout.id) } returns plans
+        advanceUntilIdle()
+        assertTrue(planned.isInSupersetMode.value)
+
+        // Overview removes Row -> WorkoutRepository dissolves "planned" on Bench
+        plans.value = listOf(planSummary(11L, 1L, "Bench", 0).copy(supersetGroupId = null))
+        advanceUntilIdle()
+        assertFalse(planned.isInSupersetMode.value)
+        assertNull(planned.nextExerciseId.value)
+
+        // Ad-hoc superset started later is NOT dissolved by plan updates
+        supersetManager.startSuperset(listOf(testExercise, second))
+        advanceUntilIdle()
+        assertTrue(planned.isInSupersetMode.value)
+        assertEquals(2L, planned.nextExerciseId.value)
+    }
+
+    @Test
+    fun `nextExerciseId derives from active superset members including dynamically added ones`() = runTest {
+        advanceUntilIdle()
+        val second = testExercise.copy(id = 2L, name = "Row")
+        val third = testExercise.copy(id = 3L, name = "Curl")
+        supersetManager.startSuperset(listOf(testExercise, second))
+        supersetManager.addExercise(third)
+
+        val vmThird = buildViewModel(exercise = third)
+        advanceUntilIdle()
+
+        assertTrue(vmThird.isInSupersetMode.value)
+        assertEquals(1L, vmThird.nextExerciseId.value)
+    }
+
+    @Test
     fun `wear publishing starts only when requested and stops with active owner`() = runTest {
         advanceUntilIdle()
         val publishedSnapshots = mutableListOf<WearSessionSnapshot>()
+        val firstPublished = CompletableDeferred<Unit>()
         every { activeWearSessionRepository.publish(42L, any()) } answers {
             publishedSnapshots += secondArg<WearSessionSnapshot>()
+            firstPublished.complete(Unit)
             Unit
         }
 
@@ -253,7 +339,7 @@ class ExerciseLoggingViewModelTest {
         verify(exactly = 0) { activeWearSessionRepository.publish(any<Long>(), any()) }
 
         viewModel.startWearPublishing()
-        advanceUntilIdle()
+        firstPublished.await()
 
         verify(exactly = 1) { activeWearSessionRepository.beginPublishing() }
         verify(atLeast = 1) { activeWearSessionRepository.publish(42L, any()) }
@@ -262,6 +348,249 @@ class ExerciseLoggingViewModelTest {
         viewModel.stopWearPublishing()
 
         verify(exactly = 1) { activeWearSessionRepository.stopPublishing(42L) }
+    }
+
+    @Test
+    fun `applySmartLogDraft applies same-exercise draft, clears edit mode, and persists token`() = runTest {
+        val handle = SavedStateHandle(mapOf("exerciseId" to testExercise.id))
+        val vm = buildViewModel(savedStateHandle = handle)
+        advanceUntilIdle()
+
+        vm.startEditingSet(existingSetFor(LogType.WEIGHT_REPS))
+        assertNotNull(vm.editingSet.value)
+
+        val token = smartLogDraftStore.put(
+            ValidatedSmartLogDraft(
+                exercise = testExercise,
+                sets = listOf(SetDraft(weight = 185f, reps = 5, isWarmup = true, note = "Paused"))
+            )
+        )
+
+        vm.applySmartLogDraft(token)
+
+        assertNull(vm.editingSet.value)
+        assertEquals(token, vm.smartLogDraftToken)
+        assertEquals(token, handle.get<String>("draftToken"))
+        assertEquals("185", vm.weight.value)
+        assertEquals("5", vm.reps.value)
+        assertTrue(vm.isWarmup.value)
+        assertEquals("Paused", vm.setNote.value)
+        assertEquals(1, vm.smartLogQueue.value?.currentSetNumber)
+    }
+
+    @Test
+    fun `dangling draftToken after process death clears savedStateHandle token cleanly`() = runTest {
+        val handle = SavedStateHandle(mapOf("exerciseId" to testExercise.id, "draftToken" to "stale-token"))
+        val vm = buildViewModel(savedStateHandle = handle)
+        advanceUntilIdle()
+
+        assertNull(vm.smartLogDraftToken)
+        assertNull(handle.get<String>("draftToken"))
+        assertNull(vm.smartLogQueue.value)
+    }
+
+    @Test
+    fun `quick edit and plan re-emissions do not clobber user rest time, distance unit, or warmup`() = runTest {
+        val exerciseFlow = MutableStateFlow(testExercise.copy(logType = LogType.DISTANCE_TIME, defaultDistanceUnit = DistanceUnit.MILES, defaultRestSeconds = 90))
+        val plansFlow = MutableStateFlow(listOf(planSummary(11L, 1L, "Bench", 0).copy(restSeconds = 120)))
+        every { exerciseRepository.getExercise(1L) } returns exerciseFlow
+        every { workoutRepository.getWorkoutPlanSummaries(testWorkout.id) } returns plansFlow
+        coEvery { exerciseRepository.updateExercise(any()) } just Runs
+
+        val vm = buildViewModel(useExistingExerciseStub = true, useExistingPlanStub = true)
+        advanceUntilIdle()
+
+        assertEquals(120, vm.restTime.value)
+        vm.adjustRestTime(-15)
+        vm.updateSelectedDistanceUnit(DistanceUnit.KILOMETERS)
+        vm.toggleWarmup()
+        vm.updateDistance("5")
+        vm.updateDuration("25:00")
+
+        // Simulate quick edit re-emitting exercise AND set log invalidating plan summaries
+        exerciseFlow.value = exerciseFlow.value.copy(name = "Tempo Run")
+        plansFlow.value = plansFlow.value.map { it.copy(setCount = 1) }
+        advanceUntilIdle()
+
+        assertEquals(105, vm.restTime.value)
+        assertEquals(DistanceUnit.KILOMETERS, vm.selectedDistanceUnit.value)
+        assertTrue(vm.isWarmup.value)
+
+        // resetTimerToDefault respects plan restSeconds before exercise default
+        vm.resetTimerToDefault()
+        assertEquals(120, vm.restTime.value)
+    }
+
+    @Test
+    fun `wear draft patches and log requests are blocked during edit mode and persistence`() = runTest {
+        advanceUntilIdle()
+        viewModel.updateWeight("100")
+        viewModel.updateReps("10")
+
+        // Block during edit mode
+        viewModel.startEditingSet(existingSetFor(LogType.WEIGHT_REPS).copy(weight = 135f, reps = 8))
+        val patch = WearDraftPatch(
+            workoutId = testWorkout.id,
+            exerciseId = testExercise.id,
+            weight = "225",
+            reps = "5"
+        )
+        wearDraftPatches.emit(patch)
+        wearLogRequests.emit(patch)
+        advanceUntilIdle()
+
+        assertEquals("135", viewModel.weight.value)
+        assertEquals("8", viewModel.reps.value)
+        coVerify(exactly = 0) { workoutRepository.logSet(any()) }
+
+        // Block while persistence is in flight
+        viewModel.cancelEditing()
+        val gate = CompletableDeferred<Unit>()
+        coEvery { workoutRepository.logSet(any()) } coAnswers { gate.await() }
+        viewModel.logSet()
+        advanceUntilIdle()
+        assertTrue(viewModel.isPersistingSet.value)
+
+        wearDraftPatches.emit(patch)
+        wearLogRequests.emit(patch)
+        advanceUntilIdle()
+        assertEquals("100", viewModel.weight.value)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        coVerify(exactly = 1) { workoutRepository.logSet(any()) }
+    }
+
+    @Test
+    fun `deleteSet on currently edited set cancels edit mode and restores draft`() = runTest {
+        advanceUntilIdle()
+        viewModel.updateWeight("125")
+        viewModel.updateReps("12")
+        val edited = existingSetFor(LogType.WEIGHT_REPS).copy(id = 77L, weight = 185f, reps = 5)
+
+        viewModel.startEditingSet(edited)
+        assertEquals(edited, viewModel.editingSet.value)
+
+        viewModel.deleteSet(77L)
+        advanceUntilIdle()
+
+        assertNull(viewModel.editingSet.value)
+        assertEquals("125", viewModel.weight.value)
+        assertEquals("12", viewModel.reps.value)
+        coVerify(exactly = 1) { workoutRepository.deleteSet(77L) }
+    }
+
+    @Test
+    fun `updateSetNote on currently edited set syncs active editingSet and note`() = runTest {
+        advanceUntilIdle()
+        val edited = existingSetFor(LogType.WEIGHT_REPS).copy(id = 78L, note = "Old note")
+        var updated: Set? = null
+        coEvery { workoutRepository.updateSet(any()) } coAnswers { updated = firstArg() }
+
+        viewModel.startEditingSet(edited)
+        viewModel.updateSetNote(edited, "Synced note")
+        advanceUntilIdle()
+
+        assertEquals("Synced note", viewModel.setNote.value)
+        assertEquals("Synced note", viewModel.editingSet.value?.note)
+
+        viewModel.saveEditedSet()
+        advanceUntilIdle()
+        assertEquals("Synced note", updated?.note)
+    }
+
+    @Test
+    fun `startTimer falls back to bound timer service when startForegroundService fails in background`() = runTest {
+        val connSlot = slot<ServiceConnection>()
+        val mockService = mockk<RestTimerService>(relaxed = true)
+        val mockBinder = mockk<RestTimerService.TimerBinder>()
+        every { mockBinder.getService() } returns mockService
+        every { mockService.remainingSeconds } returns MutableStateFlow(0)
+        every { mockService.isRunning } returns MutableStateFlow(false)
+        every { context.bindService(any<android.content.Intent>(), capture(connSlot), any<Int>()) } returns true
+        every { context.startForegroundService(any()) } throws IllegalStateException("Background start denied")
+        every { context.startService(any()) } throws IllegalStateException("Background start denied")
+
+        val vm = buildViewModel()
+        connSlot.captured.onServiceConnected(null, mockBinder)
+        advanceUntilIdle()
+
+        vm.startTimer()
+
+        verify(exactly = 1) { mockService.startTimer(90) }
+    }
+
+    @Test
+    fun `finishWorkout is single-flight, awaits in-flight persistence, and navigates if wear clear throws`() = runTest {
+        val logGate = CompletableDeferred<Unit>()
+        coEvery { workoutRepository.logSet(any()) } coAnswers { logGate.await() }
+        every { activeWearSessionRepository.clear() } throws RuntimeException("Wear offline")
+
+        val navEvents = mutableListOf<Long>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.navigationEvents.collect { navEvents += it }
+        }
+        advanceUntilIdle()
+
+        applyValidInputs(viewModel, LogType.WEIGHT_REPS)
+        viewModel.logSet()
+        advanceUntilIdle()
+        assertTrue(viewModel.isPersistingSet.value)
+
+        viewModel.finishWorkout()
+        viewModel.finishWorkout()
+        advanceUntilIdle()
+        coVerify(exactly = 0) { workoutRepository.finishWorkout(any()) }
+
+        logGate.complete(Unit)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { workoutRepository.finishWorkout(testWorkout.id) }
+        assertEquals(listOf(testWorkout.id), navEvents)
+    }
+
+    @Test
+    fun `setsBeforeSave excludes stale pre-edit current workout snapshot for PR celebrations`() = runTest {
+        val staleCurrentSet = existingSetFor(LogType.WEIGHT_REPS).copy(id = 10L, weight = 200f, reps = 5)
+        val editedCurrentSet = staleCurrentSet.copy(weight = 100f, reps = 5)
+        val historyFlow = MutableStateFlow(listOf(ExerciseHistorySet(staleCurrentSet, testWorkout.startTime, null)))
+        val workoutSetsFlow = MutableStateFlow(listOf(editedCurrentSet))
+
+        every { exerciseRepository.observeFullExerciseHistory(testExercise.id) } returns historyFlow
+        coEvery { workoutRepository.getSetsForWorkout(testWorkout.id) } returns workoutSetsFlow
+
+        val vm = buildViewModel(useExistingSetsStub = true)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.previewProgress.collect() }
+        vm.previewProgress.first { !it.isLoading }
+        vm.loggedSets.first { it == listOf(editedCurrentSet) }
+
+        vm.updateWeight("150")
+        vm.updateReps("5")
+        vm.logSet()
+        advanceUntilIdle()
+
+        assertNotNull(vm.prCelebration.value)
+        assertEquals(150f, vm.prCelebration.value?.set?.weight)
+    }
+
+    @Test
+    fun `onCleared unbinds service even when cleared before onServiceConnected`() = runTest {
+        every { context.bindService(any<android.content.Intent>(), any<ServiceConnection>(), any<Int>()) } returns true
+        val store = ViewModelStore()
+        val vm = ViewModelProvider(
+            store,
+            object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    return buildViewModel() as T
+                }
+            }
+        )[ExerciseLoggingViewModel::class.java]
+        assertNotNull(vm)
+
+        store.clear()
+
+        verify(atLeast = 1) { context.unbindService(any()) }
     }
 
     @Test
@@ -370,6 +699,7 @@ class ExerciseLoggingViewModelTest {
             applyInvalidValues(viewModel)
 
             assertFalse("Expected invalid input for $logType", viewModel.isCurrentInputValid())
+            assertFalse("Expected invalid state for $logType", viewModel.isCurrentInputValidState.value)
 
             viewModel.logSet()
             advanceUntilIdle()
@@ -377,6 +707,35 @@ class ExerciseLoggingViewModelTest {
 
         coVerify(exactly = 0) { workoutRepository.logSet(any()) }
         verify(exactly = 0) { activeWearSessionRepository.confirmSetSaved() }
+    }
+
+    @Test
+    fun `duration parser rejects 32-bit overflow and formatDistanceForEditing preserves fractional units`() = runTest {
+        viewModel = buildViewModel(exercise = exerciseFor(LogType.DURATION))
+        advanceUntilIdle()
+
+        viewModel.updateDuration("99999999:00")
+        assertFalse(viewModel.isCurrentInputValidState.value)
+        assertEquals("Enter time as seconds, mm:ss, or hh:mm:ss.", viewModel.currentInputValidationMessageState.value)
+
+        viewModel.updateDuration("596523:14:07")
+        assertTrue(viewModel.isCurrentInputValidState.value)
+
+        val distanceVm = buildViewModel(exercise = exerciseFor(LogType.WEIGHT_DISTANCE))
+        advanceUntilIdle()
+        listOf(
+            DistanceUnit.METERS,
+            DistanceUnit.YARDS,
+            DistanceUnit.FEET,
+            DistanceUnit.STEPS,
+            DistanceUnit.FLOORS
+        ).forEach { unit ->
+            distanceVm.startEditingSet(
+                existingSetFor(LogType.WEIGHT_DISTANCE).copy(distanceValue = 12.5f, distanceUnit = unit, distanceMeters = null)
+            )
+            assertEquals("12.5", distanceVm.distance.value)
+            distanceVm.cancelEditing()
+        }
     }
 
     @Test
@@ -475,7 +834,7 @@ class ExerciseLoggingViewModelTest {
 
         assertEquals(existingSet, viewModel.editingSet.value)
         assertEquals("110", viewModel.weight.value)
-        assertEquals("8.0", viewModel.rpe.value)
+        assertEquals("8", viewModel.rpe.value)
         assertEquals("good", viewModel.setNote.value)
         viewModel.cancelEditing()
         assertEquals("125", viewModel.weight.value)
@@ -676,10 +1035,12 @@ class ExerciseLoggingViewModelTest {
         advanceUntilIdle()
 
         assertNull(viewModel.currentInputValidationMessage())
+        assertNull(viewModel.currentInputValidationMessageState.value)
 
         viewModel.updateWeight("100")
 
         assertNull(viewModel.currentInputValidationMessage())
+        assertNull(viewModel.currentInputValidationMessageState.value)
     }
 
     @Test
@@ -709,7 +1070,9 @@ class ExerciseLoggingViewModelTest {
             applyInvalidValues(viewModel)
 
             assertEquals(expectedMessage, viewModel.currentInputValidationMessage())
+            assertEquals(expectedMessage, viewModel.currentInputValidationMessageState.value)
             assertFalse(viewModel.isCurrentInputValid())
+            assertFalse(viewModel.isCurrentInputValidState.value)
         }
     }
 
@@ -720,7 +1083,9 @@ class ExerciseLoggingViewModelTest {
         viewModel.updateRpe("11")
 
         assertEquals("Enter RPE from 0 to 10.", viewModel.currentInputValidationMessage())
+        assertEquals("Enter RPE from 0 to 10.", viewModel.currentInputValidationMessageState.value)
         assertFalse(viewModel.isCurrentInputValid())
+        assertFalse(viewModel.isCurrentInputValidState.value)
     }
 
     @Test
@@ -748,39 +1113,42 @@ class ExerciseLoggingViewModelTest {
     private fun buildViewModel(
         exercise: Exercise = testExercise,
         draftToken: String? = null,
-        planItems: List<WorkoutPlanSummary> = emptyList()
+        planItems: List<WorkoutPlanSummary> = emptyList(),
+        savedStateHandle: SavedStateHandle? = null,
+        useExistingExerciseStub: Boolean = false,
+        useExistingPlanStub: Boolean = false,
+        useExistingSetsStub: Boolean = false
     ): ExerciseLoggingViewModel {
-        val savedStateHandle = SavedStateHandle(
+        val handle = savedStateHandle ?: SavedStateHandle(
             buildMap {
                 put("exerciseId", exercise.id)
                 draftToken?.let { put("draftToken", it) }
             }
         )
 
-        coEvery { exerciseRepository.getExercise(exercise.id) } returns flowOf(exercise)
-        coEvery { exerciseRepository.getPersonalBestsByReps(exercise.id) } returns emptyMap()
-        coEvery { exerciseRepository.getHeaviestSet(exercise.id) } returns null
+        if (!useExistingExerciseStub) {
+            coEvery { exerciseRepository.getExercise(exercise.id) } returns flowOf(exercise)
+        }
         coEvery { workoutRepository.getCurrentWorkout() } returns testWorkout
         coEvery { workoutRepository.ensureWorkoutPlanInstance(testWorkout.id, exercise.id) } returns null
-        every { workoutRepository.getWorkoutPlanSummaries(testWorkout.id) } returns flowOf(planItems)
-        coEvery { workoutRepository.getSetsForWorkout(testWorkout.id) } returns flowOf(emptyList())
+        if (!useExistingPlanStub) {
+            every { workoutRepository.getWorkoutPlanSummaries(testWorkout.id) } returns flowOf(planItems)
+        }
+        if (!useExistingSetsStub) {
+            coEvery { workoutRepository.getSetsForWorkout(testWorkout.id) } returns flowOf(emptyList())
+        }
         coEvery { workoutRepository.getLastWorkoutSetsForExercise(exercise.id, any()) } returns emptyList()
-        coEvery { routineRepository.getRoutineDayWithExercises(any()) } returns flowOf(null)
-        coEvery { recommendationUseCase.getRecommendation(any()) } returns null
 
         return ExerciseLoggingViewModel(
             context = context,
-            savedStateHandle = savedStateHandle,
+            savedStateHandle = handle,
             exerciseRepository = exerciseRepository,
             workoutRepository = workoutRepository,
             userPreferencesRepository = userPreferencesRepository,
-            volumeOrbRepository = volumeOrbRepository,
             supersetManager = supersetManager,
-            routineRepository = routineRepository,
-            recommendationUseCase = recommendationUseCase,
             activeWearSessionRepository = activeWearSessionRepository,
             smartLogDraftStore = smartLogDraftStore
-        )
+        ).also { createdViewModels += it }
     }
 
     private fun planSummary(

@@ -14,6 +14,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -94,10 +96,95 @@ class MonthlyReportUseCaseTest {
 
         assertEquals("February 2026", report.monthLabel)
         assertEquals(1, report.workoutCount)
+        assertEquals(2, report.totalWorkingSets)
+        assertEquals(2250f, report.totalVolume, 0.01f)
+        assertEquals(1, report.exerciseCount)
         assertEquals(2, report.trainingDays)
         assertEquals(2, report.activeWeeks)
         assertEquals(Date.from(ZonedDateTime.of(2026, 2, 1, 0, 0, 0, 0, zoneId).toInstant()), report.periodStart)
         assertEquals(Date.from(ZonedDateTime.of(2026, 2, 28, 23, 59, 59, 999_000_000, zoneId).toInstant()), report.periodEnd)
+    }
+
+    @Test
+    fun `unfinished workouts, warmups muscle, zero, and NaN weights are excluded safely`() = runTest {
+        val finishedWorkout = workout(
+            id = 1L,
+            start = localDateTime(2026, 2, 10, 10, 0),
+            end = localDateTime(2026, 2, 10, 11, 0),
+            name = "Push"
+        )
+        val unfinishedWorkout = Workout(
+            id = 2L,
+            startTime = localDateTime(2026, 2, 12, 10, 0),
+            endTime = null,
+            name = "Unfinished",
+            note = null,
+            rating = 5,
+            ratingNote = null,
+            routineDayId = null
+        )
+
+        coEvery { workoutDao.getAllWorkoutsSync() } returns listOf(finishedWorkout, unfinishedWorkout)
+        coEvery { workoutDao.getMuscleSetCountsInRange(any(), any()) } returns emptyList()
+        coEvery { workoutDao.getWorkoutDatesWithWorkingSets() } returns listOf("2026-02-10")
+        coEvery { userPreferencesRepository.restDaysPerWeek } returns flowOf(2)
+        coEvery { setDao.getPersonalBestBefore(any(), any()) } returns null
+        coEvery { setDao.getSetsWithExerciseInRange(match { it < localDateTime(2026, 2, 1, 0, 0).time }, any(), any(), any()) } returns listOf(
+            workingSet(workoutId = 99L, timestamp = localDateTime(2026, 1, 10, 10, 0))
+        )
+        coEvery { setDao.getSetsWithExerciseInRange(match { it >= localDateTime(2026, 2, 1, 0, 0).time }, any(), any(), any()) } returns listOf(
+            setWithExercise(
+                workoutId = finishedWorkout.id,
+                exerciseId = 1L,
+                exerciseName = "Bench Press",
+                muscle = "Chest",
+                weight = 0f,
+                reps = 10,
+                timestamp = localDateTime(2026, 2, 10, 10, 5),
+                isWarmup = false,
+                isComplete = true
+            ),
+            setWithExercise(
+                workoutId = finishedWorkout.id,
+                exerciseId = 2L,
+                exerciseName = "Curl",
+                muscle = "Biceps",
+                weight = Float.NaN,
+                reps = 8,
+                timestamp = localDateTime(2026, 2, 10, 10, 10),
+                isWarmup = false,
+                isComplete = true
+            ),
+            setWithExercise(
+                workoutId = finishedWorkout.id,
+                exerciseId = 3L,
+                exerciseName = "Arm Circles",
+                muscle = "Warmups",
+                weight = 20f,
+                reps = 15,
+                timestamp = localDateTime(2026, 2, 10, 10, 15),
+                isWarmup = false,
+                isComplete = true
+            ),
+            setWithExercise(
+                workoutId = unfinishedWorkout.id,
+                exerciseId = 4L,
+                exerciseName = "Deadlift",
+                muscle = "Back",
+                weight = 405f,
+                reps = 5,
+                timestamp = localDateTime(2026, 2, 12, 10, 10),
+                isWarmup = false,
+                isComplete = true
+            )
+        )
+
+        val report = useCase(reference = localDateTime(2026, 3, 15, 12, 0))
+
+        assertEquals(1, report.workoutCount)
+        assertEquals(0f, report.totalVolume, 0.01f)
+        assertNull(report.volumeChangePercent)
+        assertTrue(report.newPRs.isEmpty())
     }
 
     private fun workout(id: Long = 1L, start: Date, end: Date, name: String): Workout {
@@ -144,14 +231,19 @@ class MonthlyReportUseCaseTest {
         workoutId: Long,
         timestamp: Date,
         isWarmup: Boolean,
-        isComplete: Boolean
+        isComplete: Boolean,
+        exerciseId: Long = 1L,
+        exerciseName: String = "Squat",
+        muscle: String = "Legs",
+        weight: Float = 225f,
+        reps: Int = 5
     ): SetWithExerciseInfo {
         return SetWithExerciseInfo(
             set = Set(
                 workoutId = workoutId,
-                exerciseId = 1L,
-                weight = 225f,
-                reps = 5,
+                exerciseId = exerciseId,
+                weight = weight,
+                reps = reps,
                 rpe = null,
                 durationSeconds = null,
                 distanceMeters = null,
@@ -162,8 +254,8 @@ class MonthlyReportUseCaseTest {
                 supersetGroupId = null,
                 supersetOrderIndex = 0
             ),
-            exerciseName = "Squat",
-            targetMuscle = "Legs"
+            exerciseName = exerciseName,
+            targetMuscle = muscle
         )
     }
 

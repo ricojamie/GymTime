@@ -55,9 +55,15 @@ internal fun PlateCalculatorPreviewContent(
     val safeBar = barWeight.takeIf(Float::isFinite)?.coerceIn(0f, PlateCalculator.MAX_SUPPORTED_WEIGHT) ?: 0f
     val sides = loadingSides.coerceIn(1, 16)
     val options = remember(availablePlates) { PlateCalculator.sanitizePlateOptions(availablePlates) }
-    val inventory = plateInventory.takeIf { usePlateInventory }
-    val start = initialWeight.takeIf { it.isFinite() && it >= safeBar }
-        ?.coerceAtMost(PlateCalculator.MAX_SUPPORTED_WEIGHT) ?: safeBar
+    val normalizedInventory = remember(plateInventory) { PlateCalculator.sanitizePlateInventory(plateInventory) }
+    val inventory = remember(normalizedInventory, usePlateInventory) {
+        normalizedInventory.takeIf { usePlateInventory }
+    }
+    val start = remember(initialWeight, safeBar) {
+        initialWeight.takeIf { it.isFinite() && it >= safeBar }
+            ?.coerceAtMost(PlateCalculator.MAX_SUPPORTED_WEIGHT) ?: safeBar
+    }
+
     var modeName by rememberSaveable { mutableStateOf(initialMode.name) }
     val mode = PlateCalculatorMode.valueOf(modeName)
     var targetText by rememberSaveable { mutableStateOf(PlateCalculator.formatWeight(start)) }
@@ -66,7 +72,7 @@ internal fun PlateCalculatorPreviewContent(
     var inventoryEditing by remember { mutableStateOf(false) }
     var pendingCounts by remember { mutableStateOf<Map<Float, Int>>(emptyMap()) }
     var pendingLimit by remember { mutableStateOf<Boolean?>(null) }
-    val normalizedInventory = remember(plateInventory) { PlateCalculator.sanitizePlateInventory(plateInventory) }
+
     LaunchedEffect(normalizedInventory, pendingCounts) {
         val remaining = pendingCounts.filter { (plate, count) -> (normalizedInventory[plate] ?: 0) != count }
         if (remaining != pendingCounts) pendingCounts = remaining
@@ -74,25 +80,36 @@ internal fun PlateCalculatorPreviewContent(
     LaunchedEffect(usePlateInventory, pendingLimit) {
         if (pendingLimit == usePlateInventory) pendingLimit = null
     }
+
     var manualDraft by rememberSaveable {
-        mutableStateOf(ArrayList(
-            if (initialMode == PlateCalculatorMode.BUILD) {
-                PlateCalculator.calculatePlates(start, options, safeBar, sides, inventory).platesPerSide
-            } else emptyList()
-        ))
+        mutableStateOf(
+            ArrayList(
+                if (initialMode == PlateCalculatorMode.BUILD) {
+                    PlateCalculator.calculatePlates(start, options, safeBar, sides, inventory).platesPerSide
+                } else {
+                    emptyList()
+                }
+            )
+        )
     }
-    val manual = validManualPlates(manualDraft, options, sides, inventory, safeBar)
+
+    val manual = remember(manualDraft, options, sides, inventory, safeBar) {
+        validManualPlates(manualDraft, options, sides, inventory, safeBar)
+    }
     // Constrained snapshot is rendered immediately, before this effect reconciles the local draft.
     // Removing stock/options never briefly presents an unavailable load as usable.
     LaunchedEffect(options, sides, inventory, safeBar) {
         val current = validManualPlates(manualDraft, options, sides, inventory, safeBar)
         if (manualDraft != current) manualDraft = ArrayList(current)
     }
+
     val target = targetText.toFloatOrNull()?.takeIf { it.isFinite() && it in 0f..PlateCalculator.MAX_SUPPORTED_WEIGHT }
     val targetLoadout = remember(target, options, safeBar, sides, inventory) {
         PlateCalculator.calculatePlates(target ?: safeBar, options, safeBar, sides, inventory)
     }
-    val manualTotal = PlateCalculator.calculateTotalWeight(manual, safeBar, sides)
+    val manualTotal = remember(manual, safeBar, sides) {
+        PlateCalculator.calculateTotalWeight(manual, safeBar, sides)
+    }
     val total = if (mode == PlateCalculatorMode.TARGET) targetLoadout.totalWeight else manualTotal
     val inventoryPending = pendingCounts.isNotEmpty() || pendingLimit != null
     val canUse = total.isFinite() && total >= safeBar &&
@@ -109,13 +126,29 @@ internal fun PlateCalculatorPreviewContent(
         val current = validManualPlates(manualDraft, options, sides, inventory, safeBar)
         if (PlateCalculator.canAddPlate(current, plate, sides, inventory) &&
             safeBar.toDouble() + (current.sumOf { it.toDouble() } + plate) * sides <= PlateCalculator.MAX_SUPPORTED_WEIGHT
-        ) manualDraft = ArrayList(current + plate)
+        ) {
+            manualDraft = ArrayList(current + plate)
+        }
     }
 
     PlateCalculatorPreviewLayout(
-        state = PlateCalculatorUiState(mode, safeBar, sides, options, targetText, target,
-            targetLoadout, manual, total, plateInventory, usePlateInventory, inventoryExpanded, canUse,
-            inventoryEditing, inventoryPending),
+        state = PlateCalculatorUiState(
+            mode = mode,
+            barWeight = safeBar,
+            loadingSides = sides,
+            availablePlates = options,
+            targetText = targetText,
+            target = target,
+            targetLoadout = targetLoadout,
+            manualPlates = manual,
+            loadedTotal = total,
+            plateInventory = normalizedInventory,
+            usePlateInventory = usePlateInventory,
+            inventoryExpanded = inventoryExpanded,
+            canUse = canUse,
+            inventoryEditing = inventoryEditing,
+            inventoryPending = inventoryPending
+        ),
         onDismiss = onDismiss,
         onNavigateToSettings = onNavigateToSettings,
         onUseWeight = {
@@ -133,12 +166,24 @@ internal fun PlateCalculatorPreviewContent(
         onSelectMode = { next ->
             if (next.name != modeName) {
                 if (next == PlateCalculatorMode.BUILD && !manualVisited) {
-                    manualDraft = ArrayList(PlateCalculator.calculatePlates(
-                        targetText.toFloatOrNull() ?: safeBar, options, safeBar, sides, inventory).platesPerSide)
+                    manualDraft = ArrayList(
+                        PlateCalculator.calculatePlates(
+                            targetText.toFloatOrNull() ?: safeBar,
+                            options,
+                            safeBar,
+                            sides,
+                            inventory
+                        ).platesPerSide
+                    )
                     manualVisited = true
                 } else if (next == PlateCalculatorMode.TARGET) {
-                    targetText = PlateCalculator.formatWeight(PlateCalculator.calculateTotalWeight(
-                        validManualPlates(manualDraft, options, sides, inventory, safeBar), safeBar, sides))
+                    targetText = PlateCalculator.formatWeight(
+                        PlateCalculator.calculateTotalWeight(
+                            validManualPlates(manualDraft, options, sides, inventory, safeBar),
+                            safeBar,
+                            sides
+                        )
+                    )
                 }
                 modeName = next.name
             }
@@ -148,11 +193,14 @@ internal fun PlateCalculatorPreviewContent(
             if (value.length <= 8 && value.count { it == '.' } <= 1 &&
                 value.all { it.isDigit() || it == '.' } &&
                 (parsed == null || parsed <= PlateCalculator.MAX_SUPPORTED_WEIGHT)
-            ) targetText = value
+            ) {
+                targetText = value
+            }
         },
         onTargetStep = { direction ->
             val increment = (options.minOrNull() ?: 2.5f) * sides
-            val next = ((targetText.toFloatOrNull() ?: safeBar) + increment * direction).coerceIn(safeBar, PlateCalculator.MAX_SUPPORTED_WEIGHT)
+            val next = ((targetText.toFloatOrNull() ?: safeBar) + increment * direction)
+                .coerceIn(safeBar, PlateCalculator.MAX_SUPPORTED_WEIGHT)
             targetText = PlateCalculator.formatWeight(next)
         },
         onAddPlate = ::addPlate,
@@ -177,7 +225,9 @@ internal fun PlateCalculatorPreviewContent(
                 if (onPlateInventoryCountDelta != null) {
                     pendingCounts = pendingCounts + (key to next)
                     onPlateInventoryCountDelta(key, delta)
-                } else setPlateCount(key, next)
+                } else {
+                    setPlateCount(key, next)
+                }
             }
         },
         onInventoryEditingChange = { inventoryEditing = it },

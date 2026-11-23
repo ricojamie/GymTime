@@ -1,30 +1,48 @@
 package com.example.gymtime.ui.summary
 
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
+import com.example.gymtime.ai.NarrativeGenerator
+import com.example.gymtime.ai.NarrativeGeneratorType
+import com.example.gymtime.ai.NarrativeRequest
+import com.example.gymtime.ai.NarrativeResult
 import com.example.gymtime.data.VolumeOrbRepository
 import com.example.gymtime.data.VolumeOrbState
-import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.db.dao.ExerciseDao
+import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.dao.SetDao
+import com.example.gymtime.data.db.dao.SetWithExerciseInfo
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
-import com.example.gymtime.ai.NarrativeGenerator
 import com.example.gymtime.domain.share.ShareWorkoutUseCase
+import com.example.gymtime.domain.share.ShareableWorkout
+import com.example.gymtime.domain.summary.WorkoutRecapFacts
 import com.example.gymtime.domain.summary.WorkoutRecapFactsUseCase
+import com.example.gymtime.util.ShareImagePalette
 import com.example.gymtime.util.TestDispatcherRule
 import com.example.gymtime.util.WorkoutShareImageGenerator
-import io.mockk.*
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import io.mockk.Runs
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.just
+import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -40,12 +58,12 @@ class PostWorkoutSummaryViewModelTest {
     private lateinit var workoutDao: WorkoutDao
     private lateinit var setDao: SetDao
     private lateinit var exerciseDao: ExerciseDao
+    private lateinit var muscleGroupDao: MuscleGroupDao
     private lateinit var volumeOrbRepository: VolumeOrbRepository
     private lateinit var shareWorkoutUseCase: ShareWorkoutUseCase
     private lateinit var workoutShareImageGenerator: WorkoutShareImageGenerator
     private lateinit var workoutRecapFactsUseCase: WorkoutRecapFactsUseCase
     private lateinit var narrativeGenerator: NarrativeGenerator
-    private lateinit var userPreferencesRepository: UserPreferencesRepository
 
     private val testWorkoutId = 1L
     private val testWorkout = Workout(
@@ -70,18 +88,40 @@ class PostWorkoutSummaryViewModelTest {
     )
 
     private val testSets = listOf(
-        Set(id = 1, workoutId = testWorkoutId, exerciseId = 1L, weight = 135f, reps = 10, 
-            rpe = null, durationSeconds = null, distanceMeters = null, isWarmup = true, 
-            isComplete = true, timestamp = Date(), note = null, supersetGroupId = null, supersetOrderIndex = 0),
-        Set(id = 2, workoutId = testWorkoutId, exerciseId = 1L, weight = 185f, reps = 8, 
-            rpe = 8f, durationSeconds = null, distanceMeters = null, isWarmup = false, 
-            isComplete = true, timestamp = Date(), note = null, supersetGroupId = null, supersetOrderIndex = 0),
-        Set(id = 3, workoutId = testWorkoutId, exerciseId = 1L, weight = 185f, reps = 8, 
-            rpe = 8.5f, durationSeconds = null, distanceMeters = null, isWarmup = false, 
-            isComplete = true, timestamp = Date(), note = null, supersetGroupId = null, supersetOrderIndex = 0),
-        Set(id = 4, workoutId = testWorkoutId, exerciseId = 1L, weight = 185f, reps = 6, 
-            rpe = 9f, durationSeconds = null, distanceMeters = null, isWarmup = false, 
-            isComplete = true, timestamp = Date(), note = null, supersetGroupId = null, supersetOrderIndex = 0)
+        Set(
+            id = 1, workoutId = testWorkoutId, exerciseId = 1L, weight = 135f, reps = 10,
+            rpe = null, durationSeconds = null, distanceMeters = null, isWarmup = true,
+            isComplete = true, timestamp = Date(), note = null, supersetGroupId = null, supersetOrderIndex = 0
+        ),
+        Set(
+            id = 2, workoutId = testWorkoutId, exerciseId = 1L, weight = 185f, reps = 8,
+            rpe = 8f, durationSeconds = null, distanceMeters = null, isWarmup = false,
+            isComplete = true, timestamp = Date(), note = null, supersetGroupId = null, supersetOrderIndex = 0
+        ),
+        Set(
+            id = 3, workoutId = testWorkoutId, exerciseId = 1L, weight = 185f, reps = 8,
+            rpe = 8.5f, durationSeconds = null, distanceMeters = null, isWarmup = false,
+            isComplete = true, timestamp = Date(), note = null, supersetGroupId = null, supersetOrderIndex = 0
+        ),
+        Set(
+            id = 4, workoutId = testWorkoutId, exerciseId = 1L, weight = 185f, reps = 6,
+            rpe = 9f, durationSeconds = null, distanceMeters = null, isWarmup = false,
+            isComplete = true, timestamp = Date(), note = null, supersetGroupId = null, supersetOrderIndex = 0
+        )
+    )
+
+    private val testSetInfos = testSets.map {
+        SetWithExerciseInfo(it, testExercise.name, testExercise.targetMuscle)
+    }
+
+    private val testPalette = ShareImagePalette(
+        background = 0xFF101010.toInt(),
+        card = 0xFF1C1C1C.toInt(),
+        accent = 0xFFA3E635.toInt(),
+        accentSoft = 0xFF283314.toInt(),
+        textPrimary = 0xFFFFFFFF.toInt(),
+        textMuted = 0xFF9E9E9E.toInt(),
+        onAccent = 0xFF000000.toInt()
     )
 
     @Before
@@ -90,19 +130,26 @@ class PostWorkoutSummaryViewModelTest {
         workoutDao = mockk(relaxed = true)
         setDao = mockk(relaxed = true)
         exerciseDao = mockk(relaxed = true)
+        muscleGroupDao = mockk(relaxed = true)
         volumeOrbRepository = mockk(relaxed = true)
         shareWorkoutUseCase = mockk(relaxed = true)
         workoutShareImageGenerator = mockk(relaxed = true)
         workoutRecapFactsUseCase = mockk(relaxed = true)
         narrativeGenerator = mockk(relaxed = true)
-        userPreferencesRepository = mockk(relaxed = true)
-        every { userPreferencesRepository.newUiEnabled } returns flowOf(true)
 
         every { workoutDao.getWorkoutById(testWorkoutId) } returns flowOf(testWorkout)
-        every { setDao.getSetsForWorkout(testWorkoutId) } returns flowOf(testSets)
-        coEvery { exerciseDao.getExerciseByIdSync(1L) } returns testExercise
-        every { volumeOrbRepository.orbState } returns MutableStateFlow(
-            VolumeOrbState(currentWeekVolume = 5000f, lastWeekVolume = 4000f, progressPercent = 125f, isFirstWeek = false, hasOverflowed = false, justOverflowed = false)
+        coEvery { setDao.getWorkoutSetsWithExercises(testWorkoutId) } returns testSetInfos
+        coEvery { exerciseDao.getAllExercisesSync() } returns listOf(testExercise)
+        coEvery { muscleGroupDao.getAllMuscleGroupNames() } returns listOf("Chest", "Legs")
+        every { volumeOrbRepository.orbState } returns kotlinx.coroutines.flow.MutableStateFlow(
+            VolumeOrbState(
+                currentWeekVolume = 5000f,
+                lastWeekVolume = 4000f,
+                progressPercent = 125f,
+                isFirstWeek = false,
+                hasOverflowed = false,
+                justOverflowed = false
+            )
         )
         coEvery { volumeOrbRepository.refresh() } just Runs
         coEvery { volumeOrbRepository.getSessionContribution(any()) } returns 1000f
@@ -111,16 +158,16 @@ class PostWorkoutSummaryViewModelTest {
 
     private fun createViewModel(): PostWorkoutSummaryViewModel {
         return PostWorkoutSummaryViewModel(
-            savedStateHandle,
-            workoutDao,
-            setDao,
-            exerciseDao,
-            volumeOrbRepository,
-            shareWorkoutUseCase,
-            workoutShareImageGenerator,
-            workoutRecapFactsUseCase,
-            narrativeGenerator,
-            userPreferencesRepository
+            savedStateHandle = savedStateHandle,
+            workoutDao = workoutDao,
+            setDao = setDao,
+            exerciseDao = exerciseDao,
+            muscleGroupDao = muscleGroupDao,
+            volumeOrbRepository = volumeOrbRepository,
+            shareWorkoutUseCase = shareWorkoutUseCase,
+            workoutShareImageGenerator = workoutShareImageGenerator,
+            workoutRecapFactsUseCase = workoutRecapFactsUseCase,
+            narrativeGenerator = narrativeGenerator
         )
     }
 
@@ -129,6 +176,8 @@ class PostWorkoutSummaryViewModelTest {
         val viewModel = createViewModel()
         advanceUntilIdle()
         assertNotNull(viewModel.workoutStats.value)
+        coVerify(exactly = 1) { setDao.getWorkoutSetsWithExercises(testWorkoutId) }
+        coVerify(exactly = 0) { exerciseDao.getExerciseByIdSync(any()) }
     }
 
     @Test
@@ -168,8 +217,9 @@ class PostWorkoutSummaryViewModelTest {
             isComplete = true,
             timestamp = Date()
         )
-        every { setDao.getSetsForWorkout(testWorkoutId) } returns flowOf(testSets + warmupActivity)
-        coEvery { exerciseDao.getExerciseByIdSync(warmupExercise.id) } returns warmupExercise
+        coEvery { setDao.getWorkoutSetsWithExercises(testWorkoutId) } returns (
+            testSetInfos + SetWithExerciseInfo(warmupActivity, warmupExercise.name, warmupExercise.targetMuscle)
+        )
 
         val viewModel = createViewModel()
         advanceUntilIdle()
@@ -206,6 +256,8 @@ class PostWorkoutSummaryViewModelTest {
         viewModel.saveAndFinish()
         advanceUntilIdle()
         coVerify { workoutDao.updateWorkout(match { it.rating == 5 }) }
+        // U8: stays saving once exited rather than flickering false in finally.
+        assertTrue(viewModel.uiState.value.isSaving)
     }
 
     @Test
@@ -230,8 +282,9 @@ class PostWorkoutSummaryViewModelTest {
         val unfinished = testSets.last().copy(
             id = 8L, exerciseId = 2L, weight = 500f, reps = 20, isComplete = false
         )
-        every { setDao.getSetsForWorkout(testWorkoutId) } returns flowOf(testSets + unfinished)
-        coEvery { exerciseDao.getExerciseByIdSync(2L) } returns testExercise.copy(id = 2L, targetMuscle = "Legs")
+        coEvery { setDao.getWorkoutSetsWithExercises(testWorkoutId) } returns (
+            testSetInfos + SetWithExerciseInfo(unfinished, "Squat", "Legs")
+        )
 
         val viewModel = createViewModel()
         advanceUntilIdle()
@@ -260,12 +313,14 @@ class PostWorkoutSummaryViewModelTest {
 
     @Test
     fun restoredDraftWinsOverSavedFeedbackAndSurvivesRetry() = runTest {
-        savedStateHandle = SavedStateHandle(mapOf(
-            "workoutId" to testWorkoutId,
-            "summary_draft_ready" to true,
-            "summary_rating_draft" to 2,
-            "summary_note_draft" to "Pending feedback"
-        ))
+        savedStateHandle = SavedStateHandle(
+            mapOf(
+                "workoutId" to testWorkoutId,
+                "summary_draft_ready" to true,
+                "summary_rating_draft" to 2,
+                "summary_note_draft" to "Pending feedback"
+            )
+        )
         every { workoutDao.getWorkoutById(testWorkoutId) } returns flowOf(testWorkout.copy(rating = 5, ratingNote = "Old feedback"))
         val viewModel = createViewModel()
         advanceUntilIdle()
@@ -335,8 +390,8 @@ class PostWorkoutSummaryViewModelTest {
     }
 
     @Test
-    fun statsFailureIsExplicitAndCanBeRetried() = runTest {
-        every { workoutDao.getWorkoutById(testWorkoutId) } returns kotlinx.coroutines.flow.flow { error("Read failed") }
+    fun statsFailureIsExplicitAndRetryRefreshesOrbAndRecapToo() = runTest {
+        every { workoutDao.getWorkoutById(testWorkoutId) } returns flow { error("Read failed") }
         val viewModel = createViewModel()
         advanceUntilIdle()
         assertNull(viewModel.uiState.value.stats)
@@ -348,12 +403,25 @@ class PostWorkoutSummaryViewModelTest {
         advanceUntilIdle()
         assertNotNull(viewModel.uiState.value.stats)
         assertNull(viewModel.uiState.value.loadError)
+        coVerify(exactly = 2) { volumeOrbRepository.refresh() }
+        coVerify(exactly = 2) { workoutRecapFactsUseCase(testWorkoutId) }
+    }
+
+    @Test
+    fun missingWorkoutIsHandledWithoutCrash() = runTest {
+        every { workoutDao.getWorkoutById(testWorkoutId) } returns flowOf(null)
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.stats)
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertNotNull(viewModel.uiState.value.loadError)
     }
 
     @Test
     fun doneBeforeInitialStatsLoadCannotOverwriteSavedFeedback() = runTest {
         val gate = CompletableDeferred<Unit>()
-        every { workoutDao.getWorkoutById(testWorkoutId) } returns kotlinx.coroutines.flow.flow {
+        every { workoutDao.getWorkoutById(testWorkoutId) } returns flow {
             gate.await()
             emit(testWorkout.copy(rating = 5, ratingNote = "Existing feedback"))
         }
@@ -370,10 +438,12 @@ class PostWorkoutSummaryViewModelTest {
 
     @Test
     fun restoredClearedRatingIsNotReplacedBySavedRating() = runTest {
-        savedStateHandle = SavedStateHandle(mapOf(
-            "workoutId" to testWorkoutId, "summary_draft_ready" to true,
-            "summary_rating_draft" to null, "summary_note_draft" to "Existing note"
-        ))
+        savedStateHandle = SavedStateHandle(
+            mapOf(
+                "workoutId" to testWorkoutId, "summary_draft_ready" to true,
+                "summary_rating_draft" to null, "summary_note_draft" to "Existing note"
+            )
+        )
         every { workoutDao.getWorkoutById(testWorkoutId) } returns flowOf(testWorkout.copy(rating = 5, ratingNote = "Existing note"))
         val viewModel = createViewModel()
         advanceUntilIdle()
@@ -388,7 +458,7 @@ class PostWorkoutSummaryViewModelTest {
     @Test
     fun noteEditedDuringLoadDoesNotClearUneditedSavedRating() = runTest {
         val gate = CompletableDeferred<Unit>()
-        every { workoutDao.getWorkoutById(testWorkoutId) } returns kotlinx.coroutines.flow.flow {
+        every { workoutDao.getWorkoutById(testWorkoutId) } returns flow {
             gate.await()
             emit(testWorkout.copy(rating = 5, ratingNote = "Old note"))
         }
@@ -400,5 +470,88 @@ class PostWorkoutSummaryViewModelTest {
 
         assertEquals(5, viewModel.selectedRating.value)
         assertEquals("New note", viewModel.ratingNote.value)
+    }
+
+    @Test
+    fun recapValidationPopulatesKnownMusclesAndExercises() = runTest {
+        val facts = WorkoutRecapFacts(
+            workoutId = testWorkoutId,
+            totalVolume = 4070f,
+            workingSetCount = 3,
+            exerciseCount = 1,
+            muscles = listOf("Chest"),
+            personalRecordExercises = listOf("Bench Press"),
+            leadingMuscle = "Chest",
+            isHighestComparableVolumeInSixWeeks = false,
+            comparableWorkoutCount = 0
+        )
+        val squat = testExercise.copy(id = 2L, name = "Barbell Squat", targetMuscle = "Legs")
+        coEvery { workoutRecapFactsUseCase(testWorkoutId) } returns facts
+        coEvery { exerciseDao.getAllExercisesSync() } returns listOf(testExercise, squat)
+        coEvery { muscleGroupDao.getAllMuscleGroupNames() } returns listOf("Chest", "Legs", "Back")
+        val requestSlot = slot<NarrativeRequest>()
+        every { narrativeGenerator.generate(capture(requestSlot)) } returns flowOf(
+            NarrativeResult("PR on Bench Press during a 3-set session.", NarrativeGeneratorType.TEMPLATE)
+        )
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val knownNames = requestSlot.captured.validationRules.knownNames
+        assertTrue("Barbell Squat" in knownNames)
+        assertTrue("Bench Press" in knownNames)
+        assertTrue("Legs" in knownNames)
+        assertTrue("Back" in knownNames)
+        assertTrue("Chest" in knownNames)
+    }
+
+    @Test
+    fun shareAwaitsInitialRecapAndGuardsDoubleTaps() = runTest {
+        val recapGate = CompletableDeferred<WorkoutRecapFacts?>()
+        val imageGate = CompletableDeferred<Uri>()
+        val facts = WorkoutRecapFacts(
+            workoutId = testWorkoutId,
+            totalVolume = 4070f,
+            workingSetCount = 3,
+            exerciseCount = 1,
+            muscles = listOf("Chest"),
+            personalRecordExercises = emptyList(),
+            leadingMuscle = "Chest",
+            isHighestComparableVolumeInSixWeeks = false,
+            comparableWorkoutCount = 0
+        )
+        coEvery { workoutRecapFactsUseCase(testWorkoutId) } coAnswers { recapGate.await() }
+        every { narrativeGenerator.generate(any()) } returns flowOf(
+            NarrativeResult("Logged 3 working sets.", NarrativeGeneratorType.TEMPLATE)
+        )
+        val shareable = ShareableWorkout(
+            date = Date(),
+            durationMinutes = 60,
+            totalVolume = 4070f,
+            totalWorkingSets = 3,
+            exercises = emptyList(),
+            recap = "Logged 3 working sets."
+        )
+        coEvery { shareWorkoutUseCase.buildShareableWorkout(testWorkoutId, "Logged 3 working sets.") } returns shareable
+        coEvery { workoutShareImageGenerator.generate(shareable, testPalette) } coAnswers { imageGate.await() }
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        // Share awaits initial recap readiness before building payload.
+        viewModel.onShareClicked(testPalette)
+        viewModel.onShareClicked(testPalette)
+        advanceUntilIdle()
+        coVerify(exactly = 0) { shareWorkoutUseCase.buildShareableWorkout(any(), any()) }
+
+        recapGate.complete(facts)
+        advanceUntilIdle()
+        coVerify(exactly = 1) { shareWorkoutUseCase.buildShareableWorkout(testWorkoutId, "Logged 3 working sets.") }
+        coVerify(exactly = 1) { workoutShareImageGenerator.generate(shareable, testPalette) }
+
+        val mockUri = mockk<Uri>()
+        imageGate.complete(mockUri)
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isExporting)
     }
 }

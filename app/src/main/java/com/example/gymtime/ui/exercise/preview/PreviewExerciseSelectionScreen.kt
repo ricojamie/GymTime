@@ -10,21 +10,32 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.navigation.navigateBackOrHome
+import com.example.gymtime.navigation.navigateResumed
 import com.example.gymtime.navigation.navigateToWorkoutExercise
 import com.example.gymtime.ui.exercise.ExerciseSelectionViewModel
 import com.example.gymtime.ui.smartlog.SmartLogBottomSheet
+import com.example.gymtime.ui.theme.IronLogRadius
+import com.example.gymtime.ui.theme.IronLogSpace
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.launch
 
 /** App wiring shared with the existing selection flows; the preview owns only presentation. */
 @Composable
@@ -48,7 +59,10 @@ fun PreviewExerciseSelectionScreen(
     var exerciseToDelete by remember { mutableStateOf<Exercise?>(null) }
     var showSmartLog by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
-    val pickerBackStackEntry = remember(navController) { navController.currentBackStackEntry }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val pickerBackStackEntry = remember(lifecycleOwner, navController) {
+        lifecycleOwner as? NavBackStackEntry ?: navController.currentBackStackEntry
+    }
 
     LaunchedEffect(viewModel, pickerBackStackEntry) {
         val entry = pickerBackStackEntry ?: return@LaunchedEffect
@@ -57,27 +71,42 @@ fun PreviewExerciseSelectionScreen(
                 .getStateFlow<Long?>(Screen.ExerciseForm.RESULT_CREATED_EXERCISE_ID, null)
                 .filterNotNull()
                 .collect { exerciseId ->
-                    viewModel.handleCreatedExercise(exerciseId)
                     entry.savedStateHandle[Screen.ExerciseForm.RESULT_CREATED_EXERCISE_ID] = null
+                    viewModel.handleCreatedExercise(exerciseId)
                 }
         }
     }
 
-    LaunchedEffect(viewModel, navController) {
-        viewModel.supersetStarted.collect { navController.popBackStack() }
-    }
-    LaunchedEffect(viewModel, navController) {
-        viewModel.exerciseAddedToSuperset.collect { navController.popBackStack() }
-    }
-    LaunchedEffect(viewModel, navController) {
-        viewModel.swapExerciseEvent.collect { event ->
-            when (event) {
-                is ExerciseSelectionViewModel.SwapExerciseEvent.Success -> navController.navigateToWorkoutExercise(event.exerciseId)
-                is ExerciseSelectionViewModel.SwapExerciseEvent.Error -> snackbar.showSnackbar(event.message)
+    LaunchedEffect(viewModel, navController, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            launch {
+                viewModel.supersetStarted.collect {
+                    navController.popBackStack()
+                }
+            }
+            launch {
+                viewModel.exerciseAddedToSuperset.collect {
+                    navController.popBackStack()
+                }
+            }
+            launch {
+                viewModel.swapExerciseEvent.collect { event ->
+                    when (event) {
+                        is ExerciseSelectionViewModel.SwapExerciseEvent.Success ->
+                            navController.navigateToWorkoutExercise(event.exerciseId)
+                        is ExerciseSelectionViewModel.SwapExerciseEvent.Error ->
+                            launch { snackbar.showSnackbar(event.message) }
+                    }
+                }
+            }
+            launch {
+                viewModel.selectionMessages.collect { message ->
+                    launch { snackbar.showSnackbar(message) }
+                }
             }
         }
     }
-    LaunchedEffect(viewModel) { viewModel.selectionMessages.collect { snackbar.showSnackbar(it) } }
+
     BackHandler(enabled = mode == PickerMode.BUILD_SUPERSET) { viewModel.toggleSupersetMode() }
 
     Box(Modifier.fillMaxSize()) {
@@ -106,12 +135,19 @@ fun PreviewExerciseSelectionScreen(
             },
             onAction = { action ->
                 when (action) {
-                    PickerAction.Back -> if (mode == PickerMode.BUILD_SUPERSET) viewModel.toggleSupersetMode() else navController.navigateBackOrHome()
+                    PickerAction.Back -> {
+                        if (mode == PickerMode.BUILD_SUPERSET) viewModel.toggleSupersetMode()
+                        else navController.navigateBackOrHome()
+                    }
                     PickerAction.ToggleSuperset -> viewModel.toggleSupersetMode()
-                    PickerAction.StartSuperset -> if (viewModel.canStartSuperset()) navController.navigateToWorkoutExercise(viewModel.startSuperset())
+                    PickerAction.StartSuperset -> {
+                        if (viewModel.canStartSuperset()) {
+                            navController.navigateToWorkoutExercise(viewModel.startSuperset())
+                        }
+                    }
                     PickerAction.ClearFilters -> viewModel.clearPreviewMuscleFilters()
                     PickerAction.SmartLog -> showSmartLog = true
-                    is PickerAction.Create -> navController.navigate(
+                    is PickerAction.Create -> navController.navigateResumed(
                         Screen.ExerciseForm.createRoute(
                             fromWorkout = isWorkout && mode == PickerMode.BROWSE,
                             initialName = action.name,
@@ -119,42 +155,64 @@ fun PreviewExerciseSelectionScreen(
                             returnToPicker = mode != PickerMode.BROWSE || !isWorkout
                         )
                     )
-                    is PickerAction.Edit -> navController.navigate(Screen.ExerciseForm.createRoute(action.exercise.id))
+                    is PickerAction.Edit -> navController.navigateResumed(
+                        Screen.ExerciseForm.createRoute(action.exercise.id)
+                    )
                     is PickerAction.Delete -> exerciseToDelete = action.exercise
                     is PickerAction.TogglePr -> viewModel.toggleExerciseStarred(action.exercise)
                 }
             }
         )
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = if (showNavigationChrome) 8.dp else 104.dp))
+        SnackbarHost(
+            hostState = snackbar,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = if (showNavigationChrome) 8.dp else IronLogSpace.BottomNavClearance)
+        )
     }
+
     exerciseToDelete?.let { exercise ->
         AlertDialog(
             onDismissRequest = { exerciseToDelete = null },
+            shape = IronLogRadius.CardShape,
+            containerColor = MaterialTheme.colorScheme.surface,
             title = { Text("Delete exercise?") },
             text = { Text("Delete “${exercise.name}” and all its logged history? This cannot be undone.") },
             confirmButton = {
-                TextButton(onClick = { viewModel.deleteExercise(exercise.id); exerciseToDelete = null }) {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteExercise(exercise.id)
+                        exerciseToDelete = null
+                    }
+                ) {
                     Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
-            dismissButton = { TextButton(onClick = { exerciseToDelete = null }) { Text("Cancel") } }
+            dismissButton = {
+                TextButton(onClick = { exerciseToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
+
     if (showSmartLog) {
         SmartLogBottomSheet(
             onDismiss = { showSmartLog = false },
-            onNavigateToLogger = { id, token -> showSmartLog = false; navController.navigateToWorkoutExercise(id, token) },
+            onNavigateToLogger = { id, token ->
+                showSmartLog = false
+                navController.navigateToWorkoutExercise(id, token)
+            },
             onCreateExercise = { name ->
                 showSmartLog = false
-                navController.navigate(
+                navController.navigateResumed(
                     Screen.ExerciseForm.createRoute(
                         fromWorkout = true,
                         initialName = name,
                         initialMuscle = picker.selectedMuscles.singleOrNull()
                     )
                 )
-            },
-            useThemeForegrounds = true
+            }
         )
     }
 }

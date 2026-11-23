@@ -20,10 +20,15 @@ class SmartLogDraftStore @Inject constructor() {
         var index: Int = 0
     )
 
-    private val queues = mutableMapOf<String, Queue>()
+    // Bound stored queues with access-ordered LRU eviction so abandoned tokens cannot grow unboundedly.
+    private val queues = object : LinkedHashMap<String, Queue>(MAX_DRAFTS + 1, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Queue>?): Boolean =
+            size > MAX_DRAFTS
+    }
 
     @Synchronized
     fun put(draft: ValidatedSmartLogDraft): String {
+        require(draft.sets.isNotEmpty()) { "Smart Log draft must contain at least one set." }
         val token = UUID.randomUUID().toString()
         queues[token] = Queue(draft)
         return token
@@ -62,5 +67,9 @@ class SmartLogDraftStore @Inject constructor() {
     @Synchronized
     fun discard(token: String?) {
         if (token != null) queues.remove(token)
+    }
+
+    companion object {
+        const val MAX_DRAFTS = 20
     }
 }

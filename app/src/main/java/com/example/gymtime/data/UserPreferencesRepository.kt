@@ -2,28 +2,38 @@ package com.example.gymtime.data
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "user_preferences")
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "user_preferences",
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() }
+)
 
 @Singleton
 class UserPreferencesRepository @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
     private object PreferencesKeys {
         val USER_NAME = stringPreferencesKey("user_name")
         val EXERCISES_SEEDED = booleanPreferencesKey("exercises_seeded")
-        val ACTIVE_ROUTINE_ID = androidx.datastore.preferences.core.longPreferencesKey("active_routine_id")
+        val ACTIVE_ROUTINE_ID = longPreferencesKey("active_routine_id")
 
         // Theme and UI preferences
         val THEME_COLOR = stringPreferencesKey("theme_color")
@@ -38,13 +48,12 @@ class UserPreferencesRepository @Inject constructor(
         val AVAILABLE_PLATES = stringPreferencesKey("available_plates")
         val PLATE_INVENTORY = stringPreferencesKey("plate_inventory")
         val USE_PLATE_INVENTORY = booleanPreferencesKey("use_plate_inventory")
-        val BAR_WEIGHT = androidx.datastore.preferences.core.floatPreferencesKey("bar_weight")
-        val LOADING_SIDES = androidx.datastore.preferences.core.intPreferencesKey("loading_sides")
+        val BAR_WEIGHT = floatPreferencesKey("bar_weight")
+        val LOADING_SIDES = intPreferencesKey("loading_sides")
 
         // Display preferences
         val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
         val DARK_MODE = booleanPreferencesKey("dark_mode")
-        val NEW_UI_ENABLED = booleanPreferencesKey("new_ui_enabled")
 
         // Streak tracking
         val BEST_STREAK = intPreferencesKey("best_streak")
@@ -54,118 +63,75 @@ class UserPreferencesRepository @Inject constructor(
         val MONTHLY_REPORT_ENABLED = booleanPreferencesKey("monthly_report_enabled")
     }
 
-    val userName: Flow<String> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.USER_NAME] ?: "Athlete"
+    private companion object {
+        const val DEFAULT_PLATES_JSON = "[45.0, 35.0, 25.0, 15.0, 10.0, 5.0, 2.5]"
+    }
+
+    private val preferencesFlow: Flow<Preferences> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
         }
 
-    val exercisesSeeded: Flow<Boolean> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.EXERCISES_SEEDED] ?: false
-        }
+    private inline fun <T> prefFlow(crossinline mapper: (Preferences) -> T): Flow<T> =
+        preferencesFlow.map { mapper(it) }.distinctUntilChanged()
 
-    val activeRoutineId: Flow<Long?> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.ACTIVE_ROUTINE_ID]
-        }
+    private fun parseAvailablePlates(json: String?): List<Float> =
+        (json ?: DEFAULT_PLATES_JSON)
+            .removeSurrounding("[", "]")
+            .split(",")
+            .mapNotNull { it.trim().toFloatOrNull()?.takeIf(Float::isFinite) }
 
-    val themeColor: Flow<String> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.THEME_COLOR] ?: "lime"
-        }
+    val userName: Flow<String> = prefFlow { it[PreferencesKeys.USER_NAME] ?: "Athlete" }
 
-    val customThemeColor: Flow<String?> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.CUSTOM_THEME_COLOR]
-        }
+    val exercisesSeeded: Flow<Boolean> = prefFlow { it[PreferencesKeys.EXERCISES_SEEDED] ?: false }
 
-    val themeFont: Flow<String> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.THEME_FONT] ?: "bebas_neue"
-        }
+    val activeRoutineId: Flow<Long?> = prefFlow { it[PreferencesKeys.ACTIVE_ROUTINE_ID] }
 
-    val customFontUri: Flow<String?> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.CUSTOM_FONT_URI]
-        }
+    val themeColor: Flow<String> = prefFlow { it[PreferencesKeys.THEME_COLOR] ?: "lime" }
 
-    val timerAutoStart: Flow<Boolean> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.TIMER_AUTO_START] ?: true
-        }
+    val customThemeColor: Flow<String?> = prefFlow { it[PreferencesKeys.CUSTOM_THEME_COLOR] }
 
-    val timerAudioEnabled: Flow<Boolean> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.TIMER_AUDIO_ENABLED] ?: true
-        }
+    val themeFont: Flow<String> = prefFlow { it[PreferencesKeys.THEME_FONT] ?: "bebas_neue" }
 
-    val timerVibrateEnabled: Flow<Boolean> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.TIMER_VIBRATE_ENABLED] ?: true
-        }
+    val customFontUri: Flow<String?> = prefFlow { it[PreferencesKeys.CUSTOM_FONT_URI] }
 
-    val availablePlates: Flow<List<Float>> = context.dataStore.data
-        .map { preferences ->
-            val json = preferences[PreferencesKeys.AVAILABLE_PLATES]
-                ?: "[45.0, 35.0, 25.0, 15.0, 10.0, 5.0, 2.5]"
-            // Parse JSON to List<Float>
-            json.removeSurrounding("[", "]")
-                .split(",")
-                .mapNotNull { it.trim().toFloatOrNull() }
-        }
+    val timerAutoStart: Flow<Boolean> = prefFlow { it[PreferencesKeys.TIMER_AUTO_START] ?: true }
 
-    val barWeight: Flow<Float> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.BAR_WEIGHT] ?: 45f
-        }
+    val timerAudioEnabled: Flow<Boolean> = prefFlow { it[PreferencesKeys.TIMER_AUDIO_ENABLED] ?: true }
+
+    val timerVibrateEnabled: Flow<Boolean> = prefFlow { it[PreferencesKeys.TIMER_VIBRATE_ENABLED] ?: true }
+
+    val availablePlates: Flow<List<Float>> = prefFlow { parseAvailablePlates(it[PreferencesKeys.AVAILABLE_PLATES]) }
+
+    val barWeight: Flow<Float> = prefFlow { it[PreferencesKeys.BAR_WEIGHT] ?: 45f }
 
     /** Counts and toggle come from one emission so calculators never combine stale stock and mode. */
-    val plateInventorySettings: Flow<PlateInventorySettings> = context.dataStore.data
-        .map { preferences ->
-            PlateInventorySettings(
-                counts = PlateInventoryPreferences.decode(preferences[PreferencesKeys.PLATE_INVENTORY]),
-                enabled = preferences[PreferencesKeys.USE_PLATE_INVENTORY] ?: false
-            )
-        }
+    val plateInventorySettings: Flow<PlateInventorySettings> = prefFlow { preferences ->
+        PlateInventorySettings(
+            counts = PlateInventoryPreferences.decode(preferences[PreferencesKeys.PLATE_INVENTORY]),
+            enabled = preferences[PreferencesKeys.USE_PLATE_INVENTORY] ?: false
+        )
+    }
 
-    val plateInventory: Flow<Map<Float, Int>> = plateInventorySettings.map { it.counts }
+    val plateInventory: Flow<Map<Float, Int>> = plateInventorySettings.map { it.counts }.distinctUntilChanged()
 
-    val usePlateInventory: Flow<Boolean> = plateInventorySettings.map { it.enabled }
+    val usePlateInventory: Flow<Boolean> = plateInventorySettings.map { it.enabled }.distinctUntilChanged()
 
-    val loadingSides: Flow<Int> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.LOADING_SIDES] ?: 2
-        }
+    val loadingSides: Flow<Int> = prefFlow { it[PreferencesKeys.LOADING_SIDES] ?: 2 }
 
-    val keepScreenOn: Flow<Boolean> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.KEEP_SCREEN_ON] ?: false
-        }
+    val keepScreenOn: Flow<Boolean> = prefFlow { it[PreferencesKeys.KEEP_SCREEN_ON] ?: false }
 
-    val darkMode: Flow<Boolean> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.DARK_MODE] ?: true
-        }
+    val darkMode: Flow<Boolean> = prefFlow { it[PreferencesKeys.DARK_MODE] ?: true }
 
-    val newUiEnabled: Flow<Boolean> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.NEW_UI_ENABLED] ?: false
-        }
+    val bestStreak: Flow<Int> = prefFlow { it[PreferencesKeys.BEST_STREAK] ?: 0 }
 
-    val bestStreak: Flow<Int> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.BEST_STREAK] ?: 0
-        }
+    val restDaysPerWeek: Flow<Int> = prefFlow { it[PreferencesKeys.REST_DAYS_PER_WEEK] ?: 2 }
 
-    val restDaysPerWeek: Flow<Int> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.REST_DAYS_PER_WEEK] ?: 2
-        }
-
-    val monthlyReportEnabled: Flow<Boolean> = context.dataStore.data
-        .map { preferences ->
-            preferences[PreferencesKeys.MONTHLY_REPORT_ENABLED] ?: true
-        }
+    val monthlyReportEnabled: Flow<Boolean> = prefFlow { it[PreferencesKeys.MONTHLY_REPORT_ENABLED] ?: true }
 
     suspend fun setUserName(name: String) {
         context.dataStore.edit { preferences ->
@@ -291,19 +257,16 @@ class UserPreferencesRepository @Inject constructor(
         }
     }
 
-    suspend fun setNewUiEnabled(enabled: Boolean) {
+    suspend fun togglePlate(plate: Float) {
         context.dataStore.edit { preferences ->
-            preferences[PreferencesKeys.NEW_UI_ENABLED] = enabled
+            val currentPlates = parseAvailablePlates(preferences[PreferencesKeys.AVAILABLE_PLATES])
+            val newPlates = if (currentPlates.contains(plate)) {
+                currentPlates - plate
+            } else {
+                (currentPlates + plate).sortedDescending()
+            }
+            preferences[PreferencesKeys.AVAILABLE_PLATES] = newPlates.joinToString(",", "[", "]")
         }
-    }
-
-    suspend fun togglePlate(plate: Float, currentPlates: List<Float>) {
-        val newPlates = if (currentPlates.contains(plate)) {
-            currentPlates - plate
-        } else {
-            (currentPlates + plate).sorted().reversed()
-        }
-        setAvailablePlates(newPlates)
     }
 
     suspend fun updateBestStreakIfNeeded(currentStreak: Int) {

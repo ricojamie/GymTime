@@ -1,32 +1,26 @@
 package com.example.gymtime.ui.exercise
 
+import android.app.ForegroundServiceStartNotAllowedException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import androidx.core.content.ContextCompat
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gymtime.data.RoutineRepository
 import com.example.gymtime.data.UserPreferencesRepository
-import com.example.gymtime.data.VolumeOrbRepository
-import com.example.gymtime.data.VolumeOrbState
 import com.example.gymtime.data.db.dao.WorkoutPlanSummary
-import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
 import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.db.entity.isWarmupLibraryExercise
-import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
 import com.example.gymtime.data.repository.ExerciseRepository
 import com.example.gymtime.data.repository.WorkoutRepository
-import com.example.gymtime.domain.recommendation.ExerciseAttemptRecommendation
-import com.example.gymtime.domain.recommendation.ExerciseAttemptRecommendationUseCase
 import com.example.gymtime.domain.progression.LoggerProgressState
 import com.example.gymtime.domain.progression.buildLoggerProgress
 import com.example.gymtime.domain.progression.loggerRecordLabels
@@ -42,60 +36,50 @@ import com.example.gymtime.wear.WearDraftPatch
 import com.example.gymtime.wear.WearSessionSnapshot
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import java.math.BigDecimal
 import java.util.Date
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
-import kotlin.math.roundToInt
-
-data class WorkoutStats(
-    val totalSets: Int,
-    val totalVolume: Float,
-    val exerciseCount: Int,
-    val duration: String
-)
-
-data class MuscleBreakdown(
-    val muscle: String,
-    val setCount: Int,
-    val volume: Float
-)
-
-data class WorkoutPanelData(
-    val exercises: List<WorkoutExerciseSummary> = emptyList(),
-    val setPreviews: Map<Long, List<String>> = emptyMap(),
-    val muscleBreakdown: List<MuscleBreakdown> = emptyList(),
-    val stats: WorkoutStats = WorkoutStats(0, 0f, 0, "0m"),
-    // exerciseId -> planned working sets, for routine workouts only
-    val plannedSets: Map<Long, Int> = emptyMap()
-)
-
-data class PersonalRecords(
-    val heaviestWeight: Set?,
-    val bestE1RM: Pair<Set, Float>?, // Set and calculated E1RM
-    val bestE10RM: Pair<Set, Float>?  // Set and calculated E10RM (premium feature)
-)
 
 data class SmartLogQueueUiState(
     val currentSetNumber: Int,
     val totalSets: Int,
     val exerciseName: String
+)
+
+private data class ProgressScopeKey(
+    val exerciseId: Long,
+    val logType: LogType,
+    val distanceUnit: DistanceUnit,
+    val isWarmupLibrary: Boolean,
+    val workoutId: Long,
+    val workoutStartMs: Long
 )
 
 private data class WearWorkoutState(
@@ -104,17 +88,17 @@ private data class WearWorkoutState(
     val loggedSets: List<Set>
 )
 
-private data class WearPrimaryFields(
+private data class WearTextFields(
     val weight: String,
     val reps: String,
     val rpe: String,
     val duration: String,
-    val distance: String
+    val distance: String,
+    val calories: String
 )
 
 private data class WearFormState(
-    val primaryFields: WearPrimaryFields,
-    val calories: String,
+    val textFields: WearTextFields,
     val isWarmup: Boolean,
     val selectedDistanceUnit: DistanceUnit
 )
@@ -158,24 +142,21 @@ private data class SetInputValidationResult(
 }
 
 @HiltViewModel
-@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class ExerciseLoggingViewModel @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val savedStateHandle: SavedStateHandle,
     private val exerciseRepository: ExerciseRepository,
     private val workoutRepository: WorkoutRepository,
     private val userPreferencesRepository: UserPreferencesRepository,
-    private val volumeOrbRepository: VolumeOrbRepository,
     private val supersetManager: SupersetManager,
-    private val routineRepository: RoutineRepository,
-    private val recommendationUseCase: ExerciseAttemptRecommendationUseCase,
     private val activeWearSessionRepository: ActiveWearSessionRepository,
     private val smartLogDraftStore: SmartLogDraftStore,
     private val loggerCelebrations: LoggerCelebrationState = LoggerCelebrationState()
 ) : ViewModel() {
 
     private val exerciseId: Long = checkNotNull(savedStateHandle["exerciseId"])
-    private var activeSmartLogToken: String? = savedStateHandle["draftToken"]
+    private var activeSmartLogToken: String? = savedStateHandle[KEY_DRAFT_TOKEN]
     private var lastAppliedSmartLogIndex: Int? = null
     val smartLogDraftToken: String? get() = activeSmartLogToken
 
@@ -183,7 +164,6 @@ class ExerciseLoggingViewModel @Inject constructor(
     val isInSupersetMode = supersetManager.isInSupersetMode
     val supersetExercises = supersetManager.supersetExercises
     val currentSupersetIndex = supersetManager.currentExerciseIndex
-    private val supersetExited = MutableStateFlow(false)
 
     // Auto-switch event for superset navigation
     private val _autoSwitchEvent = Channel<Long>(Channel.BUFFERED)
@@ -192,30 +172,36 @@ class ExerciseLoggingViewModel @Inject constructor(
     // Service binding
     private var timerService: RestTimerService? = null
     private var serviceBound = false
+    private var bindRequested = false
+    private var serviceSyncJob: Job? = null
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val serviceBinder = binder as? RestTimerService.TimerBinder
             timerService = serviceBinder?.getService()
-            serviceBound = true
+            serviceBound = timerService != null
             Log.d("ExerciseLoggingVM", "Service connected")
 
-            // Sync timer state from service
-            timerService?.let { service ->
+            serviceSyncJob?.cancel()
+            serviceSyncJob = timerService?.let { service ->
                 viewModelScope.launch {
-                    service.remainingSeconds.collectLatest { seconds ->
-                        _countdownTimer.value = seconds
+                    launch {
+                        service.remainingSeconds.collectLatest { seconds ->
+                            _countdownTimer.value = seconds
+                        }
                     }
-                }
-                viewModelScope.launch {
-                    service.isRunning.collectLatest { running ->
-                        _isTimerRunning.value = running
+                    launch {
+                        service.isRunning.collectLatest { running ->
+                            _isTimerRunning.value = running
+                        }
                     }
                 }
             }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
+            serviceSyncJob?.cancel()
+            serviceSyncJob = null
             timerService = null
             serviceBound = false
             Log.d("ExerciseLoggingVM", "Service disconnected")
@@ -228,34 +214,36 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _currentWorkout = MutableStateFlow<Workout?>(null)
     val currentWorkout: StateFlow<Workout?> = _currentWorkout
 
-    val newUiEnabled = userPreferencesRepository.newUiEnabled
     val prCelebration = loggerCelebrations.celebration
 
     fun dismissPrCelebration(id: Long) = loggerCelebrations.dismiss(id)
     fun claimPrCelebrationHaptic(id: Long): Boolean = loggerCelebrations.claimHaptic(id)
 
-    // Only collect the full history while the preview is in use. Room invalidates this
-    // flow on inserts, edits, deletes, and workout changes, so records stay current.
-    val previewProgress: StateFlow<LoggerProgressState> = newUiEnabled.flatMapLatest { enabled ->
-        if (!enabled) {
-            flowOf(LoggerProgressState(isLoading = false))
-        } else {
-            combine(_exercise, _currentWorkout) { exercise, workout -> exercise to workout }
-                .flatMapLatest { (exercise, workout) ->
-                    if (exercise == null || workout == null) {
-                        flowOf(LoggerProgressState())
-                    } else {
-                        exerciseRepository.observeFullExerciseHistory(exerciseId).map { history ->
-                            buildLoggerProgress(exercise, history, workout)
-                        }
-                    }
-                }
+    // Collect full history when observed. Room invalidates on writes, so distinctUntilChanged
+    // prevents rebuilding multi-year progress when unrelated exercises' sets change.
+    val previewProgress: StateFlow<LoggerProgressState> = combine(_exercise, _currentWorkout) { exercise, workout ->
+        exercise to workout
+    }
+        .distinctUntilChanged { old, new ->
+            progressKey(old.first, old.second) == progressKey(new.first, new.second)
         }
-    }.flowOn(Dispatchers.Default).stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5_000),
-        LoggerProgressState()
-    )
+        .flatMapLatest { (exercise, workout) ->
+            if (exercise == null || workout == null) {
+                flowOf(LoggerProgressState())
+            } else {
+                exerciseRepository.observeFullExerciseHistory(exerciseId)
+                    .distinctUntilChanged()
+                    .map { history ->
+                        buildLoggerProgress(exercise, history, workout)
+                    }
+            }
+        }
+        .flowOn(Dispatchers.Default)
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            LoggerProgressState()
+        )
 
     private val _loggedSets = MutableStateFlow<List<Set>>(emptyList())
     val loggedSets: StateFlow<List<Set>> = _loggedSets
@@ -288,8 +276,11 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _countdownTimer = MutableStateFlow(0) // Represents the active COUNTDOWN
     val countdownTimer: StateFlow<Int> = _countdownTimer
 
-    // Store the exercise's default rest time
+    // Store the exercise's default rest time and initial load / user-adjustment guards
     private var exerciseDefaultRestSeconds: Int = 90
+    private var hasInitializedExerciseDefaults = false
+    private var lastAppliedPlanRestSeconds: Int? = null
+    private var hasUserAdjustedRestTime = false
 
     // Flag to ensure we only prefill weight/reps once per ViewModel instance
     private var hasPrefilled = false
@@ -303,6 +294,7 @@ class ExerciseLoggingViewModel @Inject constructor(
     private val _isPersistingSet = MutableStateFlow(false)
     val isPersistingSet: StateFlow<Boolean> = _isPersistingSet
     private val setPersistenceInFlight = AtomicBoolean(false)
+    private val isFinishingWorkout = AtomicBoolean(false)
 
     private val _smartLogQueue = MutableStateFlow<SmartLogQueueUiState?>(null)
     val smartLogQueue: StateFlow<SmartLogQueueUiState?> = _smartLogQueue
@@ -318,39 +310,18 @@ class ExerciseLoggingViewModel @Inject constructor(
     val editingSet: StateFlow<Set?> = _editingSet
     private var formBeforeEditing: SetFormSnapshot? = null
 
-    // Last workout data
-    private val _lastWorkoutSets = MutableStateFlow<List<Set>>(emptyList())
-    val lastWorkoutSets: StateFlow<List<Set>> = _lastWorkoutSets
+    // Validation state (updated synchronously on form/exercise changes to avoid regex work per recomposition)
+    private val _isCurrentInputValid = MutableStateFlow(false)
+    val isCurrentInputValidState: StateFlow<Boolean> = _isCurrentInputValid.asStateFlow()
 
-    // Previous-session reps/weight, surfaced as "last time" markers on the slider inputs
-    private val _lastReps = MutableStateFlow<Int?>(null)
-    val lastReps: StateFlow<Int?> = _lastReps
-
-    private val _lastWeight = MutableStateFlow<Int?>(null)
-    val lastWeight: StateFlow<Int?> = _lastWeight
-
-    // Personal bests by rep count - Map of reps -> PB with timestamp
-    private val _personalBestsByReps = MutableStateFlow<Map<Int, com.example.gymtime.data.db.dao.PBWithTimestamp>>(emptyMap())
-    val personalBestsByReps: StateFlow<Map<Int, com.example.gymtime.data.db.dao.PBWithTimestamp>> = _personalBestsByReps
-
-    private val _bestWeight = MutableStateFlow<String?>(null)
-    val bestWeight: StateFlow<String?> = _bestWeight
-
-    private val _bestReps = MutableStateFlow<String?>(null)
-    val bestReps: StateFlow<String?> = _bestReps
-
-    private val _attemptRecommendation = MutableStateFlow<ExerciseAttemptRecommendation?>(null)
-    val attemptRecommendation: StateFlow<ExerciseAttemptRecommendation?> = _attemptRecommendation
-
-    // Workout overview data
-    private val _workoutOverview = MutableStateFlow<List<WorkoutExerciseSummary>>(emptyList())
-    val workoutOverview: StateFlow<List<WorkoutExerciseSummary>> = _workoutOverview
-
-    private val _workoutPanelData = MutableStateFlow(WorkoutPanelData())
-    val workoutPanelData: StateFlow<WorkoutPanelData> = _workoutPanelData
+    private val _currentInputValidationMessage = MutableStateFlow<String?>(null)
+    val currentInputValidationMessageState: StateFlow<String?> = _currentInputValidationMessage.asStateFlow()
 
     private val _currentPlanItem = MutableStateFlow<WorkoutPlanSummary?>(null)
     val currentPlanItem: StateFlow<WorkoutPlanSummary?> = _currentPlanItem
+
+    private val _planItems = MutableStateFlow<List<WorkoutPlanSummary>>(emptyList())
+    private val resolvedExerciseCache = mutableMapOf<Long, Exercise>()
 
     // Position within a routine day's plan, e.g. "Pull Day · Exercise 2 of 6"
     data class PlanPosition(val index: Int, val total: Int, val dayName: String?)
@@ -378,16 +349,13 @@ class ExerciseLoggingViewModel @Inject constructor(
         viewModelScope.launch { userPreferencesRepository.adjustPlateInventoryCount(weight, delta) }
     }
 
-    // Volume Orb state
-    val volumeOrbState: StateFlow<VolumeOrbState> = volumeOrbRepository.orbState
-
     private val _navigationEvents = Channel<Long>(Channel.BUFFERED)
     val navigationEvents = _navigationEvents.receiveAsFlow()
 
     private var wearPublisherId: Long? = null
     private var wearPublishJob: Job? = null
 
-    // Adjacent exercises in a routine or one-off workout plan.
+    // Adjacent exercises in a routine, superset, or one-off workout plan.
     private val _nextExerciseId = MutableStateFlow<Long?>(null)
     val nextExerciseId: StateFlow<Long?> = _nextExerciseId
 
@@ -403,7 +371,7 @@ class ExerciseLoggingViewModel @Inject constructor(
         }
         // Bind to timer service
         val serviceIntent = Intent(context, RestTimerService::class.java)
-        context.bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+        bindRequested = context.bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
         Log.d("ExerciseLoggingVM", "Binding to RestTimerService")
 
         observeWearCommands()
@@ -412,31 +380,42 @@ class ExerciseLoggingViewModel @Inject constructor(
             // Load exercise via Repository
             exerciseRepository.getExercise(exerciseId).collectLatest { ex ->
                 _exercise.value = ex
-                // Set timer to exercise's default rest time
-                ex?.let {
-                    exerciseDefaultRestSeconds = it.defaultRestSeconds
-                    _restTime.value = it.defaultRestSeconds
-                    _selectedDistanceUnit.value = it.defaultDistanceUnit
-                    setWarmupState(false)
-                    _attemptRecommendation.value = runCatching {
-                        recommendationUseCase.getRecommendation(it)
-                    }.getOrNull()
-                    
-                    applySmartLogDraftIfAvailable()
+                if (ex == null) {
+                    recomputeValidation()
+                    return@collectLatest
                 }
-                Log.d("ExerciseLoggingVM", "Exercise loaded: ${ex?.name}")
-            }
-        }
+                resolvedExerciseCache[ex.id] = ex
+                val previousDefaultRest = exerciseDefaultRestSeconds
+                exerciseDefaultRestSeconds = ex.defaultRestSeconds
 
-        viewModelScope.launch {
-            // Load personal bests via Repository
-            _personalBestsByReps.value = exerciseRepository.getPersonalBestsByReps(exerciseId)
-
-            // Also find the overall heaviest set for the "Best set" hint
-            val heaviest = exerciseRepository.getHeaviestSet(exerciseId)
-            heaviest?.let {
-                _bestWeight.value = it.weight?.toString()
-                _bestReps.value = it.reps?.toString()
+                if (!hasInitializedExerciseDefaults) {
+                    hasInitializedExerciseDefaults = true
+                    if (!hasUserAdjustedRestTime && _currentPlanItem.value?.restSeconds == null) {
+                        _restTime.value = ex.defaultRestSeconds
+                    }
+                    commitFormChange {
+                        if (lastAppliedSmartLogIndex == null && _editingSet.value == null && !hasPrefilled) {
+                            _selectedDistanceUnit.value = ex.defaultDistanceUnit
+                            setWarmupStateInternal(false)
+                        } else {
+                            setWarmupStateInternal(_isWarmup.value)
+                        }
+                    }
+                    applySmartLogDraftIfAvailable()
+                } else {
+                    if (!hasUserAdjustedRestTime &&
+                        _currentPlanItem.value?.restSeconds == null &&
+                        ex.defaultRestSeconds != previousDefaultRest &&
+                        _restTime.value == previousDefaultRest
+                    ) {
+                        _restTime.value = ex.defaultRestSeconds
+                    }
+                    commitFormChange {
+                        setWarmupStateInternal(_isWarmup.value)
+                    }
+                    supersetManager.updateExercise(ex)
+                }
+                Log.d("ExerciseLoggingVM", "Exercise loaded: ${ex.name}")
             }
         }
 
@@ -447,123 +426,188 @@ class ExerciseLoggingViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            _currentWorkout.filterNotNull().collectLatest { workout ->
-                workoutRepository.ensureWorkoutPlanInstance(workout.id, exerciseId)
-            }
+            _currentWorkout.filterNotNull()
+                .distinctUntilChanged { old, new -> old.id == new.id }
+                .collectLatest { workout ->
+                    workoutRepository.ensureWorkoutPlanInstance(workout.id, exerciseId)
+                }
         }
 
         viewModelScope.launch {
-            _currentWorkout.filterNotNull().flatMapLatest { workout ->
-                workoutRepository.getWorkoutPlanSummaries(workout.id)
-            }.combine(supersetExited) { planItems, exited ->
-                planItems to exited
-            }.collectLatest { (planItems, exited) ->
-                val currentItem = planItems.firstOrNull { it.exerciseId == exerciseId }
-                _currentPlanItem.value = currentItem
-
-                currentItem?.restSeconds?.let { _restTime.value = it }
-
-                val currentIndex = planItems.indexOfFirst { it.exerciseId == exerciseId }
-
-                _previousExerciseId.value = if (currentIndex > 0) {
-                    planItems[currentIndex - 1].exerciseId
-                } else {
-                    null
+            _currentWorkout.filterNotNull()
+                .distinctUntilChanged { old, new -> old.id == new.id }
+                .flatMapLatest { workout ->
+                    workoutRepository.getWorkoutPlanSummaries(workout.id).map { workout to it }
                 }
+                .collectLatest { (workout, planItems) ->
+                    _planItems.value = planItems
+                    val currentItem = planItems.firstOrNull { it.exerciseId == exerciseId }
+                    _currentPlanItem.value = currentItem
 
-                _planPosition.value = if (currentIndex != -1) {
-                    PlanPosition(
-                        index = currentIndex + 1,
-                        total = planItems.size,
-                        dayName = _currentWorkout.value?.routineDayNameSnapshot
-                    )
-                } else {
-                    null
-                }
-                val currentGroupId = currentItem?.supersetGroupId
-
-                if (currentGroupId != null && !exited) {
-                    val group = planItems
-                        .filter { it.supersetGroupId == currentGroupId }
-                        .sortedBy { it.supersetOrderIndex }
-
-                    val indexInGroup = group.indexOfFirst { it.exerciseId == exerciseId }
-                    if (indexInGroup != -1) {
-                        val nextInRotation = (indexInGroup + 1) % group.size
-                        _nextExerciseId.value = group[nextInRotation].exerciseId
-                    }
-
-                    val groupExercises = group.mapNotNull { workoutItem ->
-                        exerciseRepository.getExercise(workoutItem.exerciseId).first()
-                    }
-                    if (groupExercises.size >= 2) {
-                        if (!supersetManager.isInSupersetMode.value || supersetManager.supersetGroupId.value != currentGroupId) {
-                            supersetManager.startSuperset(groupExercises, currentGroupId)
+                    val planRest = currentItem?.restSeconds
+                    if (planRest != null && planRest != lastAppliedPlanRestSeconds) {
+                        lastAppliedPlanRestSeconds = planRest
+                        if (!hasUserAdjustedRestTime) {
+                            _restTime.value = planRest
                         }
-                        val orderIndex = groupExercises.indexOfFirst { it.id == exerciseId }
-                        if (orderIndex != -1) {
-                            supersetManager.setCurrentExerciseIndex(orderIndex)
+                    } else if (planRest == null) {
+                        lastAppliedPlanRestSeconds = null
+                    }
+
+                    val currentIndex = planItems.indexOfFirst { it.exerciseId == exerciseId }
+                    _previousExerciseId.value = if (currentIndex > 0) {
+                        planItems[currentIndex - 1].exerciseId
+                    } else {
+                        null
+                    }
+
+                    _planPosition.value = if (currentIndex != -1) {
+                        PlanPosition(
+                            index = currentIndex + 1,
+                            total = planItems.size,
+                            dayName = workout.routineDayNameSnapshot
+                        )
+                    } else {
+                        null
+                    }
+
+                    val activePlanGroupIds = planItems
+                        .mapNotNull { it.supersetGroupId }
+                        .groupingBy { it }
+                        .eachCount()
+                        .filterValues { it >= 2 }
+                        .keys
+                    supersetManager.dissolvePlanSupersetIfMissing(workout.id, activePlanGroupIds)
+
+                    val currentGroupId = currentItem?.supersetGroupId
+                    if (currentGroupId != null &&
+                        currentGroupId in activePlanGroupIds &&
+                        !supersetManager.isPlanGroupExited(workout.id, currentGroupId)
+                    ) {
+                        val group = planItems
+                            .filter { it.supersetGroupId == currentGroupId }
+                            .sortedBy { it.supersetOrderIndex }
+                        val groupIds = group.map { it.exerciseId }
+
+                        if (!supersetManager.isPlanSupersetSynced(workout.id, currentGroupId, groupIds)) {
+                            val groupExercises = groupIds.mapNotNull { id ->
+                                resolvedExerciseCache[id] ?: exerciseRepository.getExercise(id).first()?.also {
+                                    resolvedExerciseCache[id] = it
+                                }
+                            }
+                            if (groupExercises.size >= 2) {
+                                supersetManager.syncPlanSuperset(
+                                    workoutId = workout.id,
+                                    groupId = currentGroupId,
+                                    exercises = groupExercises,
+                                    activeExerciseId = exerciseId
+                                )
+                            }
                         }
                     }
-                } else if (currentIndex != -1 && currentIndex < planItems.lastIndex) {
-                    _nextExerciseId.value = planItems[currentIndex + 1].exerciseId
-                } else {
-                    _nextExerciseId.value = null
                 }
+        }
+
+        viewModelScope.launch {
+            combine(
+                supersetManager.isInSupersetMode,
+                supersetManager.supersetExercises,
+                _planItems
+            ) { inSuperset, supersetList, planItems ->
+                if (inSuperset && supersetList.size >= 2) {
+                    val indexInSuperset = supersetList.indexOfFirst { it.id == exerciseId }
+                    if (indexInSuperset != -1) {
+                        supersetList[(indexInSuperset + 1) % supersetList.size].id
+                    } else {
+                        null
+                    }
+                } else {
+                    val currentIndex = planItems.indexOfFirst { it.exerciseId == exerciseId }
+                    if (currentIndex != -1 && currentIndex < planItems.lastIndex) {
+                        planItems[currentIndex + 1].exerciseId
+                    } else {
+                        null
+                    }
+                }
+            }.distinctUntilChanged().collectLatest { nextId ->
+                _nextExerciseId.value = nextId
             }
         }
 
         viewModelScope.launch {
             // Load and observe sets for current workout via Repository
-            _currentWorkout.filterNotNull().collectLatest { workout ->
-                workoutRepository.getSetsForWorkout(workout.id).collectLatest { sets ->
-                    _loggedSets.value = sets.filter { it.exerciseId == exerciseId }.sortedBy { it.timestamp }
+            _currentWorkout.filterNotNull()
+                .distinctUntilChanged { old, new -> old.id == new.id }
+                .flatMapLatest { workout ->
+                    workoutRepository.getSetsForWorkout(workout.id)
+                        .map { sets ->
+                            sets.filter { it.exerciseId == exerciseId }
+                                .sortedWith(compareBy<Set> { it.timestamp }.thenBy { it.id })
+                        }
+                        .distinctUntilChanged()
+                        .flowOn(Dispatchers.Default)
                 }
-            }
+                .collectLatest { sets ->
+                    _loggedSets.value = sets
+                }
         }
 
         viewModelScope.launch {
-            // Load last workout sets for this exercise via Repository
-            _currentWorkout.filterNotNull().collectLatest { workout ->
-                val previousSets = workoutRepository.getLastWorkoutSetsForExercise(exerciseId, workout.id)
-                _lastWorkoutSets.value = previousSets
+            // Prefill weight/reps from superset or last workout (only once per ViewModel instance)
+            _currentWorkout.filterNotNull()
+                .distinctUntilChanged { old, new -> old.id == new.id }
+                .collectLatest { workout ->
+                    val previousSets = workoutRepository.getLastWorkoutSetsForExercise(exerciseId, workout.id)
+                    if (!hasPrefilled &&
+                        _editingSet.value == null &&
+                        smartLogDraftStore.peek(activeSmartLogToken, exerciseId) == null
+                    ) {
+                        hasPrefilled = true
 
-                // "Last time" markers for the slider inputs (prefer a working set over a warmup)
-                val lastWorkingSet = previousSets.firstOrNull { !it.isWarmup } ?: previousSets.firstOrNull()
-                _lastReps.value = lastWorkingSet?.reps
-                _lastWeight.value = lastWorkingSet?.weight?.roundToInt()
+                        val supersetValues = if (supersetManager.isInSupersetMode.value) {
+                            supersetManager.getLastLoggedValues(exerciseId)
+                        } else null
 
-                // Prefill weight/reps (only once per ViewModel instance)
-                if (!hasPrefilled) {
-                    hasPrefilled = true
-
-                    // In superset mode, prefer stored values from this session
-                    val supersetValues = if (supersetManager.isInSupersetMode.value) {
-                        supersetManager.getLastLoggedValues(exerciseId)
-                    } else null
-
-                    if (supersetValues != null) {
-                        _weight.value = supersetValues.weight
-                        _calories.value = supersetValues.calories
-                        _reps.value = supersetValues.reps
-                        _duration.value = supersetValues.duration
-                        _distance.value = supersetValues.distance
-                        supersetValues.distanceUnit?.let { _selectedDistanceUnit.value = it }
-                    } else if (previousSets.isNotEmpty()) {
-                        val lastSet = previousSets.first()
-                        lastSet.distanceUnit?.let { _selectedDistanceUnit.value = it }
-                        lastSet.weight?.let { _weight.value = it.toString() }
-                        lastSet.calories?.let { _calories.value = it.toString() }
-                        lastSet.reps?.let { _reps.value = it.toString() }
-                        lastSet.durationSeconds?.let { _duration.value = TimeUtils.formatSecondsToHMS(it) }
-                        _distance.value = formatDistanceForEditing(lastSet, _selectedDistanceUnit.value)
+                        commitFormChange {
+                            if (supersetValues != null) {
+                                _weight.value = supersetValues.weight
+                                _calories.value = supersetValues.calories
+                                _reps.value = supersetValues.reps
+                                _duration.value = supersetValues.duration
+                                _distance.value = supersetValues.distance
+                                supersetValues.distanceUnit?.let { _selectedDistanceUnit.value = it }
+                            } else if (previousSets.isNotEmpty()) {
+                                val lastSet = previousSets.first()
+                                lastSet.distanceUnit?.let { _selectedDistanceUnit.value = it }
+                                lastSet.weight?.let { _weight.value = it.toString() }
+                                lastSet.calories?.let { _calories.value = it.toString() }
+                                lastSet.reps?.let { _reps.value = it.toString() }
+                                lastSet.durationSeconds?.let { _duration.value = TimeUtils.formatSecondsToHMS(it) }
+                                _distance.value = formatDistanceForEditing(lastSet, _selectedDistanceUnit.value)
+                            }
+                        }
+                    } else {
+                        hasPrefilled = true
                     }
                 }
-            }
         }
     }
 
-    fun updateWeight(value: String) {
+    fun applySmartLogDraft(token: String) {
+        if (token.isBlank()) return
+        val snapshot = smartLogDraftStore.peek(token, exerciseId) ?: return
+        if (activeSmartLogToken != null && activeSmartLogToken != token) {
+            smartLogDraftStore.discard(activeSmartLogToken)
+        }
+        formBeforeEditing = null
+        _editingSet.value = null
+        activeSmartLogToken = token
+        savedStateHandle[KEY_DRAFT_TOKEN] = token
+        lastAppliedSmartLogIndex = null
+        applySmartLogDraftIfAvailable(snapshot)
+    }
+
+    fun updateWeight(value: String) = commitFormChange {
         _weight.value = value
     }
 
@@ -584,32 +628,33 @@ class ExerciseLoggingViewModel @Inject constructor(
         }
     }
 
-    fun updateCalories(value: String) {
+    fun updateCalories(value: String) = commitFormChange {
         _calories.value = value
     }
 
-    fun updateReps(value: String) {
+    fun updateReps(value: String) = commitFormChange {
         _reps.value = value
     }
 
-    fun updateRpe(value: String) {
+    fun updateRpe(value: String) = commitFormChange {
         _rpe.value = value
     }
 
-    fun updateDuration(value: String) {
+    fun updateDuration(value: String) = commitFormChange {
         _duration.value = value
     }
 
-    fun updateDistance(value: String) {
+    fun updateDistance(value: String) = commitFormChange {
         _distance.value = value
     }
 
-    fun updateSelectedDistanceUnit(unit: DistanceUnit) {
+    fun updateSelectedDistanceUnit(unit: DistanceUnit) = commitFormChange {
         _selectedDistanceUnit.value = unit
     }
 
     fun updateRestTime(seconds: Int) {
-        _restTime.value = seconds
+        hasUserAdjustedRestTime = true
+        _restTime.value = seconds.coerceAtLeast(0)
     }
 
     fun adjustRestTime(deltaSeconds: Int) {
@@ -618,21 +663,19 @@ class ExerciseLoggingViewModel @Inject constructor(
                 action = RestTimerService.ACTION_ADJUST_TIME
                 putExtra(RestTimerService.EXTRA_DELTA_SECONDS, deltaSeconds)
             }
-            context.startService(serviceIntent)
+            try {
+                context.startService(serviceIntent)
+            } catch (error: IllegalStateException) {
+                Log.w("ExerciseLoggingVM", "Unable to adjust timer service via startService; using active timer", error)
+                RestTimerService.adjustActiveTimer(deltaSeconds)
+            }
         } else {
+            hasUserAdjustedRestTime = true
             _restTime.value = (_restTime.value + deltaSeconds).coerceAtLeast(0)
         }
     }
 
-    fun applyAttemptRecommendation() {
-        val recommendation = _attemptRecommendation.value ?: return
-        if (!recommendation.canApply) return
-
-        recommendation.targetWeight?.let { _weight.value = formatWeightForInput(it) }
-        recommendation.targetReps?.let { _reps.value = it.toString() }
-    }
-
-    fun toggleWarmup() {
+    fun toggleWarmup() = commitFormChange {
         if (isWarmupLibraryExercise()) {
             _isWarmup.value = true
         } else {
@@ -640,30 +683,31 @@ class ExerciseLoggingViewModel @Inject constructor(
         }
     }
 
-    fun updateSetNote(note: String) {
+    fun updateSetNote(note: String) = commitFormChange {
         _setNote.value = note
     }
 
-    fun isCurrentInputValid(): Boolean {
-        val exercise = _exercise.value ?: return false
-        return validateSetInput(exercise, captureCurrentFormSnapshot()).isValid
-    }
+    fun isCurrentInputValid(): Boolean = _isCurrentInputValid.value
 
-    fun currentInputValidationMessage(): String? {
-        val exercise = _exercise.value ?: return null
-        return validateSetInput(exercise, captureCurrentFormSnapshot()).message
-    }
+    fun currentInputValidationMessage(): String? = _currentInputValidationMessage.value
 
     fun logSet(startTimerAfterSave: Boolean = false) {
+        if (isFinishingWorkout.get()) return
         val workout = _currentWorkout.value ?: return
         val exercise = _exercise.value ?: return
         val formSnapshot = captureCurrentFormSnapshot()
         val parsedInput = validateSetInput(exercise, formSnapshot).parsedInput ?: return
         if (!beginSetPersistence()) return
 
-        // Use the history already loaded by the preview; never hold up a save to fetch records.
+        val smartLogTokenAtSave = activeSmartLogToken
+        val smartLogIndexAtSave = lastAppliedSmartLogIndex
+
+        // Use the history already loaded by the preview; exclude current workout's cached
+        // snapshot so edited or deleted current-workout sets cannot linger over _loggedSets.
         val progressBeforeSave = previewProgress.value
-        val setsBeforeSave = (progressBeforeSave.sessions.flatMap { it.sets } + _loggedSets.value)
+        val setsBeforeSave = (progressBeforeSave.sessions
+            .filterNot { it.isCurrent }
+            .flatMap { it.sets } + _loggedSets.value)
             .distinctBy { it.id }
 
         viewModelScope.launch {
@@ -679,13 +723,15 @@ class ExerciseLoggingViewModel @Inject constructor(
                 if (!progressBeforeSave.isLoading && progressBeforeSave.workoutId == workout.id) {
                     loggerCelebrations.celebrate(exercise.name, newSet, loggerRecordLabels(exercise, newSet, setsBeforeSave))
                 }
-                activeWearSessionRepository.confirmSetSaved()
                 onLogSetSavedSuccessfully(
-                    exercise = exercise,
                     formSnapshot = formSnapshot,
-                    parsedInput = parsedInput,
-                    startTimerAfterSave = startTimerAfterSave
+                    startTimerAfterSave = startTimerAfterSave,
+                    smartLogTokenAtSave = smartLogTokenAtSave,
+                    smartLogIndexAtSave = smartLogIndexAtSave
                 )
+                activeWearSessionRepository.confirmSetSaved()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Throwable) {
                 Log.e("ExerciseLoggingVM", "Failed to log set", error)
             } finally {
@@ -695,23 +741,26 @@ class ExerciseLoggingViewModel @Inject constructor(
     }
 
     fun startEditingSet(set: Set) {
-        if (_isPersistingSet.value) return
+        if (_isPersistingSet.value || isFinishingWorkout.get()) return
         if (_editingSet.value == null) {
             formBeforeEditing = captureCurrentFormSnapshot()
         }
         _editingSet.value = set
-        set.distanceUnit?.let { _selectedDistanceUnit.value = it }
-        _weight.value = set.weight?.toString() ?: ""
-        _calories.value = set.calories?.toString() ?: ""
-        _reps.value = set.reps?.toString() ?: ""
-        _rpe.value = set.rpe?.toString() ?: ""
-        _setNote.value = set.note.orEmpty()
-        _duration.value = set.durationSeconds?.let { TimeUtils.formatSecondsToHMS(it) } ?: ""
-        _distance.value = formatDistanceForEditing(set, _selectedDistanceUnit.value)
-        setWarmupState(set.isWarmup)
+        commitFormChange {
+            set.distanceUnit?.let { _selectedDistanceUnit.value = it }
+            _weight.value = set.weight?.let(::formatDecimalForInput) ?: ""
+            _calories.value = set.calories?.let(::formatDecimalForInput) ?: ""
+            _reps.value = set.reps?.toString() ?: ""
+            _rpe.value = set.rpe?.let(::formatDecimalForInput) ?: ""
+            _setNote.value = set.note.orEmpty()
+            _duration.value = set.durationSeconds?.let { TimeUtils.formatSecondsToHMS(it) } ?: ""
+            _distance.value = formatDistanceForEditing(set, _selectedDistanceUnit.value)
+            setWarmupStateInternal(set.isWarmup)
+        }
     }
 
     fun saveEditedSet() {
+        if (isFinishingWorkout.get()) return
         val set = _editingSet.value ?: return
         val exercise = _exercise.value ?: return
         val formSnapshot = captureCurrentFormSnapshot()
@@ -735,6 +784,8 @@ class ExerciseLoggingViewModel @Inject constructor(
                 workoutRepository.updateSet(updatedSet)
                 Log.d("ExerciseLoggingVM", "Set updated: id=${set.id}")
                 restoreFormAfterEditing()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Throwable) {
                 Log.e("ExerciseLoggingVM", "Failed to save edited set", error)
             } finally {
@@ -751,23 +802,33 @@ class ExerciseLoggingViewModel @Inject constructor(
     fun cancelSmartLogQueue() {
         smartLogDraftStore.discard(activeSmartLogToken)
         activeSmartLogToken = null
+        savedStateHandle[KEY_DRAFT_TOKEN] = null
         lastAppliedSmartLogIndex = null
         _smartLogQueue.value = null
     }
 
     fun deleteSet(setId: Long) {
+        if (_editingSet.value?.id == setId) {
+            if (_isPersistingSet.value) return
+            restoreFormAfterEditing()
+        }
         viewModelScope.launch {
-            Log.e("DELETE_DEBUG", "Attempting to delete set: $setId")
-            // Delete via Repository
             workoutRepository.deleteSet(setId)
             Log.d("ExerciseLoggingVM", "Set deleted: id=$setId")
         }
     }
 
     fun updateSetNote(set: Set, note: String?) {
+        val normalizedNote = note?.takeIf { it.isNotBlank() }
+        if (_editingSet.value?.id == set.id) {
+            if (_isPersistingSet.value) return
+            _editingSet.value = _editingSet.value?.copy(note = normalizedNote)
+            commitFormChange {
+                _setNote.value = normalizedNote.orEmpty()
+            }
+        }
         viewModelScope.launch {
-            val updatedSet = set.copy(note = note?.takeIf { it.isNotBlank() })
-            // Update via Repository
+            val updatedSet = set.copy(note = normalizedNote)
             workoutRepository.updateSet(updatedSet)
             Log.d("ExerciseLoggingVM", "Set note updated: id=${set.id}, note=$note")
         }
@@ -799,7 +860,15 @@ class ExerciseLoggingViewModel @Inject constructor(
             action = RestTimerService.ACTION_START_TIMER
             putExtra(RestTimerService.EXTRA_SECONDS, seconds)
         }
-        ContextCompat.startForegroundService(context, serviceIntent)
+        try {
+            ContextCompat.startForegroundService(context, serviceIntent)
+        } catch (error: ForegroundServiceStartNotAllowedException) {
+            Log.w("ExerciseLoggingVM", "Foreground service start blocked in background; using bound timer", error)
+            timerService?.startTimer(seconds)
+        } catch (error: IllegalStateException) {
+            Log.w("ExerciseLoggingVM", "Unable to start foreground timer service; using bound timer", error)
+            timerService?.startTimer(seconds)
+        }
     }
 
     fun stopTimer() {
@@ -808,32 +877,62 @@ class ExerciseLoggingViewModel @Inject constructor(
         val serviceIntent = Intent(context, RestTimerService::class.java).apply {
             action = RestTimerService.ACTION_STOP_TIMER
         }
-        context.startService(serviceIntent)
+        try {
+            context.startService(serviceIntent)
+        } catch (error: IllegalStateException) {
+            Log.w("ExerciseLoggingVM", "Unable to stop timer service via startService; using bound/active timer", error)
+            val boundService = timerService
+            if (boundService != null) {
+                boundService.stopTimer()
+            } else {
+                RestTimerService.stopActiveTimer()
+            }
+        }
     }
 
     fun resetTimerToDefault() {
-        _restTime.value = exerciseDefaultRestSeconds
+        hasUserAdjustedRestTime = false
+        _restTime.value = getDefaultRestSeconds()
     }
 
-    fun getDefaultRestSeconds(): Int = exerciseDefaultRestSeconds
+    fun getDefaultRestSeconds(): Int = _currentPlanItem.value?.restSeconds ?: exerciseDefaultRestSeconds
 
     fun finishWorkout() {
+        val workout = _currentWorkout.value ?: return
+        if (!isFinishingWorkout.compareAndSet(false, true)) return
         viewModelScope.launch {
-            val workout = _currentWorkout.value ?: return@launch
-            // Finish via Repository
-            workoutRepository.finishWorkout(workout.id)
-            activeWearSessionRepository.clear()
+            var navigated = false
+            try {
+                // Wait for any in-flight set persistence so finishWorkout doesn't close
+                // the workout before the set commits and advances routine progress.
+                _isPersistingSet.first { !it }
+                workoutRepository.finishWorkout(workout.id)
+                runCatching { activeWearSessionRepository.clear() }
+                    .onFailure { Log.w("ExerciseLoggingVM", "Unable to clear Wear session", it) }
 
-            // Exit superset mode when finishing workout
-            supersetManager.exitSupersetMode()
+                // Exit superset mode and clear exited groups when finishing workout
+                supersetManager.exitSupersetMode()
+                supersetManager.clearWorkoutExitedPlanGroups(workout.id)
 
-            _navigationEvents.send(workout.id) // Send workoutId to navigate to summary
+                _navigationEvents.send(workout.id) // Send workoutId to navigate to summary
+                navigated = true
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                Log.e("ExerciseLoggingVM", "Failed to finish workout", error)
+            } finally {
+                if (!navigated) {
+                    isFinishingWorkout.set(false)
+                }
+            }
         }
     }
 
     fun exitSupersetMode() {
-        supersetExited.value = true
-        supersetManager.exitSupersetMode()
+        supersetManager.exitPlanSuperset(
+            workoutId = _currentWorkout.value?.id,
+            fallbackGroupId = _currentPlanItem.value?.supersetGroupId
+        )
         Log.d("ExerciseLoggingVM", "Exited superset mode")
     }
 
@@ -845,129 +944,6 @@ class ExerciseLoggingViewModel @Inject constructor(
         if (restrictedToSuperset) {
             exitSupersetMode()
         }
-    }
-
-    // Load workout overview data
-    fun loadWorkoutOverview() {
-        viewModelScope.launch {
-            _currentWorkout.value?.let { workout ->
-                combine(
-                    workoutRepository.getWorkoutOverview(workout.id),
-                    workoutRepository.getSetsForWorkout(workout.id),
-                    workoutRepository.getWorkoutPlanSummaries(workout.id)
-                ) { overview, sets, planItems ->
-                    Triple(overview, sets, planItems)
-                }.collectLatest { (overview, sets, planItems) ->
-                    _workoutOverview.value = overview
-                    _workoutPanelData.value = buildWorkoutPanelData(workout, overview, sets, planItems)
-                    Log.d("ExerciseLoggingVM", "Workout overview loaded: ${overview.size} exercises, ${sets.size} sets")
-                }
-            }
-        }
-    }
-
-    private fun buildWorkoutPanelData(
-        workout: Workout,
-        overview: List<WorkoutExerciseSummary>,
-        allSets: List<Set>,
-        planItems: List<WorkoutPlanSummary> = emptyList()
-    ): WorkoutPanelData {
-        val warmupLibraryExerciseIds = overview
-            .filter { it.targetMuscle.isWarmupMuscleGroup() }
-            .mapTo(mutableSetOf()) { it.exerciseId }
-        val workingSets = allSets.filter { !it.isWarmup }
-        val displaySets = allSets.filter { set ->
-            !set.isWarmup || set.exerciseId in warmupLibraryExerciseIds
-        }
-        val setPreviews = displaySets
-            .groupBy { it.exerciseId }
-            .mapValues { (_, sets) ->
-                sets.sortedBy { it.timestamp }.map { formatSetPreview(it) }
-            }
-
-        val muscleByExerciseId = overview.associate { it.exerciseId to it.targetMuscle }
-        val muscleBreakdown = workingSets
-            .mapNotNull { set ->
-                val muscle = muscleByExerciseId[set.exerciseId] ?: return@mapNotNull null
-                val volume = (set.weight ?: 0f) * (set.reps ?: 0)
-                Triple(muscle, 1, volume)
-            }
-            .groupBy { it.first }
-            .map { (muscle, entries) ->
-                MuscleBreakdown(
-                    muscle = muscle,
-                    setCount = entries.sumOf { it.second },
-                    volume = entries.sumOf { it.third.toDouble() }.toFloat()
-                )
-            }
-            .sortedByDescending { it.volume }
-
-        val totalVolume = workingSets.sumOf { ((it.weight ?: 0f) * (it.reps ?: 0)).toDouble() }.toFloat()
-        val durationMs = Date().time - workout.startTime.time
-        val minutes = durationMs / 1000 / 60
-        val hours = minutes / 60
-        val remainingMinutes = minutes % 60
-        val duration = if (hours > 0) "${hours}h ${remainingMinutes}m" else "${minutes}m"
-
-        val stats = WorkoutStats(
-            totalSets = workingSets.size,
-            totalVolume = totalVolume,
-            exerciseCount = overview.count { !it.targetMuscle.isWarmupMuscleGroup() },
-            duration = duration
-        )
-
-        return WorkoutPanelData(
-            exercises = overview,
-            setPreviews = setPreviews,
-            muscleBreakdown = muscleBreakdown,
-            stats = stats,
-            plannedSets = planItems.mapNotNull { item ->
-                item.plannedSets?.let { item.exerciseId to it }
-            }.toMap()
-        )
-    }
-
-    private fun formatSetPreview(set: Set): String {
-        val w = set.weight
-        val r = set.reps
-        val dur = set.durationSeconds
-        val dist = set.distanceMeters
-        return when {
-            w != null && w > 0f && r != null && r > 0 -> "${w.toInt()}×$r"
-            r != null && r > 0 -> "${r}r"
-            w != null && w > 0f && dur != null && dur > 0 -> "${w.toInt()}×${formatDurationShort(dur)}"
-            w != null && w > 0f && dist != null && dist > 0f -> "${w.toInt()}×${dist.toInt()}m"
-            dur != null && dur > 0 -> formatDurationShort(dur)
-            dist != null && dist > 0f -> "${dist.toInt()}m"
-            else -> "—"
-        }
-    }
-
-    private fun formatDurationShort(seconds: Int): String {
-        if (seconds < 60) return "${seconds}s"
-        val m = seconds / 60
-        val s = seconds % 60
-        return if (s == 0) "${m}m" else "${m}m${s}s"
-    }
-
-    // Calculate personal records for the current exercise
-    suspend fun getPersonalRecords(): PersonalRecords {
-        // Delegate to Repository
-        return exerciseRepository.getPersonalRecords(exerciseId)
-    }
-
-    // Get exercise history grouped by workout
-    suspend fun getExerciseHistory(): Map<Long, List<Set>> {
-        // Delegate to Repository
-        return exerciseRepository.getExerciseHistory(exerciseId)
-    }
-
-    // Calculate workout stats
-    fun getWorkoutStats(): WorkoutStats {
-        val workout = _currentWorkout.value
-        val overview = _workoutOverview.value
-        // Delegate calculation to Repository
-        return workoutRepository.calculateWorkoutStats(workout, overview)
     }
 
     // Calculate plates for a given target weight
@@ -988,11 +964,15 @@ class ExerciseLoggingViewModel @Inject constructor(
 
     override fun onCleared() {
         stopWearPublishing()
+        serviceSyncJob?.cancel()
+        serviceSyncJob = null
         super.onCleared()
-        // Unbind service
-        if (serviceBound) {
-            context.unbindService(serviceConnection)
+        if (bindRequested || serviceBound) {
+            runCatching { context.unbindService(serviceConnection) }
+                .onFailure { Log.w("ExerciseLoggingVM", "Unable to unbind RestTimerService", it) }
+            bindRequested = false
             serviceBound = false
+            timerService = null
             Log.d("ExerciseLoggingVM", "Service unbound")
         }
     }
@@ -1009,24 +989,63 @@ class ExerciseLoggingViewModel @Inject constructor(
         }
     }
 
-    private fun formatWeightForInput(weight: Float): String {
-        return if (weight % 1f == 0f) weight.toInt().toString() else weight.toString()
+    private fun progressKey(exercise: Exercise?, workout: Workout?): ProgressScopeKey? {
+        if (exercise == null || workout == null) return null
+        return ProgressScopeKey(
+            exerciseId = exercise.id,
+            logType = exercise.logType,
+            distanceUnit = exercise.defaultDistanceUnit,
+            isWarmupLibrary = exercise.isWarmupLibraryExercise,
+            workoutId = workout.id,
+            workoutStartMs = workout.startTime.time
+        )
+    }
+
+    private fun formatDecimalForInput(value: Float): String {
+        if (!value.isFinite()) return ""
+        if (value == 0f) return "0"
+        return if (value % 1f == 0f && value in Int.MIN_VALUE.toFloat()..Int.MAX_VALUE.toFloat()) {
+            value.toInt().toString()
+        } else {
+            BigDecimal(value.toString()).stripTrailingZeros().toPlainString()
+        }
+    }
+
+    private fun formatRoundedTwoDecimalsForInput(value: Float): String {
+        if (!value.isFinite()) return ""
+        val formatted = String.format(Locale.US, "%.2f", value).trimEnd('0').trimEnd('.')
+        return if (formatted == "-0" || formatted.isEmpty()) "0" else formatted
     }
 
     private fun formatDistanceForEditing(set: Set, fallbackUnit: DistanceUnit): String {
         val unit = set.distanceUnit ?: fallbackUnit
         return when {
-            set.distanceValue != null -> TimeUtils.formatDistance(set.distanceValue, unit)
+            set.distanceValue != null -> formatDecimalForInput(set.distanceValue)
             set.distanceMeters != null && unit.isConvertibleToMeters -> {
-                TimeUtils.formatDistance(TimeUtils.metersToDistance(set.distanceMeters, unit), unit)
+                val converted = TimeUtils.metersToDistance(set.distanceMeters, unit)
+                when (unit) {
+                    DistanceUnit.KILOMETERS,
+                    DistanceUnit.MILES -> TimeUtils.formatDistance(converted, unit)
+                    DistanceUnit.METERS,
+                    DistanceUnit.YARDS,
+                    DistanceUnit.FEET,
+                    DistanceUnit.STEPS,
+                    DistanceUnit.FLOORS -> formatRoundedTwoDecimalsForInput(converted)
+                }
             }
             else -> ""
         }
     }
 
-    private fun applySmartLogDraftIfAvailable() {
-        val snapshot = smartLogDraftStore.peek(activeSmartLogToken, exerciseId)
+    private fun applySmartLogDraftIfAvailable(preloadedSnapshot: SmartLogQueueSnapshot? = null) {
+        val token = activeSmartLogToken
+        val snapshot = preloadedSnapshot ?: smartLogDraftStore.peek(token, exerciseId)
         if (snapshot == null) {
+            if (token != null) {
+                activeSmartLogToken = null
+                savedStateHandle[KEY_DRAFT_TOKEN] = null
+            }
+            lastAppliedSmartLogIndex = null
             _smartLogQueue.value = null
             return
         }
@@ -1037,28 +1056,36 @@ class ExerciseLoggingViewModel @Inject constructor(
         _smartLogQueue.value = snapshot.toUiState()
     }
 
-    private fun advanceSmartLogDraft() {
+    private fun advanceSmartLogDraft(expectedToken: String?, expectedIndex: Int?) {
         val token = activeSmartLogToken ?: return
-        if (smartLogDraftStore.peek(token, exerciseId) == null) return
+        if (token != expectedToken || lastAppliedSmartLogIndex != expectedIndex) return
+        if (smartLogDraftStore.peek(token, exerciseId) == null) {
+            activeSmartLogToken = null
+            savedStateHandle[KEY_DRAFT_TOKEN] = null
+            lastAppliedSmartLogIndex = null
+            _smartLogQueue.value = null
+            return
+        }
         val next = smartLogDraftStore.advance(token, exerciseId)
         if (next == null) {
             activeSmartLogToken = null
+            savedStateHandle[KEY_DRAFT_TOKEN] = null
             lastAppliedSmartLogIndex = null
             _smartLogQueue.value = null
         } else {
-            applySmartLogDraftIfAvailable()
+            applySmartLogDraftIfAvailable(next)
         }
     }
 
-    private fun applySmartLogSet(draft: SetDraft) {
-        _weight.value = draft.weight?.let(::formatWeightForInput) ?: ""
-        _calories.value = draft.calories?.let(::formatWeightForInput) ?: ""
+    private fun applySmartLogSet(draft: SetDraft) = commitFormChange {
+        _weight.value = draft.weight?.let(::formatDecimalForInput) ?: ""
+        _calories.value = draft.calories?.let(::formatDecimalForInput) ?: ""
         _reps.value = draft.reps?.toString() ?: ""
-        _rpe.value = draft.rpe?.let(::formatWeightForInput) ?: ""
+        _rpe.value = draft.rpe?.let(::formatDecimalForInput) ?: ""
         _duration.value = draft.durationSeconds?.let(TimeUtils::formatSecondsToHMS) ?: ""
-        _distance.value = draft.distanceValue?.let(::formatWeightForInput) ?: ""
+        _distance.value = draft.distanceValue?.let(::formatDecimalForInput) ?: ""
         draft.distanceUnit?.let { _selectedDistanceUnit.value = it }
-        setWarmupState(draft.isWarmup)
+        setWarmupStateInternal(draft.isWarmup)
         _setNote.value = draft.note.orEmpty()
     }
 
@@ -1077,23 +1104,32 @@ class ExerciseLoggingViewModel @Inject constructor(
 
         viewModelScope.launch {
             activeWearSessionRepository.logRequests.collectLatest { patch ->
+                if (isWearCommandBlocked()) return@collectLatest
                 if (patch != null && !applyWearDraftPatch(patch)) return@collectLatest
-                logSet(startTimerAfterSave = timerAutoStart.first())
+                val autoStart = timerAutoStart.first()
+                if (isWearCommandBlocked()) return@collectLatest
+                logSet(startTimerAfterSave = autoStart)
             }
         }
     }
 
+    private fun isWearCommandBlocked(): Boolean =
+        _editingSet.value != null || setPersistenceInFlight.get() || isFinishingWorkout.get()
+
     private fun applyWearDraftPatch(patch: WearDraftPatch): Boolean {
+        if (isWearCommandBlocked()) return false
         val workout = _currentWorkout.value ?: return false
         if (patch.workoutId != workout.id || patch.exerciseId != exerciseId) return false
 
-        patch.weight?.let { _weight.value = it }
-        patch.reps?.let { _reps.value = it }
-        patch.rpe?.let { _rpe.value = it }
-        patch.duration?.let { _duration.value = it }
-        patch.distance?.let { _distance.value = it }
-        patch.calories?.let { _calories.value = it }
-        patch.isWarmup?.let(::setWarmupState)
+        commitFormChange {
+            patch.weight?.let { _weight.value = it }
+            patch.reps?.let { _reps.value = it }
+            patch.rpe?.let { _rpe.value = it }
+            patch.duration?.let { _duration.value = it }
+            patch.distance?.let { _distance.value = it }
+            patch.calories?.let { _calories.value = it }
+            patch.isWarmup?.let(::setWarmupStateInternal)
+        }
         return true
     }
 
@@ -1105,31 +1141,44 @@ class ExerciseLoggingViewModel @Inject constructor(
                     exercise = exercise,
                     loggedSets = loggedSets
                 )
-            }
-            val primaryFields = combine(_weight, _reps, _rpe, _duration, _distance) { weight, reps, rpe, duration, distance ->
-                WearPrimaryFields(
-                    weight = weight,
-                    reps = reps,
-                    rpe = rpe,
-                    duration = duration,
-                    distance = distance
+            }.distinctUntilChanged()
+
+            var firstTextEmission = true
+            val textFields = combine(_weight, _reps, _rpe, _duration, _distance, _calories) { values ->
+                WearTextFields(
+                    weight = values[0],
+                    reps = values[1],
+                    rpe = values[2],
+                    duration = values[3],
+                    distance = values[4],
+                    calories = values[5]
                 )
             }
-            val formState = combine(primaryFields, _calories, _isWarmup, _selectedDistanceUnit) { fields, calories, isWarmup, unit ->
+                .distinctUntilChanged()
+                .debounce {
+                    if (firstTextEmission) {
+                        firstTextEmission = false
+                        0L
+                    } else {
+                        WEAR_DRAFT_DEBOUNCE_MILLIS
+                    }
+                }
+
+            val formState = combine(textFields, _isWarmup, _selectedDistanceUnit) { fields, isWarmup, unit ->
                 WearFormState(
-                    primaryFields = fields,
-                    calories = calories,
+                    textFields = fields,
                     isWarmup = isWarmup,
                     selectedDistanceUnit = unit
                 )
-            }
+            }.distinctUntilChanged()
+
             val timerState = combine(_restTime, _countdownTimer, _isTimerRunning) { restTime, countdownTimer, isTimerRunning ->
                 WearTimerState(
                     restSeconds = restTime,
                     timerRemainingSeconds = countdownTimer,
                     timerRunning = isTimerRunning
                 )
-            }
+            }.distinctUntilChanged()
 
             combine(
                 workoutState,
@@ -1140,21 +1189,25 @@ class ExerciseLoggingViewModel @Inject constructor(
                     workoutId = workout.workoutId,
                     exercise = workout.exercise,
                     loggedSets = workout.loggedSets,
-                    weight = form.primaryFields.weight,
-                    reps = form.primaryFields.reps,
-                    rpe = form.primaryFields.rpe,
-                    duration = form.primaryFields.duration,
-                    distance = form.primaryFields.distance,
-                    calories = form.calories,
+                    weight = form.textFields.weight,
+                    reps = form.textFields.reps,
+                    rpe = form.textFields.rpe,
+                    duration = form.textFields.duration,
+                    distance = form.textFields.distance,
+                    calories = form.textFields.calories,
                     isWarmup = form.isWarmup,
                     selectedDistanceUnit = form.selectedDistanceUnit,
                     restSeconds = timer.restSeconds,
                     timerRemainingSeconds = timer.timerRemainingSeconds,
                     timerRunning = timer.timerRunning
                 )
-            }.collectLatest { snapshot ->
-                activeWearSessionRepository.publish(publisherId, snapshot)
             }
+                .distinctUntilChanged()
+                .onEach { snapshot ->
+                    activeWearSessionRepository.publish(publisherId, snapshot)
+                }
+                .flowOn(Dispatchers.Default)
+                .collect()
         }
     }
 
@@ -1219,38 +1272,28 @@ class ExerciseLoggingViewModel @Inject constructor(
     }
 
     private suspend fun onLogSetSavedSuccessfully(
-        exercise: Exercise,
         formSnapshot: SetFormSnapshot,
-        parsedInput: ParsedSetInput,
-        startTimerAfterSave: Boolean
+        startTimerAfterSave: Boolean,
+        smartLogTokenAtSave: String?,
+        smartLogIndexAtSave: Int?
     ) {
-        if (
-            exercise.logType == LogType.WEIGHT_REPS &&
-            !exercise.isWarmupLibraryExercise &&
-            !parsedInput.isWarmup &&
-            parsedInput.weight != null &&
-            parsedInput.reps != null
-        ) {
-            val currentPBs = _personalBestsByReps.value
-            val currentPBForReps = currentPBs[parsedInput.reps]
-            if (currentPBForReps == null || parsedInput.weight > currentPBForReps.maxWeight) {
-                _personalBestsByReps.value = exerciseRepository.getPersonalBestsByReps(exerciseId)
-            }
+        commitFormChange {
+            _rpe.value = ""
+            _setNote.value = ""
+            setWarmupStateInternal(false)
         }
 
-        _rpe.value = ""
-        _setNote.value = ""
-        setWarmupState(false)
-
-        advanceSmartLogDraft()
+        advanceSmartLogDraft(smartLogTokenAtSave, smartLogIndexAtSave)
 
         if (startTimerAfterSave) {
             startTimer()
         }
         resetTimerToDefault()
 
-        if (supersetManager.isInSupersetMode.value &&
-            supersetManager.isInCurrentSuperset(exercise.id)
+        val currentExercise = _exercise.value
+        if (currentExercise != null &&
+            supersetManager.isInSupersetMode.value &&
+            supersetManager.isInCurrentSuperset(currentExercise.id)
         ) {
             supersetManager.saveLastLoggedValues(
                 exerciseId,
@@ -1277,22 +1320,41 @@ class ExerciseLoggingViewModel @Inject constructor(
         formBeforeEditing = null
         _editingSet.value = null
         if (draft == null) return
-        _weight.value = draft.weight
-        _calories.value = draft.calories
-        _reps.value = draft.reps
-        _rpe.value = draft.rpe
-        _duration.value = draft.duration
-        _distance.value = draft.distance
-        _selectedDistanceUnit.value = draft.distanceUnit
-        setWarmupState(draft.isWarmup)
-        _setNote.value = draft.note
+        commitFormChange {
+            _weight.value = draft.weight
+            _calories.value = draft.calories
+            _reps.value = draft.reps
+            _rpe.value = draft.rpe
+            _duration.value = draft.duration
+            _distance.value = draft.distance
+            _selectedDistanceUnit.value = draft.distanceUnit
+            setWarmupStateInternal(draft.isWarmup)
+            _setNote.value = draft.note
+        }
     }
 
     private fun isWarmupLibraryExercise(): Boolean =
         _exercise.value?.isWarmupLibraryExercise == true
 
-    private fun setWarmupState(requestedWarmup: Boolean) {
+    private fun setWarmupStateInternal(requestedWarmup: Boolean) {
         _isWarmup.value = requestedWarmup || isWarmupLibraryExercise()
+    }
+
+    private inline fun commitFormChange(update: () -> Unit) {
+        update()
+        recomputeValidation()
+    }
+
+    private fun recomputeValidation() {
+        val exercise = _exercise.value
+        if (exercise == null) {
+            _isCurrentInputValid.value = false
+            _currentInputValidationMessage.value = null
+            return
+        }
+        val result = validateSetInput(exercise, captureCurrentFormSnapshot())
+        _isCurrentInputValid.value = result.isValid
+        _currentInputValidationMessage.value = result.message
     }
 
     private fun validateSetInput(
@@ -1487,31 +1549,35 @@ class ExerciseLoggingViewModel @Inject constructor(
             return null
         }
         return try {
-            when (parts.size) {
-                1 -> parts[0].toInt().takeIf { it > 0 }
+            val totalSeconds: Long = when (parts.size) {
+                1 -> parts[0].toLong()
                 2 -> {
-                    val minutes = parts[0].toInt()
-                    val seconds = parts[1].toInt()
-                    if (seconds !in 0..59) null else (minutes * 60) + seconds
+                    val minutes = parts[0].toLong()
+                    val seconds = parts[1].toLong()
+                    if (seconds !in 0L..59L) return null
+                    if (minutes > (Int.MAX_VALUE - seconds) / 60L) return null
+                    (minutes * 60L) + seconds
                 }
                 3 -> {
-                    val hours = parts[0].toInt()
-                    val minutes = parts[1].toInt()
-                    val seconds = parts[2].toInt()
-                    if (minutes !in 0..59 || seconds !in 0..59) {
-                        null
-                    } else {
-                        (hours * 3600) + (minutes * 60) + seconds
-                    }
+                    val hours = parts[0].toLong()
+                    val minutes = parts[1].toLong()
+                    val seconds = parts[2].toLong()
+                    if (minutes !in 0L..59L || seconds !in 0L..59L) return null
+                    val minSec = (minutes * 60L) + seconds
+                    if (hours > (Int.MAX_VALUE - minSec) / 3600L) return null
+                    (hours * 3600L) + minSec
                 }
-                else -> null
-            }?.takeIf { it > 0 }
+                else -> return null
+            }
+            if (totalSeconds in 1L..Int.MAX_VALUE.toLong()) totalSeconds.toInt() else null
         } catch (_: NumberFormatException) {
             null
         }
     }
 
     companion object {
+        private const val KEY_DRAFT_TOKEN = "draftToken"
+        private const val WEAR_DRAFT_DEBOUNCE_MILLIS = 120L
         private val STRICT_DECIMAL_PATTERN = Regex("""(?:\d+(?:\.\d+)?|\.\d+)""")
         private val POSITIVE_INT_PATTERN = Regex("""\d+""")
     }

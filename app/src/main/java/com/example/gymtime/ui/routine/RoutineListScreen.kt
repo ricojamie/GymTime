@@ -1,311 +1,33 @@
 package com.example.gymtime.ui.routine
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import com.example.gymtime.data.db.entity.Routine
 import com.example.gymtime.navigation.Screen
-import com.example.gymtime.navigation.navigateHomeAndClearStack
 import com.example.gymtime.navigation.navigateBackOrHome
-import com.example.gymtime.ui.components.BackNavigationIcon
-import com.example.gymtime.ui.components.HomeNavigationAction
-import com.example.gymtime.ui.components.GlowCard
-import com.example.gymtime.ui.theme.*
+import com.example.gymtime.navigation.navigateHomeAndClearStack
+import com.example.gymtime.navigation.navigateResumed
 import com.example.gymtime.ui.routine.preview.PreviewRoutineBrowseContent
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoutineListScreen(
     navController: NavController,
     viewModel: RoutineListViewModel = hiltViewModel()
 ) {
-    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
-    if (newUiEnabled) {
-        val state by viewModel.previewState.collectAsStateWithLifecycle()
-        LoggerPreviewTheme {
-            PreviewRoutineBrowseContent(
-                state = state,
-                onCreate = { navController.navigate(Screen.RoutineForm.createRoute()) },
-                onOpen = { navController.navigate(Screen.RoutineDetail.createRoute(it)) },
-                onSetActive = viewModel::setActiveRoutine,
-                onRename = { navController.navigate(Screen.RoutineForm.createRoute(it)) },
-                onDuplicate = viewModel::duplicateRoutine, onDelete = viewModel::deleteRoutineById,
-                onRetry = viewModel::retryLoad, onDismissError = viewModel::dismissError,
-                onBack = navController::navigateBackOrHome, onHome = navController::navigateHomeAndClearStack
-            )
-        }
-    } else LegacyRoutineListScreen(navController, viewModel)
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun LegacyRoutineListScreen(navController: NavController, viewModel: RoutineListViewModel) {
-    val routines by viewModel.routines.collectAsStateWithLifecycle(initialValue = emptyList())
-    val activeRoutineId by viewModel.activeRoutineId.collectAsStateWithLifecycle(initialValue = null)
-    val canCreateMore by viewModel.canCreateMoreRoutines.collectAsStateWithLifecycle()
-
-    var showMaxRoutinesDialog by remember { mutableStateOf(false) }
-    var routineToDelete by remember { mutableStateOf<Routine?>(null) }
-    val accentColor = MaterialTheme.colorScheme.primary
-
-    val gradientColors = LocalGradientColors.current
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "My Routines",
-                        color = LocalAppColors.current.textPrimary,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                },
-                navigationIcon = {
-                    BackNavigationIcon(navController::navigateBackOrHome)
-                },
-                actions = {
-                    HomeNavigationAction(navController::navigateHomeAndClearStack)
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
-                    if (canCreateMore) {
-                        navController.navigate(Screen.RoutineForm.createRoute())
-                    } else {
-                        showMaxRoutinesDialog = true
-                    }
-                },
-                containerColor = if (canCreateMore) accentColor else LocalAppColors.current.textTertiary,
-                contentColor = Color.Black,
-                shape = RoundedCornerShape(16.dp),
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Create Routine", modifier = Modifier.size(32.dp))
-            }
-        },
-        containerColor = Color.Transparent
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    androidx.compose.ui.graphics.Brush.verticalGradient(
-                        colors = listOf(gradientColors.first, gradientColors.second)
-                    )
-                )
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = 16.dp)
-            ) {
-                if (routines.isEmpty()) {
-                    // Empty state
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "🗃️",
-                                fontSize = 48.sp,
-                                modifier = Modifier.padding(bottom = 16.dp)
-                            )
-                            Text(
-                                text = "No routines yet.",
-                                color = LocalAppColors.current.textPrimary,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Tap + to create your first routine!",
-                                color = LocalAppColors.current.textTertiary,
-                                fontSize = 14.sp,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-                        }
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(top = 12.dp, bottom = 100.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        items(routines) { routine ->
-                            RoutineListItem(
-                                routine = routine,
-                                isActive = routine.id == activeRoutineId,
-                                onTap = { navController.navigate(Screen.RoutineDetail.createRoute(routine.id)) },
-                                onSetActive = { viewModel.setActiveRoutine(routine.id) },
-                                onEdit = { navController.navigate(Screen.RoutineForm.createRoute(routine.id)) },
-                                onDuplicate = {
-                                    if (canCreateMore) {
-                                        viewModel.duplicateRoutine(routine.id)
-                                    } else {
-                                        showMaxRoutinesDialog = true
-                                    }
-                                },
-                                onDelete = { routineToDelete = routine }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Max routines dialog
-    if (showMaxRoutinesDialog) {
-        AlertDialog(
-            onDismissRequest = { showMaxRoutinesDialog = false },
-            title = { Text("Maximum Routines Reached") },
-            text = { Text("You can only create up to 10 routines. Delete an existing routine to create a new one.") },
-            confirmButton = {
-                TextButton(onClick = { showMaxRoutinesDialog = false }) {
-                    Text("OK")
-                }
-            }
-        )
-    }
-
-    // Delete confirmation dialog
-    routineToDelete?.let {
-        AlertDialog(
-            onDismissRequest = { routineToDelete = null },
-            title = { Text("Delete Routine?") },
-            text = { Text("This will permanently delete \"${it.name}\" and all its days and exercises.") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.deleteRoutine(it)
-                        routineToDelete = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { routineToDelete = null }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-}
-
-@Composable
-fun RoutineListItem(
-    routine: Routine,
-    isActive: Boolean,
-    onTap: () -> Unit,
-    onSetActive: () -> Unit,
-    onEdit: () -> Unit,
-    onDuplicate: () -> Unit,
-    onDelete: () -> Unit
-) {
-    var showMenu by remember { mutableStateOf(false) }
-    val accentColor = MaterialTheme.colorScheme.primary
-
-    GlowCard(
-        onClick = onTap,
-        onLongClick = { showMenu = true },
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = routine.name,
-                        color = LocalAppColors.current.textPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    if (isActive) {
-                        Surface(
-                            color = accentColor.copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Text(
-                                text = "ACTIVE",
-                                color = accentColor,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.sp,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Context menu
-            DropdownMenu(
-                expanded = showMenu,
-                onDismissRequest = { showMenu = false }
-            ) {
-                if (!isActive) {
-                    DropdownMenuItem(
-                        text = { Text("Set as Active", color = LocalAppColors.current.textPrimary) },
-                        onClick = {
-                            showMenu = false
-                            onSetActive()
-                        }
-                    )
-                }
-                DropdownMenuItem(
-                    text = { Text("Edit Name", color = LocalAppColors.current.textPrimary) },
-                    onClick = {
-                        showMenu = false
-                        onEdit()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Duplicate", color = LocalAppColors.current.textPrimary) },
-                    onClick = {
-                        showMenu = false
-                        onDuplicate()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                    onClick = {
-                        showMenu = false
-                        onDelete()
-                    }
-                )
-            }
-        }
-    }
+    val state by viewModel.previewState.collectAsStateWithLifecycle()
+    PreviewRoutineBrowseContent(
+        state = state,
+        onCreate = { navController.navigateResumed(Screen.RoutineForm.createRoute()) },
+        onOpen = { navController.navigateResumed(Screen.RoutineDetail.createRoute(it)) },
+        onSetActive = viewModel::setActiveRoutine,
+        onRename = { navController.navigateResumed(Screen.RoutineForm.createRoute(it)) },
+        onDuplicate = viewModel::duplicateRoutine,
+        onDelete = viewModel::deleteRoutineById,
+        onRetry = viewModel::retryLoad,
+        onDismissError = viewModel::dismissError,
+        onBack = navController::navigateBackOrHome,
+        onHome = navController::navigateHomeAndClearStack
+    )
 }

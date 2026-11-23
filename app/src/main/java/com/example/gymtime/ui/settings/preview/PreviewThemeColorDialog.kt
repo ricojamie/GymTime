@@ -1,19 +1,38 @@
 package com.example.gymtime.ui.settings.preview
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -22,9 +41,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.example.gymtime.ui.theme.IronLogRadius
+import com.example.gymtime.ui.theme.IronLogSpace
 import com.example.gymtime.ui.theme.LocalLoggerActionColors
+import com.example.gymtime.ui.theme.tabular
 import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 @Composable
 fun PreviewThemeColorDialog(initialHex: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
@@ -37,31 +61,55 @@ fun PreviewThemeColorDialog(initialHex: String, onDismiss: () -> Unit, onSave: (
     val draftColor = previewParseHex(hexDraft)
     val action = LocalLoggerActionColors.current
     val colors = MaterialTheme.colorScheme
+
     fun updateSelection(nextHue: Float, nextSaturation: Float, nextBrightness: Float) {
         hue = nextHue
         saturation = nextSaturation
         brightness = nextBrightness
         hexDraft = previewColorToHex(Color.hsv(nextHue, nextSaturation, nextBrightness))
     }
+
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = IronLogRadius.CardShape,
         title = { Text("Your accent color") },
         containerColor = colors.surface,
         titleContentColor = colors.onSurface,
         textContentColor = colors.onSurface,
         text = {
             Column(
-                Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier
+                    .heightIn(max = 400.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
             ) {
                 PreviewHueWheel(hue = hue, onHue = { updateSelection(it, saturation, brightness) })
-                Box(Modifier.fillMaxWidth().height(36.dp).clip(RoundedCornerShape(12.dp)).background(color))
-                Text("Hue · ${hue.roundToInt()}°", style = MaterialTheme.typography.labelLarge)
-                Slider(value = hue, valueRange = 0f..359.9f, onValueChange = { updateSelection(it, saturation, brightness) }, modifier = Modifier.semantics { contentDescription = "Hue" })
-                Text("Saturation · ${(saturation * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge)
-                Slider(value = saturation, onValueChange = { updateSelection(hue, it, brightness) }, modifier = Modifier.semantics { contentDescription = "Saturation" })
-                Text("Brightness · ${(brightness * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge)
-                Slider(value = brightness, onValueChange = { updateSelection(hue, saturation, it) }, modifier = Modifier.semantics { contentDescription = "Brightness" })
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(36.dp)
+                        .clip(IronLogRadius.ControlShape)
+                        .background(color)
+                )
+                Text("Hue · ${hue.roundToInt()}°", style = MaterialTheme.typography.labelLarge.tabular())
+                Slider(
+                    value = hue,
+                    valueRange = 0f..359.9f,
+                    onValueChange = { updateSelection(it, saturation, brightness) },
+                    modifier = Modifier.semantics { contentDescription = "Hue" }
+                )
+                Text("Saturation · ${(saturation * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge.tabular())
+                Slider(
+                    value = saturation,
+                    onValueChange = { updateSelection(hue, it, brightness) },
+                    modifier = Modifier.semantics { contentDescription = "Saturation" }
+                )
+                Text("Brightness · ${(brightness * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge.tabular())
+                Slider(
+                    value = brightness,
+                    onValueChange = { updateSelection(hue, saturation, it) },
+                    modifier = Modifier.semantics { contentDescription = "Brightness" }
+                )
                 OutlinedTextField(
                     value = hexDraft,
                     onValueChange = {
@@ -76,8 +124,18 @@ fun PreviewThemeColorDialog(initialHex: String, onDismiss: () -> Unit, onSave: (
                     },
                     label = { Text("Hex color") },
                     singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge.tabular(),
+                    shape = IronLogRadius.ControlShape,
                     isError = draftColor == null,
-                    supportingText = { Text(if (draftColor == null) "Use six hex digits, for example #A3E635." else "Buttons adapt their text for contrast.") },
+                    supportingText = {
+                        Text(
+                            if (draftColor == null) {
+                                "Use six hex digits, for example #A3E635."
+                            } else {
+                                "Buttons adapt their text for contrast."
+                            }
+                        )
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -86,11 +144,17 @@ fun PreviewThemeColorDialog(initialHex: String, onDismiss: () -> Unit, onSave: (
             Button(
                 onClick = { draftColor?.let { onSave(previewColorToHex(it)) } },
                 enabled = draftColor != null,
-                modifier = Modifier.heightIn(min = 48.dp),
+                shape = IronLogRadius.ControlShape,
+                modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin),
                 colors = ButtonDefaults.buttonColors(containerColor = action.fill, contentColor = action.onFill)
             ) { Text("Use color") }
         },
-        dismissButton = { TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancel") } }
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
+            ) { Text("Cancel") }
+        }
     )
 }
 
@@ -99,8 +163,11 @@ private fun PreviewHueWheel(hue: Float, onHue: (Float) -> Unit) {
     val latestOnHue by rememberUpdatedState(onHue)
     val ringColors = remember { (0..360 step 30).map { Color.hsv(it.toFloat(), 1f, 1f) } }
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Canvas(
-            Modifier.sizeIn(maxWidth = 200.dp, maxHeight = 200.dp).fillMaxWidth().aspectRatio(1f)
+        Box(
+            modifier = Modifier
+                .sizeIn(maxWidth = 200.dp, maxHeight = 200.dp)
+                .fillMaxWidth()
+                .aspectRatio(1f)
                 .semantics { contentDescription = "Color wheel. Hue can also be adjusted with the slider below." }
                 .pointerInput(Unit) { detectTapGestures { latestOnHue(previewHueAngle(it, size.width, size.height)) } }
                 .pointerInput(Unit) {
@@ -109,15 +176,25 @@ private fun PreviewHueWheel(hue: Float, onHue: (Float) -> Unit) {
                         latestOnHue(previewHueAngle(change.position, size.width, size.height))
                     }
                 }
-        ) {
-            val ringWidth = 24.dp.toPx()
-            val radius = size.minDimension / 2 - ringWidth / 2
-            drawCircle(Brush.sweepGradient(ringColors), radius = radius, style = Stroke(width = ringWidth))
-            val angle = Math.toRadians(hue.toDouble())
-            val marker = Offset(center.x + kotlin.math.cos(angle).toFloat() * radius, center.y + kotlin.math.sin(angle).toFloat() * radius)
-            drawCircle(Color.White, 9.dp.toPx(), marker)
-            drawCircle(Color.Black, 5.dp.toPx(), marker)
-        }
+                .drawWithCache {
+                    val ringWidth = 24.dp.toPx()
+                    val radius = size.minDimension / 2f - ringWidth / 2f
+                    val ringStroke = Stroke(width = ringWidth)
+                    val sweepBrush = Brush.sweepGradient(ringColors)
+                    val outerDotRadius = 9.dp.toPx()
+                    val innerDotRadius = 5.dp.toPx()
+                    onDrawBehind {
+                        drawCircle(sweepBrush, radius = radius, style = ringStroke)
+                        val angle = Math.toRadians(hue.toDouble())
+                        val marker = Offset(
+                            center.x + cos(angle).toFloat() * radius,
+                            center.y + sin(angle).toFloat() * radius
+                        )
+                        drawCircle(Color.White, outerDotRadius, marker)
+                        drawCircle(Color.Black, innerDotRadius, marker)
+                    }
+                }
+        )
     }
 }
 

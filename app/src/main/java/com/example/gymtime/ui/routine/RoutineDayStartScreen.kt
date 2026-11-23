@@ -1,45 +1,27 @@
 package com.example.gymtime.ui.routine
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.repeatOnLifecycle
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavController
-import com.example.gymtime.data.db.dao.RoutineDayWithExercises
 import com.example.gymtime.navigation.Screen
-import com.example.gymtime.navigation.navigateHomeAndClearStack
 import com.example.gymtime.navigation.navigateBackOrHome
+import com.example.gymtime.navigation.navigateHomeAndClearStack
+import com.example.gymtime.navigation.navigateResumed
 import com.example.gymtime.navigation.navigateToWorkoutExercise
-import com.example.gymtime.ui.components.BackNavigationIcon
-import com.example.gymtime.ui.components.HomeNavigationAction
-import com.example.gymtime.ui.components.GlowCard
-import com.example.gymtime.ui.theme.*
 import com.example.gymtime.ui.routine.preview.PreviewRoutineDayStartContent
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoutineDayStartScreen(
     navController: NavController,
     viewModel: RoutineDayStartViewModel = hiltViewModel()
 ) {
-    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
     val lifecycleOwner = LocalLifecycleOwner.current
     val latestOpenWorkout by rememberUpdatedState<(Long) -> Unit>({ navController.navigateToWorkoutExercise(it) })
     LaunchedEffect(viewModel, lifecycleOwner) {
@@ -51,152 +33,16 @@ fun RoutineDayStartScreen(
             }
         }
     }
-    if (newUiEnabled) {
-        val state by viewModel.previewState.collectAsStateWithLifecycle()
-        LoggerPreviewTheme {
-            PreviewRoutineDayStartContent(
-                state = state, onBack = navController::navigateBackOrHome, onHome = navController::navigateHomeAndClearStack,
-                onStartDay = viewModel::startWorkoutFromDay,
-                onEditDay = { navController.navigate(Screen.RoutineDayForm.createRoute(viewModel.routineId, it)) },
-                onAddDay = { navController.navigate(Screen.RoutineDayForm.createRoute(viewModel.routineId)) },
-                onRetry = viewModel::retryLoad, onDismissError = viewModel::dismissError
-            )
-        }
-    } else LegacyRoutineDayStartScreen(navController, viewModel)
-}
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun LegacyRoutineDayStartScreen(navController: NavController, viewModel: RoutineDayStartViewModel) {
-    val routineName by viewModel.routineName.collectAsStateWithLifecycle(initialValue = "")
-    val daysWithExercises by viewModel.daysWithExercises.collectAsStateWithLifecycle(initialValue = emptyList())
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            "Start Workout",
-                            color = LocalAppColors.current.textPrimary,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            routineName,
-                            color = LocalAppColors.current.textSecondary,
-                            fontSize = 14.sp
-                        )
-                    }
-                },
-                navigationIcon = {
-                    BackNavigationIcon(navController::navigateBackOrHome)
-                },
-                actions = {
-                    HomeNavigationAction(navController::navigateHomeAndClearStack)
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
-        },
-        containerColor = Color.Transparent
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp)
-        ) {
-            Text(
-                text = "SELECT A DAY",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.5.sp,
-                color = LocalAppColors.current.textTertiary,
-                modifier = Modifier.padding(vertical = 16.dp)
-            )
-
-            if (daysWithExercises.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "This routine has no days setup yet.",
-                        color = LocalAppColors.current.textTertiary
-                    )
-                }
-            } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(daysWithExercises) { dayWithExercises ->
-                        RoutineDayStartItem(
-                            dayWithExercises = dayWithExercises,
-                            onTap = { viewModel.startWorkoutFromDay(dayWithExercises.day.id) }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun RoutineDayStartItem(
-    dayWithExercises: RoutineDayWithExercises,
-    onTap: () -> Unit
-) {
-    val accentColor = MaterialTheme.colorScheme.primary
-    GlowCard(
-        onClick = onTap,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = dayWithExercises.day.name,
-                    color = LocalAppColors.current.textPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "${dayWithExercises.exercises.size} Exercises",
-                    color = LocalAppColors.current.textSecondary,
-                    fontSize = 14.sp
-                )
-                // List first few exercises as preview
-                if (dayWithExercises.exercises.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = dayWithExercises.exercises.take(3).joinToString(", ") { it.exercise.name } +
-                                if (dayWithExercises.exercises.size > 3) ", ..." else "",
-                        color = LocalAppColors.current.textTertiary,
-                        fontSize = 12.sp,
-                        maxLines = 1
-                    )
-                }
-            }
-
-            Surface(
-                shape = RoundedCornerShape(50),
-                color = accentColor,
-                modifier = Modifier.size(40.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.PlayArrow,
-                        contentDescription = "Start",
-                        tint = Color.Black
-                    )
-                }
-            }
-        }
-    }
+    val state by viewModel.previewState.collectAsStateWithLifecycle()
+    PreviewRoutineDayStartContent(
+        state = state,
+        onBack = navController::navigateBackOrHome,
+        onHome = navController::navigateHomeAndClearStack,
+        onStartDay = viewModel::startWorkoutFromDay,
+        onEditDay = { navController.navigateResumed(Screen.RoutineDayForm.createRoute(viewModel.routineId, it)) },
+        onAddDay = { navController.navigateResumed(Screen.RoutineDayForm.createRoute(viewModel.routineId)) },
+        onRetry = viewModel::retryLoad,
+        onDismissError = viewModel::dismissError
+    )
 }

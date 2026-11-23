@@ -1,11 +1,15 @@
 package com.example.gymtime.notifications
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.example.gymtime.MainActivity
 import com.example.gymtime.R
 import com.example.gymtime.domain.report.MonthlyReport
@@ -17,11 +21,30 @@ import javax.inject.Singleton
 
 @Singleton
 class MonthlyReportNotifier @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
 
-    fun postReport(report: MonthlyReport) {
+    fun canPostNotifications(): Boolean {
+        if (
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return false
+        }
+        val managerCompat = NotificationManagerCompat.from(context)
+        if (!managerCompat.areNotificationsEnabled()) {
+            return false
+        }
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        val channel = manager?.getNotificationChannel(CHANNEL_ID)
+        return channel == null || channel.importance != NotificationManager.IMPORTANCE_NONE
+    }
+
+    fun postReport(report: MonthlyReport): Boolean {
+        if (!canPostNotifications()) return false
         ensureChannel()
+        if (!canPostNotifications()) return false
+
         val numberFormat = NumberFormat.getNumberInstance(Locale.getDefault())
         val title = "Your ${report.monthLabel} report is ready"
         val body = buildString {
@@ -53,7 +76,12 @@ class MonthlyReportNotifier @Inject constructor(
             .build()
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, notification)
+        return try {
+            manager.notify(NOTIFICATION_ID, notification)
+            true
+        } catch (_: SecurityException) {
+            false
+        }
     }
 
     private fun ensureChannel() {

@@ -38,7 +38,9 @@ sealed class Screen(val route: String, val icon: ImageVector) {
     object ExerciseLogging : Screen("exercise_logging/{exerciseId}?draftToken={draftToken}", Icons.Filled.Home) { // Placeholder, not in bottom nav
         fun createRoute(exerciseId: Long, draftToken: String? = null) = buildString {
             append("exercise_logging/$exerciseId")
-            draftToken?.let { append("?draftToken=$it") }
+            draftToken?.takeIf { it.isNotBlank() }?.let {
+                append("?draftToken=${Uri.encode(it)}")
+            }
         }
     }
     object ExerciseForm : Screen("exercise_form?exerciseId={exerciseId}&fromWorkout={fromWorkout}&fromWorkoutBuilder={fromWorkoutBuilder}&initialName={initialName}&initialMuscle={initialMuscle}&returnToPicker={returnToPicker}", Icons.Filled.Home) { // Create/Edit exercise

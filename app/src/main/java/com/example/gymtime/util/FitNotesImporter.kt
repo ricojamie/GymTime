@@ -1,5 +1,7 @@
 package com.example.gymtime.util
 
+import androidx.room.withTransaction
+import com.example.gymtime.data.db.GymTimeDatabase
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.WorkoutDao
@@ -7,13 +9,18 @@ import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
-import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.db.entity.WARMUP_MUSCLE_GROUP
+import com.example.gymtime.data.db.entity.Workout
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
-import java.text.SimpleDateFormat
-import java.util.Calendar
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.ResolverStyle
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
@@ -26,10 +33,24 @@ import javax.inject.Inject
  * 2025-01-20,Incline Bench Press,Chest,115.0,lbs,7,,,
  */
 class FitNotesImporter @Inject constructor(
+    private val database: GymTimeDatabase,
     private val exerciseDao: ExerciseDao,
     private val workoutDao: WorkoutDao,
     private val setDao: SetDao
 ) {
+    private var runInTransaction: suspend (suspend () -> ImportResult) -> ImportResult =
+        { block -> database.withTransaction { block() } }
+
+    internal constructor(
+        database: GymTimeDatabase,
+        exerciseDao: ExerciseDao,
+        workoutDao: WorkoutDao,
+        setDao: SetDao,
+        runInTransaction: suspend (suspend () -> ImportResult) -> ImportResult
+    ) : this(database, exerciseDao, workoutDao, setDao) {
+        this.runInTransaction = runInTransaction
+    }
+
     data class ImportResult(
         val workoutsImported: Int,
         val setsImported: Int,
@@ -50,107 +71,142 @@ class FitNotesImporter @Inject constructor(
         val time: String?
     )
 
-    suspend fun importCsv(inputStream: InputStream): ImportResult {
+    private data class SetMatchKey(
+        val exerciseId: Long,
+        val weight: Float?,
+        val reps: Int?,
+        val durationSeconds: Int?,
+        val distanceValue: Float?,
+        val distanceUnit: DistanceUnit?,
+        val calories: Float?
+    )
+
+    suspend fun importCsv(inputStream: InputStream): ImportResult = withContext(Dispatchers.IO) {
         val errors = mutableListOf<String>()
         val rows = mutableListOf<CsvRow>()
 
-        // Parse CSV
-        BufferedReader(InputStreamReader(inputStream)).use { reader ->
-            var lineNumber = 0
-            reader.forEachLine { line ->
-                lineNumber++
-                if (lineNumber == 1) {
-                    // Skip header row
-                    return@forEachLine
-                }
-                try {
-                    val row = parseCsvLine(line)
-                    if (row != null) {
-                        rows.add(row)
+        BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8)).use { reader ->
+            try {
+                CsvParser.forEachRecord(reader) { recordNumber, fields ->
+                    if (recordNumber == 1) {
+                        return@forEachRecord
                     }
-                } catch (e: Exception) {
-                    errors.add("Line $lineNumber: ${e.message}")
+                    try {
+                        val row = parseCsvFields(fields)
+                        if (row != null) {
+                            rows.add(row)
+                        }
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        errors.add("Record $recordNumber: ${e.message}")
+                    }
                 }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                errors.add("CSV parse error: ${e.message}")
             }
         }
 
         if (rows.isEmpty()) {
-            return ImportResult(0, 0, 0, 0, errors + "No valid data rows found")
+            return@withContext ImportResult(0, 0, 0, 0, errors + "No valid data rows found")
         }
 
-        // Group rows by date to create one workout per day
         val rowsByDate = rows.groupBy { it.date }
+        val zoneId = ZoneId.systemDefault()
 
-        var workoutsImported = 0
-        var setsImported = 0
-        var exercisesCreated = 0
-        var duplicatesSkipped = 0
+        runInTransaction {
+            var workoutsImported = 0
+            var setsImported = 0
+            var exercisesCreated = 0
+            var duplicatesSkipped = 0
 
-        // Process each date group
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val exerciseCache = mutableMapOf<String, Long>() // name -> exerciseId
+            val exerciseCache = mutableMapOf<String, Long>()
 
-        for ((dateStr, dateRows) in rowsByDate) {
-            try {
-                val parsedDate = dateFormat.parse(dateStr) ?: continue
+            for ((dateStr, dateRows) in rowsByDate) {
+                val localDate = try {
+                    LocalDate.parse(dateStr, DATE_FORMATTER)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    errors.add("Date error ($dateStr): ${e.message}")
+                    continue
+                }
 
-                // Create workout for this date
-                val workoutStartTime = getStartOfDay(parsedDate)
-                val workoutEndTime = getEndOfDay(parsedDate)
+                val workoutStartMs = localDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
+                val workoutEndMs = localDate.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli() - 1L
+                val workoutStartTime = Date(workoutStartMs)
+                val workoutEndTime = Date(workoutEndMs)
 
-                val workout = Workout(
-                    startTime = workoutStartTime,
-                    endTime = workoutEndTime,
-                    name = "FitNotes Import",
-                    note = "Imported from FitNotes",
-                    rating = null,
-                    ratingNote = null,
-                    routineDayId = null
+                // Query pre-existing sets for this day once before inserting any rows so
+                // identical straight sets within the same import all import, while re-imports
+                // skip only the already-persisted multiplicity.
+                val remainingExistingCounts = mutableMapOf<SetMatchKey, Int>()
+                val existingSetsForDay = setDao.getSetsWithExerciseInRange(
+                    startDate = workoutStartMs,
+                    endDate = workoutEndMs
                 )
-                val workoutId = workoutDao.insertWorkout(workout)
-                workoutsImported++
+                for (existing in existingSetsForDay) {
+                    val s = existing.set
+                    val key = SetMatchKey(
+                        exerciseId = s.exerciseId,
+                        weight = normalizeFloatKey(s.weight),
+                        reps = s.reps,
+                        durationSeconds = s.durationSeconds,
+                        distanceValue = normalizeFloatKey(s.distanceValue),
+                        distanceUnit = if (s.distanceValue != null) s.distanceUnit else null,
+                        calories = normalizeFloatKey(s.calories)
+                    )
+                    remainingExistingCounts[key] = (remainingExistingCounts[key] ?: 0) + 1
+                }
 
-                // Process each set in this workout
+                val pendingSets = mutableListOf<Set>()
+
                 for (row in dateRows) {
-                    try {
-                        // Get or create exercise
-                        val exerciseId = getOrCreateExercise(
-                            name = row.exerciseName,
-                            category = row.category,
-                            row = row,
-                            cache = exerciseCache
-                        ) { exercisesCreated++ }
+                    val exerciseId = getOrCreateExercise(
+                        name = row.exerciseName,
+                        category = row.category,
+                        row = row,
+                        cache = exerciseCache
+                    ) { exercisesCreated++ }
 
-                        // Check for duplicates
-                        val dayStart = workoutStartTime.time
-                        val dayEnd = workoutEndTime.time
-                        val weight = convertWeight(row.weight, row.weightUnit)
-                        val reps = row.reps
+                    val weight = convertWeight(row.weight, row.weightUnit)
+                    val reps = row.reps
+                    val durationSeconds = parseTime(row.time)
+                    val distanceValue = row.distance
+                    val distanceUnit = if (distanceValue != null || row.distanceUnit != null) {
+                        parseDistanceUnit(row.distanceUnit)
+                    } else {
+                        null
+                    }
+                    val distanceMeters = convertDistance(distanceValue, row.distanceUnit)
 
-                        val existingCount = setDao.countMatchingSets(
-                            exerciseId = exerciseId,
-                            dayStart = dayStart,
-                            dayEnd = dayEnd,
-                            weight = weight,
-                            reps = reps
-                        )
+                    val key = SetMatchKey(
+                        exerciseId = exerciseId,
+                        weight = normalizeFloatKey(weight),
+                        reps = reps,
+                        durationSeconds = durationSeconds,
+                        distanceValue = normalizeFloatKey(distanceValue),
+                        distanceUnit = if (distanceValue != null) distanceUnit else null,
+                        calories = null
+                    )
 
-                        if (existingCount > 0) {
-                            duplicatesSkipped++
-                            continue
-                        }
+                    val remaining = remainingExistingCounts[key] ?: 0
+                    if (remaining > 0) {
+                        remainingExistingCounts[key] = remaining - 1
+                        duplicatesSkipped++
+                        continue
+                    }
 
-                        // Create set
-                        val set = Set(
-                            workoutId = workoutId,
+                    pendingSets.add(
+                        Set(
+                            workoutId = 0L,
                             exerciseId = exerciseId,
                             weight = weight,
                             reps = reps,
                             rpe = null,
-                            durationSeconds = parseTime(row.time),
-                            distanceValue = row.distance,
-                            distanceUnit = parseDistanceUnit(row.distanceUnit),
-                            distanceMeters = convertDistance(row.distance, row.distanceUnit),
+                            durationSeconds = durationSeconds,
+                            distanceValue = distanceValue,
+                            distanceUnit = distanceUnit,
+                            distanceMeters = distanceMeters,
                             isWarmup = false,
                             isComplete = true,
                             timestamp = workoutStartTime,
@@ -158,28 +214,40 @@ class FitNotesImporter @Inject constructor(
                             supersetGroupId = null,
                             supersetOrderIndex = 0
                         )
-                        setDao.insertSet(set)
+                    )
+                }
+
+                if (pendingSets.isNotEmpty()) {
+                    val workout = Workout(
+                        startTime = workoutStartTime,
+                        endTime = workoutEndTime,
+                        name = "FitNotes Import",
+                        note = "Imported from FitNotes",
+                        rating = null,
+                        ratingNote = null,
+                        routineDayId = null
+                    )
+                    val workoutId = workoutDao.insertWorkout(workout)
+                    workoutsImported++
+
+                    for (preparedSet in pendingSets) {
+                        setDao.insertSet(preparedSet.copy(workoutId = workoutId))
                         setsImported++
-                    } catch (e: Exception) {
-                        errors.add("Set error (${row.exerciseName}): ${e.message}")
                     }
                 }
-            } catch (e: Exception) {
-                errors.add("Date error ($dateStr): ${e.message}")
             }
-        }
 
-        return ImportResult(
-            workoutsImported = workoutsImported,
-            setsImported = setsImported,
-            exercisesCreated = exercisesCreated,
-            duplicatesSkipped = duplicatesSkipped,
-            errors = errors
-        )
+            ImportResult(
+                workoutsImported = workoutsImported,
+                setsImported = setsImported,
+                exercisesCreated = exercisesCreated,
+                duplicatesSkipped = duplicatesSkipped,
+                errors = errors
+            )
+        }
     }
 
-    private fun parseCsvLine(line: String): CsvRow? {
-        val parts = line.split(",")
+    private fun parseCsvFields(parts: List<String>): CsvRow? {
         if (parts.size < 6) return null
 
         val date = parts.getOrNull(0)?.trim() ?: return null
@@ -192,10 +260,10 @@ class FitNotesImporter @Inject constructor(
             date = date,
             exerciseName = exerciseName,
             category = category.ifEmpty { "Other" },
-            weight = parts.getOrNull(3)?.trim()?.toFloatOrNull(),
+            weight = parts.getOrNull(3)?.trim()?.toFloatOrNull()?.takeIf { it.isFinite() },
             weightUnit = parts.getOrNull(4)?.trim()?.takeIf { it.isNotEmpty() },
             reps = parts.getOrNull(5)?.trim()?.toIntOrNull(),
-            distance = parts.getOrNull(6)?.trim()?.toFloatOrNull(),
+            distance = parts.getOrNull(6)?.trim()?.toFloatOrNull()?.takeIf { it.isFinite() },
             distanceUnit = parts.getOrNull(7)?.trim()?.takeIf { it.isNotEmpty() },
             time = parts.getOrNull(8)?.trim()?.takeIf { it.isNotEmpty() }
         )
@@ -208,17 +276,14 @@ class FitNotesImporter @Inject constructor(
         cache: MutableMap<String, Long>,
         onCreated: () -> Unit
     ): Long {
-        // Check cache first
         cache[name.lowercase()]?.let { return it }
 
-        // Check database
         val existing = exerciseDao.getExerciseByName(name)
         if (existing != null) {
             cache[name.lowercase()] = existing.id
             return existing.id
         }
 
-        // Create new exercise
         val logType = determineLogType(row)
         val exercise = Exercise(
             name = name,
@@ -243,12 +308,11 @@ class FitNotesImporter @Inject constructor(
             row.distance != null && row.time != null -> LogType.DISTANCE_TIME
             row.weight != null && row.distance != null -> LogType.WEIGHT_DISTANCE
             row.time != null -> LogType.DURATION
-            else -> LogType.WEIGHT_REPS // Default
+            else -> LogType.WEIGHT_REPS
         }
     }
 
     private fun normalizeCategory(category: String): String {
-        // Map FitNotes categories to IronLog muscle groups
         return when (category.lowercase()) {
             "chest" -> "Chest"
             "back" -> "Back"
@@ -264,23 +328,17 @@ class FitNotesImporter @Inject constructor(
     }
 
     private fun convertWeight(weight: Float?, unit: String?): Float? {
-        if (weight == null) return null
-        return when (unit?.lowercase()) {
-            "kg" -> weight * 2.20462f // Convert kg to lbs
-            else -> weight // Already in lbs or unknown
+        if (weight == null || !weight.isFinite()) return null
+        val converted = when (unit?.lowercase()) {
+            "kg" -> weight * 2.20462f
+            else -> weight
         }
+        return converted.takeIf { it.isFinite() }
     }
 
     private fun convertDistance(distance: Float?, unit: String?): Float? {
-        if (distance == null) return null
-        return when (parseDistanceUnit(unit)) {
-            DistanceUnit.KILOMETERS -> distance * 1000f
-            DistanceUnit.MILES -> distance * 1609.34f
-            DistanceUnit.METERS -> distance
-            DistanceUnit.YARDS -> distance * 0.9144f
-            DistanceUnit.FEET -> distance * 0.3048f
-            DistanceUnit.STEPS, DistanceUnit.FLOORS -> null
-        }
+        if (distance == null || !distance.isFinite()) return null
+        return TimeUtils.distanceToMeters(distance, parseDistanceUnit(unit))?.takeIf { it.isFinite() }
     }
 
     private fun parseDistanceUnit(unit: String?): DistanceUnit {
@@ -298,43 +356,17 @@ class FitNotesImporter @Inject constructor(
 
     private fun parseTime(time: String?): Int? {
         if (time.isNullOrBlank()) return null
-        // Try to parse as seconds
-        time.toIntOrNull()?.let { return it }
-        // Try to parse as mm:ss or hh:mm:ss
-        val parts = time.split(":")
-        return when (parts.size) {
-            2 -> {
-                val mins = parts[0].toIntOrNull() ?: 0
-                val secs = parts[1].toIntOrNull() ?: 0
-                mins * 60 + secs
-            }
-            3 -> {
-                val hrs = parts[0].toIntOrNull() ?: 0
-                val mins = parts[1].toIntOrNull() ?: 0
-                val secs = parts[2].toIntOrNull() ?: 0
-                hrs * 3600 + mins * 60 + secs
-            }
-            else -> null
-        }
+        return TimeUtils.parseHMSToSeconds(time)
     }
 
-    private fun getStartOfDay(date: Date): Date {
-        val cal = Calendar.getInstance()
-        cal.time = date
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        return cal.time
+    private fun normalizeFloatKey(value: Float?): Float? {
+        if (value == null || !value.isFinite()) return null
+        return if (value == 0f) 0f else value
     }
 
-    private fun getEndOfDay(date: Date): Date {
-        val cal = Calendar.getInstance()
-        cal.time = date
-        cal.set(Calendar.HOUR_OF_DAY, 23)
-        cal.set(Calendar.MINUTE, 59)
-        cal.set(Calendar.SECOND, 59)
-        cal.set(Calendar.MILLISECOND, 999)
-        return cal.time
+    private companion object {
+        private val DATE_FORMATTER: DateTimeFormatter = DateTimeFormatter
+            .ofPattern("uuuu-M-d", Locale.US)
+            .withResolverStyle(ResolverStyle.STRICT)
     }
 }

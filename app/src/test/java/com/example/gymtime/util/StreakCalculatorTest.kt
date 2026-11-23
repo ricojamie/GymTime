@@ -4,6 +4,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import java.util.Calendar
 import java.util.Date
+import java.util.Locale
 
 class StreakCalculatorTest {
 
@@ -126,6 +127,81 @@ class StreakCalculatorTest {
 
         assertEquals(Calendar.SUNDAY, reset.get(Calendar.DAY_OF_WEEK))
         assertTrue(result.nextResetDate.after(asOf))
+    }
+
+    @Test(timeout = 2_000L)
+    fun mondayFirstUkLocaleDoesNotHangAndComputesMultiWeekStreak() {
+        val previousLocale = Locale.getDefault()
+        Locale.setDefault(Locale.UK)
+        try {
+            // Wednesday 2026-06-10 with multi-week workout history (Sun-Sat weeks with <=2 misses/week)
+            val asOf = date(2026, Calendar.JUNE, 10)
+            val workouts = listOf(
+                // Previous week (Sun May 31 - Sat Jun 6): 5 workouts (2 skips)
+                date(2026, Calendar.MAY, 31),
+                date(2026, Calendar.JUNE, 1),
+                date(2026, Calendar.JUNE, 2),
+                date(2026, Calendar.JUNE, 4),
+                date(2026, Calendar.JUNE, 5),
+                // Current week (Sun Jun 7 - Wed Jun 10): 3 workouts (1 skip)
+                date(2026, Calendar.JUNE, 7),
+                date(2026, Calendar.JUNE, 8),
+                date(2026, Calendar.JUNE, 10)
+            )
+            val result = StreakCalculator.calculateStreak(
+                workoutDates = workouts,
+                allowedSkipsPerWeek = 2,
+                asOf = asOf
+            )
+
+            assertEquals(StreakCalculator.StreakState.ACTIVE, result.state)
+            assertEquals(8, result.streakDays)
+            assertEquals(1, result.skipsRemaining)
+        } finally {
+            Locale.setDefault(previousLocale)
+        }
+    }
+
+    @Test
+    fun streakAcrossDstSpringForwardAndFallBackWeeksRemainsAccurate() {
+        val ny = java.time.ZoneId.of("America/New_York")
+
+        // Spring-forward week containing Sunday 2026-03-08 (23h day)
+        val springAsOf = Date.from(java.time.LocalDate.of(2026, 3, 10).atTime(12, 0).atZone(ny).toInstant())
+        val springWorkouts = listOf(
+            // Prior week (Mar 1 - Mar 7): 5 workouts (2 skips)
+            Date.from(java.time.LocalDate.of(2026, 3, 1).atTime(10, 0).atZone(ny).toInstant()),
+            Date.from(java.time.LocalDate.of(2026, 3, 2).atTime(10, 0).atZone(ny).toInstant()),
+            Date.from(java.time.LocalDate.of(2026, 3, 4).atTime(10, 0).atZone(ny).toInstant()),
+            Date.from(java.time.LocalDate.of(2026, 3, 5).atTime(10, 0).atZone(ny).toInstant()),
+            Date.from(java.time.LocalDate.of(2026, 3, 7).atTime(10, 0).atZone(ny).toInstant()),
+            // Spring-forward week (Mar 8 - Mar 10): 3 workouts (0 skips)
+            Date.from(java.time.LocalDate.of(2026, 3, 8).atTime(10, 0).atZone(ny).toInstant()),
+            Date.from(java.time.LocalDate.of(2026, 3, 9).atTime(10, 0).atZone(ny).toInstant()),
+            Date.from(java.time.LocalDate.of(2026, 3, 10).atTime(10, 0).atZone(ny).toInstant())
+        )
+        val springResult = StreakCalculator.calculateStreakForZone(springWorkouts, allowedSkipsPerWeek = 2, asOf = springAsOf, zoneId = ny)
+        assertEquals(StreakCalculator.StreakState.ACTIVE, springResult.state)
+        assertEquals(8, springResult.streakDays)
+        assertEquals(2, springResult.skipsRemaining)
+        assertEquals(
+            java.time.LocalDate.of(2026, 3, 15),
+            springResult.nextResetDate.toInstant().atZone(ny).toLocalDate()
+        )
+
+        // Fall-back week containing Sunday 2026-11-01 (25h day)
+        val fallAsOf = Date.from(java.time.LocalDate.of(2026, 11, 1).atTime(12, 0).atZone(ny).toInstant())
+        val fallWorkouts = listOf(
+            Date.from(java.time.LocalDate.of(2026, 10, 31).atTime(10, 0).atZone(ny).toInstant()),
+            Date.from(java.time.LocalDate.of(2026, 11, 1).atTime(10, 0).atZone(ny).toInstant())
+        )
+        val fallResult = StreakCalculator.calculateStreakForZone(fallWorkouts, allowedSkipsPerWeek = 2, asOf = fallAsOf, zoneId = ny)
+        assertEquals(StreakCalculator.StreakState.ACTIVE, fallResult.state)
+        assertEquals(2, fallResult.streakDays)
+        assertEquals(
+            java.time.LocalDate.of(2026, 11, 8),
+            fallResult.nextResetDate.toInstant().atZone(ny).toLocalDate()
+        )
     }
 
     private fun date(year: Int, month: Int, day: Int): Date = Calendar.getInstance().apply {

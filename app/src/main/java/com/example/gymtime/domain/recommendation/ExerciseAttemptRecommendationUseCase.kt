@@ -29,9 +29,9 @@ class ExerciseAttemptRecommendationUseCase @Inject constructor(
                 return@withContext null
             }
 
+            // SetDao.getExerciseHistoryByWorkout already orders by workout startTime DESC.
             val history = setDao.getExerciseHistoryByWorkout(exercise.id)
-                .filter { it.isComplete && !it.isWarmup && it.reps != null }
-                .sortedByDescending { it.timestamp.time }
+                .filter { it.isComplete && !it.isWarmup && (it.reps ?: 0) > 0 }
 
             if (history.isEmpty()) return@withContext null
 
@@ -47,7 +47,10 @@ class ExerciseAttemptRecommendationUseCase @Inject constructor(
         repTarget: Int,
         history: List<Set>
     ): ExerciseAttemptRecommendation? {
-        val weightedHistory = history.filter { it.weight != null }
+        val weightedHistory = history.filter { set ->
+            val weight = set.weight
+            weight != null && weight.isFinite() && weight > 0f
+        }
         if (weightedHistory.isEmpty()) return null
 
         val latestWorkoutId = weightedHistory.first().workoutId
@@ -56,10 +59,11 @@ class ExerciseAttemptRecommendationUseCase @Inject constructor(
             compareBy<Set> { it.weight ?: 0f }.thenBy { it.reps ?: 0 }
         ) ?: return null
 
-        val lastWeight = bestLatestSet.weight ?: return null
+        val lastWeight = bestLatestSet.weight?.takeIf { it.isFinite() && it > 0f } ?: return null
         val bestRepsAtLastWeight = latestWorkoutSets
             .filter { it.weight == lastWeight }
             .maxOfOrNull { it.reps ?: 0 }
+            ?.takeIf { it > 0 }
             ?: return null
 
         return if (bestRepsAtLastWeight >= repTarget) {
@@ -119,29 +123,34 @@ class ExerciseAttemptRecommendationUseCase @Inject constructor(
     }
 
     private fun estimateRepsForWeight(history: List<Set>, targetWeight: Float, repTarget: Int): Int {
-        val e1rm = history
+        if (!targetWeight.isFinite() || targetWeight <= 0f) return (repTarget - 2).coerceAtLeast(1)
+        val topEstimates = history
             .mapNotNull { set ->
-                val weight = set.weight ?: return@mapNotNull null
-                val reps = set.reps ?: return@mapNotNull null
+                val weight = set.weight?.takeIf { it.isFinite() && it > 0f } ?: return@mapNotNull null
+                val reps = set.reps?.takeIf { it > 0 } ?: return@mapNotNull null
                 OneRepMaxCalculator.calculateE1RM(weight, reps)
+                    ?.takeIf { it.isFinite() && it > 0f }
             }
             .sortedDescending()
             .take(3)
-            .average()
-            .toFloat()
-            .takeIf { !it.isNaN() }
-            ?: return (repTarget - 2).coerceAtLeast(1)
+        if (topEstimates.isEmpty()) return (repTarget - 2).coerceAtLeast(1)
 
-        val estimated = floor(((e1rm / targetWeight) - 1f) * 30f).toInt()
+        val e1rm = topEstimates.average().toFloat()
+        if (!e1rm.isFinite() || e1rm <= 0f) return (repTarget - 2).coerceAtLeast(1)
+
+        val rawEstimate = ((e1rm / targetWeight) - 1f) * 30f
+        if (!rawEstimate.isFinite()) return (repTarget - 2).coerceAtLeast(1)
+        val estimated = floor(rawEstimate).toInt()
         return estimated.coerceIn(1, repTarget)
     }
 
     private fun nextRoundedWeight(currentWeight: Float): Float {
         val rounded = OneRepMaxCalculator.formatWeight(currentWeight + 2.5f)
-        return if (rounded > currentWeight) rounded else currentWeight + 2.5f
+        return if (rounded.isFinite() && rounded > currentWeight) rounded else currentWeight + 2.5f
     }
 
     private fun formatWeight(weight: Float): String {
+        if (!weight.isFinite()) return "0"
         return if (weight % 1f == 0f) {
             weight.toInt().toString()
         } else {

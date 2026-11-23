@@ -16,7 +16,6 @@ import android.util.Log
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,19 +26,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.ui.platform.LocalView
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -49,6 +43,7 @@ import com.example.gymtime.navigation.BottomNavigationBar
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.navigation.navigateBackOrHome
 import com.example.gymtime.navigation.navigateHomeAndClearStack
+import com.example.gymtime.navigation.navigateResumed
 import com.example.gymtime.navigation.navigateToWorkoutExercise
 import com.example.gymtime.navigation.navigateToWorkoutSummary
 import com.example.gymtime.notifications.MonthlyReportNotifier
@@ -57,9 +52,17 @@ import com.example.gymtime.ui.home.HomeScreen
 import com.example.gymtime.ui.report.MonthlyReportScreen
 import com.example.gymtime.ui.components.clearFocusOnTapOutside
 import com.example.gymtime.ui.theme.IronLogTheme
+import com.example.gymtime.ui.theme.LocalGradientColors
 import com.example.gymtime.ui.theme.ThemeColors
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+
+private val BottomBarRoutes = setOf(
+    Screen.Home.route,
+    Screen.History.route,
+    Screen.Library.route,
+    Screen.Analytics.route
+)
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -71,7 +74,7 @@ class MainActivity : ComponentActivity() {
     // Holds a deep-link destination delivered via Intent extra (e.g. from a
     // notification tap). Compose collects this to navigate after the NavHost
     // is set up. Cleared once consumed.
-    private val pendingDestination = androidx.compose.runtime.mutableStateOf<String?>(null)
+    private val pendingDestination = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Install splash screen before super.onCreate()
@@ -96,16 +99,18 @@ class MainActivity : ComponentActivity() {
             val customFontUri by userPreferencesRepository.customFontUri.collectAsStateWithLifecycle(initialValue = null)
             val keepScreenOn by userPreferencesRepository.keepScreenOn.collectAsStateWithLifecycle(initialValue = false)
             val darkMode by userPreferencesRepository.darkMode.collectAsStateWithLifecycle(initialValue = true)
-            val newUiEnabled by userPreferencesRepository.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
-            val colorScheme = ThemeColors.getScheme(themeColorName, customThemeColor)
+            val colorScheme = remember(themeColorName, customThemeColor) {
+                ThemeColors.getScheme(themeColorName, customThemeColor)
+            }
 
             // Follow the app's saved appearance instead of the device's appearance.
-            SideEffect {
+            DisposableEffect(darkMode) {
                 enableEdgeToEdge(
                     statusBarStyle = SystemBarStyle.auto(Color.Transparent.toArgb(), Color.Transparent.toArgb()) { darkMode },
                     navigationBarStyle = SystemBarStyle.auto(0xE6FFFFFF.toInt(), 0x801B1B1B.toInt()) { darkMode }
                 )
-                window.isNavigationBarContrastEnforced = !newUiEnabled
+                window.isNavigationBarContrastEnforced = false
+                onDispose { }
             }
 
             DisposableEffect(keepScreenOn) {
@@ -123,14 +128,21 @@ class MainActivity : ComponentActivity() {
                 appColorScheme = colorScheme,
                 darkMode = darkMode,
                 themeFontKey = themeFont,
-                customFontUri = customFontUri,
-                newUiEnabled = newUiEnabled
+                customFontUri = customFontUri
             ) {
-                val gradientColors = com.example.gymtime.ui.theme.LocalGradientColors.current
+                val gradientColors = LocalGradientColors.current
+                val backgroundBrush = remember(gradientColors) {
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            gradientColors.first,
+                            gradientColors.second
+                        )
+                    )
+                }
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = if (newUiEnabled) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface
+                    color = MaterialTheme.colorScheme.background
                 ) {
                     val navController = rememberNavController()
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -149,14 +161,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // Define which screens should show the bottom bar
-                    val bottomBarScreens = listOf(
-                        Screen.Home.route,
-                        Screen.History.route,
-                        Screen.Library.route,
-                        Screen.Analytics.route
-                    )
-                    val showBottomBar = currentRoute in bottomBarScreens
+                    val showBottomBar = currentRoute in BottomBarRoutes
 
                     // Outer Box to allow BottomNavigationBar to overlay content
                     Box(
@@ -173,14 +178,7 @@ class MainActivity : ComponentActivity() {
                                 startDestination = Screen.Home.route,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(
-                                        brush = Brush.verticalGradient(
-                                            colors = listOf(
-                                                gradientColors.first,
-                                                gradientColors.second
-                                            )
-                                        )
-                                    )
+                                    .background(brush = backgroundBrush)
                                     .padding(innerPadding)
                                     .consumeWindowInsets(innerPadding)
                                     .imePadding()
@@ -192,8 +190,8 @@ class MainActivity : ComponentActivity() {
                                 }
                                 composable(Screen.Analytics.route) {
                                     com.example.gymtime.ui.analytics.AnalyticsScreen(
-                                        onHistory = { navController.navigate(Screen.History.route) { launchSingleTop = true } },
-                                        onLibrary = { navController.navigate(Screen.Library.route) { launchSingleTop = true } },
+                                        onHistory = { navController.navigateResumed(Screen.History.route) },
+                                        onLibrary = { navController.navigateResumed(Screen.Library.route) },
                                         onOpenHome = navController::navigateHomeAndClearStack
                                     )
                                 }
@@ -230,10 +228,10 @@ class MainActivity : ComponentActivity() {
                                             navController.navigateToWorkoutExercise(exerciseId)
                                         },
                                         onAddExerciseClick = {
-                                            navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
+                                            navController.navigateResumed(Screen.ExerciseSelection.createRoute(workoutMode = true))
                                         },
                                         onSwapExerciseClick = { instanceId ->
-                                            navController.navigate(
+                                            navController.navigateResumed(
                                                 Screen.ExerciseSelection.createRoute(
                                                     workoutMode = true,
                                                     swapInstanceId = instanceId
@@ -384,7 +382,10 @@ class MainActivity : ComponentActivity() {
                                     .align(androidx.compose.ui.Alignment.BottomCenter)
                                     .fillMaxWidth()
                             ) {
-                                BottomNavigationBar(navController = navController)
+                                BottomNavigationBar(
+                                    navController = navController,
+                                    currentRoute = currentRoute
+                                )
                             }
                         }
 

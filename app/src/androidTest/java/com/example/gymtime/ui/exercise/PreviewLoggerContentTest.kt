@@ -37,10 +37,8 @@ import com.example.gymtime.ui.exercise.preview.LoggerFields
 import com.example.gymtime.ui.exercise.preview.LoggerProgressSheet
 import com.example.gymtime.ui.exercise.preview.PreviewLoggerContent
 import com.example.gymtime.ui.exercise.preview.PreviewLoggerState
-import com.example.gymtime.ui.home.NewUiPreviewToggle
 import com.example.gymtime.ui.theme.AppColorScheme
 import com.example.gymtime.ui.theme.IronLogTheme
-import com.example.gymtime.ui.theme.LoggerPreviewTheme
 import com.example.gymtime.ui.theme.ThemeColors
 import com.example.gymtime.ui.theme.ThemeFontOption
 import org.junit.Assert.assertEquals
@@ -299,27 +297,26 @@ class PreviewLoggerContentTest {
     }
 
     @Test
-    fun homePreviewToggleChangesOncePerTap() {
-        val enabled = mutableStateOf(false)
-        val changes = mutableListOf<Boolean>()
-        composeRule.setContent {
-            IronLogTheme(darkMode = false) {
-                NewUiPreviewToggle(
-                    enabled = enabled.value,
-                    onEnabledChange = { changes += it; enabled.value = it }
-                )
-            }
+    fun externalShrinkAndRpeLengthCapDoNotCrashKeypad() {
+        val state = mutableStateOf(sampleState())
+        setLogger(state)
+        reveal(hasContentDescription("WEIGHT / lb"))
+        composeRule.onNodeWithContentDescription("WEIGHT / lb").performClick()
+        // External shrink (e.g., Wear draftPatch) while initial selection spanned "135"
+        composeRule.runOnIdle {
+            state.value = state.value.copy(fields = state.value.fields.copy(weight = ""))
         }
+        pressKey("5")
+        composeRule.onNodeWithText("Done").performClick()
+        composeRule.runOnIdle { assertEquals("5", state.value.fields.weight) }
 
-        composeRule.onNode(isToggleable()).assertIsOff()
-        composeRule.onNode(isToggleable()).assertHeightIsAtLeast(48.dp)
-        composeRule.onNodeWithText("New UI").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Try our new UI!").performClick()
-        composeRule.onNode(isToggleable()).assertIsOn()
-        composeRule.runOnIdle { assertEquals(listOf(true), changes) }
-        composeRule.onNodeWithContentDescription("Try our new UI!").performClick()
-        composeRule.onNode(isToggleable()).assertIsOff()
-        composeRule.runOnIdle { assertEquals(listOf(true, false), changes) }
+        reveal(hasText("Note / RPE"))
+        composeRule.onNodeWithText("Note / RPE").performClick()
+        reveal(hasContentDescription("RPE (optional, 1–10)"))
+        composeRule.onNodeWithContentDescription("RPE (optional, 1–10)").performClick()
+        listOf("9", ".", "5", "1", "2").forEach(::pressKey)
+        composeRule.onNodeWithText("Done").performClick()
+        composeRule.runOnIdle { assertEquals("9.51", state.value.fields.rpe) }
     }
 
     @Test
@@ -432,12 +429,10 @@ class PreviewLoggerContentTest {
     ) {
         composeRule.setContent {
             IronLogTheme(darkMode = false, appColorScheme = appColorScheme, themeFontKey = themeFontKey) {
-                LoggerPreviewTheme {
-                    LoggerProgressSheet(
-                        exerciseName = "Bench press", logType = LogType.WEIGHT_REPS,
-                        state = state.value, onDismiss = {}
-                    )
-                }
+                LoggerProgressSheet(
+                    exerciseName = "Bench press", logType = LogType.WEIGHT_REPS,
+                    state = state.value, onDismiss = {}
+                )
             }
         }
     }
@@ -482,31 +477,29 @@ class PreviewLoggerContentTest {
             val density = LocalDensity.current.density
             CompositionLocalProvider(LocalDensity provides Density(density, fontScale)) {
                 IronLogTheme(darkMode = dark, appColorScheme = appColorScheme, themeFontKey = themeFontKey) {
-                    LoggerPreviewTheme {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                            PreviewLoggerContent(
-                                state = state.value,
-                                onAction = onAction,
-                                onFieldChange = { field, value ->
-                                    val fields = state.value.fields
-                                    state.value = state.value.copy(fields = when (field) {
-                                        LoggerField.WEIGHT -> fields.copy(weight = value)
-                                        LoggerField.REPS -> fields.copy(reps = value)
-                                        LoggerField.DURATION -> fields.copy(duration = value)
-                                        LoggerField.DISTANCE -> fields.copy(distance = value)
-                                        LoggerField.CALORIES -> fields.copy(calories = value)
-                                        LoggerField.RPE -> fields.copy(rpe = value)
-                                        LoggerField.NOTE -> fields.copy(note = value)
-                                    })
-                                },
-                                onDistanceUnitChange = { state.value = state.value.copy(fields = state.value.fields.copy(distanceUnit = it)) },
-                                onSelectExercise = onSelectExercise,
-                                onEditSet = onEditSet,
-                                onDeleteSet = onDeleteSet,
-                                onSetNote = onSetNote,
-                                modifier = if (width != null) Modifier.width(width.dp) else Modifier.fillMaxSize()
-                            )
-                        }
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                        PreviewLoggerContent(
+                            state = state.value,
+                            onAction = onAction,
+                            onFieldChange = { field, value ->
+                                val fields = state.value.fields
+                                state.value = state.value.copy(fields = when (field) {
+                                    LoggerField.WEIGHT -> fields.copy(weight = value)
+                                    LoggerField.REPS -> fields.copy(reps = value)
+                                    LoggerField.DURATION -> fields.copy(duration = value)
+                                    LoggerField.DISTANCE -> fields.copy(distance = value)
+                                    LoggerField.CALORIES -> fields.copy(calories = value)
+                                    LoggerField.RPE -> fields.copy(rpe = value)
+                                    LoggerField.NOTE -> fields.copy(note = value)
+                                })
+                            },
+                            onDistanceUnitChange = { state.value = state.value.copy(fields = state.value.fields.copy(distanceUnit = it)) },
+                            onSelectExercise = onSelectExercise,
+                            onEditSet = onEditSet,
+                            onDeleteSet = onDeleteSet,
+                            onSetNote = onSetNote,
+                            modifier = if (width != null) Modifier.width(width.dp) else Modifier.fillMaxSize()
+                        )
                     }
                 }
             }

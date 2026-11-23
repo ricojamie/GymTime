@@ -105,4 +105,20 @@ class OneRepMaxCalculatorTest {
         assertEquals(2.5f, OneRepMaxCalculator.formatWeight(1.3f))
         assertEquals(2.5f, OneRepMaxCalculator.formatWeight(2.5f))
     }
+
+    @Test
+    fun `rejects non-finite and overflowing weights safely`() {
+        assertNull(OneRepMaxCalculator.calculateE1RM(Float.NaN, 5))
+        assertNull(OneRepMaxCalculator.calculateE1RM(Float.POSITIVE_INFINITY, 5))
+        assertNull(OneRepMaxCalculator.calculateE1RM(Float.NEGATIVE_INFINITY, 5))
+        assertNull(OneRepMaxCalculator.calculateE1RM(Float.MAX_VALUE, 5))
+
+        assertNull(OneRepMaxCalculator.calculateE10RM(Float.NaN, 5))
+        assertNull(OneRepMaxCalculator.calculateE10RM(Float.POSITIVE_INFINITY, 5))
+        assertNull(OneRepMaxCalculator.calculateE10RM(Float.NEGATIVE_INFINITY, 5))
+
+        assertEquals(0f, OneRepMaxCalculator.formatWeight(Float.NaN))
+        assertEquals(0f, OneRepMaxCalculator.formatWeight(Float.POSITIVE_INFINITY))
+        assertEquals(0f, OneRepMaxCalculator.formatWeight(Float.NEGATIVE_INFINITY))
+    }
 }

@@ -56,6 +56,12 @@ data class RatedWorkoutSetInfo(
     val isWarmup: Boolean?
 )
 
+data class WorkingSetVolumeProjection(
+    val timestampMs: Long,
+    val weight: Float?,
+    val reps: Int?
+)
+
 private val localDateFormatter: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 
 private fun localDateStartMillis(timestampMs: Long, zoneId: ZoneId): Long {
@@ -79,7 +85,7 @@ interface WorkoutDao {
     suspend fun deleteWorkout(workout: Workout)
 
     @Query("SELECT * FROM workouts WHERE id = :id")
-    fun getWorkoutById(id: Long): Flow<Workout>
+    fun getWorkoutById(id: Long): Flow<Workout?>
 
     @Query("SELECT * FROM workouts WHERE id = :id")
     suspend fun getWorkoutByIdSync(id: Long): Workout?
@@ -90,8 +96,34 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts")
     suspend fun getAllWorkoutsSync(): List<Workout>
 
+    @Query("""
+        SELECT * FROM workouts
+        WHERE startTime BETWEEN :startInclusive AND :endInclusive
+        ORDER BY startTime DESC
+    """)
+    suspend fun getWorkoutsInRangeSync(startInclusive: Long, endInclusive: Long): List<Workout>
+
     @Query("SELECT * FROM workouts WHERE endTime IS NULL ORDER BY startTime DESC LIMIT 1")
     fun getOngoingWorkout(): Flow<Workout?>
+
+    @Query("SELECT * FROM workouts WHERE endTime IS NULL ORDER BY startTime DESC LIMIT 1")
+    suspend fun getOngoingWorkoutSync(): Workout?
+
+    @Query("""
+        SELECT EXISTS(
+            SELECT 1 FROM workouts
+            WHERE routineId = :routineId
+              AND startedFromRoutine = 1
+              AND endTime IS NOT NULL
+              AND id != :workoutId
+              AND (startTime > :startTimeMs OR (startTime = :startTimeMs AND id > :workoutId))
+        )
+    """)
+    suspend fun hasNewerCompletedRoutineWorkout(
+        routineId: Long,
+        workoutId: Long,
+        startTimeMs: Long
+    ): Boolean
 
     // Reopen a finished workout (for "Resume" feature)
     @Query("UPDATE workouts SET endTime = NULL WHERE id = :workoutId")
@@ -116,19 +148,19 @@ interface WorkoutDao {
     fun getWorkoutsWithMuscles(): Flow<List<WorkoutWithMuscles>>
 
     @Query("""
-        SELECT *
+        SELECT timestamp
         FROM sets
         WHERE isWarmup = 0
           AND isComplete = 1
         ORDER BY timestamp DESC
     """)
-    suspend fun getCompletedWorkingSets(): List<Set>
+    suspend fun getCompletedWorkingSetTimestamps(): List<Long>
 
     suspend fun getWorkoutDatesWithWorkingSets(): List<String> {
         val zoneId = ZoneId.systemDefault()
-        return getCompletedWorkingSets()
+        return getCompletedWorkingSetTimestamps()
             .asSequence()
-            .map { it.timestamp.toInstant().atZone(zoneId).toLocalDate() }
+            .map { Instant.ofEpochMilli(it).atZone(zoneId).toLocalDate() }
             .distinct()
             .sortedDescending()
             .map(localDateFormatter::format)
@@ -164,14 +196,14 @@ interface WorkoutDao {
     }
 
     @Query("""
-        SELECT *
+        SELECT timestamp AS timestampMs, weight, reps
         FROM sets
         WHERE isWarmup = 0
           AND isComplete = 1
           AND timestamp >= :startInclusive
         ORDER BY timestamp ASC
     """)
-    suspend fun getCompletedWorkingSetsSince(startInclusive: Long): List<Set>
+    suspend fun getCompletedWorkingSetVolumesSince(startInclusive: Long): List<WorkingSetVolumeProjection>
 
     suspend fun getDailyVolumeForHeatMap(): List<DailyVolume> {
         val zoneId = ZoneId.systemDefault()
@@ -179,8 +211,8 @@ interface WorkoutDao {
             .minusYears(1)
             .toInstant()
             .toEpochMilli()
-        return getCompletedWorkingSetsSince(startInclusive)
-            .groupBy { localDateStartMillis(it.timestamp.time, zoneId) }
+        return getCompletedWorkingSetVolumesSince(startInclusive)
+            .groupBy { localDateStartMillis(it.timestampMs, zoneId) }
             .toSortedMap()
             .map { (date, rows) ->
                 DailyVolume(
@@ -201,6 +233,7 @@ interface WorkoutDao {
         FROM sets s
         INNER JOIN exercises e ON s.exerciseId = e.id
         WHERE s.isWarmup = 0
+          AND s.isComplete = 1
           AND s.timestamp > (strftime('%s', 'now', '-30 days') * 1000)
         GROUP BY e.targetMuscle
         ORDER BY setVolume DESC
@@ -214,6 +247,7 @@ interface WorkoutDao {
         FROM sets s
         INNER JOIN exercises e ON s.exerciseId = e.id
         WHERE s.isWarmup = 0
+          AND s.isComplete = 1
           AND s.timestamp BETWEEN :startTime AND :endTime
         GROUP BY e.targetMuscle
         ORDER BY setVolume DESC
@@ -246,7 +280,7 @@ interface WorkoutDao {
             s.reps as reps,
             s.isWarmup as isWarmup
         FROM workouts w
-        LEFT JOIN sets s ON w.id = s.workoutId
+        LEFT JOIN sets s ON w.id = s.workoutId AND s.isComplete = 1
         LEFT JOIN exercises e ON s.exerciseId = e.id
         WHERE w.endTime IS NOT NULL
           AND w.rating IS NOT NULL
@@ -270,10 +304,10 @@ interface WorkoutDao {
     // All completed workouts for a routine with volume + working sets (for routine stats).
     @Query("""
         SELECT w.id as workoutId, w.routineDayId, w.startTime, w.endTime,
-            COALESCE(SUM(CASE WHEN s.isWarmup = 0 AND s.weight IS NOT NULL AND s.reps IS NOT NULL THEN s.weight * s.reps ELSE 0 END), 0) as totalVolume,
-            COALESCE(SUM(CASE WHEN s.isWarmup = 0 THEN 1 ELSE 0 END), 0) as workingSetCount
+            COALESCE(SUM(CASE WHEN s.isWarmup = 0 AND s.isComplete = 1 AND s.weight IS NOT NULL AND s.reps IS NOT NULL THEN s.weight * s.reps ELSE 0 END), 0) as totalVolume,
+            COALESCE(SUM(CASE WHEN s.isWarmup = 0 AND s.isComplete = 1 THEN 1 ELSE 0 END), 0) as workingSetCount
         FROM workouts w
-        LEFT JOIN sets s ON s.workoutId = w.id
+        LEFT JOIN sets s ON s.workoutId = w.id AND s.isComplete = 1
         WHERE w.routineId = :routineId AND w.endTime IS NOT NULL
         GROUP BY w.id
         ORDER BY w.startTime DESC
@@ -288,7 +322,7 @@ interface WorkoutDao {
         INNER JOIN workouts w ON w.id = s.workoutId
         INNER JOIN exercises e ON e.id = s.exerciseId
         WHERE w.routineId = :routineId AND w.endTime IS NOT NULL
-          AND s.isWarmup = 0 AND s.weight IS NOT NULL AND s.reps IS NOT NULL
+          AND s.isWarmup = 0 AND s.isComplete = 1 AND s.weight IS NOT NULL AND s.reps IS NOT NULL
         ORDER BY w.startTime ASC
     """)
     suspend fun getWorkingSetsForRoutine(routineId: Long): List<RoutineSetRow>

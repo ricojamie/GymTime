@@ -1,6 +1,9 @@
 package com.example.gymtime.util
 
-import java.util.Calendar
+import java.time.DayOfWeek
+import java.time.Instant
+import java.time.ZoneId
+import java.time.temporal.TemporalAdjusters
 
 /**
  * Utility object for week boundary calculations.
@@ -11,37 +14,41 @@ object WeekUtils {
     /**
      * Get Sunday 12:00 AM of the current week in milliseconds.
      */
-    fun getCurrentWeekStartMs(): Long {
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY)
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        return cal.timeInMillis
+    fun getCurrentWeekStartMs(): Long = getCurrentWeekStartMsAt(System.currentTimeMillis())
+
+    internal fun getCurrentWeekStartMsAt(
+        nowMs: Long,
+        zoneId: ZoneId = ZoneId.systemDefault()
+    ): Long {
+        val today = Instant.ofEpochMilli(nowMs).atZone(zoneId).toLocalDate()
+        val sunday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
+        return sunday.atStartOfDay(zoneId).toInstant().toEpochMilli()
     }
 
     /**
      * Get Sunday 12:00 AM of last week in milliseconds.
      */
-    fun getLastWeekStartMs(): Long {
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY)
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        cal.add(Calendar.WEEK_OF_YEAR, -1)
-        return cal.timeInMillis
+    fun getLastWeekStartMs(): Long = getLastWeekStartMsAt(System.currentTimeMillis())
+
+    internal fun getLastWeekStartMsAt(
+        nowMs: Long,
+        zoneId: ZoneId = ZoneId.systemDefault()
+    ): Long {
+        val today = Instant.ofEpochMilli(nowMs).atZone(zoneId).toLocalDate()
+        val currentWeekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
+        return currentWeekStart.minusWeeks(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
     }
 
     /**
      * Get Saturday 11:59:59.999 PM of last week in milliseconds.
      * This is equivalent to getCurrentWeekStartMs() - 1ms.
      */
-    fun getLastWeekEndMs(): Long {
-        return getCurrentWeekStartMs() - 1
-    }
+    fun getLastWeekEndMs(): Long = getCurrentWeekStartMs() - 1
+
+    internal fun getLastWeekEndMsAt(
+        nowMs: Long,
+        zoneId: ZoneId = ZoneId.systemDefault()
+    ): Long = getCurrentWeekStartMsAt(nowMs, zoneId) - 1
 
     /**
      * Get the current timestamp in milliseconds.

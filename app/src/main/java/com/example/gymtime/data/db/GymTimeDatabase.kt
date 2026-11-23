@@ -32,7 +32,7 @@ import com.example.gymtime.data.db.entity.WorkoutExerciseInstance
         MuscleGroup::class,
         GeneratedNarrative::class
     ],
-    version = 14, // Derived on-device narrative cache
+    version = 15, // Composite query indexes for workouts and sets
     exportSchema = true
 )
 @TypeConverters(Converters::class)

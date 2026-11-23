@@ -9,12 +9,12 @@ import com.example.gymtime.ai.NarrativeGenerator
 import com.example.gymtime.ai.NarrativeKind
 import com.example.gymtime.ai.NarrativeRequest
 import com.example.gymtime.ai.NarrativeValidationRules
+import com.example.gymtime.data.VolumeOrbRepository
 import com.example.gymtime.data.db.dao.ExerciseDao
+import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.WorkoutDao
-import com.example.gymtime.data.VolumeOrbRepository
-import com.example.gymtime.data.VolumeOrbState
-import com.example.gymtime.data.UserPreferencesRepository
+import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
 import com.example.gymtime.domain.share.ShareWorkoutUseCase
 import com.example.gymtime.domain.summary.WorkoutRecapFacts
 import com.example.gymtime.domain.summary.WorkoutRecapFactsUseCase
@@ -23,11 +23,20 @@ import com.example.gymtime.util.WorkoutShareFormatter
 import com.example.gymtime.util.WorkoutShareImageGenerator
 import com.example.gymtime.util.WorkoutSharePayload
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.Locale
 import javax.inject.Inject
 
 data class WorkoutSummaryStats(
@@ -59,6 +68,7 @@ data class PostWorkoutSummaryUiState(
     val note: String = "",
     val hasUnsavedFeedback: Boolean = false,
     val isSaving: Boolean = false,
+    val isExporting: Boolean = false,
     val saveError: String? = null,
     val recap: String? = null,
     val weeklyVolume: SummaryWeeklyVolume? = null
@@ -71,42 +81,48 @@ private data class SummaryLoadState(
     val originalNote: String = ""
 )
 
+private data class LoadedSummary(
+    val stats: WorkoutSummaryStats?,
+    val isLoading: Boolean,
+    val loadError: String?,
+    val originalRating: Int?,
+    val originalNote: String,
+    val weeklyVolume: SummaryWeeklyVolume?
+)
+
 @HiltViewModel
 class PostWorkoutSummaryViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val workoutDao: WorkoutDao,
     private val setDao: SetDao,
     private val exerciseDao: ExerciseDao,
+    private val muscleGroupDao: MuscleGroupDao,
     private val volumeOrbRepository: VolumeOrbRepository,
     private val shareWorkoutUseCase: ShareWorkoutUseCase,
     private val workoutShareImageGenerator: WorkoutShareImageGenerator,
     private val workoutRecapFactsUseCase: WorkoutRecapFactsUseCase,
-    private val narrativeGenerator: NarrativeGenerator,
-    userPreferencesRepository: UserPreferencesRepository
+    private val narrativeGenerator: NarrativeGenerator
 ) : ViewModel() {
 
     private val workoutId: Long = checkNotNull(savedStateHandle["workoutId"])
 
     private val _workoutStats = MutableStateFlow<WorkoutSummaryStats?>(null)
-    val workoutStats: StateFlow<WorkoutSummaryStats?> = _workoutStats
-
-    val newUiEnabled = userPreferencesRepository.newUiEnabled.stateIn(
-        viewModelScope, SharingStarted.WhileSubscribed(5_000), false
-    )
+    val workoutStats: StateFlow<WorkoutSummaryStats?> = _workoutStats.asStateFlow()
 
     private var ratingDraftPresent = savedStateHandle.get<Boolean>(DRAFT_READY) == true ||
         savedStateHandle.get<Boolean>(RATING_EDITED) == true
     private var noteDraftPresent = savedStateHandle.get<Boolean>(DRAFT_READY) == true ||
         savedStateHandle.get<Boolean>(NOTE_EDITED) == true
-    val selectedRating = savedStateHandle.getStateFlow<Int?>(RATING_DRAFT, null)
-    val ratingNote = savedStateHandle.getStateFlow(NOTE_DRAFT, "")
+    val selectedRating: StateFlow<Int?> = savedStateHandle.getStateFlow(RATING_DRAFT, null)
+    val ratingNote: StateFlow<String> = savedStateHandle.getStateFlow(NOTE_DRAFT, "")
 
     private val _feedbackState = MutableStateFlow(SummaryFeedbackState())
-    val isSaving = _feedbackState.map { it.isSaving }.stateIn(
-        viewModelScope, SharingStarted.Eagerly, false
-    )
+    private val _isExporting = MutableStateFlow(false)
     private val _loadState = MutableStateFlow(SummaryLoadState())
     private var statsJob: Job? = null
+    private var orbJob: Job? = null
+    private var recapJob: Job? = null
+    private var initialRecapReady = CompletableDeferred<Unit>()
     private var hasExited = false
 
     private val _navigationEvent = Channel<Unit>(Channel.BUFFERED)
@@ -118,34 +134,54 @@ class PostWorkoutSummaryViewModel @Inject constructor(
     private val _copyEvent = Channel<String>(Channel.BUFFERED)
     val copyEvent = _copyEvent.receiveAsFlow()
 
-    // Volume Orb state
-    val volumeOrbState: StateFlow<VolumeOrbState> = volumeOrbRepository.orbState
-
-    // Session contribution to weekly volume
     private val _sessionContribution = MutableStateFlow(0f)
-    val sessionContribution: StateFlow<Float> = _sessionContribution
+    val sessionContribution: StateFlow<Float> = _sessionContribution.asStateFlow()
     private val _weeklyVolumeLoaded = MutableStateFlow(false)
 
     private val _recap = MutableStateFlow<String?>(null)
-    val recap: StateFlow<String?> = _recap.asStateFlow()
 
-    private val weeklyVolume = combine(volumeOrbState, _sessionContribution, _weeklyVolumeLoaded) { volume, contribution, loaded ->
+    private val weeklyVolume = combine(
+        volumeOrbRepository.orbState,
+        _sessionContribution,
+        _weeklyVolumeLoaded
+    ) { volume, contribution, loaded ->
         if (loaded) SummaryWeeklyVolume(volume.currentWeekVolume, volume.lastWeekVolume, contribution) else null
     }
+
     private val loadedState = combine(_workoutStats, _loadState, weeklyVolume) { stats, load, weekly ->
-        PostWorkoutSummaryUiState(stats = stats, isLoading = load.isLoading, loadError = load.error, weeklyVolume = weekly)
+        LoadedSummary(
+            stats = stats,
+            isLoading = load.isLoading,
+            loadError = load.error,
+            originalRating = load.originalRating,
+            originalNote = load.originalNote,
+            weeklyVolume = weekly
+        )
     }
+
+    private val interactionState = combine(_feedbackState, _isExporting, _recap) { feedback, exporting, recapText ->
+        Triple(feedback, exporting, recapText)
+    }
+
     val uiState: StateFlow<PostWorkoutSummaryUiState> = combine(
-        loadedState, selectedRating, ratingNote, _feedbackState, _recap
-    ) { loaded, rating, note, feedback, recapText ->
-        loaded.copy(
+        loadedState,
+        selectedRating,
+        ratingNote,
+        interactionState
+    ) { loaded, rating, note, (feedback, exporting, recapText) ->
+        PostWorkoutSummaryUiState(
+            stats = loaded.stats,
+            isLoading = loaded.isLoading,
+            loadError = loaded.loadError,
             selectedRating = rating,
             note = note,
-            hasUnsavedFeedback = rating != _loadState.value.originalRating ||
-                note != _loadState.value.originalNote,
+            hasUnsavedFeedback = loaded.stats != null && !loaded.isLoading &&
+                (rating != loaded.originalRating || note != loaded.originalNote),
             isSaving = feedback.isSaving,
+            isExporting = exporting,
             saveError = feedback.error,
-            recap = recapText
+            recap = recapText,
+            weeklyVolume = loaded.weeklyVolume
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, PostWorkoutSummaryUiState())
 
@@ -156,9 +192,24 @@ class PostWorkoutSummaryViewModel @Inject constructor(
     }
 
     private fun loadWorkoutRecap() {
-        viewModelScope.launch {
+        recapJob?.cancel()
+        val ready = CompletableDeferred<Unit>()
+        initialRecapReady = ready
+        recapJob = viewModelScope.launch {
             try {
                 val facts = workoutRecapFactsUseCase(workoutId) ?: return@launch
+                val allExercises = exerciseDao.getAllExercisesSync()
+                val allMuscles = muscleGroupDao.getAllMuscleGroupNames()
+                val knownNames = buildSet {
+                    addAll(allMuscles)
+                    allExercises.forEach { exercise ->
+                        add(exercise.name)
+                        add(exercise.targetMuscle)
+                    }
+                    addAll(facts.muscles)
+                    addAll(facts.personalRecordExercises)
+                    facts.leadingMuscle?.let(::add)
+                }
                 val canonicalFacts = facts.canonicalFacts()
                 narrativeGenerator.generate(
                     NarrativeRequest(
@@ -174,14 +225,20 @@ class PostWorkoutSummaryViewModel @Inject constructor(
                             maxWords = 30,
                             maxSentences = 1,
                             allowedNumbers = allowedNumbers(facts),
-                            allowedNames = (facts.muscles + facts.personalRecordExercises).toSet()
+                            allowedNames = (facts.muscles + facts.personalRecordExercises).toSet(),
+                            knownNames = knownNames
                         ),
                         maxOutputTokens = 60
                     )
-                ).collect { result -> _recap.value = result.text }
+                ).collect { result ->
+                    _recap.value = result.text
+                    ready.complete(Unit)
+                }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Log.e("PostWorkoutSummaryVM", "Error building workout recap", e)
+            } finally {
+                ready.complete(Unit)
             }
         }
     }
@@ -199,6 +256,9 @@ class PostWorkoutSummaryViewModel @Inject constructor(
     private fun allowedNumbers(facts: WorkoutRecapFacts): Set<String> = buildSet {
         add(facts.totalVolume.toString())
         add(facts.totalVolume.toInt().toString())
+        if (facts.totalVolume.isFinite() && facts.totalVolume % 1f != 0f) {
+            add(String.format(Locale.US, "%.1f", facts.totalVolume))
+        }
         add(facts.workingSetCount.toString())
         add(facts.exerciseCount.toString())
         add(facts.comparableWorkoutCount.toString())
@@ -206,7 +266,8 @@ class PostWorkoutSummaryViewModel @Inject constructor(
     }
 
     private fun loadVolumeOrbData() {
-        viewModelScope.launch {
+        orbJob?.cancel()
+        orbJob = viewModelScope.launch {
             try {
                 volumeOrbRepository.refresh()
                 _sessionContribution.value = volumeOrbRepository.getSessionContribution(workoutId)
@@ -218,43 +279,37 @@ class PostWorkoutSummaryViewModel @Inject constructor(
         }
     }
 
-    fun clearOrbOverflowAnimation() {
-        volumeOrbRepository.clearOverflowAnimation()
-    }
-
     private fun loadWorkoutStats() {
         statsJob?.cancel()
         _loadState.value = _loadState.value.copy(isLoading = true, error = null)
         statsJob = viewModelScope.launch {
             try {
                 val workout = workoutDao.getWorkoutById(workoutId).first()
-                val sets = setDao.getSetsForWorkout(workoutId).first()
+                    ?: throw IllegalStateException("This workout is no longer available.")
+                val setInfos = setDao.getWorkoutSetsWithExercises(workoutId)
 
-                // Calculate duration
-                val durationMs = ((workout.endTime?.time ?: System.currentTimeMillis()) - workout.startTime.time).coerceAtLeast(0)
+                val durationMs = ((workout.endTime?.time ?: System.currentTimeMillis()) - workout.startTime.time)
+                    .coerceAtLeast(0)
                 val minutes = (durationMs / 1000 / 60).toInt()
                 val hours = minutes / 60
                 val remainingMinutes = minutes % 60
                 val durationString = if (hours > 0) "${hours}h ${remainingMinutes}m" else "${minutes}m"
 
-                // Calculate total volume (exclude warmup sets)
-                val workingSets = sets.filter { it.isComplete && !it.isWarmup }
-                val totalVolume = workingSets.sumOf { set ->
-                    ((set.weight ?: 0f) * (set.reps ?: 0)).toDouble()
+                val workingSets = setInfos.filter {
+                    it.set.isComplete && !it.set.isWarmup && !it.targetMuscle.isWarmupMuscleGroup()
+                }
+                val totalVolume = workingSets.sumOf { info ->
+                    ((info.set.weight ?: 0f) * (info.set.reps ?: 0)).toDouble()
                 }.toFloat()
 
-                // Get unique exercises and muscle groups
-                val exerciseIds = workingSets.map { it.exerciseId }.distinct()
-                val exercises = exerciseIds.mapNotNull { id ->
-                    exerciseDao.getExerciseByIdSync(id)
-                }
-                val muscleGroups = exercises.map { it.targetMuscle }.distinct().sorted()
+                val exerciseCount = workingSets.asSequence().map { it.set.exerciseId }.distinct().count()
+                val muscleGroups = workingSets.asSequence().map { it.targetMuscle }.distinct().sorted().toList()
 
                 _workoutStats.value = WorkoutSummaryStats(
                     duration = durationString,
                     totalVolume = totalVolume,
                     totalSets = workingSets.size,
-                    exerciseCount = exerciseIds.size,
+                    exerciseCount = exerciseCount,
                     muscleGroups = muscleGroups,
                     workoutName = workout.name?.takeIf { it.isNotBlank() } ?: "Workout",
                     workoutNote = workout.note
@@ -267,15 +322,18 @@ class PostWorkoutSummaryViewModel @Inject constructor(
                 noteDraftPresent = true
                 savedStateHandle[DRAFT_READY] = true
                 _loadState.value = SummaryLoadState(
-                    isLoading = false, originalRating = workout.rating,
+                    isLoading = false,
+                    originalRating = workout.rating,
                     originalNote = workout.ratingNote.orEmpty()
                 )
 
                 Log.d("PostWorkoutSummaryVM", "Loaded stats: duration=$durationString, volume=$totalVolume, sets=${workingSets.size}")
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
+                _workoutStats.value = null
                 _loadState.value = _loadState.value.copy(
-                    isLoading = false, error = "Couldn't load this workout. Try again."
+                    isLoading = false,
+                    error = "Couldn't load this workout. Try again."
                 )
                 Log.e("PostWorkoutSummaryVM", "Error loading workout stats", e)
             }
@@ -298,7 +356,11 @@ class PostWorkoutSummaryViewModel @Inject constructor(
         _feedbackState.value = SummaryFeedbackState()
     }
 
-    fun retryLoadStats() = loadWorkoutStats()
+    fun retryLoadStats() {
+        loadWorkoutStats()
+        loadVolumeOrbData()
+        loadWorkoutRecap()
+    }
 
     fun saveAndFinish() {
         if (_feedbackState.value.isSaving || hasExited || _loadState.value.isLoading || _workoutStats.value == null) return
@@ -309,6 +371,7 @@ class PostWorkoutSummaryViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val workout = workoutDao.getWorkoutById(workoutId).first()
+                    ?: throw IllegalStateException("This workout is no longer available.")
                 val updatedWorkout = workout.copy(
                     rating = rating,
                     ratingNote = note.takeIf { it.isNotBlank() }
@@ -316,14 +379,15 @@ class PostWorkoutSummaryViewModel @Inject constructor(
                 workoutDao.updateWorkout(updatedWorkout)
                 hasExited = true
                 _navigationEvent.send(Unit)
+            } catch (e: CancellationException) {
+                _feedbackState.value = _feedbackState.value.copy(isSaving = false)
+                throw e
             } catch (e: Exception) {
-                if (e is CancellationException) throw e
                 _feedbackState.value = SummaryFeedbackState(
+                    isSaving = false,
                     error = "Couldn't save your feedback. Your workout is saved; tap Done to retry."
                 )
                 Log.e("PostWorkoutSummaryVM", "Error saving rating", e)
-            } finally {
-                _feedbackState.value = _feedbackState.value.copy(isSaving = false)
             }
         }
     }
@@ -337,8 +401,11 @@ class PostWorkoutSummaryViewModel @Inject constructor(
     }
 
     fun onShareClicked(palette: ShareImagePalette) {
+        if (_isExporting.value || _feedbackState.value.isSaving || hasExited || _loadState.value.isLoading || _workoutStats.value == null) return
+        _isExporting.value = true
         viewModelScope.launch {
             try {
+                initialRecapReady.await()
                 shareWorkoutUseCase.buildShareableWorkout(workoutId, _recap.value)?.let { workout ->
                     _shareEvent.send(
                         WorkoutSharePayload(
@@ -351,13 +418,18 @@ class PostWorkoutSummaryViewModel @Inject constructor(
                 if (e is CancellationException) throw e
                 _feedbackState.value = _feedbackState.value.copy(error = "Couldn't share this workout. Try again.")
                 Log.e("PostWorkoutSummaryVM", "Error building share text", e)
+            } finally {
+                _isExporting.value = false
             }
         }
     }
 
     fun onCopyClicked() {
+        if (_isExporting.value || _feedbackState.value.isSaving || hasExited || _loadState.value.isLoading || _workoutStats.value == null) return
+        _isExporting.value = true
         viewModelScope.launch {
             try {
+                initialRecapReady.await()
                 shareWorkoutUseCase.buildShareableWorkout(workoutId, _recap.value)?.let { workout ->
                     _copyEvent.send(WorkoutShareFormatter.format(workout))
                 }
@@ -365,6 +437,8 @@ class PostWorkoutSummaryViewModel @Inject constructor(
                 if (e is CancellationException) throw e
                 _feedbackState.value = _feedbackState.value.copy(error = "Couldn't copy this workout. Try again.")
                 Log.e("PostWorkoutSummaryVM", "Error building share text", e)
+            } finally {
+                _isExporting.value = false
             }
         }
     }

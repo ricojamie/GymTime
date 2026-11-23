@@ -4,7 +4,6 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.RoutineRepository
-import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.db.dao.RoutineDayStat
 import com.example.gymtime.data.db.dao.RoutineDayWithExercises
 import com.example.gymtime.data.db.entity.Routine
@@ -13,12 +12,22 @@ import com.example.gymtime.domain.analytics.RoutineStats
 import com.example.gymtime.domain.analytics.RoutineStatsUseCase
 import com.example.gymtime.ui.routine.preview.PreviewRoutineDetailState
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class RoutineDetailUiState(
@@ -30,18 +39,20 @@ data class RoutineDetailUiState(
     val loadError: String? = null
 )
 
-private data class RoutineOperationState(val startingDayId: Long? = null, val isWorking: Boolean = false, val error: String? = null)
+private data class RoutineOperationState(
+    val startingDayId: Long? = null,
+    val isWorking: Boolean = false,
+    val error: String? = null
+)
 
 @HiltViewModel
 class RoutineDetailViewModel @Inject constructor(
     private val routineRepository: RoutineRepository,
     private val routineStatsUseCase: RoutineStatsUseCase,
-    savedStateHandle: SavedStateHandle,
-    preferences: UserPreferencesRepository
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     val routineId: Long = savedStateHandle.get<Long>("routineId") ?: 0L
-    val newUiEnabled = preferences.newUiEnabled
     private val retry = MutableStateFlow(0)
     private val operation = MutableStateFlow(RoutineOperationState())
     private val statsLoading = MutableStateFlow(true)
@@ -65,10 +76,13 @@ class RoutineDetailViewModel @Inject constructor(
             try {
                 val loaded = routineStatsUseCase.getStats(routineId)
                 if (generation == statsGeneration) _stats.value = loaded
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (generation == statsGeneration) statsError.value = "Couldn't load routine stats. Try again."
+            } finally {
+                if (generation == statsGeneration) statsLoading.value = false
             }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { if (generation == statsGeneration) statsError.value = "Couldn't load routine stats. Try again." }
-            finally { if (generation == statsGeneration) statsLoading.value = false }
         }
     }
 
@@ -79,18 +93,39 @@ class RoutineDetailViewModel @Inject constructor(
             routineRepository.getDaysWithExercisesForRoutine(routineId),
             routineRepository.getRoutineDayStats(routineId)
         ) { routine, days, dayStats ->
-            RoutineDetailUiState(routine = routine, days = days.sortedBy { it.day.orderIndex }, dayStats = dayStats,
-                canAddMoreDays = days.size < RoutineRepository.MAX_DAYS_PER_ROUTINE, isLoading = false)
+            RoutineDetailUiState(
+                routine = routine,
+                days = days.sortedBy { it.day.orderIndex },
+                dayStats = dayStats,
+                canAddMoreDays = days.size < RoutineRepository.MAX_DAYS_PER_ROUTINE,
+                isLoading = false
+            )
         }.onStart { emit(RoutineDetailUiState()) }
             .catch { emit(RoutineDetailUiState(isLoading = false, loadError = "Couldn't load this routine. Try again.")) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RoutineDetailUiState())
 
-    val previewState: StateFlow<PreviewRoutineDetailState> = combine(uiState, stats, statsLoading, statsError, operation) {
-            detail, stats, loading, error, operation ->
-        PreviewRoutineDetailState(detail, stats, loading, error, operation.startingDayId, operation.isWorking, operation.error)
+    val previewState: StateFlow<PreviewRoutineDetailState> = combine(
+        uiState,
+        stats,
+        statsLoading,
+        statsError,
+        operation
+    ) { detail, stats, loading, error, op ->
+        PreviewRoutineDetailState(
+            detail = detail,
+            stats = stats,
+            statsLoading = loading,
+            statsError = error,
+            startingDayId = op.startingDayId,
+            isWorking = op.isWorking,
+            actionError = op.error
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PreviewRoutineDetailState())
 
-    fun retryLoad() { retry.value++ }
+    fun retryLoad() {
+        retry.value++
+    }
+
     fun dismissError() {
         operation.value = operation.value.copy(error = null)
         if (uiState.value.loadError != null) retryLoad()
@@ -114,19 +149,30 @@ class RoutineDetailViewModel @Inject constructor(
                 operation.value = RoutineOperationState()
                 throw cancelled
             } catch (error: Exception) {
-                operation.value = RoutineOperationState(error = error.message ?: "Couldn't start the workout. Try again.")
+                operation.value = RoutineOperationState(
+                    error = error.message ?: "Couldn't start the workout. Try again."
+                )
             }
         }
     }
 
-    fun onWorkoutOpened() { operation.value = RoutineOperationState() }
-    fun onWorkoutNavigationFailed() { operation.value = RoutineOperationState(error = "Your workout is saved, but couldn't open. Try Start day again.") }
+    fun onWorkoutOpened() {
+        operation.value = RoutineOperationState()
+    }
+
+    fun onWorkoutNavigationFailed() {
+        operation.value = RoutineOperationState(
+            error = "Your workout is saved, but couldn't open. Try Start day again."
+        )
+    }
 
     fun setActive() {
         perform { routineRepository.setActiveRoutine(routineId) }
     }
 
-    fun clearActive() { perform { routineRepository.setActiveRoutine(null) } }
+    fun clearActive() {
+        perform { routineRepository.setActiveRoutine(null) }
+    }
 
     fun setNextDay(dayId: Long) {
         perform { routineRepository.setNextDay(routineId, dayId) }
@@ -138,7 +184,9 @@ class RoutineDetailViewModel @Inject constructor(
 
     fun duplicateDay(dayId: Long) {
         perform {
-            require(routineRepository.getDaysForRoutine(routineId).first().size < RoutineRepository.MAX_DAYS_PER_ROUTINE) { "A routine can have up to 10 days." }
+            require(routineRepository.getDaysForRoutine(routineId).first().size < RoutineRepository.MAX_DAYS_PER_ROUTINE) {
+                "A routine can have up to 10 days."
+            }
             check(routineRepository.duplicateDay(dayId) != null) { "This day no longer exists." }
         }
     }
@@ -151,9 +199,17 @@ class RoutineDetailViewModel @Inject constructor(
         if (operation.value.isWorking || operation.value.startingDayId != null) return
         operation.value = RoutineOperationState(isWorking = true)
         viewModelScope.launch {
-            try { block(); operation.value = RoutineOperationState() }
-            catch (cancelled: CancellationException) { operation.value = RoutineOperationState(); throw cancelled }
-            catch (error: Exception) { operation.value = RoutineOperationState(error = error.message ?: "Couldn't update the day. Try again.") }
+            try {
+                block()
+                operation.value = RoutineOperationState()
+            } catch (cancelled: CancellationException) {
+                operation.value = RoutineOperationState()
+                throw cancelled
+            } catch (error: Exception) {
+                operation.value = RoutineOperationState(
+                    error = error.message ?: "Couldn't update the day. Try again."
+                )
+            }
         }
     }
 }

@@ -221,6 +221,77 @@ class SetDaoTest {
     }
 
     @Test
+    fun tiedRepMaxPrsPreserveEarliestCompletedAchievementTimestamp() = runTest {
+        val workoutId = createTestWorkout()
+        val firstAt = 10_000L
+        val secondAt = 20_000L
+        val thirdAt = 30_000L
+        val cutoff = 40_000L
+
+        // Incomplete and warmup sets at earlier timestamps must never hijack firstAchievedAt.
+        setDao.insertSet(testSet(workoutId, 1L, 225f, 5, isComplete = false, timestamp = 5_000L))
+        setDao.insertSet(testSet(workoutId, 1L, 225f, 5, isWarmup = true, timestamp = 6_000L))
+
+        // Tied completed working sets across three timestamps.
+        setDao.insertSet(testSet(workoutId, 1L, 225f, 5, timestamp = firstAt))
+        setDao.insertSet(testSet(workoutId, 1L, 225f, 5, timestamp = secondAt))
+        setDao.insertSet(testSet(workoutId, 1L, 225f, 5, timestamp = thirdAt))
+        // Tie at a different rep count as well.
+        setDao.insertSet(testSet(workoutId, 1L, 185f, 8, timestamp = 15_000L))
+        setDao.insertSet(testSet(workoutId, 1L, 185f, 8, timestamp = 25_000L))
+
+        val currentPBs = setDao.getPersonalBestsWithTimestamps(1L).associateBy { it.reps }
+        val priorPBs = setDao.getPersonalBestsWithTimestampsBefore(1L, cutoff).associateBy { it.reps }
+
+        assertEquals(setOf(5, 8), currentPBs.keys)
+        assertEquals(225f, currentPBs.getValue(5).maxWeight, 0.01f)
+        assertEquals(firstAt, currentPBs.getValue(5).firstAchievedAt)
+        assertEquals(185f, currentPBs.getValue(8).maxWeight, 0.01f)
+        assertEquals(15_000L, currentPBs.getValue(8).firstAchievedAt)
+
+        assertEquals(setOf(5, 8), priorPBs.keys)
+        assertEquals(firstAt, priorPBs.getValue(5).firstAchievedAt)
+        assertEquals(15_000L, priorPBs.getValue(8).firstAchievedAt)
+    }
+
+    @Test
+    fun personalBestAndTotalVolumeQueriesExcludeIncompleteSets() = runTest {
+        val workoutId = createTestWorkout()
+        val now = System.currentTimeMillis()
+
+        setDao.insertSet(testSet(workoutId, 1L, 200f, 5, isComplete = true, timestamp = now - 2_000L))
+        setDao.insertSet(testSet(workoutId, 1L, 400f, 5, isComplete = false, timestamp = now - 1_000L))
+        setDao.insertSet(testSet(workoutId, 1L, 350f, 10, isComplete = false, timestamp = now - 500L))
+
+        assertEquals(200f, setDao.getPersonalBest(1L)?.weight ?: 0f, 0.01f)
+        assertEquals(200f, setDao.getPersonalBestBefore(1L, now)?.weight ?: 0f, 0.01f)
+        assertEquals(200f, setDao.getPersonalBestsByReps(1L).single().maxWeight, 0.01f)
+        assertEquals(1, setDao.getWorkingSetsForE1RMCalculation(1L).size)
+        assertEquals(1000f, setDao.getTotalVolume(now - 10_000L, now + 10_000L) ?: 0f, 0.01f)
+    }
+
+    @Test
+    fun getLastWorkoutSetsForExerciseReturnsSingleLatestCompletedWorkoutWithoutIncompleteSets() = runTest {
+        exerciseDao.insertExercise(testExercise)
+        val olderId = workoutDao.insertWorkout(Workout(startTime = Date(1_000L), endTime = Date(2_000L), name = "Older", note = null))
+        val newerId = workoutDao.insertWorkout(Workout(startTime = Date(3_000L), endTime = Date(4_000L), name = "Newer", note = null))
+        val currentId = workoutDao.insertWorkout(Workout(startTime = Date(5_000L), endTime = null, name = "Current", note = null))
+
+        setDao.insertSet(testSet(olderId, 1L, 135f, 10, timestamp = 1_100L))
+        repeat(22) { idx ->
+            setDao.insertSet(testSet(newerId, 1L, 185f + idx, 5, timestamp = 3_100L + idx))
+        }
+        setDao.insertSet(testSet(newerId, 1L, 999f, 1, isComplete = false, timestamp = 3_500L))
+
+        val lastSets = setDao.getLastWorkoutSetsForExercise(1L, currentId)
+
+        assertEquals(22, lastSets.size)
+        assertTrue(lastSets.all { it.workoutId == newerId && it.isComplete })
+        assertEquals(185f, lastSets.first().weight ?: 0f, 0.01f)
+        assertEquals(206f, lastSets.last().weight ?: 0f, 0.01f)
+    }
+
+    @Test
     fun exerciseUsageStatsCountsCompletedWorkingSetsOnly() = runTest {
         val workoutId = createTestWorkout()
         exerciseDao.insertExercise(testExercise.copy(id = 2L, name = "Squat", targetMuscle = "Legs"))

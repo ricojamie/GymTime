@@ -1,69 +1,30 @@
 package com.example.gymtime.ui.routine
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.LinkOff
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavController
-import com.example.gymtime.data.db.entity.Exercise
-import com.example.gymtime.navigation.navigateHomeAndClearStack
 import com.example.gymtime.navigation.navigateBackOrHome
-import com.example.gymtime.ui.components.BackNavigationIcon
-import com.example.gymtime.ui.components.GlowCard
-import com.example.gymtime.ui.components.HomeNavigationAction
+import com.example.gymtime.navigation.navigateHomeAndClearStack
 import com.example.gymtime.ui.components.rememberGuardedNavigationActions
-import com.example.gymtime.ui.theme.*
 import com.example.gymtime.ui.routine.preview.PreviewRoutineDayFormContent
-import com.example.gymtime.ui.routine.preview.RoutineDayFormUiState
 import com.example.gymtime.ui.routine.preview.RoutineDayFormActions
-import com.example.gymtime.ui.routine.preview.RoutineFormsTheme
+import com.example.gymtime.ui.routine.preview.RoutineDayFormUiState
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoutineDayFormScreen(
     navController: NavController,
     viewModel: RoutineDayFormViewModel = hiltViewModel()
 ) {
-    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle()
-    RoutineFormsTheme { RoutineDayFormScreenBody(navController, viewModel, newUiEnabled) }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun RoutineDayFormScreenBody(navController: NavController, viewModel: RoutineDayFormViewModel, newUiEnabled: Boolean) {
     val dayName by viewModel.dayName.collectAsStateWithLifecycle()
     val selectedExercises by viewModel.selectedExercises.collectAsStateWithLifecycle(initialValue = emptyList())
     val availableExercises by viewModel.availableExercises.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -79,12 +40,12 @@ private fun RoutineDayFormScreenBody(navController: NavController, viewModel: Ro
     val notes by viewModel.notes.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
+    val canEdit by viewModel.canEdit.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val pickerQuery by viewModel.pickerQuery.collectAsStateWithLifecycle()
     val pickerMuscle by viewModel.pickerMuscle.collectAsStateWithLifecycle()
 
     var showExercisePicker by rememberSaveable { mutableStateOf(false) }
-    val accentColor = MaterialTheme.colorScheme.primary
     val navigationActions = rememberGuardedNavigationActions(
         hasUnsavedChanges = hasUnsavedChanges,
         onBack = navController::navigateBackOrHome,
@@ -92,548 +53,57 @@ private fun RoutineDayFormScreenBody(navController: NavController, viewModel: Ro
     )
 
     BackHandler(enabled = isSaving) { /* Prevent leaving while the complete day is being saved. */ }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(viewModel, navController, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-        viewModel.saveSuccessEvent.collect {
-            navController.navigateUp()
-        }
-        }
-    }
-
-    if (newUiEnabled) {
-            PreviewRoutineDayFormContent(
-                state = RoutineDayFormUiState(
-                    name = dayName, editing = isEditMode, loading = isLoading, saving = isSaving,
-                    canSave = isSaveEnabled, error = error, exercises = selectedExercises,
-                    availableExercises = availableExercises, selectedIds = selectedExerciseIds,
-                    sets = targetSets, repMin = targetRepMin, repMax = targetRepMax,
-                    rest = targetRestSeconds, notes = notes, links = supersetLinks,
-                    pickerOpen = showExercisePicker, pickerQuery = pickerQuery, pickerMuscle = pickerMuscle
-                ),
-                actions = RoutineDayFormActions(
-                    name = viewModel::updateDayName, sets = viewModel::updateTargetSets,
-                    repMin = viewModel::updateTargetRepMin, repMax = viewModel::updateTargetRepMax,
-                    rest = viewModel::updateTargetRestSeconds, notes = viewModel::updateExerciseNotes,
-                    move = viewModel::moveExercise, remove = viewModel::removeExercise,
-                    link = viewModel::toggleSupersetLink, toggleExercise = viewModel::toggleExercise,
-                    pickerQuery = viewModel::updatePickerQuery, pickerMuscle = viewModel::updatePickerMuscle,
-                    openPicker = { showExercisePicker = true }, closePicker = { showExercisePicker = false },
-                    save = viewModel::saveDay, retry = viewModel::retryLoad,
-                    back = navigationActions.back, home = navigationActions.home
-                )
-            )
-        return
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        if (isEditMode) "Edit Day" else "New Day",
-                        color = LocalAppColors.current.textPrimary,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    BackNavigationIcon(navigationActions.back)
-                },
-                actions = {
-                    HomeNavigationAction(navigationActions.home)
-                    IconButton(
-                        onClick = { viewModel.saveDay() },
-                        enabled = isSaveEnabled
-                    ) {
-                        Icon(
-                            Icons.Default.Check,
-                            contentDescription = "Save",
-                            tint = if (isSaveEnabled) accentColor else LocalAppColors.current.textTertiary
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showExercisePicker = true },
-                containerColor = accentColor,
-                contentColor = Color.Black,
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Exercise", modifier = Modifier.size(32.dp))
-            }
-        },
-        containerColor = Color.Transparent
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            if (isLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
-            if (error != null && selectedExercises.isEmpty() && isEditMode) {
-                TextButton(onClick = viewModel::retryLoad) { Text("Reload day") }
-            }
-            // Name Input
-            GlowCard(onClick = {}, modifier = Modifier.fillMaxWidth()) {
-                BasicTextField(
-                    value = dayName,
-                    onValueChange = { viewModel.updateDayName(it) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = LocalAppColors.current.textPrimary,
-                        fontSize = 18.sp
-                    ),
-                    cursorBrush = SolidColor(LocalAppColors.current.cursor),
-                    decorationBox = { innerTextField ->
-                        if (dayName.isEmpty()) {
-                            Text(
-                                text = "Day Name (e.g., Push Day)",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = LocalAppColors.current.textTertiary,
-                                fontSize = 18.sp
-                            )
-                        }
-                        innerTextField()
-                    },
-                    singleLine = true
-                )
-            }
-
-            Text(
-                text = "EXERCISES (${selectedExercises.size})",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.5.sp,
-                color = LocalAppColors.current.textTertiary
-            )
-
-            if (selectedExercises.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No exercises added yet.",
-                        color = LocalAppColors.current.textTertiary
-                    )
-                }
-            } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(0.dp), // Controlled by ExerciseListItem
-                    contentPadding = PaddingValues(bottom = 80.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    itemsIndexed(selectedExercises) { index, exercise ->
-                        val isLinkedToNext = supersetLinks.contains(index)
-                        val isLinkedToPrev = index > 0 && supersetLinks.contains(index - 1)
-                        
-                        ExerciseListItem(
-                            exercise = exercise,
-                            onRemove = { viewModel.removeExercise(exercise.id) },
-                            targetSets = targetSets[exercise.id].orEmpty(),
-                            targetRepMin = targetRepMin[exercise.id].orEmpty(),
-                            targetRepMax = targetRepMax[exercise.id].orEmpty(),
-                            targetRestSeconds = targetRestSeconds[exercise.id].orEmpty(),
-                            onTargetSetsChange = { viewModel.updateTargetSets(exercise.id, it) },
-                            onTargetRepMinChange = { viewModel.updateTargetRepMin(exercise.id, it) },
-                            onTargetRepMaxChange = { viewModel.updateTargetRepMax(exercise.id, it) },
-                            onTargetRestSecondsChange = { viewModel.updateTargetRestSeconds(exercise.id, it) },
-                            isLinkedToNext = isLinkedToNext,
-                            isLinkedToPrev = isLinkedToPrev,
-                            onToggleLink = { viewModel.toggleSupersetLink(index) },
-                            showLinkButton = index < selectedExercises.size - 1,
-                            onMoveUp = if (index > 0) {
-                                { viewModel.moveExercise(exercise.id, -1) }
-                            } else null,
-                            onMoveDown = if (index < selectedExercises.size - 1) {
-                                { viewModel.moveExercise(exercise.id, 1) }
-                            } else null
-                        )
-                    }
-                }
+            viewModel.saveSuccessEvent.collect {
+                navController.navigateUp()
             }
         }
     }
 
-    if (showExercisePicker) {
-        ExercisePickerDialog(
+    PreviewRoutineDayFormContent(
+        state = RoutineDayFormUiState(
+            name = dayName,
+            editing = isEditMode,
+            loading = isLoading,
+            saving = isSaving,
+            canEdit = canEdit,
+            canSave = isSaveEnabled,
+            error = error,
+            exercises = selectedExercises,
             availableExercises = availableExercises,
-            selectedExerciseIds = selectedExerciseIds,
-            onDismiss = { showExercisePicker = false },
-            onExerciseSelected = { exercise ->
-                viewModel.toggleExercise(exercise.id)
-                // Keep dialog open to allow multiple selections
-            }
+            selectedIds = selectedExerciseIds,
+            sets = targetSets,
+            repMin = targetRepMin,
+            repMax = targetRepMax,
+            rest = targetRestSeconds,
+            notes = notes,
+            links = supersetLinks,
+            pickerOpen = showExercisePicker,
+            pickerQuery = pickerQuery,
+            pickerMuscle = pickerMuscle
+        ),
+        actions = RoutineDayFormActions(
+            name = viewModel::updateDayName,
+            sets = viewModel::updateTargetSets,
+            repMin = viewModel::updateTargetRepMin,
+            repMax = viewModel::updateTargetRepMax,
+            rest = viewModel::updateTargetRestSeconds,
+            notes = viewModel::updateExerciseNotes,
+            move = viewModel::moveExercise,
+            remove = viewModel::removeExercise,
+            link = viewModel::toggleSupersetLink,
+            toggleExercise = viewModel::toggleExercise,
+            pickerQuery = viewModel::updatePickerQuery,
+            pickerMuscle = viewModel::updatePickerMuscle,
+            openPicker = { showExercisePicker = true },
+            closePicker = { showExercisePicker = false },
+            save = viewModel::saveDay,
+            retry = viewModel::retryLoad,
+            back = navigationActions.back,
+            home = navigationActions.home
         )
-    }
-}
-
-@Composable
-fun ExerciseListItem(
-    exercise: Exercise,
-    onRemove: () -> Unit,
-    targetSets: String,
-    targetRepMin: String,
-    targetRepMax: String,
-    targetRestSeconds: String,
-    onTargetSetsChange: (String) -> Unit,
-    onTargetRepMinChange: (String) -> Unit,
-    onTargetRepMaxChange: (String) -> Unit,
-    onTargetRestSecondsChange: (String) -> Unit,
-    isLinkedToNext: Boolean = false,
-    isLinkedToPrev: Boolean = false,
-    onToggleLink: () -> Unit = {},
-    showLinkButton: Boolean = false,
-    onMoveUp: (() -> Unit)? = null,
-    onMoveDown: (() -> Unit)? = null
-) {
-    val accentColor = MaterialTheme.colorScheme.primary
-    
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Superset Bar indicator
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .height(80.dp)
-                    .padding(vertical = if (isLinkedToPrev && isLinkedToNext) 0.dp else if (isLinkedToPrev) 0.dp else if (isLinkedToNext) 16.dp else 0.dp)
-                    .background(
-                        color = if (isLinkedToNext || isLinkedToPrev) accentColor else Color.Transparent,
-                        shape = when {
-                            isLinkedToNext && isLinkedToPrev -> RoundedCornerShape(0.dp)
-                            isLinkedToNext -> RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
-                            isLinkedToPrev -> RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp)
-                            else -> RoundedCornerShape(0.dp)
-                        }
-                    )
-            )
-            
-            Spacer(modifier = Modifier.width(12.dp))
-            
-            Surface(
-                color = LocalAppColors.current.surfaceCards,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = exercise.name,
-                            color = LocalAppColors.current.textPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
-                        Text(
-                            text = exercise.targetMuscle,
-                            color = LocalAppColors.current.textSecondary,
-                            fontSize = 12.sp
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PrescriptionField(
-                                label = "Sets",
-                                value = targetSets,
-                                onValueChange = onTargetSetsChange,
-                                modifier = Modifier.weight(1f)
-                            )
-                            PrescriptionField(
-                                label = "Rep Min",
-                                value = targetRepMin,
-                                onValueChange = onTargetRepMinChange,
-                                modifier = Modifier.weight(1f)
-                            )
-                            PrescriptionField(
-                                label = "Rep Max",
-                                value = targetRepMax,
-                                onValueChange = onTargetRepMaxChange,
-                                modifier = Modifier.weight(1f)
-                            )
-                            PrescriptionField(
-                                label = "Rest",
-                                value = targetRestSeconds,
-                                onValueChange = onTargetRestSecondsChange,
-                                suffix = "s",
-                                placeholder = exercise.defaultRestSeconds.toString(),
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        IconButton(
-                            onClick = { onMoveUp?.invoke() },
-                            enabled = onMoveUp != null,
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.KeyboardArrowUp,
-                                contentDescription = "Move up",
-                                tint = if (onMoveUp != null) accentColor else LocalAppColors.current.textTertiary.copy(alpha = 0.3f)
-                            )
-                        }
-                        IconButton(onClick = onRemove, modifier = Modifier.size(28.dp)) {
-                            Icon(Icons.Default.Close, contentDescription = "Remove", tint = LocalAppColors.current.textTertiary)
-                        }
-                        IconButton(
-                            onClick = { onMoveDown?.invoke() },
-                            enabled = onMoveDown != null,
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.KeyboardArrowDown,
-                                contentDescription = "Move down",
-                                tint = if (onMoveDown != null) accentColor else LocalAppColors.current.textTertiary.copy(alpha = 0.3f)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Link toggle button between items
-        if (showLinkButton) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(32.dp),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                // Connecting line for the bar
-                if (isLinkedToNext) {
-                    Box(
-                        modifier = Modifier
-                            .padding(start = 0.dp) // Aligned with the indicator bar
-                            .width(4.dp)
-                            .fillMaxHeight()
-                            .background(accentColor)
-                    )
-                }
-                
-                Row(
-                    modifier = Modifier
-                        .padding(start = 24.dp)
-                        .clickable(onClick = onToggleLink),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = if (isLinkedToNext) Icons.Default.LinkOff else Icons.Default.Link,
-                        contentDescription = "Toggle Superset",
-                        tint = if (isLinkedToNext) Color(0xFFEF5350) else accentColor,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (isLinkedToNext) "Unlink Superset" else "Link as Superset",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isLinkedToNext) Color(0xFFEF5350) else accentColor,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        } else {
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-    }
-}
-
-@Composable
-private fun PrescriptionField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    suffix: String? = null,
-    placeholder: String? = null
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier,
-        textStyle = MaterialTheme.typography.bodySmall.copy(color = LocalAppColors.current.textPrimary),
-        singleLine = true,
-        label = {
-            Text(label, style = MaterialTheme.typography.labelSmall)
-        },
-        placeholder = placeholder?.let {
-            { Text(it, style = MaterialTheme.typography.labelSmall) }
-        },
-        suffix = suffix?.let {
-            { Text(it, style = MaterialTheme.typography.labelSmall) }
-        },
-        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
-        colors = appTextFieldColors()
     )
-}
-
-@Composable
-fun ExercisePickerDialog(
-    availableExercises: List<Exercise>,
-    selectedExerciseIds: Set<Long>,
-    onDismiss: () -> Unit,
-    onExerciseSelected: (Exercise) -> Unit
-) {
-    var searchQuery by remember { mutableStateOf("") }
-    val accentColor = MaterialTheme.colorScheme.primary
-
-    val filteredExercises = remember(searchQuery, availableExercises) {
-        if (searchQuery.isBlank()) availableExercises
-        else availableExercises.filter {
-            it.name.contains(searchQuery, ignoreCase = true) ||
-            it.targetMuscle.contains(searchQuery, ignoreCase = true)
-        }
-    }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = LocalAppColors.current.backgroundCanvas
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .navigationBarsPadding()
-            ) {
-                // Header
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = LocalAppColors.current.textPrimary)
-                    }
-                    Text(
-                        text = "Add Exercises",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = LocalAppColors.current.textPrimary,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                // Search
-                Surface(
-                    color = LocalAppColors.current.surfaceCards,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Search, contentDescription = null, tint = LocalAppColors.current.textTertiary)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        BasicTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            modifier = Modifier.weight(1f),
-                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = LocalAppColors.current.textPrimary),
-                            cursorBrush = SolidColor(LocalAppColors.current.cursor),
-                            decorationBox = { innerTextField ->
-                                if (searchQuery.isEmpty()) {
-                                    Text("Search exercises...", color = LocalAppColors.current.textTertiary)
-                                }
-                                innerTextField()
-                            }
-                        )
-                    }
-                }
-
-                // List
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(filteredExercises) { exercise ->
-                        ExercisePickerItem(
-                            exercise = exercise,
-                            isSelected = exercise.id in selectedExerciseIds,
-                            onClick = { onExerciseSelected(exercise) }
-                        )
-                    }
-                }
-                
-                // Done Button
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .padding(top = 8.dp, bottom = 32.dp)
-                        .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = accentColor),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Done", color = Color.Black, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ExercisePickerItem(
-    exercise: Exercise,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val accentColor = MaterialTheme.colorScheme.primary
-    Surface(
-        color = if (isSelected) accentColor.copy(alpha = 0.1f) else LocalAppColors.current.surfaceCards,
-        shape = RoundedCornerShape(12.dp),
-        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, accentColor) else null,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .clickable(onClick = onClick)
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = exercise.name,
-                    color = LocalAppColors.current.textPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = exercise.targetMuscle,
-                    color = LocalAppColors.current.textSecondary,
-                    fontSize = 12.sp
-                )
-            }
-            if (isSelected) {
-                Icon(Icons.Default.Check, contentDescription = "Selected", tint = accentColor)
-            } else {
-                Icon(Icons.Default.Add, contentDescription = "Add", tint = LocalAppColors.current.textTertiary)
-            }
-        }
-    }
 }

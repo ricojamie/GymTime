@@ -12,8 +12,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.util.Calendar
 import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class WorkoutRatingUseCaseTest {
@@ -116,6 +120,79 @@ class WorkoutRatingUseCaseTest {
 
         assertTrue(result.weekAverageRating == null)
         assertEquals(0, result.ratedWorkoutCount)
+    }
+
+    @Test
+    fun `sunday in US locale includes current Monday-Sunday week without jumping forward`() = runTest {
+        val zone = ZoneId.of("America/New_York")
+        val zonedUseCase = WorkoutRatingUseCase(workoutDao, zone)
+        val previousLocale = Locale.getDefault()
+        Locale.setDefault(Locale.US)
+        try {
+            val sundayNoon = ZonedDateTime.of(2026, 5, 17, 12, 0, 0, 0, zone).toInstant().toEpochMilli()
+            val mondayMorning = ZonedDateTime.of(2026, 5, 11, 8, 0, 0, 0, zone).toInstant().toEpochMilli()
+            coEvery { workoutDao.getRatedWorkoutSetInfo(any(), any()) } returns listOf(
+                ratedRowAt(workoutId = 1L, startMs = mondayMorning, rating = 5),
+                ratedRowAt(workoutId = 2L, startMs = sundayNoon - 3_600_000L, rating = 3)
+            )
+
+            val result = zonedUseCase.getRatingStats(sundayNoon)
+
+            assertEquals(4f, result.weekAverageRating ?: 0f, 0.01f)
+            assertEquals(1600f, result.weekRatedVolume, 0.01f)
+            assertEquals(1, result.weeklyTrend.size)
+        } finally {
+            Locale.setDefault(previousLocale)
+        }
+    }
+
+    @Test
+    fun `dst spring forward week keeps trend buckets aligned to local Mondays`() = runTest {
+        val zone = ZoneId.of("America/New_York")
+        val zonedUseCase = WorkoutRatingUseCase(workoutDao, zone)
+        // 2026-03-08 is US DST spring forward (23-hour day -> 167-hour week).
+        val nowAfterDst = ZonedDateTime.of(2026, 3, 18, 12, 0, 0, 0, zone).toInstant().toEpochMilli()
+        val preDstMonday = ZonedDateTime.of(2026, 3, 2, 0, 30, 0, 0, zone).toInstant().toEpochMilli()
+        val postDstMonday = ZonedDateTime.of(2026, 3, 9, 0, 30, 0, 0, zone).toInstant().toEpochMilli()
+
+        coEvery { workoutDao.getRatedWorkoutSetInfo(any(), any()) } returns listOf(
+            ratedRowAt(workoutId = 1L, startMs = preDstMonday, rating = 5),
+            ratedRowAt(workoutId = 2L, startMs = postDstMonday, rating = 4)
+        )
+
+        val result = zonedUseCase.getRatingStats(nowAfterDst)
+
+        assertEquals(2, result.weeklyTrend.size)
+        assertEquals(
+            Date.from(LocalDate.of(2026, 3, 2).atStartOfDay(zone).toInstant()),
+            result.weeklyTrend[0].date
+        )
+        assertEquals(
+            Date.from(LocalDate.of(2026, 3, 9).atStartOfDay(zone).toInstant()),
+            result.weeklyTrend[1].date
+        )
+    }
+
+    private fun ratedRowAt(
+        workoutId: Long,
+        startMs: Long,
+        rating: Int,
+        muscle: String = "Chest",
+        weight: Float = 100f,
+        reps: Int = 10
+    ): RatedWorkoutSetInfo {
+        return RatedWorkoutSetInfo(
+            workoutId = workoutId,
+            startTime = Date(startMs),
+            endTime = Date(startMs + 60 * 60 * 1000L),
+            rating = rating,
+            setId = workoutId,
+            exerciseId = workoutId,
+            targetMuscle = muscle,
+            weight = weight,
+            reps = reps,
+            isWarmup = false
+        )
     }
 
     private fun row(

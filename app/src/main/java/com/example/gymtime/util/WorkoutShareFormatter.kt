@@ -3,21 +3,26 @@ package com.example.gymtime.util
 import com.example.gymtime.domain.share.ShareableSet
 import com.example.gymtime.domain.share.ShareableWorkout
 import java.text.NumberFormat
-import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 object WorkoutShareFormatter {
+    private val dateFormatters = ConcurrentHashMap<Locale, DateTimeFormatter>()
 
     /**
      * Renders a [ShareableWorkout] as plain text suitable for Android's share sheet.
      * Warmup sets and exercises with zero working sets are excluded from the body.
      */
     fun format(workout: ShareableWorkout, locale: Locale = Locale.getDefault()): String {
-        val dateFormat = SimpleDateFormat("d MMM yyyy", locale)
+        val formattedDate = formatShareDate(workout.date, locale)
         val volumeFormat = NumberFormat.getNumberInstance(locale)
         val builder = StringBuilder()
 
-        builder.append("GymTime — ").append(dateFormat.format(workout.date)).append('\n')
+        builder.append("GymTime — ").append(formattedDate).append('\n')
 
         val headerParts = mutableListOf<String>()
         workout.durationMinutes?.let { headerParts += formatDuration(it) }
@@ -45,24 +50,57 @@ object WorkoutShareFormatter {
         return builder.toString()
     }
 
+    internal fun formatShareDate(date: Date, locale: Locale = Locale.getDefault()): String {
+        val formatter = dateFormatters.computeIfAbsent(locale) { loc ->
+            DateTimeFormatter.ofPattern("d MMM yyyy", loc)
+        }
+        return Instant.ofEpochMilli(date.time)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+            .format(formatter)
+    }
+
     private fun formatDuration(minutes: Int): String {
-        val h = minutes / 60
-        val m = minutes % 60
+        val safeMinutes = minutes.coerceAtLeast(0)
+        val h = safeMinutes / 60
+        val m = safeMinutes % 60
         return if (h > 0) "Duration: ${h}h ${m}m" else "Duration: ${m}m"
     }
 
-    private fun formatSet(set: ShareableSet): String {
-        val weight = set.weight
+    internal fun formatDurationSeconds(seconds: Int): String {
+        val safeSeconds = seconds.coerceAtLeast(0)
+        val minutes = safeSeconds / 60
+        val remaining = safeSeconds % 60
+        return if (minutes > 0) "${minutes}m ${remaining}s" else "${remaining}s"
+    }
+
+    internal fun formatSet(
+        set: ShareableSet,
+        multiplicationSymbol: String = "×",
+        emptyFallback: String = "—"
+    ): String {
+        val weight = set.weight?.takeIf { it.isFinite() }
         val reps = set.reps
+        val duration = set.durationSeconds?.takeIf { it >= 0 }
+        val distance = set.distanceMeters?.takeIf { it.isFinite() }
+        val calories = set.calories?.takeIf { it.isFinite() }
         return when {
-            weight != null && reps != null -> "${trim(weight)} lbs × $reps"
+            weight != null && reps != null -> "${trim(weight)} lbs $multiplicationSymbol $reps"
+            weight != null && duration != null -> "${trim(weight)} lbs · ${formatDurationSeconds(duration)}"
+            weight != null && distance != null -> "${trim(weight)} lbs · ${trim(distance)} m"
             weight != null -> "${trim(weight)} lbs"
             reps != null -> "$reps reps"
-            else -> "—"
+            distance != null && duration != null -> "${trim(distance)} m · ${formatDurationSeconds(duration)}"
+            calories != null && duration != null -> "${trim(calories)} cal · ${formatDurationSeconds(duration)}"
+            duration != null -> formatDurationSeconds(duration)
+            distance != null -> "${trim(distance)} m"
+            calories != null -> "${trim(calories)} cal"
+            else -> emptyFallback
         }
     }
 
     private fun trim(value: Float): String {
+        if (!value.isFinite()) return "0"
         // Drop trailing .0 for whole-number weights ("60 lbs" not "60.0 lbs").
         return if (value % 1f == 0f) value.toInt().toString() else value.toString()
     }

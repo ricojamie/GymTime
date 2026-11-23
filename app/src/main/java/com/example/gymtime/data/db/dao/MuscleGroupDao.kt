@@ -25,8 +25,11 @@ interface MuscleGroupDao {
     @Delete
     suspend fun deleteMuscleGroup(muscleGroup: MuscleGroup)
 
-    @Query("DELETE FROM muscle_groups WHERE name = :name")
+    @Query("DELETE FROM muscle_groups WHERE LOWER(name) = LOWER(:name)")
     suspend fun deleteMuscleGroupByName(name: String)
+
+    @Query("SELECT * FROM muscle_groups WHERE LOWER(name) = LOWER(:name) LIMIT 1")
+    suspend fun findByNameIgnoreCase(name: String): MuscleGroup?
 
     @Query("SELECT COUNT(*) FROM exercises WHERE LOWER(targetMuscle) = LOWER(:muscleName)")
     suspend fun getExerciseCountForMuscle(muscleName: String): Int

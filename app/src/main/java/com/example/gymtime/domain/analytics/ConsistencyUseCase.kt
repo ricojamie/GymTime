@@ -38,28 +38,53 @@ class ConsistencyUseCase @Inject constructor(
     private val userPreferencesRepository: UserPreferencesRepository
 ) {
     private var zoneId: ZoneId = ZoneId.systemDefault()
+    private var clockMs: () -> Long = System::currentTimeMillis
 
     internal constructor(
         workoutDao: WorkoutDao,
         setDao: SetDao,
         userPreferencesRepository: UserPreferencesRepository,
-        zoneId: ZoneId
+        zoneId: ZoneId,
+        clockMs: () -> Long = System::currentTimeMillis
     ) : this(workoutDao, setDao, userPreferencesRepository) {
         this.zoneId = zoneId
+        this.clockMs = clockMs
     }
 
     suspend fun getHeatMapData(): List<HeatMapDay> = withContext(Dispatchers.IO) {
         val rawData = workoutDao.getDailyVolumeForHeatMap()
 
-        // 1. Calculate Percentiles (only from non-zero data)
-        val volumes = rawData.map { it.dailyVol }.sorted()
+        val map = mutableMapOf<Long, DailyVolume>()
+        for (entry in rawData) {
+            val dayMs = startOfLocalDayMillis(entry.date)
+            val vol = entry.dailyVol.takeIf { it.isFinite() && it >= 0f } ?: 0f
+            val sets = entry.workingSetCount.coerceAtLeast(0)
+            val existing = map[dayMs]
+            map[dayMs] = if (existing == null) {
+                DailyVolume(dailyVol = vol, date = dayMs, workingSetCount = sets)
+            } else {
+                DailyVolume(
+                    dailyVol = (existing.dailyVol.toDouble() + vol).toFloat(),
+                    date = dayMs,
+                    workingSetCount = existing.workingSetCount + sets
+                )
+            }
+        }
 
-        val p33 = if (volumes.isNotEmpty()) volumes[(volumes.size * 0.33).toInt()] else 0f
-        val p66 = if (volumes.isNotEmpty()) volumes[(volumes.size * 0.66).toInt()] else 0f
+        // 1. Calculate Percentiles (only from positive non-zero data)
+        val volumes = map.values
+            .map { it.dailyVol }
+            .filter { it.isFinite() && it > 0f }
+            .sorted()
 
-        val map = rawData.associateBy { startOfLocalDayMillis(it.date) }
+        val p33 = if (volumes.isNotEmpty()) {
+            volumes[(volumes.size * 0.33).toInt().coerceAtMost(volumes.lastIndex)]
+        } else 0f
+        val p66 = if (volumes.isNotEmpty()) {
+            volumes[(volumes.size * 0.66).toInt().coerceAtMost(volumes.lastIndex)]
+        } else 0f
 
-        val today = LocalDate.now(zoneId)
+        val today = Instant.ofEpochMilli(clockMs()).atZone(zoneId).toLocalDate()
         val startOfYear = today.withDayOfYear(1)
         val endOfYear = LocalDate.of(today.year, 12, 31)
 
@@ -74,19 +99,21 @@ class ConsistencyUseCase @Inject constructor(
 
             val level = when {
                 isFuture -> -1  // Future day marker
-                volume == 0f -> 0
+                volume <= 0f -> 0
                 volume <= p33 -> 1
                 volume <= p66 -> 2
                 else -> 3
             }
 
-            days.add(HeatMapDay(
-                date = dateMs,
-                volume = volume,
-                workingSetCount = workingSetCount,
-                level = level,
-                formattedDate = formatDate(cursor)
-            ))
+            days.add(
+                HeatMapDay(
+                    date = dateMs,
+                    volume = volume,
+                    workingSetCount = workingSetCount,
+                    level = level,
+                    formattedDate = formatDate(cursor)
+                )
+            )
             cursor = cursor.plusDays(1)
         }
 
@@ -96,14 +123,19 @@ class ConsistencyUseCase @Inject constructor(
     suspend fun getConsistencyStats(): ConsistencyStats = withContext(Dispatchers.IO) {
         // 1. Heatmap Data -> Score
         val rawData = workoutDao.getDailyVolumeForHeatMap()
-        
-        // Consistency Score Calculation (Existing logic)
-        val activeDates = rawData.map { it.date }
-        val activeWeeks = activeDates.map { getWeekSinceEpoch(it) }.toSet()
-        val currentWeek = getWeekSinceEpoch(System.currentTimeMillis())
+        val nowMs = clockMs()
+
+        // Consistency Score Calculation over trailing 52 Sunday-Saturday weeks
+        val activeWeeks = rawData.asSequence()
+            .filter { (it.dailyVol.isFinite() && it.dailyVol > 0f) || it.workingSetCount > 0 }
+            .mapTo(HashSet()) { getWeekSinceEpoch(it.date) }
+        val currentWeek = getWeekSinceEpoch(nowMs)
         val totalWeeksInYear = 52
-        val activeWeeksCount = activeWeeks.count { it >= currentWeek - 52 }
-        val score = if (totalWeeksInYear > 0) ((activeWeeksCount.toFloat() / totalWeeksInYear) * 100).toInt() else 0
+        val windowStartWeek = currentWeek - (totalWeeksInYear - 1)
+        val activeWeeksCount = activeWeeks.count { it in windowStartWeek..currentWeek }
+        val score = ((activeWeeksCount.toFloat() / totalWeeksInYear) * 100)
+            .toInt()
+            .coerceIn(0, 100)
 
         // 2. Iron Streak Data (From HomeViewModel logic)
         val dateStrings = workoutDao.getWorkoutDatesWithWorkingSets()
@@ -115,7 +147,8 @@ class ConsistencyUseCase @Inject constructor(
         }
         val streakResult = StreakCalculator.calculateStreak(
             workoutDates = workoutDates,
-            allowedSkipsPerWeek = allowedRestDays
+            allowedSkipsPerWeek = allowedRestDays,
+            asOf = Date(nowMs)
         )
 
         // 3. Best Streak (From Prefs)
@@ -129,13 +162,15 @@ class ConsistencyUseCase @Inject constructor(
         val ytdWorkouts = workoutDao.getYearToDateWorkoutCount()
 
         // 5. YTD Volume
-        val startOfYear = LocalDate.now(zoneId)
+        val startOfYear = Instant.ofEpochMilli(nowMs)
+            .atZone(zoneId)
+            .toLocalDate()
             .withDayOfYear(1)
             .atStartOfDay(zoneId)
             .toInstant()
             .toEpochMilli()
-        val endOfToday = System.currentTimeMillis()
-        val ytdVolume = setDao.getTotalVolume(startOfYear, endOfToday) ?: 0f
+        val ytdVolume = (setDao.getTotalVolume(startOfYear, nowMs) ?: 0f)
+            .let { if (it.isFinite() && it >= 0f) it else 0f }
 
         ConsistencyStats(
             streakResult = streakResult,
@@ -146,11 +181,13 @@ class ConsistencyUseCase @Inject constructor(
         )
     }
 
+    // 1970-01-01 was Thursday (+4 shifts epochDay so Sunday-Saturday weeks map to contiguous integers).
     private fun getWeekSinceEpoch(timestamp: Long): Long {
-        return Instant.ofEpochMilli(timestamp)
+        val epochDay = Instant.ofEpochMilli(timestamp)
             .atZone(zoneId)
             .toLocalDate()
-            .toEpochDay() / 7L
+            .toEpochDay()
+        return Math.floorDiv(epochDay + 4L, 7L)
     }
 
     private fun startOfLocalDayMillis(timestamp: Long): Long {

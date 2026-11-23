@@ -6,6 +6,9 @@ import com.example.gymtime.util.WeekUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -33,64 +36,69 @@ class VolumeOrbRepository @Inject constructor(
     private val _orbState = MutableStateFlow(VolumeOrbState())
     val orbState: StateFlow<VolumeOrbState> = _orbState.asStateFlow()
 
+    private val mutex = Mutex()
+
     // Track if we've already triggered the overflow celebration this week
     private var overflowCelebrationTriggered = false
-    private var lastWeekStartMs: Long = 0L
+    private var lastCurrentWeekStartMs: Long = 0L
 
     /**
      * Refresh the orb state from the database.
      * Should be called on app launch, after logging a set, and after finishing a workout.
      */
     suspend fun refresh() {
-        val currentWeekStart = WeekUtils.getCurrentWeekStartMs()
-        val lastWeekStart = WeekUtils.getLastWeekStartMs()
-        val lastWeekEnd = WeekUtils.getLastWeekEndMs()
-        val now = WeekUtils.getCurrentTimeMs()
+        mutex.withLock {
+            val currentWeekStart = WeekUtils.getCurrentWeekStartMs()
+            val lastWeekStart = WeekUtils.getLastWeekStartMs()
+            val lastWeekEnd = WeekUtils.getLastWeekEndMs()
+            val now = WeekUtils.getCurrentTimeMs()
 
-        // Reset overflow flag if we've crossed into a new week
-        if (lastWeekStartMs != 0L && currentWeekStart != lastWeekStartMs + (7 * 24 * 60 * 60 * 1000L)) {
-            overflowCelebrationTriggered = false
+            // Reset overflow flag only when the calendar week boundary actually changes
+            // (immune to 167h/169h DST transitions).
+            if (lastCurrentWeekStartMs != 0L && currentWeekStart != lastCurrentWeekStartMs) {
+                overflowCelebrationTriggered = false
+            }
+            lastCurrentWeekStartMs = currentWeekStart
+
+            // Get volumes (upper bound is exclusive, so +1 includes sets at `now`)
+            val lastWeekVolume = setDao.getVolumeInRange(lastWeekStart, lastWeekEnd + 1)
+            val currentWeekVolume = setDao.getVolumeInRange(currentWeekStart, now + 1)
+
+            Log.d("VolumeOrbRepository", "Last week: $lastWeekVolume, Current week: $currentWeekVolume")
+
+            // Calculate progress
+            val isFirstWeek = lastWeekVolume <= 0f
+            val progressPercent = if (isFirstWeek) {
+                0f // No progress to show in first week
+            } else {
+                currentWeekVolume / lastWeekVolume
+            }
+
+            // Check for overflow
+            val hasOverflowed = !isFirstWeek && currentWeekVolume > lastWeekVolume
+            val justOverflowed = hasOverflowed && !overflowCelebrationTriggered
+
+            if (justOverflowed) {
+                overflowCelebrationTriggered = true
+                Log.d("VolumeOrbRepository", "OVERFLOW! Celebration triggered")
+            }
+
+            _orbState.value = VolumeOrbState(
+                lastWeekVolume = lastWeekVolume,
+                currentWeekVolume = currentWeekVolume,
+                progressPercent = progressPercent,
+                isFirstWeek = isFirstWeek,
+                hasOverflowed = hasOverflowed,
+                justOverflowed = justOverflowed
+            )
         }
-        lastWeekStartMs = lastWeekStart
-
-        // Get volumes
-        val lastWeekVolume = setDao.getVolumeInRange(lastWeekStart, lastWeekEnd + 1)
-        val currentWeekVolume = setDao.getVolumeInRange(currentWeekStart, now)
-
-        Log.d("VolumeOrbRepository", "Last week: $lastWeekVolume, Current week: $currentWeekVolume")
-
-        // Calculate progress
-        val isFirstWeek = lastWeekVolume <= 0f
-        val progressPercent = if (isFirstWeek) {
-            0f // No progress to show in first week
-        } else {
-            currentWeekVolume / lastWeekVolume
-        }
-
-        // Check for overflow
-        val hasOverflowed = !isFirstWeek && currentWeekVolume > lastWeekVolume
-        val justOverflowed = hasOverflowed && !overflowCelebrationTriggered
-
-        if (justOverflowed) {
-            overflowCelebrationTriggered = true
-            Log.d("VolumeOrbRepository", "OVERFLOW! Celebration triggered")
-        }
-
-        _orbState.value = VolumeOrbState(
-            lastWeekVolume = lastWeekVolume,
-            currentWeekVolume = currentWeekVolume,
-            progressPercent = progressPercent,
-            isFirstWeek = isFirstWeek,
-            hasOverflowed = hasOverflowed,
-            justOverflowed = justOverflowed
-        )
     }
 
     /**
      * Clear the justOverflowed flag after the animation has played.
      */
     fun clearOverflowAnimation() {
-        _orbState.value = _orbState.value.copy(justOverflowed = false)
+        _orbState.update { it.copy(justOverflowed = false) }
     }
 
     /**

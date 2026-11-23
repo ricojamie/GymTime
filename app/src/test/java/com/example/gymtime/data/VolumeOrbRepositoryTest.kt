@@ -2,6 +2,7 @@ package com.example.gymtime.data
 
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.util.TestDispatcherRule
+import com.example.gymtime.util.WeekUtils
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -144,5 +145,48 @@ class VolumeOrbRepositoryTest {
         advanceUntilIdle()
 
         assertEquals(1.5f, repository.orbState.value.progressPercent, 0.01f)
+    }
+
+    @Test
+    fun dstWeekDoesNotRetriggerOverflowOnSubsequentRefresh() = runTest {
+        mockkObject(WeekUtils)
+        try {
+            // Simulate a 167-hour spring-forward DST week (currentWeekStart - lastWeekStart != 7d).
+            val lastWeekStart = 1_700_000_000_000L
+            val dstWeekDuration = 167L * 60L * 60L * 1000L
+            val currentWeekStart = lastWeekStart + dstWeekDuration
+            val now = currentWeekStart + 3_600_000L
+
+            every { WeekUtils.getLastWeekStartMs() } returns lastWeekStart
+            every { WeekUtils.getLastWeekEndMs() } returns currentWeekStart - 1L
+            every { WeekUtils.getCurrentWeekStartMs() } returns currentWeekStart
+            every { WeekUtils.getCurrentTimeMs() } returns now
+
+            coEvery { setDao.getVolumeInRange(lastWeekStart, currentWeekStart) } returns 5000f
+            coEvery { setDao.getVolumeInRange(currentWeekStart, now + 1L) } returns 6000f
+
+            repository.refresh()
+            assertTrue(repository.orbState.value.justOverflowed)
+
+            coEvery { setDao.getVolumeInRange(currentWeekStart, now + 1L) } returns 7000f
+            repository.refresh()
+            assertTrue(repository.orbState.value.hasOverflowed)
+            assertFalse(repository.orbState.value.justOverflowed)
+
+            // Advancing into a new week resets the celebration trigger.
+            val nextWeekStart = currentWeekStart + (7L * 24L * 60L * 60L * 1000L)
+            val nextNow = nextWeekStart + 1000L
+            every { WeekUtils.getLastWeekStartMs() } returns currentWeekStart
+            every { WeekUtils.getLastWeekEndMs() } returns nextWeekStart - 1L
+            every { WeekUtils.getCurrentWeekStartMs() } returns nextWeekStart
+            every { WeekUtils.getCurrentTimeMs() } returns nextNow
+            coEvery { setDao.getVolumeInRange(currentWeekStart, nextWeekStart) } returns 7000f
+            coEvery { setDao.getVolumeInRange(nextWeekStart, nextNow + 1L) } returns 8000f
+
+            repository.refresh()
+            assertTrue(repository.orbState.value.justOverflowed)
+        } finally {
+            unmockkObject(WeekUtils)
+        }
     }
 }

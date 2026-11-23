@@ -2,21 +2,32 @@ package com.example.gymtime.ui.routine.preview
 
 import com.example.gymtime.data.RoutineRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 
-/** One local-data projection for both browse entry points. No database calls happen in composition. */
+/** One single-query local projection for both browse entry points. No database calls happen in composition. */
 @OptIn(ExperimentalCoroutinesApi::class)
 internal fun routineBrowseState(repository: RoutineRepository, retry: Flow<Int>): Flow<RoutineBrowseUiState> =
     retry.flatMapLatest {
-        repository.getAllRoutines().flatMapLatest { routines ->
-            if (routines.isEmpty()) flowOf(RoutineBrowseUiState(isLoading = false))
-            else combine(routines.map { routine ->
-                repository.getDaysWithExercisesForRoutine(routine.id).map { days ->
-                    val next = days.firstOrNull { it.day.orderIndex == routine.nextDayOrderIndex } ?: days.firstOrNull()
-                    RoutineBrowseItem(routine.id, routine.name, routine.isActive, days.size,
-                        days.sumOf { it.exercises.size }, next?.day?.name)
-                }
-            }) { entries -> RoutineBrowseUiState(routines = entries.toList(), isLoading = false) }
-        }.onStart { emit(RoutineBrowseUiState()) }
+        repository.getRoutineBrowseSummaries()
+            .map { summaries ->
+                RoutineBrowseUiState(
+                    routines = summaries.map { summary ->
+                        RoutineBrowseItem(
+                            id = summary.id,
+                            name = summary.name,
+                            isActive = summary.isActive,
+                            dayCount = summary.dayCount,
+                            exerciseCount = summary.exerciseCount,
+                            nextDayName = summary.nextDayName
+                        )
+                    },
+                    isLoading = false
+                )
+            }
+            .onStart { emit(RoutineBrowseUiState()) }
             .catch { emit(RoutineBrowseUiState(isLoading = false, loadError = "Couldn't load routines. Try again.")) }
     }

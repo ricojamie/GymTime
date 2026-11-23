@@ -1,24 +1,34 @@
 package com.example.gymtime.ui.settings
 
+import android.content.Context
+import android.content.Intent
+import android.graphics.Typeface as AndroidTypeface
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.notifications.MonthlyReportScheduler
+import com.example.gymtime.ui.theme.ThemeFontOption
+import com.example.gymtime.ui.theme.ThemePreset
 import com.example.gymtime.util.FitNotesImporter
 import com.example.gymtime.util.IronLogExporter
 import com.example.gymtime.util.IronLogImporter
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.io.InputStream
-import java.io.OutputStream
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
+    @param:ApplicationContext private val appContext: Context,
     private val userPreferencesRepository: UserPreferencesRepository,
     private val fitNotesImporter: FitNotesImporter,
     private val ironLogExporter: IronLogExporter,
@@ -27,7 +37,6 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     val userName = userPreferencesRepository.userName
-    val newUiEnabled = userPreferencesRepository.newUiEnabled
     val themeColor = userPreferencesRepository.themeColor
     val customThemeColor = userPreferencesRepository.customThemeColor
     val themeFont = userPreferencesRepository.themeFont
@@ -48,6 +57,13 @@ class SettingsViewModel @Inject constructor(
     val availablePlates = userPreferencesRepository.availablePlates
     val plateInventorySettings = userPreferencesRepository.plateInventorySettings
 
+    private val transferMutex = Mutex()
+    private var accentWriteJob: Job? = null
+    private var fontWriteJob: Job? = null
+
+    private val _fontImportError = MutableStateFlow<String?>(null)
+    val fontImportError: StateFlow<String?> = _fontImportError.asStateFlow()
+
     fun setPlateInventoryCount(weight: Float, count: Int) {
         viewModelScope.launch { userPreferencesRepository.setPlateInventoryCount(weight, count) }
     }
@@ -67,13 +83,15 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setThemeColor(color: String) {
-        viewModelScope.launch {
+        accentWriteJob?.cancel()
+        accentWriteJob = viewModelScope.launch {
             userPreferencesRepository.setThemeColor(color)
         }
     }
 
     fun setCustomThemeColor(colorHex: String?) {
-        viewModelScope.launch {
+        accentWriteJob?.cancel()
+        accentWriteJob = viewModelScope.launch {
             userPreferencesRepository.setCustomThemeColor(colorHex)
             if (!colorHex.isNullOrBlank()) {
                 userPreferencesRepository.setThemeColor("custom")
@@ -81,25 +99,76 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun clearCustomThemeColor() {
-        viewModelScope.launch {
+    fun clearCustomThemeColor(currentThemeColor: String = "") {
+        accentWriteJob?.cancel()
+        accentWriteJob = viewModelScope.launch {
+            if (currentThemeColor == "custom") {
+                userPreferencesRepository.setThemeColor(ThemePreset.SUMMER_SHRED.storageKey)
+            }
             userPreferencesRepository.setCustomThemeColor(null)
         }
     }
 
     fun setThemeFont(font: String) {
-        viewModelScope.launch {
+        fontWriteJob?.cancel()
+        _fontImportError.value = null
+        fontWriteJob = viewModelScope.launch {
             userPreferencesRepository.setThemeFont(font)
         }
     }
 
-    fun setCustomFontUri(uri: String?) {
-        viewModelScope.launch {
-            userPreferencesRepository.setCustomFontUri(uri)
-            if (!uri.isNullOrBlank()) {
-                userPreferencesRepository.setThemeFont("custom")
+    fun importCustomFont(uri: Uri) {
+        fontWriteJob?.cancel()
+        _fontImportError.value = null
+        fontWriteJob = viewModelScope.launch {
+            try {
+                val errorMessage = withContext(Dispatchers.IO) {
+                    val persisted = runCatching {
+                        appContext.contentResolver.takePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    }
+                    if (persisted.isFailure) {
+                        return@withContext "Couldn't keep access to this font. Choose a file from your device storage."
+                    }
+                    val typeface = runCatching {
+                        appContext.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                            AndroidTypeface.Builder(pfd.fileDescriptor).build()
+                        }
+                    }.getOrNull()
+                    if (typeface == null) {
+                        return@withContext "Couldn't load that font file. Choose a valid .ttf or .otf file."
+                    }
+                    null
+                }
+                if (errorMessage != null) {
+                    _fontImportError.value = errorMessage
+                    return@launch
+                }
+                userPreferencesRepository.setCustomFontUri(uri.toString())
+                userPreferencesRepository.setThemeFont(ThemeFontOption.CUSTOM.storageKey)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _fontImportError.value = "Couldn't load that font file. Choose a valid .ttf or .otf file."
             }
         }
+    }
+
+    fun clearCustomFont(currentFontKey: String = "") {
+        fontWriteJob?.cancel()
+        _fontImportError.value = null
+        fontWriteJob = viewModelScope.launch {
+            if (currentFontKey == ThemeFontOption.CUSTOM.storageKey) {
+                userPreferencesRepository.setThemeFont(ThemeFontOption.BEBAS_NEUE.storageKey)
+            }
+            userPreferencesRepository.setCustomFontUri(null)
+        }
+    }
+
+    fun clearFontImportError() {
+        _fontImportError.value = null
     }
 
     fun setTimerAutoStart(enabled: Boolean) {
@@ -157,9 +226,9 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun togglePlate(plate: Float, currentPlates: List<Float>) {
+    fun togglePlate(plate: Float) {
         viewModelScope.launch {
-            userPreferencesRepository.togglePlate(plate, currentPlates)
+            userPreferencesRepository.togglePlate(plate)
         }
     }
 
@@ -174,24 +243,23 @@ class SettingsViewModel @Inject constructor(
     private val _importState = MutableStateFlow<ImportState>(ImportState.Idle)
     val importState: StateFlow<ImportState> = _importState.asStateFlow()
 
-    fun importFitNotes(inputStream: InputStream) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _importState.value = ImportState.InProgress
-            try {
-                val result = fitNotesImporter.importCsv(inputStream)
-                _importState.value = ImportState.Success(result)
-            } catch (e: Exception) {
-                _importState.value = ImportState.Error(e.message ?: "Unknown error during import")
-            }
+    fun importFitNotes(uri: Uri) {
+        launchTransfer(
+            stateFlow = _importState,
+            inProgressState = ImportState.InProgress,
+            idleState = ImportState.Idle,
+            errorState = ImportState::Error,
+            fallbackError = "Unknown error during import"
+        ) {
+            val input = appContext.contentResolver.openInputStream(uri)
+                ?: error("The selected CSV file could not be opened.")
+            val result = input.use { stream -> fitNotesImporter.importCsv(stream) }
+            ImportState.Success(result)
         }
     }
 
     fun clearImportState() {
         _importState.value = ImportState.Idle
-    }
-
-    fun reportFitNotesFileError(message: String) {
-        _importState.value = ImportState.Error(message)
     }
 
     // IronLog Export State
@@ -205,24 +273,23 @@ class SettingsViewModel @Inject constructor(
     private val _exportState = MutableStateFlow<ExportState>(ExportState.Idle)
     val exportState: StateFlow<ExportState> = _exportState.asStateFlow()
 
-    fun exportData(outputStream: OutputStream) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _exportState.value = ExportState.InProgress
-            try {
-                val result = ironLogExporter.export(outputStream)
-                _exportState.value = ExportState.Success(result)
-            } catch (e: Exception) {
-                _exportState.value = ExportState.Error(e.message ?: "Unknown error during export")
-            }
+    fun exportData(uri: Uri) {
+        launchTransfer(
+            stateFlow = _exportState,
+            inProgressState = ExportState.InProgress,
+            idleState = ExportState.Idle,
+            errorState = ExportState::Error,
+            fallbackError = "Unknown error during export"
+        ) {
+            val output = appContext.contentResolver.openOutputStream(uri)
+                ?: error("The backup file could not be opened for writing.")
+            val result = output.use { stream -> ironLogExporter.export(stream) }
+            ExportState.Success(result)
         }
     }
 
     fun clearExportState() {
         _exportState.value = ExportState.Idle
-    }
-
-    fun reportExportFileError(message: String) {
-        _exportState.value = ExportState.Error(message)
     }
 
     // IronLog Import State
@@ -236,15 +303,18 @@ class SettingsViewModel @Inject constructor(
     private val _ironLogImportState = MutableStateFlow<IronLogImportState>(IronLogImportState.Idle)
     val ironLogImportState: StateFlow<IronLogImportState> = _ironLogImportState.asStateFlow()
 
-    fun importIronLog(inputStream: InputStream) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _ironLogImportState.value = IronLogImportState.InProgress
-            try {
-                val result = ironLogImporter.import(inputStream)
-                _ironLogImportState.value = IronLogImportState.Success(result)
-            } catch (e: Exception) {
-                _ironLogImportState.value = IronLogImportState.Error(e.message ?: "Unknown error during import")
-            }
+    fun importIronLog(uri: Uri) {
+        launchTransfer(
+            stateFlow = _ironLogImportState,
+            inProgressState = IronLogImportState.InProgress,
+            idleState = IronLogImportState.Idle,
+            errorState = IronLogImportState::Error,
+            fallbackError = "Unknown error during import"
+        ) {
+            val input = appContext.contentResolver.openInputStream(uri)
+                ?: error("The selected ZIP backup could not be opened.")
+            val result = input.use { stream -> ironLogImporter.import(stream) }
+            IronLogImportState.Success(result)
         }
     }
 
@@ -252,7 +322,35 @@ class SettingsViewModel @Inject constructor(
         _ironLogImportState.value = IronLogImportState.Idle
     }
 
-    fun reportIronLogFileError(message: String) {
-        _ironLogImportState.value = IronLogImportState.Error(message)
+    private inline fun <S> launchTransfer(
+        stateFlow: MutableStateFlow<S>,
+        inProgressState: S,
+        idleState: S,
+        crossinline errorState: (String) -> S,
+        fallbackError: String,
+        crossinline block: suspend () -> S
+    ) {
+        if (!transferMutex.tryLock()) return
+        stateFlow.value = inProgressState
+        val job = viewModelScope.launch {
+            try {
+                stateFlow.value = withContext(Dispatchers.IO) { block() }
+            } catch (e: CancellationException) {
+                stateFlow.value = idleState
+                throw e
+            } catch (e: Exception) {
+                stateFlow.value = errorState(e.message?.takeIf { it.isNotBlank() } ?: fallbackError)
+            } finally {
+                if (transferMutex.isLocked) {
+                    transferMutex.unlock()
+                }
+            }
+        }
+        if (job.isCancelled) {
+            stateFlow.value = idleState
+            if (transferMutex.isLocked) {
+                transferMutex.unlock()
+            }
+        }
     }
 }

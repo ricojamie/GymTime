@@ -155,6 +155,41 @@ class WeeklyAnalyticsInsightUseCaseTest {
         assertEquals(WeeklyAnalyticsInsightKind.BUILDING_HISTORY, result.kind)
     }
 
+    @Test
+    fun `non-finite weights do not crash volume or push-pull gap calculations`() = runTest {
+        val currentStart = now
+            .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.SUNDAY))
+            .toLocalDate()
+            .atStartOfDay(zone)
+        val previousStart = currentStart.minusWeeks(1)
+        val rows = buildList {
+            repeat(5) { add(row(currentStart.plusDays(1).plusMinutes(it.toLong()), "Legs", Float.NaN, 10)) }
+            repeat(5) { add(row(previousStart.plusDays(1).plusMinutes(it.toLong()), "Legs", 100f, 10)) }
+        }
+        coEvery { setDao.getAnalyticsInsightSets(any(), any()) } returns rows
+
+        val result = useCase(now.toInstant().toEpochMilli(), zone)
+
+        assertEquals(WeeklyAnalyticsInsightKind.MOST_TRAINED_MUSCLE, result.kind)
+    }
+
+    @Test
+    fun `stale muscle ignores warmups and merges Core and Abs training history`() = runTest {
+        coEvery { muscleGroupDao.getAllMuscleGroupNames() } returns listOf("Core", "Abs", "Legs", "Warmups")
+        coEvery { workoutDao.getMuscleLastTrainedDates() } returns listOf(
+            MuscleFreshness("Warmups", now.minusDays(60).toInstant().toEpochMilli()),
+            MuscleFreshness("Abs", now.minusDays(30).toInstant().toEpochMilli()),
+            MuscleFreshness("Core", now.minusDays(2).toInstant().toEpochMilli()),
+            MuscleFreshness("Legs", now.minusDays(20).toInstant().toEpochMilli())
+        )
+
+        val result = useCase(now.toInstant().toEpochMilli(), zone)
+
+        assertEquals(WeeklyAnalyticsInsightKind.STALE_MUSCLE, result.kind)
+        assertEquals("Legs has not been trained in 20 days.", result.fallbackText)
+        assertTrue(result.knownMuscleNames.containsAll(listOf("Core", "Abs")))
+    }
+
     private fun row(
         timestamp: ZonedDateTime,
         muscle: String,

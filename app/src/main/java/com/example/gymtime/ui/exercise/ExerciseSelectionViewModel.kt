@@ -3,7 +3,6 @@ package com.example.gymtime.ui.exercise
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.db.dao.ExerciseLastSetRow
 import com.example.gymtime.data.db.dao.ExerciseUsageRow
 import com.example.gymtime.data.db.entity.Exercise
@@ -14,25 +13,32 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
-import java.util.Calendar
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
+import java.time.ZonedDateTime
 import javax.inject.Inject
 
 enum class ExerciseSortMode(val label: String) {
@@ -63,11 +69,8 @@ class ExerciseSelectionViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val supersetManager: SupersetManager,
     private val pickerSessionState: ExercisePickerSessionState,
-    userPreferencesRepository: UserPreferencesRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
-
-    val newUiEnabled: Flow<Boolean> = userPreferencesRepository.newUiEnabled
 
     private val workoutMode: Boolean = savedStateHandle["workoutMode"] ?: false
     private val supersetMode: Boolean = savedStateHandle["supersetMode"] ?: false
@@ -86,8 +89,8 @@ class ExerciseSelectionViewModel @Inject constructor(
         data class Error(val message: String) : SwapExerciseEvent
     }
 
-    private val _swapExerciseEvent = MutableSharedFlow<SwapExerciseEvent>()
-    val swapExerciseEvent = _swapExerciseEvent.asSharedFlow()
+    private val _swapExerciseEvent = Channel<SwapExerciseEvent>(Channel.BUFFERED)
+    val swapExerciseEvent = _swapExerciseEvent.receiveAsFlow()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
@@ -107,8 +110,8 @@ class ExerciseSelectionViewModel @Inject constructor(
     val previewSortMode: StateFlow<ExerciseSortMode> = previewPreferences.map { it.sortMode }
         .stateIn(viewModelScope, SharingStarted.Eagerly, ExerciseSortMode.RECENTLY_USED)
 
-    private val _selectionMessages = MutableSharedFlow<String>()
-    val selectionMessages = _selectionMessages.asSharedFlow()
+    private val _selectionMessages = Channel<String>(Channel.BUFFERED)
+    val selectionMessages = _selectionMessages.receiveAsFlow()
 
     // Superset selection mode state
     private val _isSupersetModeEnabled = MutableStateFlow(supersetMode)
@@ -117,12 +120,12 @@ class ExerciseSelectionViewModel @Inject constructor(
     private val _selectedForSuperset = MutableStateFlow<List<Exercise>>(emptyList())
     val selectedForSuperset: StateFlow<List<Exercise>> = _selectedForSuperset
 
-    private val _supersetStarted = MutableSharedFlow<Long>()
-    val supersetStarted = _supersetStarted.asSharedFlow()
+    private val _supersetStarted = Channel<Long>(Channel.BUFFERED)
+    val supersetStarted = _supersetStarted.receiveAsFlow()
 
     // Event when exercise is added to existing superset (pop back)
-    private val _exerciseAddedToSuperset = MutableSharedFlow<Long>()
-    val exerciseAddedToSuperset = _exerciseAddedToSuperset.asSharedFlow()
+    private val _exerciseAddedToSuperset = Channel<Long>(Channel.BUFFERED)
+    val exerciseAddedToSuperset = _exerciseAddedToSuperset.receiveAsFlow()
 
     // Expose add-to-superset mode for UI
     val isAddToSupersetMode: Boolean = addToSuperset
@@ -130,9 +133,17 @@ class ExerciseSelectionViewModel @Inject constructor(
     // Maximum exercises allowed in a superset
     val maxSupersetExercises = 10
 
-    private val recentUsageStartMs: Long = Calendar.getInstance().apply {
-        add(Calendar.DAY_OF_YEAR, -90)
-    }.timeInMillis
+    // Single-flight and serialization guards
+    private var swapInFlight = false
+    private var swapCompleted = false
+    private var addToSupersetInFlight = false
+    private var addToSupersetCompleted = false
+    private var adHocSupersetInFlight = false
+    private var adHocSupersetCompleted = false
+    private val starToggleMutex = Mutex()
+    private val starToggleInFlightIds = mutableSetOf<Long>()
+
+    private val recentUsageStartMs: Long = ZonedDateTime.now().minusDays(90).toInstant().toEpochMilli()
 
     private val allExercises: Flow<List<ExerciseUsageRow>> =
         exerciseRepository.getExercisesWithUsageStats(recentUsageStartMs)
@@ -157,81 +168,128 @@ class ExerciseSelectionViewModel @Inject constructor(
         }
 
         when (sortMode) {
-            ExerciseSortMode.ALPHABETICAL -> filtered.sortedBy { it.exercise.name.lowercase() }
+            ExerciseSortMode.ALPHABETICAL -> filtered.sortedWith(
+                compareBy(String.CASE_INSENSITIVE_ORDER) { it.exercise.name }
+            )
             ExerciseSortMode.ALL_TIME_SETS -> filtered.sortedWith(
                 compareByDescending<ExerciseUsageRow> { it.allTimeSetCount }
-                    .thenBy { it.exercise.name.lowercase() }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.exercise.name }
             )
             ExerciseSortMode.RECENT_SETS -> filtered.sortedWith(
                 compareByDescending<ExerciseUsageRow> { it.recentSetCount }
-                    .thenBy { it.exercise.name.lowercase() }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.exercise.name }
             )
             // Most recently used first; exercises that have never been used (null
             // lastUsedMs) sort to the bottom, then alphabetically as a tiebreaker.
             ExerciseSortMode.RECENTLY_USED -> filtered.sortedWith(
                 compareByDescending<ExerciseUsageRow> { it.lastUsedMs ?: Long.MIN_VALUE }
-                    .thenBy { it.exercise.name.lowercase() }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.exercise.name }
             )
+        }
+    }.flowOn(Dispatchers.Default)
+
+    private val _previewPickerState = MutableStateFlow(PreviewPickerState())
+    val previewPickerState: StateFlow<PreviewPickerState> = _previewPickerState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            _previewPickerState.subscriptionCount
+                .map { it > 0 }
+                .transformLatest { active ->
+                    if (active) {
+                        emit(true)
+                    } else {
+                        delay(PREVIEW_STOP_TIMEOUT_MILLIS)
+                        emit(false)
+                    }
+                }
+                .distinctUntilChanged()
+                .collectLatest { subscribed ->
+                    if (!subscribed) {
+                        previewSession.value = null
+                        _previewPickerState.value = PreviewPickerState()
+                    } else {
+                        try {
+                            buildPreviewPickerFlow().collect { state ->
+                                _previewPickerState.value = state
+                            }
+                        } finally {
+                            previewSession.value = null
+                            _previewPickerState.value = PreviewPickerState()
+                        }
+                    }
+                }
         }
     }
 
-    // The preview's extra history query only runs while the new picker is enabled
-    // and observed. Legacy selection retains its own filtering and sort state.
-    val previewPickerState: StateFlow<PreviewPickerState> = newUiEnabled.flatMapLatest { enabled ->
-        if (!enabled) {
-            previewSession.value = null
-            flowOf(PreviewPickerState())
-        } else {
-            workoutRepository.getOngoingWorkoutFlow().map { it?.id }.distinctUntilChanged().flatMapLatest { workoutId ->
+    private fun buildPreviewPickerFlow(): Flow<PreviewPickerState> {
+        val lastSetsByExerciseId = exerciseRepository.observeLastWorkoutSets()
+            .map { rows -> rows.associateBy { it.set.exerciseId } }
+
+        val boundSessionFlow: Flow<ExercisePickerSession?> = workoutRepository.getOngoingWorkoutFlow()
+            .map { it?.id }
+            .distinctUntilChanged()
+            .flatMapLatest { workoutId ->
                 flow {
                     // Disable chips while rebinding to a different workout. Metadata changes
                     // within the same workout do not restart this flow or flash a loading state.
                     previewSession.value = null
-                    emit(PreviewPickerState())
+                    emit(null)
                     val completed = workoutRepository.getLastCompletedWorkout()?.let {
                         WorkoutCompletionMarker(it.id, it.endTime?.time)
                     }
                     val session = pickerSessionState.bind(workoutId, completed)
                     previewSession.value = session
-                    val previewFilters = combine(session.preferences, _searchQuery) { preferences, query ->
-                        PreviewPickerFilters(preferences.sortMode, query, preferences.muscles)
-                    }
-                    emitAll(combine(
-                        allExercises,
-                        exerciseRepository.observeLastWorkoutSets(),
-                        previewFilters
-                    ) { rows, lastSets, filters ->
-                        val tokens = filters.query.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
-                        val filtered = rows.filter { row ->
-                            val matchesSearch = tokens.all { row.exercise.name.contains(it, ignoreCase = true) }
-                            val matchesMuscle = filters.muscles.isEmpty() || row.exercise.targetMuscle in filters.muscles
-                            matchesSearch && matchesMuscle
-                        }
-                        val comparator = when (filters.sortMode) {
-                            ExerciseSortMode.ALPHABETICAL -> compareBy<ExerciseUsageRow> { it.exercise.name.lowercase() }
-                            ExerciseSortMode.ALL_TIME_SETS -> compareByDescending<ExerciseUsageRow> { it.allTimeSetCount }
-                                .thenBy { it.exercise.name.lowercase() }
-                            ExerciseSortMode.RECENT_SETS -> compareByDescending<ExerciseUsageRow> { it.recentSetCount }
-                                .thenBy { it.exercise.name.lowercase() }
-                            ExerciseSortMode.RECENTLY_USED -> compareByDescending<ExerciseUsageRow> { it.lastUsedMs ?: Long.MIN_VALUE }
-                                .thenBy { it.exercise.name.lowercase() }
-                        }
-                        PreviewPickerState(
-                            isLoading = false,
-                            rows = filtered.sortedWith(comparator),
-                            selectedMuscles = filters.muscles,
-                            sortMode = filters.sortMode,
-                            lastSets = lastSets.associateBy { it.set.exerciseId }
-                        )
-                    })
+                    emit(session)
                 }
-            }.flowOn(Dispatchers.Default)
+            }
+            .onStart { emit(null) }
+
+        val activeFiltersFlow: Flow<PreviewPickerFilters?> = boundSessionFlow.flatMapLatest { session ->
+            if (session == null) {
+                flowOf(null)
+            } else {
+                combine(session.preferences, _searchQuery) { preferences, query ->
+                    PreviewPickerFilters(preferences.sortMode, query, preferences.muscles)
+                }
+            }
         }
-    }.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000, replayExpirationMillis = 0),
-        PreviewPickerState()
-    )
+
+        return combine(
+            allExercises,
+            lastSetsByExerciseId,
+            activeFiltersFlow
+        ) { rows, lastSetsMap, filters ->
+            if (filters == null) {
+                PreviewPickerState()
+            } else {
+                val tokens = filters.query.trim().split(WHITESPACE_REGEX).filter { it.isNotEmpty() }
+                val filtered = rows.filter { row ->
+                    val matchesSearch = tokens.all { row.exercise.name.contains(it, ignoreCase = true) }
+                    val matchesMuscle = filters.muscles.isEmpty() || row.exercise.targetMuscle in filters.muscles
+                    matchesSearch && matchesMuscle
+                }
+                val comparator = when (filters.sortMode) {
+                    ExerciseSortMode.ALPHABETICAL -> compareBy<ExerciseUsageRow, String>(String.CASE_INSENSITIVE_ORDER) {
+                        it.exercise.name
+                    }
+                    ExerciseSortMode.ALL_TIME_SETS -> compareByDescending<ExerciseUsageRow> { it.allTimeSetCount }
+                        .thenBy(String.CASE_INSENSITIVE_ORDER) { it.exercise.name }
+                    ExerciseSortMode.RECENT_SETS -> compareByDescending<ExerciseUsageRow> { it.recentSetCount }
+                        .thenBy(String.CASE_INSENSITIVE_ORDER) { it.exercise.name }
+                    ExerciseSortMode.RECENTLY_USED -> compareByDescending<ExerciseUsageRow> { it.lastUsedMs ?: Long.MIN_VALUE }
+                        .thenBy(String.CASE_INSENSITIVE_ORDER) { it.exercise.name }
+                }
+                PreviewPickerState(
+                    isLoading = false,
+                    rows = filtered.sortedWith(comparator),
+                    selectedMuscles = filters.muscles,
+                    sortMode = filters.sortMode,
+                    lastSets = lastSetsMap
+                )
+            }
+        }.distinctUntilChanged().flowOn(Dispatchers.Default)
+    }
 
     fun togglePreviewMuscleFilter(muscle: String) {
         previewSession.value?.toggleMuscle(muscle)
@@ -259,13 +317,28 @@ class ExerciseSelectionViewModel @Inject constructor(
             null
         }
         if (exercise == null) {
-            _selectionMessages.emit("Your exercise was saved. Select it from the library to continue.")
+            _selectionMessages.send("Your exercise was saved. Select it from the library to continue.")
             return
         }
 
-        // The form may have covered the picker long enough for its observation to stop.
-        // Wait for its workout session to rebind before making the new exercise visible.
-        val session = previewSession.filterNotNull().first()
+        // Wait briefly for an active picker observation to rebind its workout session;
+        // if unobserved (or timed out), bind directly so this call never hangs indefinitely.
+        val session = previewSession.value
+            ?: if (_previewPickerState.subscriptionCount.value > 0) {
+                withTimeoutOrNull(SESSION_REBIND_TIMEOUT_MILLIS) {
+                    previewSession.filterNotNull().first()
+                }
+            } else {
+                null
+            }
+            ?: run {
+                val workoutId = workoutRepository.getOngoingWorkoutFlow().first()?.id
+                val completed = workoutRepository.getLastCompletedWorkout()?.let {
+                    WorkoutCompletionMarker(it.id, it.endTime?.time)
+                }
+                pickerSessionState.bind(workoutId, completed).also { previewSession.value = it }
+            }
+
         val selectedMuscles = session.preferences.value.muscles
         if (selectedMuscles.isNotEmpty() && exercise.targetMuscle !in selectedMuscles) {
             session.toggleMuscle(exercise.targetMuscle)
@@ -305,18 +378,25 @@ class ExerciseSelectionViewModel @Inject constructor(
     }
 
     fun swapPlannedExercise(exerciseId: Long) {
-        if (!isSwapMode) return
+        if (!isSwapMode || swapInFlight || swapCompleted) return
+        swapInFlight = true
         viewModelScope.launch {
-            when (workoutRepository.swapWorkoutPlanExercise(swapInstanceId, exerciseId)) {
-                WorkoutPlanEditResult.Updated ->
-                    _swapExerciseEvent.emit(SwapExerciseEvent.Success(exerciseId))
-                WorkoutPlanEditResult.DuplicateExercise ->
-                    _swapExerciseEvent.emit(SwapExerciseEvent.Error("That exercise is already in today's plan"))
-                WorkoutPlanEditResult.HasLoggedSets ->
-                    _swapExerciseEvent.emit(SwapExerciseEvent.Error("Exercises with logged sets can't be swapped"))
-                WorkoutPlanEditResult.NotFound,
-                WorkoutPlanEditResult.Removed ->
-                    _swapExerciseEvent.emit(SwapExerciseEvent.Error("This planned exercise is no longer available"))
+            try {
+                when (workoutRepository.swapWorkoutPlanExercise(swapInstanceId, exerciseId)) {
+                    WorkoutPlanEditResult.Updated -> {
+                        swapCompleted = true
+                        _swapExerciseEvent.send(SwapExerciseEvent.Success(exerciseId))
+                    }
+                    WorkoutPlanEditResult.DuplicateExercise ->
+                        _swapExerciseEvent.send(SwapExerciseEvent.Error("That exercise is already in today's plan"))
+                    WorkoutPlanEditResult.HasLoggedSets ->
+                        _swapExerciseEvent.send(SwapExerciseEvent.Error("Exercises with logged sets can't be swapped"))
+                    WorkoutPlanEditResult.NotFound,
+                    WorkoutPlanEditResult.Removed ->
+                        _swapExerciseEvent.send(SwapExerciseEvent.Error("This planned exercise is no longer available"))
+                }
+            } finally {
+                swapInFlight = false
             }
         }
     }
@@ -362,7 +442,7 @@ class ExerciseSelectionViewModel @Inject constructor(
             current.add(exercise)
         } else {
             viewModelScope.launch {
-                _selectionMessages.emit("A superset can have up to $maxSupersetExercises exercises")
+                _selectionMessages.send("A superset can have up to $maxSupersetExercises exercises")
             }
         }
 
@@ -421,36 +501,75 @@ class ExerciseSelectionViewModel @Inject constructor(
      * Maximum of 3 exercises can be starred.
      */
     fun toggleExerciseStarred(exercise: Exercise) {
+        if (!starToggleInFlightIds.add(exercise.id)) return
         viewModelScope.launch {
-            if (!exercise.isStarred) {
-                // Check if we already have 3 starred
-                val currentStarredCount = exerciseRepository.getStarredExercises().first().size
-                if (currentStarredCount >= 3) {
-                    _selectionMessages.emit("Track PRs for up to 3 exercises. Untrack one to add another.")
-                    return@launch
+            try {
+                starToggleMutex.withLock {
+                    if (!exercise.isStarred) {
+                        // Check if we already have 3 starred
+                        val currentStarredCount = exerciseRepository.getStarredExercises().first().size
+                        if (currentStarredCount >= 3) {
+                            _selectionMessages.send("Track PRs for up to 3 exercises. Untrack one to add another.")
+                            return@withLock
+                        }
+                    }
+                    exerciseRepository.updateStarredStatus(exercise.id, !exercise.isStarred)
                 }
+            } finally {
+                starToggleInFlightIds.remove(exercise.id)
             }
-            exerciseRepository.updateStarredStatus(exercise.id, !exercise.isStarred)
         }
     }
+
     private fun addExerciseToExistingSuperset(exercise: Exercise) {
+        if (addToSupersetInFlight || addToSupersetCompleted) return
+        addToSupersetInFlight = true
         viewModelScope.launch {
-            val current = supersetManager.supersetExercises.value
-            if (current.size >= maxSupersetExercises && current.none { it.id == exercise.id }) {
-                _selectionMessages.emit("A superset can have up to $maxSupersetExercises exercises")
-                return@launch
+            try {
+                val current = supersetManager.supersetExercises.value
+                if (current.size >= maxSupersetExercises && current.none { it.id == exercise.id }) {
+                    _selectionMessages.send("A superset can have up to $maxSupersetExercises exercises")
+                    return@launch
+                }
+                supersetManager.addExercise(exercise)
+                addToSupersetCompleted = true
+                _exerciseAddedToSuperset.send(exercise.id)
+            } finally {
+                addToSupersetInFlight = false
             }
-            supersetManager.addExercise(exercise)
-            _exerciseAddedToSuperset.emit(exercise.id)
         }
     }
 
     private fun startAdHocSuperset(secondExercise: Exercise) {
-        viewModelScope.launch {
-            val firstExercise = exerciseRepository.getExercise(adHocParentId!!).first() ?: return@launch
-            supersetManager.startSuperset(listOf(firstExercise, secondExercise))
-            // Emit the SECOND exercise ID so the UI navigates to the new one
-            _supersetStarted.emit(secondExercise.id)
+        val parentId = adHocParentId ?: return
+        if (parentId <= 0L || adHocSupersetInFlight || adHocSupersetCompleted) return
+        if (secondExercise.id == parentId) {
+            viewModelScope.launch {
+                _selectionMessages.send("Select a different exercise to superset with")
+            }
+            return
         }
+        adHocSupersetInFlight = true
+        viewModelScope.launch {
+            try {
+                val firstExercise = exerciseRepository.getExercise(parentId).first()
+                if (firstExercise == null) {
+                    _selectionMessages.send("Starting exercise is no longer available")
+                    return@launch
+                }
+                supersetManager.startSuperset(listOf(firstExercise, secondExercise))
+                adHocSupersetCompleted = true
+                // Emit the SECOND exercise ID so the UI navigates to the new one
+                _supersetStarted.send(secondExercise.id)
+            } finally {
+                adHocSupersetInFlight = false
+            }
+        }
+    }
+
+    private companion object {
+        const val PREVIEW_STOP_TIMEOUT_MILLIS = 5_000L
+        const val SESSION_REBIND_TIMEOUT_MILLIS = 2_000L
+        val WHITESPACE_REGEX = Regex("\\s+")
     }
 }

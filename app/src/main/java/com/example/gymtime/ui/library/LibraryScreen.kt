@@ -1,17 +1,28 @@
 package com.example.gymtime.ui.library
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.gymtime.ui.exercise.ExerciseSelectionContent
-import com.example.gymtime.ui.theme.*
+import com.example.gymtime.ui.theme.IronLogRadius
+import com.example.gymtime.ui.theme.IronLogSpace
+import com.example.gymtime.ui.theme.LocalLoggerActionColors
 
 /**
  * Library screen with tabs for Exercises and Routines.
@@ -22,62 +33,47 @@ import com.example.gymtime.ui.theme.*
 fun LibraryScreen(navController: NavController) {
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     val tabs = listOf("Exercises", "Routines")
-    val accentColor = MaterialTheme.colorScheme.primary
-    val previewActive = LocalLoggerPreviewThemeActive.current
+    val scheme = MaterialTheme.colorScheme
+    val action = LocalLoggerActionColors.current
 
     Column(modifier = Modifier.fillMaxSize()) {
-        if (previewActive) {
-            val action = LocalLoggerActionColors.current
-            SingleChoiceSegmentedButtonRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-            ) {
-                tabs.forEachIndexed { index, title ->
-                    SegmentedButton(
-                        selected = selectedTabIndex == index,
-                        onClick = { selectedTabIndex = index },
-                        modifier = Modifier.heightIn(min = 48.dp),
-                        shape = SegmentedButtonDefaults.itemShape(index, tabs.size),
-                        colors = SegmentedButtonDefaults.colors(
-                            activeContainerColor = action.fill,
-                            activeContentColor = action.onFill,
-                            activeBorderColor = action.fill,
-                            inactiveContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                            inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            inactiveBorderColor = MaterialTheme.colorScheme.outlineVariant
-                        ),
-                        label = { Text(title, fontWeight = FontWeight.SemiBold) }
-                    )
-                }
-            }
-        } else {
-            TabRow(
-                selectedTabIndex = selectedTabIndex,
-                containerColor = Color.Transparent,
-                contentColor = accentColor,
-                divider = {
-                    HorizontalDivider(color = LocalAppColors.current.textTertiary.copy(alpha = 0.3f))
-                }
-            ) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTabIndex == index,
-                        onClick = { selectedTabIndex = index },
-                        text = {
-                            Text(
-                                text = title,
-                                fontSize = 14.sp,
-                                fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Medium,
-                                color = if (selectedTabIndex == index) accentColor else LocalAppColors.current.textSecondary
-                            )
-                        }
-                    )
-                }
+        SingleChoiceSegmentedButtonRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = IronLogSpace.ScreenHorizontal,
+                    vertical = IronLogSpace.CompactGap
+                )
+        ) {
+            tabs.forEachIndexed { index, title ->
+                SegmentedButton(
+                    selected = selectedTabIndex == index,
+                    onClick = { selectedTabIndex = index },
+                    modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin),
+                    shape = SegmentedButtonDefaults.itemShape(
+                        index = index,
+                        count = tabs.size,
+                        baseShape = IronLogRadius.ControlShape
+                    ),
+                    colors = SegmentedButtonDefaults.colors(
+                        activeContainerColor = action.fill,
+                        activeContentColor = action.onFill,
+                        activeBorderColor = action.fill,
+                        inactiveContainerColor = scheme.surfaceContainerLow,
+                        inactiveContentColor = scheme.onSurfaceVariant,
+                        inactiveBorderColor = scheme.outlineVariant
+                    ),
+                    label = {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                )
             }
         }
 
-        // Content based on selected tab
         when (selectedTabIndex) {
             0 -> ExerciseSelectionContent(navController = navController)
             1 -> RoutineLibraryContent(navController = navController)

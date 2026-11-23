@@ -145,4 +145,59 @@ class WorkoutShareFormatterTest {
         assertTrue(output.contains("25 lbs × 10"))
         assertFalse(output.contains("25.0 lbs"))
     }
+
+    @Test
+    fun `formats duration distance calories and combined cardio or loaded carry sets`() {
+        val output = WorkoutShareFormatter.format(
+            ShareableWorkout(
+                date = date,
+                durationMinutes = 40,
+                totalVolume = 0f,
+                totalWorkingSets = 6,
+                exercises = listOf(
+                    ShareableExercise(
+                        name = "Plank",
+                        targetMuscle = "Core",
+                        sets = listOf(
+                            ShareableSet(null, null, isWarmup = false, isPersonalRecord = false, durationSeconds = 90)
+                        )
+                    ),
+                    ShareableExercise(
+                        name = "Sprint",
+                        targetMuscle = "Cardio",
+                        sets = listOf(
+                            ShareableSet(null, null, isWarmup = false, isPersonalRecord = false, distanceMeters = 400f),
+                            ShareableSet(null, null, isWarmup = false, isPersonalRecord = false, durationSeconds = 600, distanceMeters = 2000f)
+                        )
+                    ),
+                    ShareableExercise(
+                        name = "Assault Bike",
+                        targetMuscle = "Cardio",
+                        sets = listOf(
+                            ShareableSet(null, null, isWarmup = false, isPersonalRecord = false, calories = 120f),
+                            ShareableSet(null, null, isWarmup = false, isPersonalRecord = false, durationSeconds = 300, calories = 75f)
+                        )
+                    ),
+                    ShareableExercise(
+                        name = "Farmers Walk",
+                        targetMuscle = "Core",
+                        sets = listOf(
+                            ShareableSet(70f, null, isWarmup = false, isPersonalRecord = false, distanceMeters = 40f)
+                        )
+                    )
+                )
+            ),
+            locale = locale
+        )
+
+        assertTrue(output.contains("  1m 30s"))
+        assertTrue(output.contains("  400 m"))
+        assertTrue(output.contains("  2000 m · 10m 0s"))
+        assertTrue(output.contains("  120 cal"))
+        assertTrue(output.contains("  75 cal · 5m 0s"))
+        assertTrue(output.contains("  70 lbs · 40 m"))
+        val bodyLines = output.lines().drop(2).joinToString("\n")
+        assertFalse(bodyLines.contains("—"))
+        assertEquals("—", WorkoutShareFormatter.formatSet(ShareableSet(null, null, isWarmup = false, isPersonalRecord = false)))
+    }
 }

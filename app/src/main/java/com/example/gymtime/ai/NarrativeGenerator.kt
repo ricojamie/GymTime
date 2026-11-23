@@ -2,8 +2,10 @@ package com.example.gymtime.ai
 
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 
 data class NarrativeRequest(
     val kind: NarrativeKind,
@@ -53,25 +55,82 @@ class NarrativeGenerator @Inject constructor(
             sourceFingerprint = request.sourceFingerprint,
             promptVersion = request.promptVersion
         )
+        var emittedValidNano = false
         if (cached != null) {
-            emit(cached.toResult(fromCache = true))
-            if (cached.generatorType == NarrativeGeneratorType.GEMINI_NANO) return@flow
-        } else {
-            val fallback = repository.save(
+            when (cached.generatorType) {
+                NarrativeGeneratorType.GEMINI_NANO -> {
+                    val validatedCached = validator.validate(cached.text, request.validationRules)
+                    if (validatedCached is NarrativeValidationResult.Valid) {
+                        emit(cached.copy(text = validatedCached.text).toResult(fromCache = true))
+                        emittedValidNano = true
+                    } else {
+                        repository.deleteIfFingerprintMatches(
+                            kind = request.kind,
+                            subjectKey = request.subjectKey,
+                            sourceFingerprint = request.sourceFingerprint,
+                            promptVersion = request.promptVersion
+                        )
+                    }
+                }
+                NarrativeGeneratorType.TEMPLATE -> {
+                    val expectedTemplate = request.fallbackText.trim()
+                    if (cached.text != expectedTemplate) {
+                        val refreshed = repository.saveTemplateIfNotUpgraded(
+                            kind = request.kind,
+                            subjectKey = request.subjectKey,
+                            workoutId = request.workoutId,
+                            subjectStartEpochMs = request.subjectStartEpochMs,
+                            sourceFingerprint = request.sourceFingerprint,
+                            promptVersion = request.promptVersion,
+                            text = request.fallbackText
+                        )
+                        if (refreshed.generatorType == NarrativeGeneratorType.GEMINI_NANO) {
+                            val validatedNano = validator.validate(refreshed.text, request.validationRules)
+                            if (validatedNano is NarrativeValidationResult.Valid) {
+                                emit(refreshed.copy(text = validatedNano.text).toResult(fromCache = true))
+                                emittedValidNano = true
+                            }
+                        }
+                        if (!emittedValidNano) {
+                            emit(refreshed.toResult(fromCache = false))
+                        }
+                    } else {
+                        emit(cached.toResult(fromCache = true))
+                    }
+                }
+            }
+        }
+
+        if (cached == null || (cached.generatorType == NarrativeGeneratorType.GEMINI_NANO && !emittedValidNano)) {
+            val fallback = repository.saveTemplateIfNotUpgraded(
                 kind = request.kind,
                 subjectKey = request.subjectKey,
                 workoutId = request.workoutId,
                 subjectStartEpochMs = request.subjectStartEpochMs,
                 sourceFingerprint = request.sourceFingerprint,
                 promptVersion = request.promptVersion,
-                text = request.fallbackText,
-                generatorType = NarrativeGeneratorType.TEMPLATE
+                text = request.fallbackText
             )
-            emit(fallback.toResult(fromCache = false))
+            if (fallback.generatorType == NarrativeGeneratorType.GEMINI_NANO) {
+                val validatedNano = validator.validate(fallback.text, request.validationRules)
+                if (validatedNano is NarrativeValidationResult.Valid) {
+                    emit(fallback.copy(text = validatedNano.text).toResult(fromCache = true))
+                    emittedValidNano = true
+                }
+            }
+            if (!emittedValidNano) {
+                emit(fallback.toResult(fromCache = false))
+            }
         }
 
         pruneOldPeriodicEntries(request.kind)
-        if (aiClient.refreshCapability() !is AiCapability.Ready) return@flow
+        if (emittedValidNano) return@flow
+
+        if (aiClient.capability.value !is AiCapability.Ready &&
+            aiClient.refreshCapability() !is AiCapability.Ready
+        ) {
+            return@flow
+        }
 
         val generated = aiClient.generateText(
             AiTextRequest(
@@ -86,7 +145,7 @@ class NarrativeGenerator @Inject constructor(
         val validated = validator.validate(generated.value, request.validationRules)
         if (validated !is NarrativeValidationResult.Valid) return@flow
 
-        val nano = repository.save(
+        val nano = repository.saveGeneratedIfCurrent(
             kind = request.kind,
             subjectKey = request.subjectKey,
             workoutId = request.workoutId,
@@ -94,11 +153,10 @@ class NarrativeGenerator @Inject constructor(
             sourceFingerprint = request.sourceFingerprint,
             promptVersion = request.promptVersion,
             text = validated.text,
-            generatorType = NarrativeGeneratorType.GEMINI_NANO,
             modelName = generated.modelName
-        )
+        ) ?: return@flow
         emit(nano.toResult(fromCache = false))
-    }
+    }.flowOn(Dispatchers.IO)
 
     private suspend fun pruneOldPeriodicEntries(kind: NarrativeKind) {
         val retentionMs = when (kind) {

@@ -1,28 +1,74 @@
 package com.example.gymtime.ui.settings.preview
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.gymtime.ui.theme.LocalLoggerActionColors
+import com.example.gymtime.ui.components.IronLogDivider
+import com.example.gymtime.ui.components.IronLogGroupedCard
+import com.example.gymtime.ui.components.IronLogPrimaryButton
+import com.example.gymtime.ui.components.IronLogSectionHeader
 import com.example.gymtime.ui.components.plate.PlateInventoryEditor
+import com.example.gymtime.ui.theme.IronLogBorder
+import com.example.gymtime.ui.theme.IronLogRadius
+import com.example.gymtime.ui.theme.IronLogSpace
+import com.example.gymtime.ui.theme.LocalLoggerActionColors
+import com.example.gymtime.ui.theme.tabular
 
 data class SettingsPreviewState(
     val userName: String? = null,
@@ -82,15 +128,24 @@ fun PreviewSettingsContent(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
-    val actions = LocalLoggerActionColors.current
+    val focusManager = LocalFocusManager.current
     var nameDraft by rememberSaveable { mutableStateOf("") }
     var nameEdited by rememberSaveable { mutableStateOf(false) }
+    var nameFocused by remember { mutableStateOf(false) }
+    var pendingSavedName by rememberSaveable { mutableStateOf<String?>(null) }
     var platesExpanded by rememberSaveable { mutableStateOf(false) }
     var backupsExpanded by rememberSaveable { mutableStateOf(false) }
     var showChangelog by rememberSaveable { mutableStateOf(false) }
     val busy = state.transfers.any { it.status == SettingsTransferStatus.BUSY }
-    LaunchedEffect(state.userName) {
-        if (!nameEdited) state.userName?.let { nameDraft = it }
+
+    LaunchedEffect(state.userName, nameFocused) {
+        val incoming = state.userName ?: return@LaunchedEffect
+        if (pendingSavedName != null && incoming == pendingSavedName) {
+            pendingSavedName = null
+        }
+        if (!nameEdited && !nameFocused && pendingSavedName == null) {
+            nameDraft = incoming
+        }
     }
 
     Scaffold(
@@ -102,12 +157,18 @@ fun PreviewSettingsContent(
             TopAppBar(
                 title = { Text("Settings", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = { onAction(SettingsPreviewAction.Back) }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    IconButton(
+                        onClick = { onAction(SettingsPreviewAction.Back) },
+                        modifier = Modifier.size(IronLogSpace.TouchTargetMin)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
-                    TextButton(onClick = { onAction(SettingsPreviewAction.Home) }) { Text("Home") }
+                    TextButton(
+                        onClick = { onAction(SettingsPreviewAction.Home) },
+                        modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
+                    ) { Text("Home") }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.background),
                 windowInsets = WindowInsets(0, 0, 0, 0)
@@ -115,76 +176,126 @@ fun PreviewSettingsContent(
         }
     ) { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .consumeWindowInsets(padding),
+            contentPadding = PaddingValues(
+                start = IronLogSpace.ScreenHorizontal,
+                end = IronLogSpace.ScreenHorizontal,
+                top = IronLogSpace.CompactGap,
+                bottom = IronLogSpace.BottomNavClearance
+            ),
+            verticalArrangement = Arrangement.spacedBy(IronLogSpace.SectionGap)
         ) {
-            item {
-                Text("Make it yours", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text("Your look. Your logging. Your setup.", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+            item(key = "intro") {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "Make it yours",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Your look. Your logging. Your setup.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.onSurfaceVariant
+                    )
+                }
             }
-            item {
+
+            item(key = "profile") {
                 SettingsSection("Profile") {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(
+                        modifier = Modifier.padding(IronLogSpace.CardPadding),
+                        verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
+                    ) {
                         OutlinedTextField(
                             value = nameDraft,
-                            onValueChange = { nameDraft = it; nameEdited = true },
+                            onValueChange = {
+                                nameDraft = it
+                                nameEdited = true
+                                pendingSavedName = null
+                            },
                             label = { Text("Your name") },
                             enabled = state.userName != null,
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onFocusChanged { nameFocused = it.isFocused },
+                            shape = IronLogRadius.ControlShape
                         )
                         if (nameEdited) {
-                            Button(
+                            IronLogPrimaryButton(
+                                text = "Save name",
                                 onClick = {
-                                    nameDraft = nameDraft.trim()
-                                    onAction(SettingsPreviewAction.SaveName(nameDraft))
+                                    val trimmed = nameDraft.trim()
+                                    nameDraft = trimmed
                                     nameEdited = false
+                                    pendingSavedName = trimmed
+                                    focusManager.clearFocus()
+                                    onAction(SettingsPreviewAction.SaveName(trimmed))
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = actions.fill, contentColor = actions.onFill),
-                                modifier = Modifier.heightIn(min = 48.dp)
-                            ) { Text("Save name") }
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
                 }
             }
-            item {
+
+            item(key = "look-and-feel") {
                 SettingsSection("Look & feel") {
-                    SettingsLinkRow("Theme & fonts", "Accent colors, custom colors and type", "Customize") { onAction(SettingsPreviewAction.Theme) }
-                    SettingsDivider()
+                    SettingsLinkRow("Theme & fonts", "Accent colors, custom colors and type", "Customize") {
+                        onAction(SettingsPreviewAction.Theme)
+                    }
+                    IronLogDivider()
                     SettingsSwitchRow("Dark mode", "A darker canvas for your workouts", state.darkMode) {
                         onAction(SettingsPreviewAction.Toggle(SettingsToggle.DARK_MODE, it))
                     }
                 }
             }
-            item {
+
+            item(key = "while-you-train") {
                 SettingsSection("While you train") {
                     SettingsSwitchRow("Auto-start rest timer", "After each logged set", state.timerAutoStart) {
                         onAction(SettingsPreviewAction.Toggle(SettingsToggle.AUTO_START, it))
                     }
-                    SettingsDivider()
+                    IronLogDivider()
                     SettingsSwitchRow("Timer sound", "Play a tone when your rest ends", state.timerAudio) {
                         onAction(SettingsPreviewAction.Toggle(SettingsToggle.AUDIO, it))
                     }
-                    SettingsDivider()
+                    IronLogDivider()
                     SettingsSwitchRow("Timer vibration", "Feel when your rest ends", state.timerVibrate) {
                         onAction(SettingsPreviewAction.Toggle(SettingsToggle.VIBRATE, it))
                     }
-                    SettingsDivider()
+                    IronLogDivider()
                     SettingsSwitchRow("Keep screen awake", "During workouts", state.keepScreenOn) {
                         onAction(SettingsPreviewAction.Toggle(SettingsToggle.KEEP_SCREEN_ON, it))
                     }
                 }
             }
-            item {
+
+            item(key = "consistency") {
                 SettingsSection("Consistency") {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(
+                        modifier = Modifier.padding(IronLogSpace.CardPadding),
+                        verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
+                    ) {
                         Text("Allowed rest days", style = MaterialTheme.typography.titleMedium)
-                        Text("Miss up to this many days each week without breaking your Iron Streak.", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Miss up to this many days each week without breaking your Iron Streak.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.onSurfaceVariant
+                        )
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
                             (0..7).forEach { count ->
-                                SettingsChoice("$count", state.restDays == count, "$count rest days per week") {
+                                SettingsChoice(
+                                    label = "$count",
+                                    selected = state.restDays == count,
+                                    accessibleLabel = "$count rest days per week"
+                                ) {
                                     onAction(SettingsPreviewAction.RestDays(count))
                                 }
                             }
@@ -192,36 +303,50 @@ fun PreviewSettingsContent(
                     }
                 }
             }
-            item {
+
+            item(key = "reports-body-parts") {
                 SettingsSection("Reports & body parts") {
                     SettingsSwitchRow("Monthly report reminder", "A summary on the first of each month", state.monthlyReport) {
                         onAction(SettingsPreviewAction.Toggle(SettingsToggle.MONTHLY_REPORT, it))
                     }
-                    SettingsDivider()
-                    SettingsLinkRow("Last month's report", "Open your existing summary", "Open") { onAction(SettingsPreviewAction.MonthlyReport) }
-                    SettingsDivider()
-                    SettingsLinkRow("Body parts", "Add, rename or remove muscle groups", "Manage") { onAction(SettingsPreviewAction.MuscleGroups) }
+                    IronLogDivider()
+                    SettingsLinkRow("Last month's report", "Open your existing summary", "Open") {
+                        onAction(SettingsPreviewAction.MonthlyReport)
+                    }
+                    IronLogDivider()
+                    SettingsLinkRow("Body parts", "Add, rename or remove muscle groups", "Manage") {
+                        onAction(SettingsPreviewAction.MuscleGroups)
+                    }
                 }
             }
-            item {
+
+            item(key = "equipment") {
                 SettingsSection("Equipment") {
                     SettingsExpansionRow(
-                        "Plate calculator setup",
-                        "${state.barWeight.plateLabel()} bar · ${state.loadingSides} loading ${if (state.loadingSides == 1) "side" else "sides"}",
-                        platesExpanded,
-                        { platesExpanded = !platesExpanded }
+                        title = "Plate calculator setup",
+                        subtitle = "${state.barWeight.plateLabel()} bar · ${state.loadingSides} loading ${if (state.loadingSides == 1) "side" else "sides"}",
+                        expanded = platesExpanded,
+                        onClick = { platesExpanded = !platesExpanded }
                     )
                     if (platesExpanded) {
-                        SettingsDivider()
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IronLogDivider()
+                        Column(
+                            modifier = Modifier.padding(IronLogSpace.CardPadding),
+                            verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
+                        ) {
                             Text("Bar weight", style = MaterialTheme.typography.titleSmall)
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
                                 listOf(0f, 25f, 35f, 45f).forEach { weight ->
-                                    SettingsChoice(weight.plateLabel(), state.barWeight == weight) { onAction(SettingsPreviewAction.BarWeight(weight)) }
+                                    SettingsChoice(weight.plateLabel(), state.barWeight == weight) {
+                                        onAction(SettingsPreviewAction.BarWeight(weight))
+                                    }
                                 }
                             }
                             Text("Loading sides", style = MaterialTheme.typography.titleSmall)
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
                                 listOf(1, 2).forEach { sides ->
                                     SettingsChoice("$sides ${if (sides == 1) "side" else "sides"}", state.loadingSides == sides) {
                                         onAction(SettingsPreviewAction.LoadingSides(sides))
@@ -229,91 +354,160 @@ fun PreviewSettingsContent(
                                 }
                             }
                             Text("Available plates", style = MaterialTheme.typography.titleSmall)
-                            Text("Select the sizes you have.", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "Select the sizes you have.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.onSurfaceVariant
+                            )
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
                                 listOf(45f, 35f, 25f, 15f, 10f, 5f, 2.5f).forEach { weight ->
-                                    SettingsChoice(weight.plateLabel(), weight in state.availablePlates) { onAction(SettingsPreviewAction.Plate(weight)) }
+                                    SettingsChoice(weight.plateLabel(), weight in state.availablePlates) {
+                                        onAction(SettingsPreviewAction.Plate(weight))
+                                    }
                                 }
                             }
-                            HorizontalDivider(Modifier.padding(vertical = 8.dp), color = colors.outlineVariant)
-                            if (state.plateInventoryReady) PlateInventoryEditor(
-                                availablePlates = state.availablePlates,
-                                plateInventory = state.plateInventory,
-                                usePlateInventory = state.usePlateInventory,
-                                onPlateInventoryCountChange = { weight, count -> onAction(SettingsPreviewAction.PlateCount(weight, count)) },
-                                onUsePlateInventoryChange = { onAction(SettingsPreviewAction.LimitPlates(it)) },
-                                onPlateInventoryCountDelta = { weight, delta -> onAction(SettingsPreviewAction.PlateCountDelta(weight, delta)) }
-                            ) else LinearProgressIndicator(Modifier.fillMaxWidth())
+                            IronLogDivider(insetStart = 0.dp, modifier = Modifier.padding(vertical = 8.dp))
+                            if (state.plateInventoryReady) {
+                                PlateInventoryEditor(
+                                    availablePlates = state.availablePlates,
+                                    plateInventory = state.plateInventory,
+                                    usePlateInventory = state.usePlateInventory,
+                                    onPlateInventoryCountChange = { weight, count ->
+                                        onAction(SettingsPreviewAction.PlateCount(weight, count))
+                                    },
+                                    onUsePlateInventoryChange = {
+                                        onAction(SettingsPreviewAction.LimitPlates(it))
+                                    },
+                                    onPlateInventoryCountDelta = { weight, delta ->
+                                        onAction(SettingsPreviewAction.PlateCountDelta(weight, delta))
+                                    }
+                                )
+                            } else {
+                                LinearProgressIndicator(Modifier.fillMaxWidth())
+                            }
                         }
                     }
                 }
             }
-            item {
+
+            item(key = "your-data") {
                 SettingsSection("Your data") {
-                    SettingsExpansionRow("Backup & import", "IronLog ZIP backups and FitNotes CSV", backupsExpanded || busy) { backupsExpanded = !backupsExpanded }
+                    SettingsExpansionRow(
+                        title = "Backup & import",
+                        subtitle = "IronLog ZIP backups and FitNotes CSV",
+                        expanded = backupsExpanded || busy,
+                        onClick = { backupsExpanded = !backupsExpanded }
+                    )
                     if (backupsExpanded || busy) {
-                        SettingsDivider()
+                        IronLogDivider()
                         SettingsTransferRow("Export IronLog backup", "Save workouts, exercises and routines to ZIP", SettingsTransfer.EXPORT, state.transfers, busy, onAction)
-                        SettingsDivider()
+                        IronLogDivider()
                         SettingsTransferRow("Import IronLog backup", "Restore from an IronLog ZIP", SettingsTransfer.IRONLOG_IMPORT, state.transfers, busy, onAction)
-                        SettingsDivider()
+                        IronLogDivider()
                         SettingsTransferRow("Import from FitNotes", "Bring in your exported CSV workout history", SettingsTransfer.FITNOTES_IMPORT, state.transfers, busy, onAction)
                     }
                 }
             }
-            item {
-                TextButton(onClick = { showChangelog = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                    Text("IronLog ${state.versionName} · What's new")
+
+            item(key = "changelog") {
+                TextButton(
+                    onClick = { showChangelog = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = IronLogSpace.TouchTargetMin)
+                ) {
+                    Text(
+                        text = "IronLog ${state.versionName} · What's new",
+                        style = MaterialTheme.typography.labelLarge.tabular()
+                    )
                 }
             }
         }
     }
 
-    state.transfers.firstOrNull { it.status == SettingsTransferStatus.SUCCESS || it.status == SettingsTransferStatus.ERROR }?.let { result ->
+    state.transfers.firstOrNull {
+        it.status == SettingsTransferStatus.SUCCESS || it.status == SettingsTransferStatus.ERROR
+    }?.let { result ->
         AlertDialog(
             onDismissRequest = { onAction(SettingsPreviewAction.DismissTransfer(result.operation)) },
+            shape = IronLogRadius.CardShape,
+            containerColor = colors.surface,
+            titleContentColor = colors.onSurface,
+            textContentColor = colors.onSurface,
             title = { Text(result.title) },
             text = {
-                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    result.lines.forEach { Text(it) }
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
+                ) {
+                    result.lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium.tabular()) }
                     if (result.errors.isNotEmpty()) {
-                        Text("${result.errors.size} ${if (result.errors.size == 1) "issue" else "issues"} reported", fontWeight = FontWeight.Bold)
-                        result.errors.forEach { Text(it, color = colors.error) }
+                        Text(
+                            text = "${result.errors.size} ${if (result.errors.size == 1) "issue" else "issues"} reported",
+                            style = MaterialTheme.typography.labelLarge.tabular(),
+                            fontWeight = FontWeight.Bold
+                        )
+                        result.errors.forEach { Text(it, color = colors.error, style = MaterialTheme.typography.bodySmall) }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { onAction(SettingsPreviewAction.DismissTransfer(result.operation)) }) { Text("Done") }
+                TextButton(
+                    onClick = { onAction(SettingsPreviewAction.DismissTransfer(result.operation)) },
+                    modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
+                ) { Text("Done") }
             }
         )
     }
+
     if (showChangelog) {
         AlertDialog(
             onDismissRequest = { showChangelog = false },
+            shape = IronLogRadius.CardShape,
+            containerColor = colors.surface,
+            titleContentColor = colors.onSurface,
+            textContentColor = colors.onSurfaceVariant,
             title = { Text("What's new in ${state.versionName}") },
             text = {
-                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Plan it, load it, lift it", fontWeight = FontWeight.Bold)
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
+                ) {
+                    Text(
+                        text = "Plan it, load it, lift it",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = colors.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
                     Text("Build a one-off workout. Choose every exercise you plan to do and move forward or back through your plan while logging. No routine required.")
                     Text("Superset exercise pills open the selected exercise in the logger right away.")
                     Text("The plate calculator supports a target weight or manual loading, using your saved bar, plates and loading sides. Bigger controls keep your setup intact when you switch modes.")
                 }
             },
-            confirmButton = { TextButton(onClick = { showChangelog = false }) { Text("Done") } }
+            confirmButton = {
+                TextButton(
+                    onClick = { showChangelog = false },
+                    modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
+                ) { Text("Done") }
+            }
         )
     }
 }
 
 @Composable
 private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.fillMaxWidth(),
+    Column(verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
+        IronLogSectionHeader(title = title)
+        IronLogGroupedCard(
+            showBorder = true,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
             content = content
         )
     }
@@ -322,11 +516,13 @@ private fun SettingsSection(title: String, content: @Composable ColumnScope.() -
 @Composable
 private fun SettingsSwitchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
             .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = IronLogSpace.CardPadding, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall)
@@ -339,13 +535,17 @@ private fun SettingsSwitchRow(title: String, subtitle: String, checked: Boolean,
 @Composable
 private fun SettingsLinkRow(title: String, subtitle: String, action: String, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 64.dp).clickable(role = Role.Button, onClick = onClick).padding(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(IronLogSpace.CardPadding),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium.tabular(), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text(action, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
     }
@@ -364,8 +564,12 @@ private fun SettingsChoice(label: String, selected: Boolean, accessibleLabel: St
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { Text(label) },
-        modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = accessibleLabel },
+        shape = IronLogRadius.ControlShape,
+        label = { Text(label, style = MaterialTheme.typography.labelLarge.tabular()) },
+        modifier = Modifier
+            .heightIn(min = IronLogSpace.TouchTargetMin)
+            .widthIn(min = IronLogSpace.TouchTargetMin)
+            .semantics { contentDescription = accessibleLabel },
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = actions.fill,
             selectedLabelColor = actions.onFill
@@ -374,34 +578,44 @@ private fun SettingsChoice(label: String, selected: Boolean, accessibleLabel: St
 }
 
 @Composable
-private fun SettingsDivider() {
-    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
-}
-
-@Composable
 private fun SettingsTransferRow(
-    title: String, subtitle: String, operation: SettingsTransfer,
-    transfers: List<SettingsTransferUi>, busy: Boolean,
+    title: String,
+    subtitle: String,
+    operation: SettingsTransfer,
+    transfers: List<SettingsTransferUi>,
+    busy: Boolean,
     onAction: (SettingsPreviewAction) -> Unit
 ) {
+    val scheme = MaterialTheme.colorScheme
     val inProgress = transfers.any { it.operation == operation && it.status == SettingsTransferStatus.BUSY }
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(
+        modifier = Modifier.padding(IronLogSpace.CardPadding),
+        verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
+    ) {
         Text(title, style = MaterialTheme.typography.titleSmall)
-        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
         OutlinedButton(
             onClick = { onAction(SettingsPreviewAction.Transfer(operation)) },
             enabled = !busy,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            shape = IronLogRadius.ControlShape,
+            border = IronLogBorder.stroke(if (!busy) scheme.outlineVariant else scheme.outlineVariant.copy(alpha = 0.45f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = IronLogSpace.TouchTargetMin)
         ) {
             if (inProgress) {
                 CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(IronLogSpace.CompactGap))
             }
-            Text(if (inProgress) "In progress…" else when (operation) {
-                SettingsTransfer.EXPORT -> "Save ZIP backup"
-                SettingsTransfer.IRONLOG_IMPORT -> "Choose ZIP backup"
-                SettingsTransfer.FITNOTES_IMPORT -> "Choose CSV file"
-            })
+            Text(
+                text = if (inProgress) "In progress…" else when (operation) {
+                    SettingsTransfer.EXPORT -> "Save ZIP backup"
+                    SettingsTransfer.IRONLOG_IMPORT -> "Choose ZIP backup"
+                    SettingsTransfer.FITNOTES_IMPORT -> "Choose CSV file"
+                },
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }

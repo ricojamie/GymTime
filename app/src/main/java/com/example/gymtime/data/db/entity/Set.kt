@@ -22,7 +22,16 @@ import java.util.Date
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("workoutId"), Index("exerciseId"), Index("timestamp"), Index("supersetGroupId")]
+    indices = [
+        Index("workoutId"),
+        Index("exerciseId"),
+        Index("timestamp"),
+        Index("supersetGroupId"),
+        Index(value = ["exerciseId", "timestamp"]),
+        Index(value = ["workoutId", "exerciseId"]),
+        Index(value = ["exerciseId", "workoutId"]),
+        Index(value = ["isWarmup", "isComplete", "timestamp"])
+    ]
 )
 data class Set(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

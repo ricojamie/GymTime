@@ -8,6 +8,7 @@ import com.example.gymtime.ai.OnDeviceAiClient
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,17 +34,24 @@ class OnDeviceAiSetupViewModel @Inject constructor(
 
     private val _downloadState = MutableStateFlow<AiDownloadState>(AiDownloadState.Idle)
     val downloadState: StateFlow<AiDownloadState> = _downloadState.asStateFlow()
+    private var downloadJob: Job? = null
 
     init {
         retry()
     }
 
     fun retry() {
+        if (aiClient.capability.value == AiCapability.Downloading || downloadJob?.isActive == true) {
+            return
+        }
         viewModelScope.launch { aiClient.refreshCapability() }
     }
 
     fun download() {
-        viewModelScope.launch {
+        if (downloadJob?.isActive == true || aiClient.capability.value == AiCapability.Downloading) {
+            return
+        }
+        downloadJob = viewModelScope.launch {
             aiClient.downloadModel().collect { _downloadState.value = it }
         }
     }
@@ -56,6 +64,8 @@ class OnDeviceAiSetupViewModel @Inject constructor(
         if (dismissed || capability is AiCapability.Ready) return false
         return capability == AiCapability.Downloadable ||
             capability == AiCapability.Downloading ||
+            downloadState is AiDownloadState.Started ||
+            downloadState is AiDownloadState.Progress ||
             downloadState is AiDownloadState.Failed
     }
 }

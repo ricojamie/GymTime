@@ -1,12 +1,17 @@
 package com.example.gymtime.data.repository
 
+import com.example.gymtime.data.db.GymTimeDatabase
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.dao.PBWithTimestamp
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.entity.Set
+import com.example.gymtime.data.repository.ExerciseRepository
+import com.example.gymtime.data.repository.MuscleGroupDeleteResult
+import com.example.gymtime.data.repository.MuscleGroupMutationResult
 import com.example.gymtime.util.TestDispatcherRule
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -23,7 +28,8 @@ class ExerciseRepositoryTest {
     @get:Rule
     val testDispatcherRule = TestDispatcherRule()
 
-    private val exerciseDao: ExerciseDao = mockk()
+    private val database: GymTimeDatabase = mockk(relaxed = true)
+    private val exerciseDao: ExerciseDao = mockk(relaxed = true)
     private val setDao: SetDao = mockk()
     private val muscleGroupDao: MuscleGroupDao = mockk()
 
@@ -31,7 +37,7 @@ class ExerciseRepositoryTest {
 
     @Before
     fun setup() {
-        repository = ExerciseRepository(exerciseDao, setDao, muscleGroupDao)
+        repository = ExerciseRepository(database, exerciseDao, setDao, muscleGroupDao)
     }
 
     @Test
@@ -76,5 +82,21 @@ class ExerciseRepositoryTest {
 
         assertEquals(sets[1], result.heaviestWeight)
         assertEquals(sets[0], result.bestE1RM?.first)
+    }
+
+    @Test
+    fun `deleteExercise delegates to ExerciseDao deleteExerciseById`() = runTest {
+        repository.deleteExercise(42L)
+        coVerify(exactly = 1) { exerciseDao.deleteExerciseById(42L) }
+    }
+
+    @Test
+    fun `muscle group validation protects Warmups and short names before transaction`() = runTest {
+        assertEquals(MuscleGroupMutationResult.InvalidName, repository.createMuscleGroup("A"))
+        assertEquals(MuscleGroupMutationResult.ProtectedCategory, repository.createMuscleGroup("warm-ups"))
+        assertEquals(MuscleGroupMutationResult.ProtectedCategory, repository.renameMuscleGroup("Warmups", "Other"))
+        assertEquals(MuscleGroupMutationResult.ProtectedCategory, repository.renameMuscleGroup("Chest", "Warmup"))
+        assertEquals(MuscleGroupMutationResult.InvalidName, repository.renameMuscleGroup("Chest", "X"))
+        assertEquals(MuscleGroupDeleteResult.ProtectedCategory, repository.deleteMuscleGroupSafely("Warmups"))
     }
 }

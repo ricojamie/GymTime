@@ -14,11 +14,16 @@ import com.example.gymtime.util.TestDispatcherRule
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -142,12 +147,71 @@ class SmartLogViewModelTest {
         )
     }
 
+    @Test
+    fun `submit failure clears isProcessing instead of sticking`() = runTest {
+        val viewModel = createViewModel()
+        val input = "bench press 135 x 8"
+        coEvery { interpreter.extract(input) } throws IllegalStateException("boom")
+
+        viewModel.updateInput(input)
+        viewModel.submit(currentExercise = null)
+        advanceUntilIdle()
+
+        val state = viewModel.state.value
+        assertFalse(state.isProcessing)
+        assertEquals("Couldn't parse that set right now. Try again.", state.error)
+    }
+
+    @Test
+    fun `updateInput cancels in flight submit so stale results do not overwrite`() = runTest {
+        val viewModel = createViewModel()
+        val gate = CompletableDeferred<ParsedLoggingCommand?>()
+        coEvery { interpreter.extract("incline dumbbell press 50 x 8") } coAnswers { gate.await() }
+
+        viewModel.updateInput("incline dumbbell press 50 x 8")
+        viewModel.submit(currentExercise = null)
+        viewModel.updateInput("bench")
+        gate.complete(parsed("incline dumbbell press"))
+        advanceUntilIdle()
+
+        val state = viewModel.state.value
+        assertEquals("bench", state.input)
+        assertFalse(state.isProcessing)
+        assertNull(state.review)
+        assertNull(state.createExerciseName)
+    }
+
+    @Test
+    fun `confirmReview resets state and guards against double tap`() = runTest {
+        val viewModel = createViewModel()
+        val events = mutableListOf<SmartLogNavigationEvent>()
+        val collectJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.navigation.collect { events += it }
+        }
+        val input = "incline dumbbell press 50 x 8"
+        coEvery { interpreter.extract(input) } returns parsed("incline dumbbell press")
+
+        viewModel.updateInput(input)
+        viewModel.submit(currentExercise = null)
+        advanceUntilIdle()
+
+        viewModel.confirmReview()
+        viewModel.confirmReview()
+        advanceUntilIdle()
+
+        assertEquals(1, events.size)
+        assertEquals(incline.id, events.single().exerciseId)
+        assertEquals(SmartLogUiState(), viewModel.state.value)
+        collectJob.cancel()
+    }
+
     private fun createViewModel(): SmartLogViewModel = SmartLogViewModel(
         exerciseRepository = exerciseRepository,
         interpreter = interpreter,
         matcher = matcher,
         validator = validator,
-        draftStore = draftStore
+        draftStore = draftStore,
+        computeDispatcher = dispatcherRule.testDispatcher
     )
 
     private fun parsed(query: String) = ParsedLoggingCommand(

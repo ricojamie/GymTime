@@ -34,6 +34,29 @@ class ExerciseMatcherTest {
     }
 
     @Test
+    fun `single token query with two containing candidates does not auto match shorter name`() {
+        val benchPress = exercise(10, "Bench Press")
+        val inclineDbPress = exercise(11, "Incline Dumbbell Press")
+        val result = matcher.match("press", rows(benchPress, inclineDbPress))
+        assertTrue(result is ExerciseMatchResult.NeedsConfirmation)
+    }
+
+    @Test
+    fun `symbol only query returns no match`() {
+        val result = matcher.match("---", rows(incline, bench))
+        assertEquals(ExerciseMatchResult.NoMatch, result)
+    }
+
+    @Test
+    fun `plural presses stems cleanly to press`() {
+        assertEquals("press", matcher.normalize("presses"))
+        assertEquals("overhead press", matcher.normalize("overhead presses"))
+        val overheadPress = exercise(3, "Overhead Press")
+        val result = matcher.match("overhead presses", rows(incline, overheadPress))
+        assertEquals(overheadPress, (result as ExerciseMatchResult.Matched).candidate.exercise)
+    }
+
+    @Test
     fun `missing query uses current exercise only`() {
         val result = matcher.match(null, rows(incline, bench), currentExercise = bench)
         assertEquals(bench, (result as ExerciseMatchResult.Matched).candidate.exercise)

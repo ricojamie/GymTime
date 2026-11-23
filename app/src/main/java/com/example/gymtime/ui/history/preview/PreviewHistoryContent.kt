@@ -1,32 +1,68 @@
 package com.example.gymtime.ui.history.preview
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.gymtime.data.db.entity.WorkoutWithMuscles
-import com.example.gymtime.ui.theme.LocalLoggerActionColors
+import com.example.gymtime.ui.components.IronLogCard
+import com.example.gymtime.ui.components.IronLogEmptyState
+import com.example.gymtime.ui.components.IronLogSectionHeader
+import com.example.gymtime.ui.components.IronLogStatusChip
+import com.example.gymtime.ui.components.IronLogStatusTone
+import com.example.gymtime.ui.theme.IronLogRadius
+import com.example.gymtime.ui.theme.IronLogSpace
+import com.example.gymtime.ui.theme.IronLogType
+import com.example.gymtime.ui.theme.tabular
 import java.text.NumberFormat
-import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+
+private val HISTORY_SEARCH_WHITESPACE = Regex("\\s+")
+private val DATE_FORMATTER_CACHE = ConcurrentHashMap<Pair<String, Locale>, DateTimeFormatter>()
+private val NUMBER_FORMAT_LOCAL = ThreadLocal<Pair<Locale, NumberFormat>?>()
 
 data class HistoryUiState(
     val workouts: List<WorkoutWithMuscles> = emptyList(),
@@ -45,16 +81,31 @@ fun PreviewHistoryContent(
     modifier: Modifier = Modifier
 ) {
     var query by rememberSaveable { mutableStateOf("") }
-    val visible = remember(state.workouts, query) {
-        val tokens = query.trim().lowercase(Locale.getDefault()).split(Regex("\\s+")).filter { it.isNotBlank() }
-        state.workouts.filter { item ->
-            val search = (historyWorkoutTitle(item) + " " + item.muscleGroups.joinToString(" ") + " " +
-                item.workout.routineNameSnapshot.orEmpty() + " " + historyDate(item.workout.startTime, "MMMM yyyy"))
-                .lowercase(Locale.getDefault())
-            tokens.all(search::contains)
+    val locale = Locale.getDefault()
+    val visible = remember(state.workouts, query, locale) {
+        if (query.isBlank()) {
+            state.workouts
+        } else {
+            val tokens = query.trim().lowercase(locale).split(HISTORY_SEARCH_WHITESPACE).filter { it.isNotBlank() }
+            if (tokens.isEmpty()) {
+                state.workouts
+            } else {
+                state.workouts.filter { item ->
+                    val search = (
+                        historyWorkoutTitle(item) + " " +
+                            item.muscleGroups.joinToString(" ") + " " +
+                            item.workout.routineNameSnapshot.orEmpty() + " " +
+                            historyDate(item.workout.startTime, "MMMM yyyy", locale)
+                        ).lowercase(locale)
+                    tokens.all(search::contains)
+                }
+            }
         }
     }
-    val months = remember(visible) { visible.groupBy { historyDate(it.workout.startTime, "MMMM yyyy") } }
+    val months = remember(visible, locale) {
+        visible.groupBy { historyDate(it.workout.startTime, "MMMM yyyy", locale) }
+    }
+
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
@@ -63,8 +114,16 @@ fun PreviewHistoryContent(
             TopAppBar(
                 title = {
                     Column {
-                        Text("History", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
-                        Text("Your training, on replay", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            text = "History",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            text = "Your training, on replay",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
@@ -72,66 +131,112 @@ fun PreviewHistoryContent(
         }
     ) { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(
+                start = IronLogSpace.ScreenHorizontal,
+                end = IronLogSpace.ScreenHorizontal,
+                top = IronLogSpace.CompactGap,
+                bottom = IronLogSpace.BottomNavClearance
+            ),
+            verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
         ) {
             if (state.workouts.isNotEmpty()) {
                 item(key = "search") {
                     OutlinedTextField(
-                        value = query, onValueChange = { query = it },
-                        modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
                         placeholder = { Text("Name, muscle, or month") },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        trailingIcon = if (query.isNotEmpty()) {{
-                            IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, "Clear history search") }
-                        }} else null,
-                        shape = RoundedCornerShape(18.dp),
+                        trailingIcon = if (query.isNotEmpty()) {
+                            {
+                                IconButton(
+                                    onClick = { query = "" },
+                                    modifier = Modifier.size(IronLogSpace.TouchTargetMin)
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear history search")
+                                }
+                            }
+                        } else null,
+                        shape = IronLogRadius.ControlShape,
                         colors = OutlinedTextFieldDefaults.colors(
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                             unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
                         )
                     )
                 }
             }
+
             when {
-                state.isLoading -> item {
-                    Box(Modifier.fillMaxWidth().padding(56.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                }
-                state.error != null -> item {
-                    Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(state.error, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) { Text("Try again") }
+                state.isLoading -> item(key = "loading") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(56.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
                     }
                 }
-                state.workouts.isEmpty() -> item {
-                    HistoryEmptyState(onStartWorkout)
+                state.error != null -> item(key = "error") {
+                    IronLogEmptyState(
+                        title = "Couldn't load history",
+                        body = state.error,
+                        actionLabel = "Try again",
+                        onAction = onRetry
+                    )
                 }
-                visible.isEmpty() -> item {
-                    Column(Modifier.fillMaxWidth().padding(vertical = 36.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("No matching workouts", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text("Try a workout name, muscle, or month.", style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
-                        TextButton(onClick = { query = "" }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Clear search") }
-                    }
+                state.workouts.isEmpty() -> item(key = "empty") {
+                    IronLogEmptyState(
+                        title = "Your first session starts here",
+                        body = "Log a workout and build a history you can look back on.",
+                        icon = Icons.Default.FitnessCenter,
+                        actionLabel = "Start a workout",
+                        onAction = onStartWorkout
+                    )
+                }
+                visible.isEmpty() -> item(key = "empty-search") {
+                    IronLogEmptyState(
+                        title = "No matching workouts",
+                        body = "Try a workout name, muscle, or month.",
+                        actionLabel = "Clear search",
+                        onAction = { query = "" }
+                    )
                 }
                 else -> {
-                    if (query.isNotBlank()) item(key = "search-count") {
-                        Text("${visible.size} ${if (visible.size == 1) "workout" else "workouts"} found",
-                            style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    months.forEach { (month, workouts) ->
-                        item(key = "month-$month") {
-                            Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(month, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                Text("${workouts.size} ${if (workouts.size == 1) "session" else "sessions"}",
-                                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
+                    if (query.isNotBlank()) {
+                        item(key = "search-count") {
+                            Text(
+                                text = "${visible.size} ${if (visible.size == 1) "workout" else "workouts"} found",
+                                style = IronLogType.tabular(MaterialTheme.typography.labelLarge),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                        items(workouts, key = { it.workout.id }) { workout ->
-                            HistoryTimelineCard(workout, onClick = { onSelectWorkout(workout) })
+                    }
+                    months.forEach { (month, monthWorkouts) ->
+                        item(key = "month-$month") {
+                            IronLogSectionHeader(
+                                title = month,
+                                modifier = Modifier.padding(top = 6.dp),
+                                trailingAction = {
+                                    Text(
+                                        text = "${monthWorkouts.size} ${if (monthWorkouts.size == 1) "session" else "sessions"}",
+                                        style = IronLogType.tabular(MaterialTheme.typography.labelMedium),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            )
+                        }
+                        items(monthWorkouts, key = { it.workout.id }) { workout ->
+                            HistoryTimelineCard(
+                                workout = workout,
+                                locale = locale,
+                                onClick = { onSelectWorkout(workout) }
+                            )
                         }
                     }
                 }
@@ -140,85 +245,150 @@ fun PreviewHistoryContent(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun HistoryTimelineCard(workout: WorkoutWithMuscles, onClick: () -> Unit) {
+private fun HistoryTimelineCard(
+    workout: WorkoutWithMuscles,
+    locale: Locale,
+    onClick: () -> Unit
+) {
     val scheme = MaterialTheme.colorScheme
-    Surface(
+    val dayNumber = remember(workout.workout.startTime, locale) {
+        historyDate(workout.workout.startTime, "dd", locale)
+    }
+    val dayOfWeek = remember(workout.workout.startTime, locale) {
+        historyDate(workout.workout.startTime, "EEE", locale)
+    }
+    val timeText = remember(workout.workout.startTime, workout.workout.endTime, locale) {
+        if (workout.workout.endTime == null) null else historyDate(workout.workout.startTime, "h:mm a", locale)
+    }
+    val muscleLine = remember(workout.muscleGroups) {
+        when {
+            workout.muscleGroups.isEmpty() -> null
+            workout.muscleGroups.size <= 3 -> workout.muscleGroups.joinToString(" · ")
+            else -> workout.muscleGroups.take(3).joinToString(" · ") + " · +${workout.muscleGroups.size - 3}"
+        }
+    }
+    val metricsLine = remember(workout.workingSetCount, workout.workout.startTime, workout.workout.endTime, workout.totalVolume, locale) {
+        buildList {
+            add("${workout.workingSetCount ?: 0} sets")
+            historyDuration(workout)?.let { add(it) }
+            workout.totalVolume?.takeIf { it > 0f }?.let { add("${historyNumber(it, locale)} lb") }
+        }.joinToString(" · ")
+    }
+
+    IronLogCard(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp),
-        color = scheme.surface, contentColor = scheme.onSurface,
-        border = BorderStroke(1.dp, scheme.outlineVariant)
+        showBorder = true,
+        containerColor = scheme.surfaceContainerLow,
+        shape = IronLogRadius.CardShape,
+        contentPadding = PaddingValues(IronLogSpace.CardPadding)
     ) {
-        Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Surface(shape = RoundedCornerShape(16.dp), color = scheme.primaryContainer, contentColor = scheme.onPrimaryContainer) {
-                Column(Modifier.widthIn(min = 50.dp).padding(horizontal = 8.dp, vertical = 10.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(historyDate(workout.workout.startTime, "dd"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-                    Text(historyDate(workout.workout.startTime, "EEE"), style = MaterialTheme.typography.labelSmall)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap),
+            verticalAlignment = Alignment.Top
+        ) {
+            Surface(
+                shape = IronLogRadius.ControlShape,
+                color = scheme.primaryContainer,
+                contentColor = scheme.onPrimaryContainer
+            ) {
+                Column(
+                    modifier = Modifier
+                        .widthIn(min = 50.dp)
+                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = dayNumber,
+                        style = MaterialTheme.typography.titleLarge.tabular(),
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = dayOfWeek,
+                        style = MaterialTheme.typography.labelSmall
+                    )
                 }
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(historyWorkoutTitle(workout), modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.padding(start = 8.dp).size(18.dp), tint = scheme.primary)
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = historyWorkoutTitle(workout),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .size(18.dp),
+                        tint = scheme.primary
+                    )
                 }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    workout.muscleGroups.take(3).forEach { HistoryMusclePill(it) }
-                    if (workout.muscleGroups.size > 3) HistoryMusclePill("+${workout.muscleGroups.size - 3}")
+
+                if (muscleLine != null) {
+                    Text(
+                        text = muscleLine,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    HistoryMetricText("${workout.workingSetCount ?: 0} sets")
-                    historyDuration(workout)?.let { HistoryMetricText(it) }
-                    workout.totalVolume?.takeIf { it > 0f }?.let { HistoryMetricText("${historyNumber(it)} lb") }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(if (workout.workout.endTime == null) "In progress" else historyDate(workout.workout.startTime, "h:mm a"),
-                        style = MaterialTheme.typography.labelSmall, color = if (workout.workout.endTime == null) scheme.primary else scheme.onSurfaceVariant)
+
+                Text(
+                    text = metricsLine,
+                    style = MaterialTheme.typography.labelMedium.tabular(),
+                    fontWeight = FontWeight.SemiBold,
+                    color = scheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (timeText == null) {
+                        IronLogStatusChip(
+                            label = "In progress",
+                            tone = IronLogStatusTone.ACTIVE
+                        )
+                    } else {
+                        Text(
+                            text = timeText,
+                            style = MaterialTheme.typography.labelSmall.tabular(),
+                            color = scheme.onSurfaceVariant
+                        )
+                    }
                     workout.workout.rating?.let { rating ->
                         Spacer(Modifier.weight(1f))
-                        Icon(Icons.Default.LocalFireDepartment, contentDescription = "Workout rating", modifier = Modifier.size(16.dp), tint = scheme.tertiary)
-                        Text("$rating/5", style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+                        Icon(
+                            imageVector = Icons.Default.LocalFireDepartment,
+                            contentDescription = "Workout rating",
+                            modifier = Modifier.size(16.dp),
+                            tint = scheme.tertiary
+                        )
+                        Text(
+                            text = "$rating/5",
+                            style = MaterialTheme.typography.labelSmall.tabular(),
+                            color = scheme.onSurfaceVariant
+                        )
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-internal fun HistoryMusclePill(muscle: String) {
-    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant) {
-        Text(muscle, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp))
-    }
-}
-
-@Composable
-private fun HistoryMetricText(value: String) {
-    Text(value, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
-
-@Composable
-private fun HistoryEmptyState(onStartWorkout: () -> Unit) {
-    val colors = LocalLoggerActionColors.current
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 48.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer) {
-            Icon(Icons.Default.FitnessCenter, contentDescription = null, modifier = Modifier.padding(20.dp).size(32.dp))
-        }
-        Text("Your first session starts here", style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-        Text("Log a workout and build a history you can look back on.", style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-        Button(onClick = onStartWorkout, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = colors.fill, contentColor = colors.onFill)) {
-            Text("Start a workout", fontWeight = FontWeight.Bold)
-            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.padding(start = 8.dp).size(18.dp))
         }
     }
 }
@@ -229,11 +399,33 @@ internal fun historyWorkoutTitle(workout: WorkoutWithMuscles): String =
         ?: workout.muscleGroups.take(2).takeIf { it.isNotEmpty() }?.joinToString(" + ")
         ?: "Workout"
 
-internal fun historyDate(date: Date, pattern: String): String = SimpleDateFormat(pattern, Locale.getDefault()).format(date)
+internal fun historyDate(
+    date: Date,
+    pattern: String,
+    locale: Locale = Locale.getDefault()
+): String {
+    val formatter = DATE_FORMATTER_CACHE.getOrPut(pattern to locale) {
+        DateTimeFormatter.ofPattern(pattern, locale)
+    }
+    return Instant.ofEpochMilli(date.time)
+        .atZone(ZoneId.systemDefault())
+        .format(formatter)
+}
 
-internal fun historyNumber(value: Float): String = NumberFormat.getNumberInstance(Locale.getDefault()).apply {
-    maximumFractionDigits = 1
-}.format(value)
+internal fun historyNumber(
+    value: Float,
+    locale: Locale = Locale.getDefault()
+): String {
+    val cached = NUMBER_FORMAT_LOCAL.get()
+    val formatter = if (cached != null && cached.first == locale) {
+        cached.second
+    } else {
+        NumberFormat.getNumberInstance(locale).apply {
+            maximumFractionDigits = 1
+        }.also { NUMBER_FORMAT_LOCAL.set(locale to it) }
+    }
+    return formatter.format(value)
+}
 
 internal fun historyDuration(workout: WorkoutWithMuscles): String? = workout.workout.endTime?.let { end ->
     val minutes = ((end.time - workout.workout.startTime.time).coerceAtLeast(0L) / 60_000L)

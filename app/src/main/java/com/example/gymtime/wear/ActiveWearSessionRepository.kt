@@ -114,10 +114,11 @@ data class WearSessionSnapshot(
 
 @Singleton
 class ActiveWearSessionRepository @Inject constructor(
-    @ApplicationContext context: Context
+    @param:ApplicationContext context: Context
 ) {
     private val appContext = context.applicationContext
     private val dataClient by lazy { Wearable.getDataClient(appContext) }
+    private var snapshotPublisherOverride: ((WearSessionSnapshot, Long, Long, Long) -> Unit)? = null
     private val publisherCounter = AtomicLong(0)
     private val completionCounter = AtomicLong(0)
     private val saveConfirmationCounter = AtomicLong(0)
@@ -126,6 +127,13 @@ class ActiveWearSessionRepository @Inject constructor(
     private var lastCompletionId: Long = 0
     private var lastSaveConfirmationId: Long = 0
     private var lastPublishAtMillis: Long = 0
+
+    internal constructor(
+        context: Context,
+        snapshotPublisher: (WearSessionSnapshot, Long, Long, Long) -> Unit
+    ) : this(context) {
+        snapshotPublisherOverride = snapshotPublisher
+    }
 
     val draftPatches = MutableSharedFlow<WearDraftPatch>(
         extraBufferCapacity = 8,
@@ -157,6 +165,10 @@ class ActiveWearSessionRepository @Inject constructor(
     }
 
     @Synchronized
+    fun hasActivePublisher(): Boolean =
+        activePublisherId != null && logRequests.subscriptionCount.value > 0
+
+    @Synchronized
     fun clear() {
         activePublisherId = null
         publishSnapshotState(WearSessionSnapshot.inactive())
@@ -170,7 +182,7 @@ class ActiveWearSessionRepository @Inject constructor(
             snapshot.timerRemainingSeconds == 0 &&
             snapshot.active
         ) {
-            completionCounter.incrementAndGet()
+            nextMonotonicId(completionCounter)
         } else {
             lastCompletionId
         }
@@ -179,7 +191,7 @@ class ActiveWearSessionRepository @Inject constructor(
         lastCompletionId = completionId
 
         val now = System.currentTimeMillis()
-        val isRoutineTimerTick = previousSnapshot.isRoutineTimerTickTo(snapshot)
+        val isRoutineTimerTick = isRoutineTimerTick(previousSnapshot, snapshot)
         val checkpointDue = now - lastPublishAtMillis >= TIMER_CHECKPOINT_INTERVAL_MILLIS
         if (!isRoutineTimerTick || checkpointDue) {
             publishSnapshot(snapshot, completionId, now)
@@ -188,7 +200,7 @@ class ActiveWearSessionRepository @Inject constructor(
 
     @Synchronized
     fun confirmSetSaved() {
-        lastSaveConfirmationId = saveConfirmationCounter.incrementAndGet()
+        lastSaveConfirmationId = nextMonotonicId(saveConfirmationCounter)
         publishSnapshot(lastSnapshot, lastCompletionId, System.currentTimeMillis())
     }
 
@@ -198,6 +210,10 @@ class ActiveWearSessionRepository @Inject constructor(
         publishedAtMillis: Long
     ) {
         lastPublishAtMillis = publishedAtMillis
+        snapshotPublisherOverride?.let { override ->
+            override(snapshot, completionId, lastSaveConfirmationId, publishedAtMillis)
+            return
+        }
         val request = PutDataMapRequest.create(WearContract.DATA_ACTIVE_SESSION).apply {
             dataMap.putSnapshot(
                 snapshot = snapshot,
@@ -250,15 +266,26 @@ class ActiveWearSessionRepository @Inject constructor(
         putLong(WearContract.KEY_UPDATED_AT, updatedAtMillis)
     }
 
-    private fun WearSessionSnapshot.isRoutineTimerTickTo(next: WearSessionSnapshot): Boolean {
-        if (!timerRunning || !next.timerRunning) return false
-        if (next.timerRemainingSeconds >= timerRemainingSeconds) return false
-
-        return copy(timerRemainingSeconds = next.timerRemainingSeconds) == next
-    }
-
     companion object {
         private const val TAG = "ActiveWearSession"
         private const val TIMER_CHECKPOINT_INTERVAL_MILLIS = 30_000L
+
+        internal fun nextMonotonicId(
+            counter: AtomicLong,
+            nowMillis: Long = System.currentTimeMillis()
+        ): Long {
+            val floor = nowMillis.coerceAtLeast(1L)
+            return counter.updateAndGet { prev -> maxOf(prev + 1L, floor) }
+        }
+
+        internal fun isRoutineTimerTick(
+            previous: WearSessionSnapshot,
+            next: WearSessionSnapshot
+        ): Boolean {
+            if (!previous.timerRunning || !next.timerRunning) return false
+            if ((previous.timerRemainingSeconds - next.timerRemainingSeconds) != 1) return false
+
+            return previous.copy(timerRemainingSeconds = next.timerRemainingSeconds) == next
+        }
     }
 }

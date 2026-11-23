@@ -1,10 +1,12 @@
 package com.example.gymtime.domain.analytics
 
+import com.example.gymtime.data.db.dao.RoutineSetRow
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.util.OneRepMaxCalculator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 data class RoutineExerciseTrend(
@@ -31,6 +33,15 @@ data class RoutineStats(
 class RoutineStatsUseCase @Inject constructor(
     private val workoutDao: WorkoutDao
 ) {
+    private var clockMs: () -> Long = System::currentTimeMillis
+
+    internal constructor(
+        workoutDao: WorkoutDao,
+        clockMs: () -> Long
+    ) : this(workoutDao) {
+        this.clockMs = clockMs
+    }
+
     suspend fun getStats(routineId: Long): RoutineStats = withContext(Dispatchers.IO) {
         // Only count workouts where something was actually logged.
         val workouts = workoutDao.getCompletedWorkoutsForRoutine(routineId)
@@ -43,14 +54,18 @@ class RoutineStatsUseCase @Inject constructor(
             }
         }
 
-        val fourWeeksAgo = System.currentTimeMillis() - 28L * 24 * 60 * 60 * 1000
-        val recentCount = workouts.count { it.startTime.time >= fourWeeksAgo }
+        val now = clockMs()
+        val fourWeeksAgo = now - 28L * 24 * 60 * 60 * 1000
+        val recentCount = workouts.count { it.startTime.time in fourWeeksAgo..now }
+        val totalVolume = workouts.sumOf { row ->
+            row.totalVolume.takeIf { it.isFinite() && it >= 0f }?.toDouble() ?: 0.0
+        }.toFloat()
 
         RoutineStats(
             timesCompleted = workouts.size,
             lastPerformed = workouts.maxOfOrNull { it.startTime },
             avgDurationMinutes = durations.takeIf { it.isNotEmpty() }?.average()?.toInt(),
-            totalVolume = workouts.map { it.totalVolume }.sum(),
+            totalVolume = totalVolume,
             workoutsPerWeekRecent = if (recentCount > 0) recentCount / 4f else null,
             exerciseTrends = buildExerciseTrends(routineId)
         )
@@ -58,38 +73,76 @@ class RoutineStatsUseCase @Inject constructor(
 
     private suspend fun buildExerciseTrends(routineId: Long): List<RoutineExerciseTrend> {
         val sets = workoutDao.getWorkingSetsForRoutine(routineId)
+            .filter { it.weight.isFinite() && it.weight >= 0f && it.reps > 0 }
         if (sets.isEmpty()) return emptyList()
 
         return sets.groupBy { it.exerciseId }.mapNotNull { (exerciseId, rows) ->
-            // Best e1RM per workout, in chronological order.
             val perWorkout = rows.groupBy { it.workoutId }
-                .map { (_, workoutRows) ->
-                    val best = workoutRows.maxByOrNull {
-                        OneRepMaxCalculator.calculateE1RM(it.weight, it.reps) ?: 0f
-                    } ?: return@mapNotNull null
-                    best
-                }
-                .sortedBy { it.startTime }
-            val last = perWorkout.lastOrNull() ?: return@mapNotNull null
-            val lastE1rm = OneRepMaxCalculator.calculateE1RM(last.weight, last.reps)
+                .mapNotNull { (workoutId, workoutRows) ->
+                    val bestE1rm = workoutRows.mapNotNull { row ->
+                        OneRepMaxCalculator.calculateE1RM(row.weight, row.reps)
+                            ?.takeIf { it.isFinite() && it > 0f }
+                            ?.let { row to it }
+                    }.maxWithOrNull(
+                        compareBy<Pair<RoutineSetRow, Float>> { it.second }
+                            .thenBy { it.first.weight }
+                            .thenBy { it.first.reps }
+                    )
+                    val bestRaw = workoutRows.maxWithOrNull(
+                        compareBy<RoutineSetRow> { it.weight }.thenBy { it.reps }
+                    ) ?: return@mapNotNull null
 
-            // Baseline: best e1RM from the most recent workout at least 3 weeks
-            // older than the last one; fall back to the earliest workout.
+                    WorkoutBest(
+                        workoutId = workoutId,
+                        startTime = workoutRows.first().startTime,
+                        displayRow = bestE1rm?.first ?: bestRaw,
+                        e1rm = bestE1rm?.second
+                    )
+                }
+                .sortedWith(compareBy<WorkoutBest> { it.startTime.time }.thenBy { it.workoutId })
+
+            val latest = perWorkout.lastOrNull() ?: return@mapNotNull null
+            val eligibleWorkouts = perWorkout.filter { it.e1rm != null }
+            val latestEligible = eligibleWorkouts.lastOrNull()
+
+            // Baseline: best eligible e1RM from the most recent workout at least 3 weeks
+            // older than the latest eligible workout; fall back to the earliest eligible workout.
             val threeWeeksMs = 21L * 24 * 60 * 60 * 1000
-            val baselineRow = perWorkout.lastOrNull { it.startTime.time <= last.startTime.time - threeWeeksMs }
-                ?: perWorkout.firstOrNull().takeIf { perWorkout.size > 1 }
-            val baselineE1rm = baselineRow?.let { OneRepMaxCalculator.calculateE1RM(it.weight, it.reps) }
+            val baselineEligible = if (latestEligible != null && eligibleWorkouts.size > 1) {
+                eligibleWorkouts.lastOrNull {
+                    it.workoutId != latestEligible.workoutId &&
+                        it.startTime.time <= latestEligible.startTime.time - threeWeeksMs
+                } ?: eligibleWorkouts.firstOrNull { it.workoutId != latestEligible.workoutId }
+            } else {
+                null
+            }
+
+            val lastE1rm = latestEligible?.e1rm
+            val baselineE1rm = baselineEligible?.e1rm
 
             RoutineExerciseTrend(
                 exerciseId = exerciseId,
                 exerciseName = rows.first().exerciseName,
-                lastBestLabel = "${formatWeight(last.weight)} × ${last.reps}",
+                lastBestLabel = "${formatWeight(latest.displayRow.weight)} × ${latest.displayRow.reps}",
                 lastE1rm = lastE1rm,
                 e1rmDelta = if (lastE1rm != null && baselineE1rm != null) lastE1rm - baselineE1rm else null
             )
         }.sortedBy { it.exerciseName }
     }
 
-    private fun formatWeight(weight: Float): String =
-        if (weight % 1f == 0f) weight.toInt().toString() else "%.1f".format(weight)
+    private fun formatWeight(weight: Float): String {
+        if (!weight.isFinite()) return "0"
+        return if (weight % 1f == 0f) {
+            weight.toInt().toString()
+        } else {
+            String.format(Locale.US, "%.1f", weight)
+        }
+    }
+
+    private data class WorkoutBest(
+        val workoutId: Long,
+        val startTime: Date,
+        val displayRow: RoutineSetRow,
+        val e1rm: Float?
+    )
 }

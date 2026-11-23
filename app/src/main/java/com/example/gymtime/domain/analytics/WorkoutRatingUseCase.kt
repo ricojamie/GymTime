@@ -2,10 +2,15 @@ package com.example.gymtime.domain.analytics
 
 import com.example.gymtime.data.db.dao.RatedWorkoutSetInfo
 import com.example.gymtime.data.db.dao.WorkoutDao
+import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Calendar
+import java.time.DayOfWeek
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.temporal.TemporalAdjusters
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
@@ -38,13 +43,28 @@ data class RatedVolumePoint(
 class WorkoutRatingUseCase @Inject constructor(
     private val workoutDao: WorkoutDao
 ) {
+    private var zoneId: ZoneId = ZoneId.systemDefault()
+
+    internal constructor(
+        workoutDao: WorkoutDao,
+        zoneId: ZoneId
+    ) : this(workoutDao) {
+        this.zoneId = zoneId
+    }
+
     suspend fun getRatingStats(nowMs: Long = System.currentTimeMillis()): WorkoutRatingStats =
         withContext(Dispatchers.IO) {
-            val startOfWeek = startOfCurrentWeek(nowMs)
-            val startOfMonth = startOfCurrentMonth(nowMs)
-            val trendStart = startOfWeek - WEEKS_FOR_TREND * WEEK_MS
+            val nowDate = Instant.ofEpochMilli(nowMs).atZone(zoneId).toLocalDate()
+            val startOfWeekDate = nowDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+            val startOfWeek = startOfWeekDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
+            val startOfMonth = nowDate.withDayOfMonth(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
+            val trendStartDate = startOfWeekDate.minusWeeks(WEEKS_FOR_TREND.toLong())
+            val trendStart = trendStartDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
+
             val rows = workoutDao.getRatedWorkoutSetInfo(trendStart, nowMs)
-            val workouts = rows.toSnapshots().filter { it.workingRows().isNotEmpty() }
+            val workouts = rows.toSnapshots().filter {
+                it.startTime.time in trendStart..nowMs && it.workingRows().isNotEmpty()
+            }
 
             val weekWorkouts = workouts.filter { it.startTime.time >= startOfWeek }
             val monthWorkouts = workouts.filter { it.startTime.time >= startOfMonth }
@@ -56,7 +76,7 @@ class WorkoutRatingUseCase @Inject constructor(
                 weekRatedVolume = weekWorkouts.sumOf { it.ratedVolume().toDouble() }.toFloat(),
                 monthRatedVolume = monthWorkouts.sumOf { it.ratedVolume().toDouble() }.toFloat(),
                 ratedWorkoutCount = monthWorkouts.size,
-                weeklyTrend = buildWeeklyTrend(workouts, trendStart, nowMs),
+                weeklyTrend = buildWeeklyTrend(workouts, trendStartDate, nowDate, nowMs),
                 topMuscles = monthMuscles.sortedByDescending { it.averageRating }.take(3),
                 lowMuscles = monthMuscles.sortedBy { it.averageRating }.take(3)
             )
@@ -69,9 +89,9 @@ class WorkoutRatingUseCase @Inject constructor(
 
     private fun buildMuscleSummaries(workouts: List<RatedWorkoutSnapshot>): List<MuscleRatingSummary> {
         data class Accumulator(
-            var weightedRating: Float = 0f,
-            var weight: Float = 0f,
-            var ratedVolume: Float = 0f,
+            var weightedRating: Double = 0.0,
+            var weight: Double = 0.0,
+            var ratedVolume: Double = 0.0,
             var workingSets: Int = 0
         )
 
@@ -81,28 +101,29 @@ class WorkoutRatingUseCase @Inject constructor(
             val totalSets = workingSets.size
             if (totalSets == 0) return@forEach
 
-            workingSets.groupBy { it.targetMuscle ?: "Other" }.forEach { (muscle, rows) ->
-                val share = rows.size.toFloat() / totalSets
-                val volume = rows.sumOf { row ->
-                    val weight = row.weight ?: return@sumOf 0.0
-                    val reps = row.reps ?: return@sumOf 0.0
-                    weight.toDouble() * reps
-                }.toFloat()
+            workingSets.groupBy { it.targetMuscle?.takeIf { m -> m.isNotBlank() } ?: "Other" }
+                .forEach { (muscle, rows) ->
+                    val share = rows.size.toDouble() / totalSets
+                    val volume = rows.sumOf { row ->
+                        val weight = row.weight?.takeIf { it.isFinite() && it >= 0f } ?: return@sumOf 0.0
+                        val reps = row.reps?.takeIf { it > 0 } ?: return@sumOf 0.0
+                        weight.toDouble() * reps
+                    }
 
-                val acc = byMuscle.getOrPut(muscle) { Accumulator() }
-                acc.weightedRating += workout.rating * share
-                acc.weight += share
-                acc.ratedVolume += volume * (workout.rating / 5f)
-                acc.workingSets += rows.size
-            }
+                    val acc = byMuscle.getOrPut(muscle) { Accumulator() }
+                    acc.weightedRating += workout.rating * share
+                    acc.weight += share
+                    acc.ratedVolume += volume * (workout.rating / 5.0)
+                    acc.workingSets += rows.size
+                }
         }
 
         return byMuscle.mapNotNull { (muscle, acc) ->
-            if (acc.weight <= 0f) return@mapNotNull null
+            if (acc.weight <= 0.0) return@mapNotNull null
             MuscleRatingSummary(
                 muscle = muscle,
-                averageRating = acc.weightedRating / acc.weight,
-                ratedVolume = acc.ratedVolume,
+                averageRating = (acc.weightedRating / acc.weight).toFloat(),
+                ratedVolume = acc.ratedVolume.toFloat(),
                 workingSets = acc.workingSets
             )
         }
@@ -110,61 +131,43 @@ class WorkoutRatingUseCase @Inject constructor(
 
     private fun buildWeeklyTrend(
         workouts: List<RatedWorkoutSnapshot>,
-        startMs: Long,
-        endMs: Long
+        trendStartDate: LocalDate,
+        nowDate: LocalDate,
+        nowMs: Long
     ): List<RatedVolumePoint> {
-        val formatter = SimpleDateFormat("'W'w", Locale.getDefault())
+        val formatter = DateTimeFormatter.ofPattern("'W'w", Locale.getDefault())
+        val workoutsByMonday = workouts.groupBy { snapshot ->
+            Instant.ofEpochMilli(snapshot.startTime.time)
+                .atZone(zoneId)
+                .toLocalDate()
+                .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        }
         val points = mutableListOf<RatedVolumePoint>()
-        var bucketStart = startMs
+        var cursorDate = trendStartDate
 
-        while (bucketStart <= endMs) {
-            val bucketEnd = bucketStart + WEEK_MS
-            val bucketWorkouts = workouts.filter {
-                it.startTime.time >= bucketStart && it.startTime.time < bucketEnd
-            }
+        while (!cursorDate.isAfter(nowDate)) {
+            val bucketStartMs = cursorDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
+            if (bucketStartMs > nowMs) break
+            val bucketWorkouts = workoutsByMonday[cursorDate].orEmpty()
             if (bucketWorkouts.isNotEmpty()) {
                 points += RatedVolumePoint(
-                    label = formatter.format(Date(bucketStart)),
+                    label = formatter.format(cursorDate),
                     averageRating = bucketWorkouts.map { it.rating }.average().toFloat(),
                     ratedVolume = bucketWorkouts.sumOf { it.ratedVolume().toDouble() }.toFloat(),
-                    date = Date(bucketStart)
+                    date = Date.from(Instant.ofEpochMilli(bucketStartMs))
                 )
             }
-            bucketStart = bucketEnd
+            cursorDate = cursorDate.plusWeeks(1)
         }
 
         return points.takeLast(WEEKS_FOR_TREND)
-    }
-
-    private fun startOfCurrentWeek(nowMs: Long): Long {
-        val calendar = Calendar.getInstance().apply {
-            timeInMillis = nowMs
-            firstDayOfWeek = Calendar.MONDAY
-            set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        return calendar.timeInMillis
-    }
-
-    private fun startOfCurrentMonth(nowMs: Long): Long {
-        val calendar = Calendar.getInstance().apply {
-            timeInMillis = nowMs
-            set(Calendar.DAY_OF_MONTH, 1)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        return calendar.timeInMillis
     }
 
     private fun List<RatedWorkoutSetInfo>.toSnapshots(): List<RatedWorkoutSnapshot> {
         return groupBy { it.workoutId }
             .mapNotNull { (_, rows) ->
                 val first = rows.firstOrNull() ?: return@mapNotNull null
+                if (first.endTime == null) return@mapNotNull null
                 RatedWorkoutSnapshot(
                     workoutId = first.workoutId,
                     startTime = first.startTime,
@@ -172,12 +175,11 @@ class WorkoutRatingUseCase @Inject constructor(
                     rows = rows
                 )
             }
-            .sortedBy { it.startTime }
+            .sortedWith(compareBy<RatedWorkoutSnapshot> { it.startTime.time }.thenBy { it.workoutId })
     }
 
     companion object {
         private const val WEEKS_FOR_TREND = 8
-        private const val WEEK_MS = 7L * 24L * 60L * 60L * 1000L
     }
 }
 
@@ -188,13 +190,17 @@ data class RatedWorkoutSnapshot(
     val rows: List<RatedWorkoutSetInfo>
 ) {
     fun workingRows(): List<RatedWorkoutSetInfo> {
-        return rows.filter { it.setId != null && it.isWarmup != true }
+        return rows.filter {
+            it.setId != null &&
+                it.isWarmup != true &&
+                it.targetMuscle?.isWarmupMuscleGroup() != true
+        }
     }
 
     fun volume(): Float {
         return workingRows().sumOf { row ->
-            val weight = row.weight ?: return@sumOf 0.0
-            val reps = row.reps ?: return@sumOf 0.0
+            val weight = row.weight?.takeIf { it.isFinite() && it >= 0f } ?: return@sumOf 0.0
+            val reps = row.reps?.takeIf { it > 0 } ?: return@sumOf 0.0
             weight.toDouble() * reps
         }.toFloat()
     }

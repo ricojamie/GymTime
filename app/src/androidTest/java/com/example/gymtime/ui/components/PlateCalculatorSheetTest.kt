@@ -3,17 +3,24 @@ package com.example.gymtime.ui.components
 import android.content.ComponentName
 import android.content.Intent
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
-import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
-import com.example.gymtime.ui.theme.IronLogTheme
+import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.gymtime.ui.components.plate.PlateInventoryEditor
+import com.example.gymtime.ui.theme.IronLogTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -95,8 +102,55 @@ class PlateCalculatorSheetTest {
         composeRule.onNodeWithTag("plate_total").assertTextEquals("95")
     }
 
+    @Test
+    fun emptyStockBanner_checksEnabledPlatesOnly() {
+        setCalculator(
+            initialWeight = 135f,
+            availablePlates = listOf(45f),
+            plateInventory = mapOf(10f to 4),
+            usePlateInventory = true
+        )
+
+        composeRule.onNodeWithText(
+            "No plates counted yet. Add your counts above; the calculator currently uses the bare bar."
+        ).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun inventoryEditor_rapidDeltaTaps_doNotSnapBackWhenIntermediateCountEmits() {
+        var inventory by mutableStateOf(mapOf(45f to 2))
+        val deltas = mutableListOf<Int>()
+
+        composeRule.setContent {
+            IronLogTheme {
+                PlateInventoryEditor(
+                    availablePlates = listOf(45f),
+                    plateInventory = inventory,
+                    usePlateInventory = true,
+                    onPlateInventoryCountChange = { _, _ -> },
+                    onUsePlateInventoryChange = {},
+                    onPlateInventoryCountDelta = { _, delta -> deltas += delta }
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("plate_stock_add_45").performClick()
+        composeRule.onNodeWithTag("plate_stock_add_45").performClick()
+        composeRule.runOnIdle {
+            assertEquals(listOf(1, 1), deltas)
+            // Simulate first DataStore write completing while second write is still in flight.
+            inventory = mapOf(45f to 3)
+        }
+        composeRule.onNodeWithTag("plate_stock_count_45").assertTextContains("4")
+        composeRule.runOnIdle { inventory = mapOf(45f to 4) }
+        composeRule.onNodeWithTag("plate_stock_count_45").assertTextContains("4")
+    }
+
     private fun setCalculator(
         initialWeight: Float,
+        availablePlates: List<Float> = listOf(45f, 35f, 25f, 15f, 10f, 5f, 2.5f),
+        plateInventory: Map<Float, Int> = emptyMap(),
+        usePlateInventory: Boolean = false,
         onUseWeight: (Float) -> Unit = {}
     ) {
         composeRule.setContent {
@@ -104,12 +158,14 @@ class PlateCalculatorSheetTest {
                 PlateCalculatorContent(
                     initialWeight = initialWeight,
                     barWeight = 45f,
-                    availablePlates = listOf(45f, 35f, 25f, 15f, 10f, 5f, 2.5f),
+                    availablePlates = availablePlates,
                     loadingSides = 2,
                     onDismiss = {},
                     onNavigateToSettings = {},
                     onUseWeight = onUseWeight,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    plateInventory = plateInventory,
+                    usePlateInventory = usePlateInventory
                 )
             }
         }

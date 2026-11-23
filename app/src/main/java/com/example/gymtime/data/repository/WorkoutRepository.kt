@@ -5,23 +5,27 @@ import com.example.gymtime.data.VolumeOrbRepository
 import com.example.gymtime.data.db.GymTimeDatabase
 import com.example.gymtime.data.db.dao.RoutineDao
 import com.example.gymtime.data.db.dao.SetDao
-import com.example.gymtime.data.db.dao.WorkoutPlanDao
-import com.example.gymtime.data.db.dao.WorkoutPlanSummary
 import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
+import com.example.gymtime.data.db.dao.WorkoutPlanDao
+import com.example.gymtime.data.db.dao.WorkoutPlanSummary
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.db.entity.WorkoutExerciseInstance
-import com.example.gymtime.ui.exercise.WorkoutStats
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import java.util.Date
 import javax.inject.Inject
 import javax.inject.Singleton
+
+data class WorkoutStats(
+    val totalSets: Int,
+    val totalVolume: Float,
+    val exerciseCount: Int,
+    val duration: String
+)
 
 data class WorkoutStartResult(
     val workoutId: Long,
@@ -46,16 +50,11 @@ class WorkoutRepository @Inject constructor(
     private val volumeOrbRepository: VolumeOrbRepository
 ) {
 
-    suspend fun getCurrentWorkout(): Workout {
-        val ongoing = workoutDao.getOngoingWorkout().first()
-        return if (ongoing != null) {
-            ongoing
-        } else {
-            val newWorkoutId = workoutDao.insertWorkout(
-                Workout(startTime = Date(), endTime = null, name = null, note = null)
-            )
-            workoutDao.getWorkoutById(newWorkoutId).first()!!
-        }
+    suspend fun getCurrentWorkout(): Workout = database.withTransaction {
+        workoutDao.getOngoingWorkoutSync()?.let { return@withTransaction it }
+        val newWorkout = Workout(startTime = Date(), endTime = null, name = null, note = null)
+        val newWorkoutId = workoutDao.insertWorkout(newWorkout)
+        workoutDao.getWorkoutByIdSync(newWorkoutId) ?: newWorkout.copy(id = newWorkoutId)
     }
 
     /**
@@ -67,7 +66,7 @@ class WorkoutRepository @Inject constructor(
         require(orderedExerciseIds.isNotEmpty()) { "Select at least one exercise" }
 
         return database.withTransaction {
-            check(workoutDao.getOngoingWorkout().first() == null) {
+            check(workoutDao.getOngoingWorkoutSync() == null) {
                 "An active workout is already in progress"
             }
 
@@ -101,9 +100,6 @@ class WorkoutRepository @Inject constructor(
 
     suspend fun getWorkoutById(workoutId: Long): Flow<Workout?> = workoutDao.getWorkoutById(workoutId)
 
-    suspend fun getSetsForWorkoutExercise(workoutId: Long, exerciseId: Long): Flow<List<Set>> =
-        setDao.getSetsForWorkout(workoutId)
-
     suspend fun getSetsForWorkout(workoutId: Long): Flow<List<Set>> = setDao.getSetsForWorkout(workoutId)
 
     suspend fun getLastWorkoutSetsForExercise(exerciseId: Long, workoutId: Long): List<Set> =
@@ -116,15 +112,19 @@ class WorkoutRepository @Inject constructor(
 
     suspend fun updateSet(set: Set) {
         setDao.updateSet(set)
+        volumeOrbRepository.refresh()
     }
 
     suspend fun deleteSet(setId: Long) {
         setDao.deleteSetById(setId)
+        volumeOrbRepository.refresh()
     }
 
     suspend fun finishWorkout(workoutId: Long) {
         database.withTransaction {
-            val workout = workoutDao.getWorkoutById(workoutId).first() ?: return@withTransaction
+            val workout = workoutDao.getWorkoutByIdSync(workoutId) ?: return@withTransaction
+            if (workout.endTime != null) return@withTransaction
+
             val updatedWorkout = workout.copy(endTime = Date())
             workoutDao.updateWorkout(updatedWorkout)
 
@@ -134,6 +134,12 @@ class WorkoutRepository @Inject constructor(
 
             val active = routineDao.getActiveRoutineSync()
             if (active?.id != workout.routineId) return@withTransaction
+
+            // Do not rewind routine progression when finishing an older reopened session
+            // after subsequent routine workouts have already completed.
+            if (workoutDao.hasNewerCompletedRoutineWorkout(active.id, workout.id, workout.startTime.time)) {
+                return@withTransaction
+            }
 
             val startedCount = workoutPlanDao.getStartedInstanceCount(workoutId)
             if (startedCount <= 0) return@withTransaction
@@ -150,7 +156,17 @@ class WorkoutRepository @Inject constructor(
     }
 
     suspend fun reopenWorkout(workoutId: Long) {
-        workoutDao.reopenWorkout(workoutId)
+        database.withTransaction {
+            val target = workoutDao.getWorkoutByIdSync(workoutId)
+                ?: throw IllegalStateException("Workout not found")
+            val ongoing = workoutDao.getOngoingWorkoutSync()
+            check(ongoing == null || ongoing.id == workoutId) {
+                "An active workout is already in progress"
+            }
+            if (target.endTime != null) {
+                workoutDao.reopenWorkout(workoutId)
+            }
+        }
     }
 
     suspend fun getLastCompletedWorkout(): Workout? = workoutDao.getLastCompletedWorkout()
@@ -264,7 +280,7 @@ class WorkoutRepository @Inject constructor(
 
     suspend fun ensureWorkoutPlanInstance(workoutId: Long, exerciseId: Long): WorkoutExerciseInstance? {
         return database.withTransaction {
-            workoutDao.getWorkoutById(workoutId).first() ?: return@withTransaction null
+            workoutDao.getWorkoutByIdSync(workoutId) ?: return@withTransaction null
             // Blank workouts remain build-as-you-go. Existing routine and
             // one-off plans both keep newly added exercises in their order.
             if (workoutPlanDao.getInstanceCountForWorkout(workoutId) == 0) {
@@ -293,7 +309,7 @@ class WorkoutRepository @Inject constructor(
         val totalVolume = overview.sumOf { it.totalVolume.toDouble() }.toFloat()
 
         val duration = workout?.let {
-            val durationMs = Date().time - it.startTime.time
+            val durationMs = ((it.endTime?.time ?: Date().time) - it.startTime.time).coerceAtLeast(0L)
             val minutes = durationMs / 1000 / 60
             val hours = minutes / 60
             val remainingMinutes = minutes % 60

@@ -74,6 +74,9 @@ interface WorkoutPlanDao {
     """)
     suspend fun getInstancesForWorkoutSync(workoutId: Long): List<WorkoutExerciseInstance>
 
+    @Query("SELECT * FROM workout_exercise_instances")
+    suspend fun getAllInstancesSync(): List<WorkoutExerciseInstance>
+
     @Query("""
         SELECT * FROM workout_exercise_instances
         WHERE workoutId = :workoutId

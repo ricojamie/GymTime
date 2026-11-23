@@ -2,8 +2,13 @@ package com.example.gymtime.domain.report
 
 import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.db.dao.SetDao
+import com.example.gymtime.data.db.dao.SetWithExerciseInfo
 import com.example.gymtime.data.db.dao.WorkoutDao
+import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
 import com.example.gymtime.util.StreakCalculator
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -12,8 +17,7 @@ import java.time.temporal.WeekFields
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
-import kotlinx.coroutines.flow.first
-import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 class MonthlyReportUseCase @Inject constructor(
     private val workoutDao: WorkoutDao,
@@ -35,7 +39,7 @@ class MonthlyReportUseCase @Inject constructor(
      * Builds a [MonthlyReport] for the calendar month immediately preceding [reference].
      * If [reference] is May 2026, the report covers April 1 - April 30 (inclusive).
      */
-    suspend operator fun invoke(reference: Date = Date()): MonthlyReport {
+    suspend operator fun invoke(reference: Date = Date()): MonthlyReport = withContext(Dispatchers.IO) {
         val referenceDate = reference.toInstant().atZone(zoneId).toLocalDate()
         val periodStartDate = referenceDate.withDayOfMonth(1).minusMonths(1)
         val nextMonthStartDate = periodStartDate.plusMonths(1)
@@ -55,14 +59,30 @@ class MonthlyReportUseCase @Inject constructor(
         )
 
         val allWorkouts = workoutDao.getAllWorkoutsSync()
-        val periodSets = setDao.getSetsWithExerciseInRange(periodStartMs, periodEndMs)
-        val workingSets = periodSets.filter { !it.set.isWarmup }
-        val completedWorkingSets = workingSets.filter { it.set.isComplete }
-        val previousWorkingSets = setDao
+        val completedWorkoutIds = allWorkouts
+            .asSequence()
+            .filter { it.endTime != null }
+            .map { it.id }
+            .toHashSet()
+
+        val completedWorkingSets = setDao.getSetsWithExerciseInRange(periodStartMs, periodEndMs)
+            .filter {
+                it.set.isComplete &&
+                    !it.set.isWarmup &&
+                    !it.targetMuscle.isWarmupMuscleGroup() &&
+                    it.set.workoutId in completedWorkoutIds
+            }
+        val previousCompletedWorkingSets = setDao
             .getSetsWithExerciseInRange(previousStartMs, previousEndMs)
-            .filter { !it.set.isWarmup }
-        val workoutIdsWithWorkingSets = workingSets.mapTo(mutableSetOf()) { it.set.workoutId }
-        val previousWorkoutIdsWithWorkingSets = previousWorkingSets
+            .filter {
+                it.set.isComplete &&
+                    !it.set.isWarmup &&
+                    !it.targetMuscle.isWarmupMuscleGroup() &&
+                    it.set.workoutId in completedWorkoutIds
+            }
+
+        val workoutIdsWithWorkingSets = completedWorkingSets.mapTo(mutableSetOf()) { it.set.workoutId }
+        val previousWorkoutIdsWithWorkingSets = previousCompletedWorkingSets
             .mapTo(mutableSetOf()) { it.set.workoutId }
         val workouts = allWorkouts
             .filter {
@@ -80,19 +100,15 @@ class MonthlyReportUseCase @Inject constructor(
         val averageRating = if (ratings.isNotEmpty()) ratings.average().toFloat() else null
 
         val muscleSetCounts = workoutDao.getMuscleSetCountsInRange(periodStartMs, periodEndMs)
+            .filterNot { it.muscle.isWarmupMuscleGroup() }
         val topMuscles = muscleSetCounts.take(5).map { MuscleTotal(it.muscle, it.setVolume) }
         val undertrained = muscleSetCounts.filter { it.setVolume < UNDERTRAINED_SET_THRESHOLD }
             .map { it.muscle }
             .take(3)
 
-        val totalVolume = workingSets.sumOf { info ->
-            ((info.set.weight ?: 0f) * (info.set.reps ?: 0)).toDouble()
-        }.toFloat()
-        val exerciseCount = workingSets.map { it.set.exerciseId }.distinct().size
-
-        val previousTotalVolume = previousWorkingSets.sumOf { info ->
-            ((info.set.weight ?: 0f) * (info.set.reps ?: 0)).toDouble()
-        }.toFloat()
+        val totalVolume = sumFiniteVolume(completedWorkingSets)
+        val exerciseCount = completedWorkingSets.map { it.set.exerciseId }.distinct().size
+        val previousTotalVolume = sumFiniteVolume(previousCompletedWorkingSets)
 
         val trainingDays = completedWorkingSets
             .map { localDateOf(it.set.timestamp.time) }
@@ -117,39 +133,52 @@ class MonthlyReportUseCase @Inject constructor(
             asOf = periodEnd
         ).streakDays
 
-        // PR detection per exercise: the heaviest working set in the period that
-        // beats the all-time best from before the period.
+        // PR detection per exercise: the heaviest completed working set in the period
+        // with finite positive weight and reps that beats the prior all-time best.
         val newPRs = mutableListOf<MonthlyPR>()
-        val byExercise = workingSets
-            .filter { it.set.weight != null }
+        val byExercise = completedWorkingSets
+            .filter { info ->
+                val weight = info.set.weight
+                val reps = info.set.reps
+                weight != null && weight.isFinite() && weight > 0f && reps != null && reps > 0
+            }
             .groupBy { it.set.exerciseId }
         for ((exerciseId, sets) in byExercise) {
-            val heaviest = sets.maxByOrNull { it.set.weight ?: 0f } ?: continue
-            val priorBest = setDao.getPersonalBestBefore(exerciseId, periodStartMs)?.weight
+            val heaviest = sets.maxWithOrNull(
+                compareBy<SetWithExerciseInfo> { it.set.weight!! }
+                    .thenBy { it.set.reps!! }
+            ) ?: continue
             val w = heaviest.set.weight ?: continue
+            val r = heaviest.set.reps ?: continue
+            val priorBest = setDao.getPersonalBestBefore(exerciseId, periodStartMs)
+                ?.weight
+                ?.takeIf { it.isFinite() && it > 0f }
             if (priorBest == null || w > priorBest) {
                 newPRs += MonthlyPR(
                     exerciseName = heaviest.exerciseName,
                     weight = w,
-                    reps = heaviest.set.reps ?: 0
+                    reps = r
                 )
             }
         }
-        newPRs.sortByDescending { it.weight }
+        newPRs.sortWith(compareByDescending<MonthlyPR> { it.weight }.thenByDescending { it.reps })
 
-        return MonthlyReport(
+        MonthlyReport(
             periodStart = periodStart,
             periodEnd = periodEnd,
             monthLabel = monthLabel,
             workoutCount = workouts.size,
             totalVolume = totalVolume,
-            totalWorkingSets = workingSets.size,
+            totalWorkingSets = completedWorkingSets.size,
             exerciseCount = exerciseCount,
             previousWorkoutCount = previousWorkouts.size,
             previousTotalVolume = previousTotalVolume,
-            previousWorkingSets = previousWorkingSets.size,
+            previousWorkingSets = previousCompletedWorkingSets.size,
             volumeChangePercent = percentChange(totalVolume, previousTotalVolume),
-            workingSetChangePercent = percentChange(workingSets.size.toFloat(), previousWorkingSets.size.toFloat()),
+            workingSetChangePercent = percentChange(
+                completedWorkingSets.size.toFloat(),
+                previousCompletedWorkingSets.size.toFloat()
+            ),
             trainingDays = trainingDays,
             activeWeeks = activeWeeks,
             weeksInPeriod = weeksInPeriod,
@@ -167,9 +196,19 @@ class MonthlyReportUseCase @Inject constructor(
         private const val UNDERTRAINED_SET_THRESHOLD = 6
     }
 
+    private fun sumFiniteVolume(sets: List<SetWithExerciseInfo>): Float {
+        return sets.sumOf { info ->
+            val weight = info.set.weight?.takeIf { it.isFinite() && it > 0f } ?: return@sumOf 0.0
+            val reps = info.set.reps?.takeIf { it > 0 } ?: return@sumOf 0.0
+            weight.toDouble() * reps
+        }.toFloat()
+    }
+
     private fun percentChange(current: Float, previous: Float): Float? {
-        if (previous <= 0f) return null
-        return (((current - previous) / previous) * 1000f).roundToInt() / 10f
+        if (!current.isFinite() || !previous.isFinite() || previous <= 0f) return null
+        val scaled = (((current.toDouble() - previous.toDouble()) / previous.toDouble()) * 1000.0)
+        if (!scaled.isFinite()) return null
+        return (scaled.roundToLong() / 10.0).toFloat()
     }
 
     private fun localDateOf(timestampMs: Long): LocalDate {

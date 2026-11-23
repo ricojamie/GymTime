@@ -8,8 +8,8 @@ import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.VibratorManager
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -38,9 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -61,12 +60,19 @@ import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
 import androidx.wear.compose.foundation.rotary.rotaryScrollable
 import androidx.wear.compose.material3.ScreenScaffold
@@ -81,6 +87,20 @@ private const val UNINITIALIZED_COMPLETION_ID = Long.MIN_VALUE
 private val IronLogGreen = Color(0xFFB6FF3B)
 private val IronLogBackground = Color(0xFF090B08)
 private val IronLogSurface = Color(0xFF121611)
+
+private val IronLogWearColorScheme = darkColorScheme(
+    primary = IronLogGreen,
+    background = IronLogBackground,
+    surface = IronLogSurface,
+    onPrimary = Color.Black,
+    onBackground = Color.White,
+    onSurface = Color.White
+)
+
+private val WearLogButtonShape = RoundedCornerShape(24.dp)
+private val WearTimerCardShape = RoundedCornerShape(16.dp)
+private val WearSmallPillShape = RoundedCornerShape(20.dp)
+private val TabularTextStyle = TextStyle(fontFeatureSettings = "tnum")
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -117,15 +137,29 @@ private fun IronLogWearApp() {
     }
     var showTimerCompletion by rememberSaveable { mutableStateOf(false) }
 
-    DisposableEffect(client) {
+    LifecycleStartEffect(client) {
         client.start()
-        onDispose { client.stop() }
+        onStopOrDispose { client.stop() }
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        notificationsEnabled = ContextCompat.checkSelfPermission(
+            applicationContext,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
     }
 
     // Ignore the initial hydrated completion ID. It may represent a timer that ended while the
     // activity was not running and must not produce a stale haptic when the user opens the app.
-    LaunchedEffect(session.timerCompletionId, session.updatedAt, session.active) {
-        if (session.updatedAt <= 0L) return@LaunchedEffect
+    val isHydrated = session.updatedAt > 0L
+    LaunchedEffect(
+        session.timerCompletionId,
+        isHydrated,
+        session.active,
+        session.timerRunning,
+        session.timerRemainingSeconds > 0
+    ) {
+        if (!isHydrated) return@LaunchedEffect
 
         if (lastSeenTimerCompletionId == UNINITIALIZED_COMPLETION_ID) {
             lastSeenTimerCompletionId = session.timerCompletionId
@@ -154,6 +188,13 @@ private fun IronLogWearApp() {
         }
     }
 
+    // Clear the local optimistic lock as soon as delivery transitions to retryable or timed out.
+    LaunchedEffect(deliveryState.canRetrySetLog, deliveryState.isSetLogPending, deliveryState.lastError) {
+        if (deliveryState.canRetrySetLog || (!deliveryState.isSetLogPending && deliveryState.lastError != null)) {
+            logRequestPending = false
+        }
+    }
+
     // A failed/disconnected send must become retryable even when no acknowledgement arrives.
     LaunchedEffect(logRequestPending) {
         if (logRequestPending) {
@@ -168,26 +209,19 @@ private fun IronLogWearApp() {
         showTimerCompletion = false
     }
 
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = IronLogGreen,
-            background = IronLogBackground,
-            surface = IronLogSurface,
-            onPrimary = Color.Black,
-            onBackground = Color.White,
-            onSurface = Color.White
-        )
-    ) {
+    MaterialTheme(colorScheme = IronLogWearColorScheme) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
             if (session.active) {
+                val isActivelySaving = !deliveryState.canRetrySetLog &&
+                    (logRequestPending || deliveryState.isSetLogPending)
                 ActiveSessionScreen(
                     session = session,
                     showTimerCompletion = showTimerCompletion,
                     deliveryState = deliveryState,
-                    logRequestPending = logRequestPending || deliveryState.isSetLogPending,
+                    isActivelySaving = isActivelySaving,
                     onSessionChange = { transform ->
                         // Always transform the latest optimistic draft. This prevents fast repeated
                         // taps in the same frame from applying to the same stale captured value.
@@ -195,11 +229,10 @@ private fun IronLogWearApp() {
                     },
                     onLogSet = {
                         val latestSession = client.session.value
-                        if (
-                            !logRequestPending &&
-                            !deliveryState.isSetLogPending &&
-                            latestSession.canLog
-                        ) {
+                        val latestDeliveryState = client.deliveryState.value
+                        val latestActivelySaving = !latestDeliveryState.canRetrySetLog &&
+                            (logRequestPending || latestDeliveryState.isSetLogPending)
+                        if (!latestActivelySaving && latestSession.canLog) {
                             logRequestPending = true
                             client.logSet(latestSession)
                         }
@@ -284,7 +317,7 @@ private fun ActiveSessionScreen(
     session: WearSession,
     showTimerCompletion: Boolean,
     deliveryState: WearDeliveryState,
-    logRequestPending: Boolean,
+    isActivelySaving: Boolean,
     onSessionChange: ((WearSession) -> WearSession) -> Unit,
     onLogSet: () -> Unit,
     onAdjustTimer: (Int) -> Unit,
@@ -296,7 +329,6 @@ private fun ActiveSessionScreen(
     val scrollState = rememberScrollState()
     val focusRequester = remember { FocusRequester() }
     val rotaryBehavior = RotaryScrollableDefaults.behavior(scrollState)
-    val displayedTimerSeconds = rememberDisplayedTimerSeconds(session)
 
     LaunchedEffect(session.workoutId, session.exerciseId) {
         scrollState.scrollTo(0)
@@ -341,6 +373,7 @@ private fun ActiveSessionScreen(
                 color = MaterialTheme.colorScheme.primary,
                 fontSize = if (isCompact) 10.sp else 11.sp,
                 fontWeight = FontWeight.Bold,
+                style = LocalTextStyle.current.merge(TabularTextStyle),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -350,7 +383,6 @@ private fun ActiveSessionScreen(
 
             TimerControls(
                 session = session,
-                displayedSeconds = displayedTimerSeconds,
                 showCompletion = showTimerCompletion,
                 compact = isCompact,
                 onAdjustTimer = onAdjustTimer,
@@ -373,31 +405,38 @@ private fun ActiveSessionScreen(
                 }
             )
 
+            val buttonLabel = when {
+                deliveryState.canRetrySetLog && deliveryState.lastError != null -> "RETRY LOG SET"
+                deliveryState.isSetLogPending && !deliveryState.isPhoneConnected -> "QUEUED"
+                isActivelySaving -> "SAVING..."
+                else -> "LOG SET"
+            }
+            val buttonDescription = when {
+                deliveryState.canRetrySetLog && deliveryState.lastError != null ->
+                    "Retry logging set ${session.setNumber}"
+                deliveryState.isSetLogPending && !deliveryState.isPhoneConnected ->
+                    "Set ${session.setNumber} queued; tap to retry"
+                isActivelySaving -> "Saving set"
+                else -> "Log set ${session.setNumber}"
+            }
+
             Button(
                 onClick = onLogSet,
-                enabled = session.canLog && !logRequestPending,
+                enabled = session.canLog && !isActivelySaving,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
                     .semantics {
-                        contentDescription = if (logRequestPending) {
-                            "Saving set"
-                        } else {
-                            "Log set ${session.setNumber}"
-                        }
+                        contentDescription = buttonDescription
                     },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = Color.Black
                 ),
-                shape = RoundedCornerShape(24.dp)
+                shape = WearLogButtonShape
             ) {
                 Text(
-                    text = when {
-                        deliveryState.isSetLogPending && !deliveryState.isPhoneConnected -> "QUEUED"
-                        logRequestPending -> "SAVING..."
-                        else -> "LOG SET"
-                    },
+                    text = buttonLabel,
                     fontWeight = FontWeight.Black,
                     fontSize = 14.sp
                 )
@@ -411,7 +450,10 @@ private fun ActiveSessionScreen(
 @Composable
 private fun DeliveryStatus(deliveryState: WearDeliveryState) {
     val status = when {
-        deliveryState.lastError != null -> "PHONE UNAVAILABLE - WILL RETRY"
+        deliveryState.lastError != null && !deliveryState.isPhoneConnected ->
+            "PHONE UNAVAILABLE - WILL RETRY"
+        deliveryState.lastError != null ->
+            deliveryState.lastError.uppercase(Locale.US)
         !deliveryState.isPhoneConnected -> "CONNECTING TO PHONE..."
         deliveryState.isDraftPending -> "SYNCING CHANGES..."
         else -> null
@@ -426,7 +468,7 @@ private fun DeliveryStatus(deliveryState: WearDeliveryState) {
             },
             fontSize = 8.sp,
             fontWeight = FontWeight.Bold,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
             modifier = Modifier
@@ -441,23 +483,12 @@ private fun DeliveryStatus(deliveryState: WearDeliveryState) {
 @Composable
 private fun TimerControls(
     session: WearSession,
-    displayedSeconds: Int,
     showCompletion: Boolean,
     compact: Boolean,
     onAdjustTimer: (Int) -> Unit,
     onStopTimer: () -> Unit
 ) {
     val timerCanBeControlled = session.timerRunning || session.timerRemainingSeconds > 0
-    val timerText = when {
-        displayedSeconds > 0 -> formatSeconds(displayedSeconds)
-        session.timerRunning || showCompletion -> "DONE"
-        else -> formatSeconds(session.restSeconds.coerceAtLeast(0))
-    }
-    val timerDescription = when {
-        displayedSeconds > 0 -> "Rest timer, ${spokenDuration(displayedSeconds)} remaining"
-        timerText == "DONE" -> "Rest timer complete"
-        else -> "Rest after set, ${spokenDuration(session.restSeconds.coerceAtLeast(0))}"
-    }
 
     Column(
         modifier = Modifier
@@ -465,19 +496,15 @@ private fun TimerControls(
             .border(
                 width = 1.dp,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                shape = RoundedCornerShape(16.dp)
+                shape = WearTimerCardShape
             )
             .padding(horizontal = 7.dp, vertical = if (compact) 6.dp else 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = timerText,
-            color = MaterialTheme.colorScheme.primary,
-            fontSize = if (compact) 20.sp else 22.sp,
-            fontWeight = FontWeight.Black,
-            modifier = Modifier.semantics {
-                contentDescription = timerDescription
-            }
+        TimerCountdownReadout(
+            session = session,
+            showCompletion = showCompletion,
+            compact = compact
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -500,6 +527,36 @@ private fun TimerControls(
             ) { onStopTimer() }
         }
     }
+}
+
+@Composable
+private fun TimerCountdownReadout(
+    session: WearSession,
+    showCompletion: Boolean,
+    compact: Boolean
+) {
+    val displayedSeconds = rememberDisplayedTimerSeconds(session)
+    val timerText = when {
+        displayedSeconds > 0 -> formatSeconds(displayedSeconds)
+        session.timerRunning || showCompletion -> "DONE"
+        else -> formatSeconds(session.restSeconds.coerceAtLeast(0))
+    }
+    val timerDescription = when {
+        displayedSeconds > 0 -> "Rest timer, ${spokenDuration(displayedSeconds)} remaining"
+        timerText == "DONE" -> "Rest timer complete"
+        else -> "Rest after set, ${spokenDuration(session.restSeconds.coerceAtLeast(0))}"
+    }
+
+    Text(
+        text = timerText,
+        color = MaterialTheme.colorScheme.primary,
+        fontSize = if (compact) 20.sp else 22.sp,
+        fontWeight = FontWeight.Black,
+        style = LocalTextStyle.current.merge(TabularTextStyle),
+        modifier = Modifier.semantics {
+            contentDescription = timerDescription
+        }
+    )
 }
 
 @Composable
@@ -732,6 +789,7 @@ private fun FieldRow(
                 color = Color.White,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
+                style = LocalTextStyle.current.merge(TabularTextStyle),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -807,7 +865,7 @@ private fun SmallPill(
             .height(40.dp)
             .semantics { this.contentDescription = contentDescription },
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-        shape = RoundedCornerShape(20.dp),
+        shape = WearSmallPillShape,
         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
     ) {
         Text(text, fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -816,6 +874,7 @@ private fun SmallPill(
 
 @Composable
 private fun rememberDisplayedTimerSeconds(session: WearSession): Int {
+    val lifecycleOwner = LocalLifecycleOwner.current
     var displayedSeconds by remember(
         session.workoutId,
         session.exerciseId
@@ -824,33 +883,36 @@ private fun rememberDisplayedTimerSeconds(session: WearSession): Int {
     }
 
     LaunchedEffect(
+        lifecycleOwner,
         session.timerRunning,
         session.timerRemainingSeconds,
         session.updatedAt
     ) {
-        val snapshotAgeSeconds = if (session.timerRunning && session.updatedAt > 0L) {
-            ((System.currentTimeMillis() - session.updatedAt).coerceAtLeast(0L) / 1_000L)
-                .coerceAtMost(Int.MAX_VALUE.toLong())
-                .toInt()
-        } else {
-            0
-        }
-        val anchorSeconds = (
-            session.timerRemainingSeconds.coerceAtLeast(0) - snapshotAgeSeconds
-        ).coerceAtLeast(0)
-        displayedSeconds = anchorSeconds
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            val snapshotAgeSeconds = if (session.timerRunning && session.updatedAt > 0L) {
+                ((System.currentTimeMillis() - session.updatedAt).coerceAtLeast(0L) / 1_000L)
+                    .coerceAtMost(Int.MAX_VALUE.toLong())
+                    .toInt()
+            } else {
+                0
+            }
+            val anchorSeconds = (
+                session.timerRemainingSeconds.coerceAtLeast(0) - snapshotAgeSeconds
+            ).coerceAtLeast(0)
+            displayedSeconds = anchorSeconds
 
-        if (!session.timerRunning || anchorSeconds == 0) return@LaunchedEffect
+            if (!session.timerRunning || anchorSeconds == 0) return@repeatOnLifecycle
 
-        val anchorElapsedRealtime = SystemClock.elapsedRealtime()
-        while (displayedSeconds > 0) {
-            val elapsedMillis = SystemClock.elapsedRealtime() - anchorElapsedRealtime
-            val remaining = (anchorSeconds - (elapsedMillis / 1_000L).toInt()).coerceAtLeast(0)
-            if (displayedSeconds != remaining) displayedSeconds = remaining
-            if (remaining == 0) break
+            val anchorElapsedRealtime = SystemClock.elapsedRealtime()
+            while (displayedSeconds > 0) {
+                val elapsedMillis = SystemClock.elapsedRealtime() - anchorElapsedRealtime
+                val remaining = (anchorSeconds - (elapsedMillis / 1_000L).toInt()).coerceAtLeast(0)
+                if (displayedSeconds != remaining) displayedSeconds = remaining
+                if (remaining == 0) break
 
-            val delayUntilNextSecond = 1_000L - (elapsedMillis % 1_000L)
-            delay(delayUntilNextSecond.coerceAtLeast(50L))
+                val delayUntilNextSecond = 1_000L - (elapsedMillis % 1_000L)
+                delay(delayUntilNextSecond.coerceAtLeast(50L))
+            }
         }
     }
 
@@ -904,13 +966,14 @@ private fun parseDuration(value: String): Int {
     val parts = value.filter { it.isDigit() || it == ':' }
         .split(":")
         .filter { it.isNotBlank() }
-        .mapNotNull { it.toIntOrNull() }
-    return when (parts.size) {
+        .mapNotNull { it.toLongOrNull() }
+    val totalSeconds = when (parts.size) {
         1 -> parts[0]
-        2 -> parts[0] * 60 + parts[1]
-        3 -> parts[0] * 3600 + parts[1] * 60 + parts[2]
-        else -> 0
+        2 -> parts[0] * 60L + parts[1]
+        3 -> parts[0] * 3600L + parts[1] * 60L + parts[2]
+        else -> 0L
     }
+    return totalSeconds.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
 }
 
 private fun formatSeconds(seconds: Int): String {

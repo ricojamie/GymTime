@@ -1,128 +1,89 @@
 package com.example.gymtime.ui.exercise
 
-import android.view.HapticFeedbackConstants
 import android.os.SystemClock
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.verticalScroll
+import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.VerticalDivider
-import com.example.gymtime.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavController
+import com.example.gymtime.data.PlateInventorySettings
 import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.LogType
-import com.example.gymtime.data.db.entity.isWarmupLibraryExercise
-import com.example.gymtime.domain.recommendation.ExerciseAttemptRecommendation
+import com.example.gymtime.data.db.entity.Set as WorkoutSet
 import com.example.gymtime.navigation.Screen
 import com.example.gymtime.navigation.navigateBackOrHome
 import com.example.gymtime.navigation.navigateHomeAndClearStack
+import com.example.gymtime.navigation.navigateResumed
 import com.example.gymtime.navigation.navigateToWorkoutExercise
-import com.example.gymtime.navigation.navigateToWorkoutSummary
 import com.example.gymtime.navigation.navigateToWorkoutOverview
+import com.example.gymtime.navigation.navigateToWorkoutSummary
+import com.example.gymtime.ui.components.IronLogDivider
 import com.example.gymtime.ui.components.PlateCalculatorSheet
-import com.example.gymtime.ui.components.VolumeProgressBar
-import com.example.gymtime.ui.theme.IronLogTheme
-import com.example.gymtime.ui.theme.LocalAppColors
-import com.example.gymtime.ui.theme.appTextFieldColors
-import com.example.gymtime.util.PlateCalculator
-import com.example.gymtime.util.TimeUtils
-import com.example.gymtime.util.TimeFormatter
+import com.example.gymtime.ui.exercise.preview.LoggerAction
+import com.example.gymtime.ui.exercise.preview.LoggerField
+import com.example.gymtime.ui.exercise.preview.LoggerFields
+import com.example.gymtime.ui.exercise.preview.LoggerProgressSheet
+import com.example.gymtime.ui.exercise.preview.PreviewLoggerContent
+import com.example.gymtime.ui.exercise.preview.PreviewLoggerState
+import com.example.gymtime.ui.exercise.preview.formatLoggerNumber
+import com.example.gymtime.ui.exercise.preview.formatLoggerSet
 import com.example.gymtime.ui.smartlog.SmartLogBottomSheet
-import kotlin.math.roundToInt
-import com.example.gymtime.ui.exercise.preview.*
-import com.example.gymtime.ui.theme.LoggerPreviewTheme
+import com.example.gymtime.ui.theme.IronLogRadius
+import com.example.gymtime.ui.theme.IronLogSpace
+import com.example.gymtime.ui.theme.IronLogTheme
+import com.example.gymtime.ui.theme.IronLogType
+import com.example.gymtime.util.PlateCalculator
+import com.example.gymtime.util.TimeFormatter
+import com.example.gymtime.util.TimeUtils
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+private data class NoteEditTarget(
+    val set: WorkoutSet,
+    val displayLabel: String
+)
 
 private fun NavController.replaceExerciseLogger(exerciseId: Long, draftToken: String?) {
     navigateToWorkoutExercise(exerciseId, draftToken)
@@ -134,21 +95,16 @@ fun ExerciseLoggingScreen(
     navController: NavController,
     viewModel: ExerciseLoggingViewModel = hiltViewModel()
 ) {
-    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
-    if (newUiEnabled) {
-        LoggerPreviewTheme { ExerciseLoggingScreenBody(navController, viewModel, newUiEnabled = true) }
-    } else {
-        ExerciseLoggingScreenBody(navController, viewModel, newUiEnabled = false)
-    }
+    ExerciseLoggingScreenBody(navController = navController, viewModel = viewModel)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ExerciseLoggingScreenBody(
     navController: NavController,
-    viewModel: ExerciseLoggingViewModel,
-    newUiEnabled: Boolean
+    viewModel: ExerciseLoggingViewModel
 ) {
+    val scheme = MaterialTheme.colorScheme
     val exercise by viewModel.exercise.collectAsStateWithLifecycle()
     val currentWorkout by viewModel.currentWorkout.collectAsStateWithLifecycle()
     val loggedSets by viewModel.loggedSets.collectAsStateWithLifecycle()
@@ -159,60 +115,38 @@ private fun ExerciseLoggingScreenBody(
     val duration by viewModel.duration.collectAsStateWithLifecycle()
     val distance by viewModel.distance.collectAsStateWithLifecycle()
     val selectedDistanceUnit by viewModel.selectedDistanceUnit.collectAsStateWithLifecycle()
+    val setNote by viewModel.setNote.collectAsStateWithLifecycle()
     val restTime by viewModel.restTime.collectAsStateWithLifecycle()
-    val countdownTimer by viewModel.countdownTimer.collectAsStateWithLifecycle()
     val isWarmup by viewModel.isWarmup.collectAsStateWithLifecycle()
     val isTimerRunning by viewModel.isTimerRunning.collectAsStateWithLifecycle()
-    val timerAudioEnabled by viewModel.timerAudioEnabled.collectAsStateWithLifecycle(initialValue = true)
-    val timerVibrateEnabled by viewModel.timerVibrateEnabled.collectAsStateWithLifecycle(initialValue = true)
-    val lastWorkoutSets by viewModel.lastWorkoutSets.collectAsStateWithLifecycle()
     val currentPlanItem by viewModel.currentPlanItem.collectAsStateWithLifecycle()
-    val planPosition by viewModel.planPosition.collectAsStateWithLifecycle()
-    val personalBestsByReps by viewModel.personalBestsByReps.collectAsStateWithLifecycle()
-    val attemptRecommendation by viewModel.attemptRecommendation.collectAsStateWithLifecycle()
-    val volumeOrbState by viewModel.volumeOrbState.collectAsStateWithLifecycle()
     val smartLogQueue by viewModel.smartLogQueue.collectAsStateWithLifecycle()
     val isPersistingSet by viewModel.isPersistingSet.collectAsStateWithLifecycle()
-
-
+    val isCurrentInputValid by viewModel.isCurrentInputValidState.collectAsStateWithLifecycle()
+    val inputValidationMessage by viewModel.currentInputValidationMessageState.collectAsStateWithLifecycle()
     val editingSet by viewModel.editingSet.collectAsStateWithLifecycle()
     val timerAutoStart by viewModel.timerAutoStart.collectAsStateWithLifecycle(initialValue = true)
-    val barWeight by viewModel.barWeight.collectAsStateWithLifecycle(initialValue = 45f)
-    val availablePlates by viewModel.availablePlates.collectAsStateWithLifecycle(initialValue = listOf(45f, 35f, 25f, 15f, 10f, 5f, 2.5f))
-    val loadingSides by viewModel.loadingSides.collectAsStateWithLifecycle(initialValue = 2)
-    val plateInventorySettings by viewModel.plateInventorySettings.collectAsStateWithLifecycle(initialValue = null)
-    var showDistanceUnitMenu by remember { mutableStateOf(false) }
-
-    // Superset state
     val isInSupersetMode by viewModel.isInSupersetMode.collectAsStateWithLifecycle()
     val supersetExercises by viewModel.supersetExercises.collectAsStateWithLifecycle()
-    val currentSupersetIndex by viewModel.currentSupersetIndex.collectAsStateWithLifecycle()
-
     val nextExerciseId by viewModel.nextExerciseId.collectAsStateWithLifecycle()
     val previousExerciseId by viewModel.previousExerciseId.collectAsStateWithLifecycle()
+    val progress by viewModel.previewProgress.collectAsStateWithLifecycle()
+    val celebration by viewModel.prCelebration.collectAsStateWithLifecycle()
 
     var showFinishDialog by remember { mutableStateOf(false) }
+    var finishRequested by remember { mutableStateOf(false) }
     var showTimerDialog by remember { mutableStateOf(false) }
     var showExerciseHistory by remember { mutableStateOf(false) }
     var showPlateCalculator by remember { mutableStateOf(false) }
     var showExerciseNotes by remember { mutableStateOf(false) }
     var showSmartLog by remember { mutableStateOf(false) }
-    val scrollState = rememberScrollState()
-
-    var personalRecords by remember { mutableStateOf<PersonalRecords?>(null) }
-    var exerciseHistory by remember { mutableStateOf<Map<Long, List<com.example.gymtime.data.db.entity.Set>>>(emptyMap()) }
-
-    // Set deletion
-    var selectedSetToDelete by remember { mutableStateOf<com.example.gymtime.data.db.entity.Set?>(null) }
-
-    // Set note editing
-    var setToAddNote by remember { mutableStateOf<com.example.gymtime.data.db.entity.Set?>(null) }
+    var selectedSetToDelete by remember { mutableStateOf<WorkoutSet?>(null) }
+    var setToAddNote by remember { mutableStateOf<NoteEditTarget?>(null) }
     var noteText by remember { mutableStateOf("") }
-
-    // Exercise quick-edit (tap title)
     var showExerciseQuickEdit by remember { mutableStateOf(false) }
 
     val view = LocalView.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(viewModel) {
         viewModel.startWearPublishing()
@@ -225,51 +159,45 @@ private fun ExerciseLoggingScreenBody(
         targetExerciseId: Long,
         draftTokenOverride: String? = viewModel.smartLogDraftToken
     ) {
-        if (targetExerciseId == exercise?.id) return
+        if (targetExerciseId == exercise?.id) {
+            if (!draftTokenOverride.isNullOrBlank() && draftTokenOverride != viewModel.smartLogDraftToken) {
+                viewModel.applySmartLogDraft(draftTokenOverride)
+            }
+            return
+        }
         if (isInSupersetMode) {
             viewModel.selectSupersetExercise(targetExerciseId)
         }
         navController.replaceExerciseLogger(targetExerciseId, draftTokenOverride)
     }
 
-    // Observe navigation events from ViewModel
-    LaunchedEffect(Unit) {
-        viewModel.navigationEvents.collect { workoutId ->
-            navController.navigateToWorkoutSummary(workoutId)
+    LaunchedEffect(viewModel, navController, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            launch {
+                viewModel.navigationEvents.collect { workoutId ->
+                    navController.navigateToWorkoutSummary(workoutId)
+                }
+            }
+            launch {
+                viewModel.autoSwitchEvent.collect { nextId ->
+                    navigateToLoggerExercise(nextId)
+                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                }
+            }
         }
     }
 
-    // Observe auto-switch events for superset mode
-    LaunchedEffect(Unit) {
-        viewModel.autoSwitchEvent.collect { nextExerciseId ->
-            navigateToLoggerExercise(nextExerciseId)
-            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+    LaunchedEffect(celebration?.id, viewModel) {
+        val event = celebration ?: return@LaunchedEffect
+        val remaining = event.expiresAt - SystemClock.elapsedRealtime()
+        if (remaining > 0) {
+            if (viewModel.claimPrCelebrationHaptic(event.id)) {
+                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            }
+            delay(remaining)
         }
+        viewModel.dismissPrCelebration(event.id)
     }
-
-    val scope = rememberCoroutineScope()
-    val gradientColors = com.example.gymtime.ui.theme.LocalGradientColors.current
-    val inputValidationMessage = viewModel.currentInputValidationMessage()
-
-    // Load exercise history when bottom sheet opens
-    LaunchedEffect(showExerciseHistory, newUiEnabled, viewModel) {
-        if (showExerciseHistory && !newUiEnabled) {
-            personalRecords = viewModel.getPersonalRecords()
-            exerciseHistory = viewModel.getExerciseHistory()
-        }
-    }
-
-    // Get best set data for inline "Best:" display
-    val bestWeight by viewModel.bestWeight.collectAsStateWithLifecycle()
-    // "Last time" values for the slider markers
-    val lastWeight by viewModel.lastWeight.collectAsStateWithLifecycle()
-    val lastReps by viewModel.lastReps.collectAsStateWithLifecycle()
-
-    // Track if timer just finished for animation
-    var timerJustFinished by remember { mutableStateOf(false) }
-
-    // Timer countdown is now handled by RestTimerService (persistent notification)
-    // No need for LaunchedEffect - service manages countdown and vibration
 
     val submitSet: () -> Unit = {
         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
@@ -288,933 +216,168 @@ private fun ExerciseLoggingScreenBody(
         }
     }
 
-    if (newUiEnabled) {
-        val progress by viewModel.previewProgress.collectAsStateWithLifecycle()
-        val setNote by viewModel.setNote.collectAsStateWithLifecycle()
-        val celebration by viewModel.prCelebration.collectAsStateWithLifecycle()
-        LaunchedEffect(celebration?.id, viewModel) {
-            val event = celebration ?: return@LaunchedEffect
-            val remaining = event.expiresAt - SystemClock.elapsedRealtime()
-            if (remaining > 0) {
-                if (viewModel.claimPrCelebrationHaptic(event.id)) {
-                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                }
-                delay(remaining)
-            }
-            viewModel.dismissPrCelebration(event.id)
-        }
-        PreviewLoggerContent(
-            state = PreviewLoggerState(
-                exercise = exercise,
-                fields = LoggerFields(weight, reps, duration, distance, calories, rpe, setNote, selectedDistanceUnit),
-                sets = loggedSets,
-                best = if (progress.isLoading) "Loading…" else progress.allTimeBest?.let { formatLoggerSet(it, exercise?.logType ?: LogType.WEIGHT_REPS) } ?: "No working sets yet",
-                last = if (progress.isLoading) "Loading…" else progress.lastWorkoutBest?.let { formatLoggerSet(it, exercise?.logType ?: LogType.WEIGHT_REPS) } ?: "No prior working set",
-                bestLabel = progress.recordLabel,
-                plan = currentPlanItem?.let { plan ->
-                    buildList {
-                        plan.plannedSets?.let { add("$it planned sets") }
-                        plan.repMin?.let { add(if (plan.repMax != null && plan.repMax != it) "$it–${plan.repMax} reps" else "$it reps") }
-                        plan.notes?.takeIf { it.isNotBlank() }?.let { add(it) }
-                    }.joinToString(" · ").takeIf { it.isNotBlank() }
-                },
-                isWarmup = isWarmup, editingSetId = editingSet?.id,
-                canLog = viewModel.isCurrentInputValid(), saving = isPersistingSet,
-                validation = inputValidationMessage,
-                restSeconds = restTime, remainingSeconds = countdownTimer, timerRunning = isTimerRunning,
-                hasPrevious = previousExerciseId != null, hasNext = nextExerciseId != null,
-                superset = if (isInSupersetMode) supersetExercises else emptyList(),
-                smartQueue = smartLogQueue?.let { "Smart Log ${it.currentSetNumber} of ${it.totalSets}" },
-                personalBestSetIds = progress.setRecordLabels.keys,
-                recordLabels = progress.setRecordLabels,
-                workoutId = currentWorkout?.id,
-                celebration = celebration?.takeIf { it.expiresAt > SystemClock.elapsedRealtime() }
-            ),
-            onFieldChange = changeField,
-            onDistanceUnitChange = viewModel::updateSelectedDistanceUnit,
-            onSelectExercise = { navigateToLoggerExercise(it) },
-            onEditSet = viewModel::startEditingSet,
-            onDeleteSet = { selectedSetToDelete = it },
-            onSetNote = { noteText = it.note.orEmpty(); setToAddNote = it },
-            onAction = { action ->
-                when (action) {
-                    LoggerAction.BACK -> navController.navigateBackOrHome()
-                    LoggerAction.HOME -> navController.navigateHomeAndClearStack()
-                    LoggerAction.FINISH -> showFinishDialog = true
-                    LoggerAction.PREVIOUS -> previousExerciseId?.let { navigateToLoggerExercise(it) }
-                    LoggerAction.NEXT -> nextExerciseId?.let { navigateToLoggerExercise(it) }
-                    LoggerAction.ADD_EXERCISE -> navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
-                    LoggerAction.OVERVIEW -> navController.navigateToWorkoutOverview()
-                    LoggerAction.HISTORY -> showExerciseHistory = true
-                    LoggerAction.PLATES -> showPlateCalculator = true
-                    LoggerAction.NOTES -> showExerciseNotes = true
-                    LoggerAction.EDIT_EXERCISE -> showExerciseQuickEdit = true
-                    LoggerAction.THEME -> navController.navigate(Screen.ThemeSettings.route)
-                    LoggerAction.SUPERSET -> navController.navigate(
-                        if (isInSupersetMode) Screen.ExerciseSelection.createRoute(workoutMode = true, addToSuperset = true)
-                        else Screen.ExerciseSelection.createRoute(workoutMode = true, supersetMode = true, adHocParentId = exercise?.id)
-                    )
-                    LoggerAction.EXIT_SUPERSET -> viewModel.exitSupersetMode()
-                    LoggerAction.SMART_LOG -> showSmartLog = true
-                    LoggerAction.CANCEL_SMART_LOG -> viewModel.cancelSmartLogQueue()
-                    LoggerAction.TOGGLE_WARMUP -> viewModel.toggleWarmup()
-                    LoggerAction.LOG -> submitSet()
-                    LoggerAction.CANCEL_EDIT -> viewModel.cancelEditing()
-                    LoggerAction.DISMISS_PR -> celebration?.let { viewModel.dismissPrCelebration(it.id) }
-                    LoggerAction.TIMER -> showTimerDialog = true
-                    LoggerAction.START_TIMER -> viewModel.startTimer()
-                    LoggerAction.SKIP_TIMER -> viewModel.stopTimer()
-                    LoggerAction.ADD_REST -> viewModel.adjustRestTime(30)
-                }
-            }
-        )
-        if (showExerciseHistory) {
-            LoggerProgressSheet(
-                exerciseName = exercise?.name.orEmpty(),
-                logType = exercise?.logType ?: LogType.WEIGHT_REPS,
-                state = progress,
-                onDismiss = { showExerciseHistory = false }
-            )
-        }
-    } else {
-    val logType = exercise?.logType ?: LogType.WEIGHT_REPS
-    val fields = LoggerFields(weight, reps, duration, distance, calories, rpe, distanceUnit = selectedDistanceUnit)
-    var activeInput by rememberSaveable(exercise?.id, logType, editingSet?.id) { mutableStateOf<LoggerField?>(null) }
-    activeInput?.let { field ->
-        LoggingKeypad(field, fields, logType.inputFields(), changeField, { activeInput = it },
-            canLog = viewModel.isCurrentInputValid() && !isPersistingSet, editing = editingSet != null,
-            onLog = submitSet,
-            lastValue = if (field == LoggerField.WEIGHT) lastWeight else lastReps,
-            bestValue = if (field == LoggerField.WEIGHT) bestWeight?.toFloatOrNull()?.roundToInt() else null,
-            goalValue = if (field == LoggerField.REPS) exercise?.repTarget else null)
+    val fields = remember(weight, reps, duration, distance, calories, rpe, setNote, selectedDistanceUnit) {
+        LoggerFields(weight, reps, duration, distance, calories, rpe, setNote, selectedDistanceUnit)
     }
-    Scaffold(
-        topBar = {
-            exercise?.let { ex ->
-                TopAppBar(
-                    title = {
-                        Column(
-                            modifier = Modifier.clickable { showExerciseQuickEdit = true }
-                        ) {
-                            Text(
-                                text = ex.name,
-                                style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
-                                fontWeight = FontWeight.Bold,
-                                color = LocalAppColors.current.textPrimary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = planPosition?.let { pos ->
-                                    val prefix = pos.dayName?.let { "$it · " } ?: ""
-                                    "${prefix}Exercise ${pos.index} of ${pos.total}"
-                                } ?: ex.targetMuscle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = {
-                            navController.navigateBackOrHome()
-                        }) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = LocalAppColors.current.textPrimary
-                            )
-                        }
-                    },
-                    actions = {
-                        // Timer finished animation
-                        val timerPulseScale by animateFloatAsState(
-                            targetValue = if (timerJustFinished) 1.15f else 1f,
-                            animationSpec = if (timerJustFinished) {
-                                infiniteRepeatable(
-                                    animation = tween(300),
-                                    repeatMode = RepeatMode.Reverse
-                                )
-                            } else {
-                                tween(300)
-                            },
-                            label = "timer_pulse"
-                        )
-
-                        // Timer Pill Action
-                        Surface(
-                            onClick = { showTimerDialog = true },
-                            shape = androidx.compose.foundation.shape.CircleShape,
-                            color = if (timerJustFinished) MaterialTheme.colorScheme.primary else LocalAppColors.current.surfaceCards,
-                            border = androidx.compose.foundation.BorderStroke(
-                                width = if (timerJustFinished) 2.dp else 1.dp,
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = if (timerJustFinished) 1f else 0.5f)
-                            ),
-                            modifier = Modifier
-                                .padding(end = 8.dp)
-                                .scale(timerPulseScale)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    painter = androidx.compose.ui.res.painterResource(id = com.example.gymtime.R.drawable.ic_timer),
-                                    contentDescription = "Timer",
-                                    tint = if (timerJustFinished) Color.Black else MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    text = if (timerJustFinished) "GO!" else if (isTimerRunning) {
-                                        TimeFormatter.formatSecondsToMMSS(countdownTimer)
-                                    } else {
-                                        TimeFormatter.formatSecondsToMMSS(restTime)
-                                    },
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (timerJustFinished) Color.Black else MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-
-                        // Vertical divider
-                        VerticalDivider(
-                            modifier = Modifier
-                                .height(24.dp)
-                                .padding(horizontal = 4.dp),
-                            color = LocalAppColors.current.textTertiary.copy(alpha = 0.3f)
-                        )
-
-                        // Exercise notes icon (only when the exercise has notes)
-                        if (exercise?.notes?.isNotBlank() == true) {
-                            IconButton(onClick = { showExerciseNotes = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = "Exercise notes",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-
-                        // Back opens the full overview; Home minimizes the workout.
-                        IconButton(onClick = { navController.navigateHomeAndClearStack() }) {
-                            Icon(
-                                imageVector = Icons.Default.Home,
-                                contentDescription = "Home",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        // Exercise history icon
-                        IconButton(onClick = { showExerciseHistory = true }) {
-                            Icon(
-                                imageVector = Icons.Default.History,
-                                contentDescription = "Exercise History",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent
-                    )
-                )
-            }
-        },
-        containerColor = Color.Transparent
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(gradientColors.first, gradientColors.second)
-                    )
-                )
-                .padding(paddingValues)
-                .padding(16.dp)
-        ) {
-            exercise?.let { ex ->
-                // Inputs + session log scroll together; nav buttons stay pinned below.
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .verticalScroll(scrollState)
-                ) {
-                currentPlanItem
-                    ?.takeIf { plan ->
-                        currentWorkout?.startedFromRoutine == true ||
-                            plan.plannedSets != null ||
-                            plan.repMin != null ||
-                            !plan.notes.isNullOrBlank()
-                    }
-                    ?.let { plan ->
-                        WorkoutPrescriptionCard(
-                            plannedSets = plan.plannedSets,
-                            repMin = plan.repMin,
-                            repMax = plan.repMax,
-                            restSeconds = plan.restSeconds,
-                            notes = plan.notes
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-
-                if (exercise?.logType.supportsRepTarget && exercise?.repTarget != null) {
-                    if (attemptRecommendation != null) {
-                        AttemptRecommendationCard(
-                            recommendation = attemptRecommendation!!,
-                            repTarget = exercise!!.repTarget!!,
-                            onUse = { viewModel.applyAttemptRecommendation() }
-                        )
-                    } else {
-                        RepTargetHintCard(repTarget = exercise!!.repTarget!!)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
+    val bestSummary = remember(progress.isLoading, progress.allTimeBest, exercise?.logType) {
+        if (progress.isLoading) "Loading…"
+        else progress.allTimeBest?.let { formatLoggerSet(it, exercise?.logType ?: LogType.WEIGHT_REPS) }
+            ?: "No working sets yet"
+    }
+    val lastSummary = remember(progress.isLoading, progress.lastWorkoutBest, exercise?.logType) {
+        if (progress.isLoading) "Loading…"
+        else progress.lastWorkoutBest?.let { formatLoggerSet(it, exercise?.logType ?: LogType.WEIGHT_REPS) }
+            ?: "No prior working set"
+    }
+    val planSummary = remember(currentPlanItem) {
+        currentPlanItem?.let { plan ->
+            buildList {
+                plan.plannedSets?.let { add("$it planned sets") }
+                plan.repMin?.let {
+                    add(if (plan.repMax != null && plan.repMax != it) "$it–${plan.repMax} reps" else "$it reps")
                 }
+                plan.notes?.takeIf { it.isNotBlank() }?.let { add(it) }
+            }.joinToString(" · ").takeIf { it.isNotBlank() }
+        }
+    }
+    val activeSuperset = remember(isInSupersetMode, supersetExercises) {
+        if (isInSupersetMode) supersetExercises else emptyList()
+    }
+    val smartQueueLabel = remember(smartLogQueue) {
+        smartLogQueue?.let { "Smart Log ${it.currentSetNumber} of ${it.totalSets}" }
+    }
+    val activeCelebration = remember(celebration) {
+        celebration?.takeIf { it.expiresAt > SystemClock.elapsedRealtime() }
+    }
 
-            // Volume Progress Bar - shows weekly progress (compact horizontal bar)
-            VolumeProgressBar(
-                state = volumeOrbState,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Superset Indicator Pills (only shown when in superset mode)
-            if (isInSupersetMode && supersetExercises.isNotEmpty()) {
-                TextButton(onClick = { viewModel.exitSupersetMode() }) {
-                    Text("Exit superset")
-                }
-                SupersetIndicatorPills(
-                    exercises = supersetExercises,
-                    currentExerciseIndex = currentSupersetIndex,
-                    currentExerciseId = exercise?.id,
-                    onExerciseClick = { exerciseId ->
-                        navigateToLoggerExercise(exerciseId)
-                    }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            smartLogQueue?.let { queue ->
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                "Smart Log ${queue.currentSetNumber} of ${queue.totalSets}",
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        TextButton(onClick = viewModel::cancelSmartLogQueue) { Text("Cancel") }
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            LoggingInputs(logType, fields) { activeInput = it }
-
-            if (exercise?.logType.usesDistanceUnit) {
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Box {
-                    OutlinedButton(
-                        onClick = { showDistanceUnitMenu = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Text(
-                            text = "Distance Type: ${selectedDistanceUnit.displayName}",
-                            color = LocalAppColors.current.textPrimary
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = showDistanceUnitMenu,
-                        onDismissRequest = { showDistanceUnitMenu = false },
-                        modifier = Modifier.background(LocalAppColors.current.surfaceCards)
-                    ) {
-                        DistanceUnit.entries.forEach { unit ->
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text(unit.displayName, color = LocalAppColors.current.textPrimary)
-                                        Text(
-                                            text = unit.loggingDescription,
-                                            color = LocalAppColors.current.textTertiary,
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
-                                    }
-                                },
-                                onClick = {
-                                    viewModel.updateSelectedDistanceUnit(unit)
-                                    showDistanceUnitMenu = false
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Warmup Toggle and Plate Calculator Row - show based on LogType
-            val showWarmupToggle = exercise?.logType in listOf(
-                LogType.WEIGHT_REPS,
-                LogType.REPS_ONLY,
-                LogType.WEIGHT_DISTANCE,
-                LogType.WEIGHT_TIME,
-                null
-            )
-            val isWarmupLibraryExercise = exercise?.isWarmupLibraryExercise == true
-            val showPlateCalculatorButton = exercise?.logType in listOf(
-                LogType.WEIGHT_REPS,
-                LogType.WEIGHT_DISTANCE,
-                LogType.WEIGHT_TIME,
-                null
-            )
-
-            // Smart Log is always available; other actions remain log-type aware.
-            if (isWarmupLibraryExercise || showWarmupToggle || showPlateCalculatorButton || exercise != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp)
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Warmup Toggle Pill
-                    if (isWarmupLibraryExercise) {
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                            ),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Text(
-                                    text = "Warmup activity · not counted",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    } else if (showWarmupToggle) {
-                        Surface(
-                            onClick = { viewModel.toggleWarmup() },
-                            shape = RoundedCornerShape(50),
-                            color = if (isWarmup) MaterialTheme.colorScheme.primary else Color.Transparent,
-                            border = if (isWarmup) null else androidx.compose.foundation.BorderStroke(1.dp, LocalAppColors.current.textTertiary),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                if (isWarmup) {
-                                    Text(text = "🔥 ", fontSize = 14.sp)
-                                }
-                                Text(
-                                    text = "Warmup",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isWarmup) Color.Black else LocalAppColors.current.textTertiary
-                                )
-                            }
-                        }
-                    }
-
-                    // Plate Calculator Button - only for weight-based exercises
-                    if (showPlateCalculatorButton) {
-                        Surface(
-                            onClick = { showPlateCalculator = true },
-                            shape = RoundedCornerShape(50),
-                            color = Color.Transparent,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Text(text = "🏋️ ", fontSize = 14.sp)
-                                Text(
-                                    text = "Plates",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-
-                    // Superset Toggle Pill / Add Exercise to Superset
-                    val isInSupersetMode by viewModel.isInSupersetMode.collectAsStateWithLifecycle()
-                    if (isInSupersetMode) {
-                        // Already in superset - show "Add" button to add more exercises
-                        Surface(
-                            onClick = {
-                                navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true, addToSuperset = true))
-                            },
-                            shape = RoundedCornerShape(50),
-                            color = Color.Transparent,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Add",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    } else {
-                        Surface(
-                            onClick = {
-                                exercise?.id?.let { id ->
-                                    navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true, supersetMode = true, adHocParentId = id))
-                                }
-                            },
-                            shape = RoundedCornerShape(50),
-                            color = Color.Transparent,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    painter = androidx.compose.ui.res.painterResource(id = com.example.gymtime.R.drawable.ic_sync),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Superset",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-
-                    Surface(
-                        onClick = { showSmartLog = true },
-                        shape = RoundedCornerShape(50),
-                        color = Color.Transparent,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.height(32.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Text(
-                                text = "Smart",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Determine if Log Set button should be enabled based on LogType
-            val isLogSetEnabled = viewModel.isCurrentInputValid() && !isPersistingSet
-
-            // Log Set Button (or Save Edit if editing)
-            if (editingSet != null) {
-                // Editing mode - show Save and Cancel buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { viewModel.cancelEditing() },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = LocalAppColors.current.textTertiary
-                        )
-                    ) {
-                        Text("Cancel")
-                    }
-                    Button(
-                        onClick = submitSet,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(56.dp),
-                        enabled = isLogSetEnabled,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                        ),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Text(
-                            text = "SAVE EDIT ✓",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 18.sp,
-                            letterSpacing = 1.sp,
-                            color = Color.Black
-                        )
-                    }
-                }
+    PreviewLoggerContent(
+        state = PreviewLoggerState(
+            exercise = exercise,
+            fields = fields,
+            sets = loggedSets,
+            best = bestSummary,
+            last = lastSummary,
+            bestLabel = progress.recordLabel,
+            plan = planSummary,
+            isWarmup = isWarmup,
+            editingSetId = editingSet?.id,
+            canLog = isCurrentInputValid,
+            saving = isPersistingSet,
+            validation = inputValidationMessage,
+            restSeconds = restTime,
+            remainingSeconds = 0,
+            timerRunning = isTimerRunning,
+            hasPrevious = previousExerciseId != null,
+            hasNext = nextExerciseId != null,
+            superset = activeSuperset,
+            smartQueue = smartQueueLabel,
+            personalBestSetIds = progress.setRecordLabels.keys,
+            recordLabels = progress.setRecordLabels,
+            workoutId = currentWorkout?.id,
+            celebration = activeCelebration
+        ),
+        remainingSecondsFlow = viewModel.countdownTimer,
+        onFieldChange = changeField,
+        onDistanceUnitChange = viewModel::updateSelectedDistanceUnit,
+        onSelectExercise = { navigateToLoggerExercise(it) },
+        onEditSet = viewModel::startEditingSet,
+        onDeleteSet = { selectedSetToDelete = it },
+        onSetNote = { selectedSet ->
+            noteText = selectedSet.note.orEmpty()
+            val displayLabel = if (selectedSet.isWarmup) {
+                val warmupNumber = loggedSets.asSequence()
+                    .filter { it.isWarmup }
+                    .indexOfFirst { it.id == selectedSet.id } + 1
+                if (warmupNumber > 0) "Warm-up $warmupNumber" else "Warm-up"
             } else {
-                // Normal mode - show LOG SET button
-                LogSetButton(
-                    onClick = submitSet,
-                    enabled = isLogSetEnabled
-                )
+                val workingNumber = loggedSets.asSequence()
+                    .filterNot { it.isWarmup }
+                    .indexOfFirst { it.id == selectedSet.id } + 1
+                if (workingNumber > 0) "Set $workingNumber" else "Set"
             }
-
-            inputValidationMessage?.let { message ->
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Session Log Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "SESSION LOG",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = LocalAppColors.current.textTertiary,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
-                )
-                Text(
-                    text = "${loggedSets.size} sets done",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Logged Sets List
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                loggedSets.forEachIndexed { index, set ->
-                    // Check if this set is a PB for its rep count (must be first occurrence)
-                    val isPB = !set.isWarmup &&
-                        set.weight != null &&
-                        set.reps != null &&
-                        personalBestsByReps[set.reps]?.let { pb ->
-                            pb.maxWeight == set.weight && pb.firstAchievedAt == set.timestamp.time
-                        } == true
-
-                    ExerciseSetLogCard(
-                        set = set,
-                        setNumber = index + 1,
-                        isPersonalBest = isPB,
-                        onEdit = { selectedSet ->
-                            viewModel.startEditingSet(selectedSet)
-                        },
-                        onDelete = { selectedSet ->
-                            selectedSetToDelete = selectedSet
-                        },
-                        onAddNote = { selectedSet ->
-                            noteText = selectedSet.note ?: ""
-                            setToAddNote = selectedSet
-                        }
-                    )
+            setToAddNote = NoteEditTarget(selectedSet, displayLabel)
+        },
+        onAction = { action ->
+            when (action) {
+                LoggerAction.BACK -> navController.navigateBackOrHome()
+                LoggerAction.HOME -> navController.navigateHomeAndClearStack()
+                LoggerAction.FINISH -> {
+                    finishRequested = false
+                    showFinishDialog = true
                 }
-            }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Bottom Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedButton(
-                    onClick = {
-                        if (previousExerciseId != null) {
-                            navigateToLoggerExercise(previousExerciseId!!)
-                        } else {
-                            navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true))
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Text(
-                        text = if (previousExerciseId != null) "Previous Exercise" else "Add Exercise",
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Button(
-                    onClick = { 
-                        if (nextExerciseId != null) {
-                            navigateToLoggerExercise(nextExerciseId!!)
-                        } else {
-                            showFinishDialog = true 
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (nextExerciseId != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                        contentColor = if (nextExerciseId != null) Color.Black else MaterialTheme.colorScheme.primary
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        text = if (nextExerciseId != null) "Next Exercise →" else "Finish Workout",
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-            } ?: run {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                }
+                LoggerAction.PREVIOUS -> previousExerciseId?.let { navigateToLoggerExercise(it) }
+                LoggerAction.NEXT -> nextExerciseId?.let { navigateToLoggerExercise(it) }
+                LoggerAction.ADD_EXERCISE -> navController.navigateResumed(
+                    Screen.ExerciseSelection.createRoute(workoutMode = true)
+                )
+                LoggerAction.OVERVIEW -> navController.navigateToWorkoutOverview()
+                LoggerAction.HISTORY -> showExerciseHistory = true
+                LoggerAction.PLATES -> showPlateCalculator = true
+                LoggerAction.NOTES -> showExerciseNotes = true
+                LoggerAction.EDIT_EXERCISE -> showExerciseQuickEdit = true
+                LoggerAction.THEME -> navController.navigateResumed(Screen.ThemeSettings.route)
+                LoggerAction.SUPERSET -> navController.navigateResumed(
+                    if (isInSupersetMode) {
+                        Screen.ExerciseSelection.createRoute(workoutMode = true, addToSuperset = true)
+                    } else {
+                        Screen.ExerciseSelection.createRoute(
+                            workoutMode = true,
+                            supersetMode = true,
+                            adHocParentId = exercise?.id
+                        )
+                    }
+                )
+                LoggerAction.EXIT_SUPERSET -> viewModel.exitSupersetMode()
+                LoggerAction.SMART_LOG -> showSmartLog = true
+                LoggerAction.CANCEL_SMART_LOG -> viewModel.cancelSmartLogQueue()
+                LoggerAction.TOGGLE_WARMUP -> viewModel.toggleWarmup()
+                LoggerAction.LOG -> submitSet()
+                LoggerAction.CANCEL_EDIT -> viewModel.cancelEditing()
+                LoggerAction.DISMISS_PR -> celebration?.let { viewModel.dismissPrCelebration(it.id) }
+                LoggerAction.TIMER -> showTimerDialog = true
+                LoggerAction.START_TIMER -> viewModel.startTimer()
+                LoggerAction.SKIP_TIMER -> viewModel.stopTimer()
+                LoggerAction.ADD_REST -> viewModel.adjustRestTime(30)
             }
         }
-    }
+    )
 
-    }
-
-    // Timer Dialog
-    if (showTimerDialog) {
-        AlertDialog(
-            onDismissRequest = { showTimerDialog = false },
-            title = {
-                Text(
-                    text = "Rest Timer",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = LocalAppColors.current.textPrimary
-                )
-            },
-            text = {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = if (isTimerRunning) {
-                            String.format(java.util.Locale.US, "%d:%02d", countdownTimer / 60, countdownTimer % 60)
-                        } else {
-                            String.format(java.util.Locale.US, "%d:%02d", restTime / 60, restTime % 60)
-                        },
-                        style = MaterialTheme.typography.displayLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { viewModel.adjustRestTime(-5) },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = LocalAppColors.current.textTertiary)
-                        ) {
-                            Text("-5s")
-                        }
-                        OutlinedButton(
-                            onClick = { viewModel.adjustRestTime(5) },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = LocalAppColors.current.textTertiary)
-                        ) {
-                            Text("+5s")
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    HorizontalDivider(color = LocalAppColors.current.textTertiary.copy(alpha = 0.1f))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                                contentDescription = null,
-                                tint = if (timerAudioEnabled) MaterialTheme.colorScheme.primary else LocalAppColors.current.textTertiary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Audio", style = MaterialTheme.typography.bodyMedium, color = LocalAppColors.current.textPrimary)
-                        }
-                        Switch(
-                            checked = timerAudioEnabled,
-                            onCheckedChange = { viewModel.toggleTimerAudio(it) },
-                            colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.Vibration,
-                                contentDescription = null,
-                                tint = if (timerVibrateEnabled) MaterialTheme.colorScheme.primary else LocalAppColors.current.textTertiary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Vibration", style = MaterialTheme.typography.bodyMedium, color = LocalAppColors.current.textPrimary)
-                        }
-                        Switch(
-                            checked = timerVibrateEnabled,
-                            onCheckedChange = { viewModel.toggleTimerVibrate(it) },
-                            colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                if (isTimerRunning) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            onClick = { viewModel.stopTimer() },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
-                        ) {
-                            Text("Stop")
-                        }
-                        Button(
-                            onClick = {
-                                viewModel.stopTimer()
-                                viewModel.startTimer()
-                                showTimerDialog = false
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                        ) {
-                            Text("Restart", color = if (newUiEnabled) MaterialTheme.colorScheme.onPrimary else Color.Black, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                } else {
-                    Button(
-                        onClick = {
-                            viewModel.startTimer()
-                            showTimerDialog = false
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Text("Start Timer", color = if (newUiEnabled) MaterialTheme.colorScheme.onPrimary else Color.Black, fontWeight = FontWeight.Bold)
-                    }
-                }
-            },
-            dismissButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = { viewModel.resetTimerToDefault() }) {
-                        Text("Reset", color = LocalAppColors.current.textTertiary)
-                    }
-                    TextButton(onClick = { showTimerDialog = false }) {
-                        Text("Close", color = LocalAppColors.current.textTertiary)
-                    }
-                }
-            },
-            containerColor = LocalAppColors.current.surfaceCards
+    if (showExerciseHistory) {
+        LoggerProgressSheet(
+            exerciseName = exercise?.name.orEmpty(),
+            logType = exercise?.logType ?: LogType.WEIGHT_REPS,
+            state = progress,
+            onDismiss = { showExerciseHistory = false }
         )
     }
 
-    // Delete Confirmation Dialog
+    if (showTimerDialog) {
+        RestTimerDialog(
+            viewModel = viewModel,
+            restTime = restTime,
+            isTimerRunning = isTimerRunning,
+            onDismiss = { showTimerDialog = false }
+        )
+    }
+
     selectedSetToDelete?.let { setToDelete ->
         AlertDialog(
             onDismissRequest = { selectedSetToDelete = null },
+            shape = IronLogRadius.CardShape,
+            containerColor = scheme.surface,
             title = {
                 Text(
                     text = "Delete Set?",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = LocalAppColors.current.textPrimary
+                    color = scheme.onSurface
                 )
             },
             text = {
                 Text(
                     text = "Are you sure you want to delete this set? This action cannot be undone.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = LocalAppColors.current.textTertiary
+                    color = scheme.onSurfaceVariant
                 )
             },
             confirmButton = {
@@ -1223,51 +386,54 @@ private fun ExerciseLoggingScreenBody(
                         viewModel.deleteSet(setToDelete.id)
                         selectedSetToDelete = null
                     },
+                    shape = IronLogRadius.ControlShape,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (newUiEnabled) MaterialTheme.colorScheme.error else Color(0xFFE74C3C)
+                        containerColor = scheme.error,
+                        contentColor = scheme.onError
                     )
                 ) {
-                    Text("Delete", color = if (newUiEnabled) MaterialTheme.colorScheme.onError else Color.White, fontWeight = FontWeight.Bold)
+                    Text("Delete", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { selectedSetToDelete = null }) {
-                    Text("Cancel", color = LocalAppColors.current.textTertiary)
+                    Text("Cancel", color = scheme.onSurfaceVariant)
                 }
-            },
-            containerColor = LocalAppColors.current.surfaceCards
+            }
         )
     }
 
-    // Add/Edit Note Dialog
-    setToAddNote?.let { set ->
+    setToAddNote?.let { target ->
         AlertDialog(
             onDismissRequest = {
                 setToAddNote = null
                 noteText = ""
             },
+            shape = IronLogRadius.CardShape,
+            containerColor = scheme.surface,
             title = {
                 Text(
-                    text = if (set.note.isNullOrBlank()) "Add Note" else "Edit Note",
+                    text = if (target.set.note.isNullOrBlank()) "Add Note" else "Edit Note",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = LocalAppColors.current.textPrimary
+                    color = scheme.onSurface
                 )
             },
             text = {
                 Column {
                     Text(
-                        text = buildSetSummary(set, selectedDistanceUnit, loggedSets.indexOf(set) + 1),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = LocalAppColors.current.textTertiary,
+                        text = buildSetSummary(target.set, selectedDistanceUnit, target.displayLabel),
+                        style = IronLogType.tabular(MaterialTheme.typography.bodySmall),
+                        color = scheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
-                    androidx.compose.material3.OutlinedTextField(
+                    OutlinedTextField(
                         value = noteText,
                         onValueChange = { noteText = it },
-                        placeholder = { Text("Enter note...", color = LocalAppColors.current.textTertiary) },
+                        placeholder = { Text("Enter note...") },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = appTextFieldColors(),
+                        shape = IronLogRadius.ControlShape,
+                        colors = loggerTextFieldColors(),
                         maxLines = 3
                     )
                 }
@@ -1275,28 +441,32 @@ private fun ExerciseLoggingScreenBody(
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.updateSetNote(set, noteText)
+                        viewModel.updateSetNote(target.set, noteText)
                         setToAddNote = null
                         noteText = ""
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    shape = IronLogRadius.ControlShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = scheme.primary,
+                        contentColor = scheme.onPrimary
+                    )
                 ) {
-                    Text("Save", color = if (newUiEnabled) MaterialTheme.colorScheme.onPrimary else Color.Black, fontWeight = FontWeight.Bold)
+                    Text("Save", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    setToAddNote = null
-                    noteText = ""
-                }) {
-                    Text("Cancel", color = LocalAppColors.current.textTertiary)
+                TextButton(
+                    onClick = {
+                        setToAddNote = null
+                        noteText = ""
+                    }
+                ) {
+                    Text("Cancel", color = scheme.onSurfaceVariant)
                 }
-            },
-            containerColor = LocalAppColors.current.surfaceCards
+            }
         )
     }
 
-    // Exercise quick-edit dialog (opened by tapping the title)
     if (showExerciseQuickEdit) {
         exercise?.let { ex ->
             // Seeded on dialog-open (this block leaves composition when the flag
@@ -1304,34 +474,39 @@ private fun ExerciseLoggingScreenBody(
             // clobber in-progress typing.
             var editName by remember { mutableStateOf(ex.name) }
             var editRest by remember { mutableStateOf(ex.defaultRestSeconds.toString()) }
-            var editNotes by remember { mutableStateOf(ex.notes ?: "") }
-            val fieldColors = appTextFieldColors()
+            var editNotes by remember { mutableStateOf(ex.notes.orEmpty()) }
+            val fieldColors = loggerTextFieldColors()
 
             AlertDialog(
                 onDismissRequest = { showExerciseQuickEdit = false },
+                shape = IronLogRadius.CardShape,
+                containerColor = scheme.surface,
                 title = {
                     Text(
                         text = "Edit Exercise",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        color = LocalAppColors.current.textPrimary
+                        color = scheme.onSurface
                     )
                 },
                 text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)) {
                         OutlinedTextField(
                             value = editName,
                             onValueChange = { editName = it },
-                            label = { Text("Name", color = LocalAppColors.current.textTertiary) },
+                            label = { Text("Name") },
                             singleLine = true,
+                            shape = IronLogRadius.ControlShape,
                             modifier = Modifier.fillMaxWidth(),
                             colors = fieldColors
                         )
                         OutlinedTextField(
                             value = editRest,
-                            onValueChange = { new -> editRest = new.filter { it.isDigit() }.take(4) },
-                            label = { Text("Default rest (seconds)", color = LocalAppColors.current.textTertiary) },
+                            onValueChange = { new -> editRest = new.filter(Char::isDigit).take(4) },
+                            label = { Text("Default rest (seconds)") },
                             singleLine = true,
+                            shape = IronLogRadius.ControlShape,
+                            textStyle = IronLogType.tabular(MaterialTheme.typography.bodyLarge),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.fillMaxWidth(),
                             colors = fieldColors
@@ -1339,8 +514,9 @@ private fun ExerciseLoggingScreenBody(
                         OutlinedTextField(
                             value = editNotes,
                             onValueChange = { editNotes = it },
-                            label = { Text("Notes", color = LocalAppColors.current.textTertiary) },
+                            label = { Text("Notes") },
                             maxLines = 3,
+                            shape = IronLogRadius.ControlShape,
                             modifier = Modifier.fillMaxWidth(),
                             colors = fieldColors
                         )
@@ -1357,76 +533,94 @@ private fun ExerciseLoggingScreenBody(
                             showExerciseQuickEdit = false
                         },
                         enabled = editName.isNotBlank(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        shape = IronLogRadius.ControlShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = scheme.primary,
+                            contentColor = scheme.onPrimary
+                        )
                     ) {
-                        Text("Save", color = if (newUiEnabled) MaterialTheme.colorScheme.onPrimary else Color.Black, fontWeight = FontWeight.Bold)
+                        Text("Save", fontWeight = FontWeight.Bold)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showExerciseQuickEdit = false }) {
-                        Text("Cancel", color = LocalAppColors.current.textTertiary)
+                        Text("Cancel", color = scheme.onSurfaceVariant)
                     }
-                },
-                containerColor = LocalAppColors.current.surfaceCards
+                }
             )
         }
     }
 
-    // Finish Workout Dialog
     if (showFinishDialog) {
         AlertDialog(
-            onDismissRequest = { showFinishDialog = false },
+            onDismissRequest = { if (!finishRequested) showFinishDialog = false },
+            shape = IronLogRadius.CardShape,
+            containerColor = scheme.surface,
             title = {
                 Text(
                     text = "Finish Workout?",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = LocalAppColors.current.textPrimary
+                    color = scheme.onSurface
                 )
             },
             text = {
                 Text(
                     text = "Are you sure you want to finish this workout session?",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = LocalAppColors.current.textTertiary
+                    color = scheme.onSurfaceVariant
                 )
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.finishWorkout()
-                        showFinishDialog = false
+                        if (!finishRequested) {
+                            finishRequested = true
+                            showFinishDialog = false
+                            viewModel.finishWorkout()
+                        }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    enabled = !finishRequested,
+                    shape = IronLogRadius.ControlShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = scheme.primary,
+                        contentColor = scheme.onPrimary
+                    )
                 ) {
-                    Text("Finish", color = if (newUiEnabled) MaterialTheme.colorScheme.onPrimary else Color.Black, fontWeight = FontWeight.Bold)
+                    Text("Finish", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showFinishDialog = false }) {
-                    Text("Cancel", color = LocalAppColors.current.textTertiary)
+                    Text("Cancel", color = scheme.onSurfaceVariant)
                 }
-            },
-            containerColor = LocalAppColors.current.surfaceCards
+            }
         )
     }
 
-    // Plate Calculator Sheet
-    if (showPlateCalculator && plateInventorySettings != null) {
+    if (showPlateCalculator) {
+        val barWeight by viewModel.barWeight.collectAsStateWithLifecycle(initialValue = 45f)
+        val availablePlates by viewModel.availablePlates.collectAsStateWithLifecycle(
+            initialValue = listOf(45f, 35f, 25f, 15f, 10f, 5f, 2.5f)
+        )
+        val loadingSides by viewModel.loadingSides.collectAsStateWithLifecycle(initialValue = 2)
+        val plateInventorySettings by viewModel.plateInventorySettings.collectAsStateWithLifecycle(
+            initialValue = PlateInventorySettings(counts = emptyMap(), enabled = false)
+        )
         PlateCalculatorSheet(
             initialWeight = weight.toFloatOrNull() ?: 0f,
             barWeight = barWeight,
             availablePlates = availablePlates,
             loadingSides = loadingSides,
-            plateInventory = plateInventorySettings?.counts.orEmpty(),
-            usePlateInventory = plateInventorySettings?.enabled ?: false,
+            plateInventory = plateInventorySettings.counts,
+            usePlateInventory = plateInventorySettings.enabled,
             onPlateInventoryCountChange = viewModel::setPlateInventoryCount,
             onUsePlateInventoryChange = viewModel::setUsePlateInventory,
             onPlateInventoryCountDelta = viewModel::adjustPlateInventoryCount,
             onDismiss = { showPlateCalculator = false },
             onNavigateToSettings = {
                 showPlateCalculator = false
-                navController.navigate(Screen.Settings.route)
+                navController.navigateResumed(Screen.Settings.route)
             },
             onUseWeight = { newWeight ->
                 viewModel.updateWeight(PlateCalculator.formatWeight(newWeight))
@@ -1436,213 +630,259 @@ private fun ExerciseLoggingScreenBody(
     }
 
     if (showSmartLog) {
+        val allowedExerciseIds = remember(isInSupersetMode, supersetExercises) {
+            if (isInSupersetMode) supersetExercises.map { it.id }.toSet() else null
+        }
         SmartLogBottomSheet(
-            useThemeForegrounds = newUiEnabled,
             currentExercise = exercise,
-            allowedExerciseIds = if (isInSupersetMode) supersetExercises.map { it.id }.toSet() else null,
+            allowedExerciseIds = allowedExerciseIds,
             onDismiss = { showSmartLog = false },
-            onNavigateToLogger = { exerciseId, token ->
+            onNavigateToLogger = { targetExerciseId, token ->
                 showSmartLog = false
-                navigateToLoggerExercise(exerciseId, token)
+                if (targetExerciseId == exercise?.id) {
+                    viewModel.applySmartLogDraft(token)
+                } else {
+                    navigateToLoggerExercise(targetExerciseId, token)
+                }
             },
             onCreateExercise = { name ->
                 showSmartLog = false
                 viewModel.prepareForSmartLogExerciseCreation(
                     restrictedToSuperset = isInSupersetMode && supersetExercises.isNotEmpty()
                 )
-                navController.navigate(Screen.ExerciseForm.createRoute(fromWorkout = true, initialName = name))
-            }
-        )
-    }
-
-    // Exercise History Bottom Sheet
-    if (showExerciseHistory && !newUiEnabled) {
-        ModalBottomSheet(
-            onDismissRequest = { showExerciseHistory = false },
-            containerColor = LocalAppColors.current.surfaceCards,
-            scrimColor = Color.Black.copy(alpha = 0.5f)
-        ) {
-            exercise?.let { ex ->
-                ExerciseHistoryContent(
-                    exerciseName = ex.name,
-                    personalRecords = personalRecords,
-                    history = exerciseHistory,
-                    onDismiss = { showExerciseHistory = false }
+                navController.navigateResumed(
+                    Screen.ExerciseForm.createRoute(fromWorkout = true, initialName = name)
                 )
             }
-        }
+        )
     }
 
     if (showExerciseNotes) {
         AlertDialog(
             onDismissRequest = { showExerciseNotes = false },
-            title = { Text("Exercise Notes", color = LocalAppColors.current.textPrimary) },
+            shape = IronLogRadius.CardShape,
+            containerColor = scheme.surface,
+            title = {
+                Text(
+                    text = "Exercise Notes",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = scheme.onSurface
+                )
+            },
             text = {
                 Text(
-                    text = exercise?.notes?.takeIf { it.isNotBlank() } ?: "Add a setup cue or reminder for this exercise.",
-                    color = LocalAppColors.current.textPrimary,
+                    text = exercise?.notes?.takeIf { it.isNotBlank() }
+                        ?: "Add a setup cue or reminder for this exercise.",
+                    color = scheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
             confirmButton = {
                 TextButton(onClick = { showExerciseNotes = false }) {
-                    Text("Close", color = MaterialTheme.colorScheme.primary)
+                    Text("Close", color = scheme.primary)
                 }
             },
             dismissButton = {
-                if (newUiEnabled) TextButton(onClick = { showExerciseNotes = false; showExerciseQuickEdit = true }) { Text("Edit notes") }
-            },
-            containerColor = LocalAppColors.current.surfaceCards
+                TextButton(
+                    onClick = {
+                        showExerciseNotes = false
+                        showExerciseQuickEdit = true
+                    }
+                ) {
+                    Text("Edit notes")
+                }
+            }
         )
     }
 }
 
 @Composable
-private fun WorkoutPrescriptionCard(
-    plannedSets: Int?,
-    repMin: Int?,
-    repMax: Int?,
-    restSeconds: Int?,
-    notes: String?
+private fun RestTimerDialog(
+    viewModel: ExerciseLoggingViewModel,
+    restTime: Int,
+    isTimerRunning: Boolean,
+    onDismiss: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
+    val scheme = MaterialTheme.colorScheme
+    val countdownTimer by viewModel.countdownTimer.collectAsStateWithLifecycle()
+    val timerAudioEnabled by viewModel.timerAudioEnabled.collectAsStateWithLifecycle(initialValue = true)
+    val timerVibrateEnabled by viewModel.timerVibrateEnabled.collectAsStateWithLifecycle(initialValue = true)
+    val displayedSeconds = if (isTimerRunning) countdownTimer else restTime
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = IronLogRadius.CardShape,
+        containerColor = scheme.surface,
+        title = {
             Text(
-                text = "PLANNED WORK",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
+                text = "Rest Timer",
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
+                color = scheme.onSurface
             )
-            Text(
-                text = buildString {
-                    plannedSets?.let { append("$it sets") }
-                    if (repMin != null) {
-                        if (isNotEmpty()) append(" • ")
-                        append(repMin)
-                        if (repMax != null && repMax != repMin) append("-$repMax")
-                        append(" reps")
-                    }
-                    restSeconds?.let {
-                        if (isNotEmpty()) append(" • ")
-                        append("${it}s rest")
-                    }
-                }.ifBlank { "Session-only exercise" },
-                style = MaterialTheme.typography.bodyMedium,
-                color = LocalAppColors.current.textPrimary
-            )
-            notes?.takeIf { it.isNotBlank() }?.let {
+        },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = LocalAppColors.current.textSecondary
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AttemptRecommendationCard(
-    recommendation: ExerciseAttemptRecommendation,
-    repTarget: Int,
-    onUse: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = recommendation.title.uppercase(java.util.Locale.US),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
-                )
-                Text(
-                    text = recommendation.message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = LocalAppColors.current.textPrimary
-                )
-                Text(
-                    text = "Rep target: $repTarget",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = LocalAppColors.current.textTertiary
-                )
-            }
-
-            if (recommendation.canApply) {
-                TextButton(onClick = onUse) {
-                    Text(
-                        text = "Use",
-                        color = MaterialTheme.colorScheme.primary,
+                    text = TimeFormatter.formatSecondsToMMSS(displayedSeconds),
+                    style = IronLogType.tabular(MaterialTheme.typography.displayLarge).copy(
                         fontWeight = FontWeight.Bold
+                    ),
+                    color = scheme.primary
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)) {
+                    OutlinedButton(
+                        onClick = { viewModel.adjustRestTime(-5) },
+                        shape = IronLogRadius.ControlShape,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = scheme.onSurfaceVariant)
+                    ) {
+                        Text("-5s", style = IronLogType.tabular(MaterialTheme.typography.labelLarge))
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.adjustRestTime(5) },
+                        shape = IronLogRadius.ControlShape,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = scheme.onSurfaceVariant)
+                    ) {
+                        Text("+5s", style = IronLogType.tabular(MaterialTheme.typography.labelLarge))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+                IronLogDivider(insetStart = 0.dp)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = null,
+                            tint = if (timerAudioEnabled) scheme.primary else scheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Audio", style = MaterialTheme.typography.bodyMedium, color = scheme.onSurface)
+                    }
+                    Switch(
+                        checked = timerAudioEnabled,
+                        onCheckedChange = viewModel::toggleTimerAudio,
+                        colors = SwitchDefaults.colors(checkedThumbColor = scheme.primary)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.Vibration,
+                            contentDescription = null,
+                            tint = if (timerVibrateEnabled) scheme.primary else scheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Vibration", style = MaterialTheme.typography.bodyMedium, color = scheme.onSurface)
+                    }
+                    Switch(
+                        checked = timerVibrateEnabled,
+                        onCheckedChange = viewModel::toggleTimerVibrate,
+                        colors = SwitchDefaults.colors(checkedThumbColor = scheme.primary)
                     )
                 }
             }
+        },
+        confirmButton = {
+            if (isTimerRunning) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { viewModel.stopTimer() },
+                        shape = IronLogRadius.ControlShape,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = scheme.primary)
+                    ) {
+                        Text("Stop")
+                    }
+                    Button(
+                        onClick = {
+                            viewModel.stopTimer()
+                            viewModel.startTimer()
+                            onDismiss()
+                        },
+                        shape = IronLogRadius.ControlShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = scheme.primary,
+                            contentColor = scheme.onPrimary
+                        )
+                    ) {
+                        Text("Restart", fontWeight = FontWeight.Bold)
+                    }
+                }
+            } else {
+                Button(
+                    onClick = {
+                        viewModel.startTimer()
+                        onDismiss()
+                    },
+                    shape = IronLogRadius.ControlShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = scheme.primary,
+                        contentColor = scheme.onPrimary
+                    )
+                ) {
+                    Text("Start Timer", fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = { viewModel.resetTimerToDefault() }) {
+                    Text("Reset", color = scheme.onSurfaceVariant)
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Close", color = scheme.onSurfaceVariant)
+                }
+            }
         }
-    }
+    )
 }
 
 @Composable
-private fun RepTargetHintCard(repTarget: Int) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "REP TARGET",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = LocalAppColors.current.textTertiary,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
-                )
-                Text(
-                    text = "$repTarget reps before increasing weight",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = LocalAppColors.current.textPrimary
-                )
-            }
-        }
-    }
-}
-
-
-
-
+private fun loggerTextFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = MaterialTheme.colorScheme.primary,
+    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
+)
 
 @Preview(showBackground = true)
 @Composable
 private fun ExerciseLoggingScreenPreview() {
     IronLogTheme {
-        // Preview would require mock NavController
+        PreviewLoggerContent(
+            state = PreviewLoggerState(
+                exercise = null
+            ),
+            onAction = {},
+            onFieldChange = { _, _ -> },
+            onDistanceUnitChange = {},
+            onSelectExercise = {},
+            onEditSet = {},
+            onDeleteSet = {},
+            onSetNote = {}
+        )
     }
 }
 
@@ -1657,58 +897,30 @@ private val DistanceUnit.shortLabel: String
         DistanceUnit.FLOORS -> "FLOORS"
     }
 
-private val DistanceUnit.displayName: String
-    get() = when (this) {
-        DistanceUnit.METERS -> "Meters"
-        DistanceUnit.KILOMETERS -> "Kilometers"
-        DistanceUnit.YARDS -> "Yards"
-        DistanceUnit.FEET -> "Feet"
-        DistanceUnit.MILES -> "Miles"
-        DistanceUnit.STEPS -> "Steps"
-        DistanceUnit.FLOORS -> "Floors"
-    }
-
-private val DistanceUnit.loggingDescription: String
-    get() = when (this) {
-        DistanceUnit.METERS -> "Track work and short intervals"
-        DistanceUnit.KILOMETERS -> "Longer runs and rides"
-        DistanceUnit.YARDS -> "Pools, turf, and field work"
-        DistanceUnit.FEET -> "Carries and stair machines"
-        DistanceUnit.MILES -> "Road runs and outdoor cardio"
-        DistanceUnit.STEPS -> "Pedometer and step-based cardio"
-        DistanceUnit.FLOORS -> "Stair climbers and floor goals"
-    }
-
-private val LogType?.usesDistanceUnit: Boolean
-    get() = this == LogType.WEIGHT_DISTANCE || this == LogType.DISTANCE_TIME
-
-private val LogType?.supportsRepTarget: Boolean
-    get() = this == LogType.WEIGHT_REPS || this == LogType.REPS_ONLY
-
 private fun buildSetSummary(
-    set: com.example.gymtime.data.db.entity.Set,
+    set: WorkoutSet,
     fallbackDistanceUnit: DistanceUnit,
-    setNumber: Int
+    displayLabel: String
 ): String {
     val parts = mutableListOf<String>()
 
-    set.weight?.let { parts += "${it.toInt()} lbs" }
-    set.calories?.let { parts += "${it.toInt()} cal" }
+    set.weight?.let { parts += "${formatLoggerNumber(it)} lbs" }
+    set.calories?.let { parts += "${formatLoggerNumber(it)} cal" }
     set.reps?.let { parts += "$it reps" }
 
     val unit = set.distanceUnit ?: fallbackDistanceUnit
     val distanceValue = when {
         set.distanceValue != null -> set.distanceValue
         set.distanceMeters != null && unit.isConvertibleToMeters -> {
-            com.example.gymtime.util.TimeUtils.metersToDistance(set.distanceMeters, unit)
+            TimeUtils.metersToDistance(set.distanceMeters, unit)
         }
         else -> null
     }
     distanceValue?.let {
-        parts += "${com.example.gymtime.util.TimeUtils.formatDistance(it, unit)} ${unit.shortLabel.lowercase()}"
+        parts += "${TimeUtils.formatDistance(it, unit)} ${unit.shortLabel.lowercase()}"
     }
 
-    set.durationSeconds?.let { parts += com.example.gymtime.util.TimeUtils.formatSecondsToHMS(it) }
+    set.durationSeconds?.let { parts += TimeUtils.formatSecondsToHMS(it) }
 
-    return "Set $setNumber: " + if (parts.isEmpty()) "No data" else parts.joinToString(" × ")
+    return "$displayLabel: " + if (parts.isEmpty()) "No data" else parts.joinToString(" × ")
 }

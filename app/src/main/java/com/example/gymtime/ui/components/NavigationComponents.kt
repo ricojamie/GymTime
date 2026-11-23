@@ -1,6 +1,8 @@
 package com.example.gymtime.ui.components
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
@@ -15,22 +17,30 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.example.gymtime.ui.theme.LocalAppColors
+import androidx.compose.ui.Modifier
+import com.example.gymtime.ui.theme.IronLogRadius
+import com.example.gymtime.ui.theme.IronLogSpace
 
 @Composable
 fun BackNavigationIcon(onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(IronLogSpace.TouchTargetMin)
+    ) {
         Icon(
             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
             contentDescription = "Back",
-            tint = LocalAppColors.current.textPrimary
+            tint = MaterialTheme.colorScheme.onSurface
         )
     }
 }
 
 @Composable
 fun HomeNavigationAction(onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(IronLogSpace.TouchTargetMin)
+    ) {
         Icon(
             imageVector = Icons.Default.Home,
             contentDescription = "Home",
@@ -77,8 +87,10 @@ fun rememberGuardedNavigationActions(
     BackHandler { request(PendingNavigation.BACK) }
 
     if (pendingNavigation != null) {
+        val scheme = MaterialTheme.colorScheme
         AlertDialog(
             onDismissRequest = { pendingNavigation = null },
+            shape = IronLogRadius.CardShape,
             title = { Text(dialogTitle) },
             text = { Text(dialogMessage) },
             confirmButton = {
@@ -91,19 +103,23 @@ fun rememberGuardedNavigationActions(
                             PendingNavigation.HOME -> onHome()
                             null -> Unit
                         }
-                    }
+                    },
+                    modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
                 ) {
-                    Text("Discard", color = MaterialTheme.colorScheme.error)
+                    Text("Discard", color = scheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pendingNavigation = null }) {
+                TextButton(
+                    onClick = { pendingNavigation = null },
+                    modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
+                ) {
                     Text("Keep editing")
                 }
             },
-            containerColor = LocalAppColors.current.surfaceCards,
-            titleContentColor = LocalAppColors.current.textPrimary,
-            textContentColor = LocalAppColors.current.textSecondary
+            containerColor = scheme.surface,
+            titleContentColor = scheme.onSurface,
+            textContentColor = scheme.onSurfaceVariant
         )
     }
 

@@ -306,6 +306,24 @@ class LoggerProgressTest {
         assertCurrentSetRecord(candidate, emptyList())
     }
 
+    @Test
+    fun `warmup library exercises never produce records or chart points`() {
+        val warmupExercise = exercise.copy(targetMuscle = "Warmups")
+        val rows = listOf(
+            row(set(1, 1, 100f, 10)),
+            row(set(2, 2, 120f, 10))
+        )
+
+        val result = buildLoggerProgress(warmupExercise, rows, workout(3))
+
+        assertNull(result.allTimeBest)
+        assertNull(result.lastWorkoutBest)
+        assertTrue(result.points.isEmpty())
+        assertTrue(result.records.isEmpty())
+        assertTrue(result.setRecordLabels.isEmpty())
+        assertEquals(2, result.sessions.size)
+    }
+
     private fun assertNoCurrentSetRecord(candidate: Set, previousSets: List<Set>) {
         assertTrue(loggerRecordLabels(exercise, candidate, previousSets).isEmpty())
         val result = progressWithCurrentSetFirst(candidate, previousSets)

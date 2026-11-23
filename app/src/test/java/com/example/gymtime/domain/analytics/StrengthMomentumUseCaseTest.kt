@@ -1,12 +1,14 @@
 package com.example.gymtime.domain.analytics
 
 import com.example.gymtime.data.db.dao.MuscleGroupDao
+import com.example.gymtime.data.db.dao.MuscleWeeklyVolumeComparison
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.SetWithExercisePerformanceInfo
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.util.TestDispatcherRule
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -16,6 +18,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
@@ -309,6 +313,37 @@ class StrengthMomentumUseCaseTest {
         assertEquals(MomentumDirection.FLAT, state.muscles.first { it.muscle == "Chest" }.direction)
         assertTrue(state.topImproving.isEmpty())
         assertTrue(state.topDeclining.isEmpty())
+    }
+
+    @Test
+    fun `core weekly volume maps to canonical Abs and derives Sunday bounds from nowMs`() = runTest {
+        val zone = ZoneId.of("America/New_York")
+        val zonedUseCase = StrengthMomentumUseCase(setDao, muscleGroupDao, zone)
+        // Wednesday 2024-06-12 15:00 local -> Sunday 2024-06-09 00:00 and previous Sunday 2024-06-02 00:00
+        val wednesdayMs = ZonedDateTime.of(2024, 6, 12, 15, 0, 0, 0, zone).toInstant().toEpochMilli()
+        val expectedCurrentSunday = ZonedDateTime.of(2024, 6, 9, 0, 0, 0, 0, zone).toInstant().toEpochMilli()
+        val expectedPreviousSunday = ZonedDateTime.of(2024, 6, 2, 0, 0, 0, 0, zone).toInstant().toEpochMilli()
+
+        stubSets(emptyList())
+        coEvery { setDao.getMuscleWeeklyVolumeComparison(any(), any(), any()) } returns listOf(
+            MuscleWeeklyVolumeComparison("Core", currentWeekVolume = 1500f, previousWeekVolume = 1000f),
+            MuscleWeeklyVolumeComparison("Abs", currentWeekVolume = 500f, previousWeekVolume = 200f),
+            MuscleWeeklyVolumeComparison("Warmups", currentWeekVolume = 999f, previousWeekVolume = 999f)
+        )
+
+        val state = zonedUseCase.getStrengthMomentum(wednesdayMs)
+        val abs = state.muscles.first { it.muscle == "Abs" }
+
+        assertEquals(2000f, abs.currentWeekVolume, 0.01f)
+        assertEquals(1200f, abs.previousWeekVolume, 0.01f)
+        assertTrue(state.muscles.none { it.muscle.equals("Warmups", ignoreCase = true) })
+        coVerify {
+            setDao.getMuscleWeeklyVolumeComparison(
+                previousWeekStartMs = expectedPreviousSunday,
+                currentWeekStartMs = expectedCurrentSunday,
+                nowMs = wednesdayMs
+            )
+        }
     }
 
     private suspend fun resultFor(muscle: String): MuscleMomentum =

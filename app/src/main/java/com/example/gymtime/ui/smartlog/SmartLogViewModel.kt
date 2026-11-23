@@ -13,6 +13,12 @@ import com.example.gymtime.smartlog.SmartLogDraftStore
 import com.example.gymtime.smartlog.SmartLogValidator
 import com.example.gymtime.smartlog.ValidatedSmartLogDraft
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,7 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import javax.inject.Inject
+import kotlinx.coroutines.withContext
 
 data class SmartLogUiState(
     val input: String = "",
@@ -34,13 +40,31 @@ data class SmartLogUiState(
 data class SmartLogNavigationEvent(val exerciseId: Long, val draftToken: String)
 
 @HiltViewModel
-class SmartLogViewModel @Inject constructor(
+class SmartLogViewModel internal constructor(
     private val exerciseRepository: ExerciseRepository,
     private val interpreter: SmartLogCommandInterpreter,
     private val matcher: ExerciseMatcher,
     private val validator: SmartLogValidator,
-    private val draftStore: SmartLogDraftStore
+    private val draftStore: SmartLogDraftStore,
+    private val computeDispatcher: CoroutineDispatcher
 ) : ViewModel() {
+
+    @Inject
+    constructor(
+        exerciseRepository: ExerciseRepository,
+        interpreter: SmartLogCommandInterpreter,
+        matcher: ExerciseMatcher,
+        validator: SmartLogValidator,
+        draftStore: SmartLogDraftStore
+    ) : this(
+        exerciseRepository = exerciseRepository,
+        interpreter = interpreter,
+        matcher = matcher,
+        validator = validator,
+        draftStore = draftStore,
+        computeDispatcher = Dispatchers.Default
+    )
+
     private val _state = MutableStateFlow(SmartLogUiState())
     val state: StateFlow<SmartLogUiState> = _state.asStateFlow()
 
@@ -49,16 +73,22 @@ class SmartLogViewModel @Inject constructor(
 
     private var pendingParsed: ParsedLoggingCommand? = null
     private var pendingAllowedExerciseIds: Set<Long>? = null
+    private var submitJob: Job? = null
+    private var isConfirmingReview: Boolean = false
 
     fun updateInput(value: String) {
+        submitJob?.cancel()
+        submitJob = null
         _state.value = _state.value.copy(
             input = value,
+            isProcessing = false,
             error = null,
             candidates = emptyList(),
             review = null,
             createExerciseName = null
         )
         pendingParsed = null
+        pendingAllowedExerciseIds = null
     }
 
     fun reportSpeechError(message: String) {
@@ -67,43 +97,67 @@ class SmartLogViewModel @Inject constructor(
 
     fun submit(currentExercise: Exercise?, allowedExerciseIds: Set<Long>? = null) {
         val text = _state.value.input.trim()
-        if (text.isEmpty() || _state.value.isProcessing) return
-        viewModelScope.launch {
-            _state.value = _state.value.copy(
-                isProcessing = true,
-                error = null,
-                candidates = emptyList(),
-                review = null,
-                createExerciseName = null
-            )
-            val parsed = interpreter.extract(text)
-            if (parsed == null) {
-                _state.value = _state.value.copy(
-                    isProcessing = false,
-                    error = "I couldn't find a complete set. Try an exercise, weight, and reps."
-                )
-                return@launch
-            }
-            val createName = parsed.exerciseQuery
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
-            _state.value = _state.value.copy(createExerciseName = createName)
-            val rows = exerciseRepository.getExercisesWithUsageStats(0L).first()
-            when (val result = matcher.match(parsed.exerciseQuery, rows, currentExercise)) {
-                is ExerciseMatchResult.Matched -> validateSelection(result.candidate.exercise, parsed, allowedExerciseIds)
-                is ExerciseMatchResult.NeedsConfirmation -> {
-                    pendingParsed = parsed
-                    pendingAllowedExerciseIds = allowedExerciseIds
-                    _state.value = _state.value.copy(isProcessing = false, candidates = result.candidates)
-                }
-                ExerciseMatchResult.NoMatch -> {
+        if (text.isEmpty()) return
+        submitJob?.cancel()
+        pendingParsed = null
+        pendingAllowedExerciseIds = null
+        _state.value = _state.value.copy(
+            isProcessing = true,
+            error = null,
+            candidates = emptyList(),
+            review = null,
+            createExerciseName = null
+        )
+        val newJob = viewModelScope.launch(start = CoroutineStart.LAZY) {
+            val currentJob = coroutineContext[Job]
+            try {
+                val parsed = interpreter.extract(text)
+                if (parsed == null) {
                     _state.value = _state.value.copy(
-                        isProcessing = false,
-                        error = "No close match was found in your exercise library."
+                        error = "I couldn't find a complete set. Try an exercise, weight, and reps."
                     )
+                    return@launch
+                }
+                val createName = parsed.exerciseQuery
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                _state.value = _state.value.copy(createExerciseName = createName)
+                val rows = exerciseRepository.getExercisesWithUsageStats(0L).first()
+                val result = withContext(computeDispatcher) {
+                    matcher.match(parsed.exerciseQuery, rows, currentExercise)
+                }
+                when (result) {
+                    is ExerciseMatchResult.Matched -> validateSelection(
+                        result.candidate.exercise,
+                        parsed,
+                        allowedExerciseIds
+                    )
+                    is ExerciseMatchResult.NeedsConfirmation -> {
+                        pendingParsed = parsed
+                        pendingAllowedExerciseIds = allowedExerciseIds
+                        _state.value = _state.value.copy(candidates = result.candidates)
+                    }
+                    ExerciseMatchResult.NoMatch -> {
+                        _state.value = _state.value.copy(
+                            error = "No close match was found in your exercise library."
+                        )
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                _state.value = _state.value.copy(
+                    error = "Couldn't parse that set right now. Try again."
+                )
+            } finally {
+                if (submitJob === currentJob) {
+                    submitJob = null
+                    _state.value = _state.value.copy(isProcessing = false)
                 }
             }
         }
+        submitJob = newJob
+        newJob.start()
     }
 
     fun chooseExercise(exercise: Exercise) {
@@ -112,16 +166,25 @@ class SmartLogViewModel @Inject constructor(
     }
 
     fun confirmReview() {
+        if (isConfirmingReview) return
         val draft = _state.value.review ?: return
+        isConfirmingReview = true
         val token = draftStore.put(draft)
-        viewModelScope.launch {
-            _navigation.send(SmartLogNavigationEvent(draft.exercise.id, token))
+        reset()
+        val sent = _navigation.trySend(SmartLogNavigationEvent(draft.exercise.id, token))
+        if (!sent.isSuccess) {
+            viewModelScope.launch {
+                _navigation.send(SmartLogNavigationEvent(draft.exercise.id, token))
+            }
         }
     }
 
     fun reset() {
+        submitJob?.cancel()
+        submitJob = null
         pendingParsed = null
         pendingAllowedExerciseIds = null
+        isConfirmingReview = false
         _state.value = SmartLogUiState()
     }
 

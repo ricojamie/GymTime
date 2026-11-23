@@ -6,9 +6,11 @@ import com.example.gymtime.data.db.entity.MuscleDistribution
 import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
-import java.util.Calendar
+import java.time.Instant
+import java.time.ZoneId
+import java.util.Locale
 import java.util.concurrent.TimeUnit
+import javax.inject.Inject
 
 data class MuscleFreshnessStatus(
     val muscle: String,
@@ -34,6 +36,18 @@ class BalanceUseCase @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val muscleGroupDao: MuscleGroupDao
 ) {
+    private var zoneId: ZoneId = ZoneId.systemDefault()
+    private var clockMs: () -> Long = System::currentTimeMillis
+
+    internal constructor(
+        workoutDao: WorkoutDao,
+        muscleGroupDao: MuscleGroupDao,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        clockMs: () -> Long = System::currentTimeMillis
+    ) : this(workoutDao, muscleGroupDao) {
+        this.zoneId = zoneId
+        this.clockMs = clockMs
+    }
 
     suspend fun getMuscleDistribution(range: BalanceTimeRange): List<MuscleDistribution> = withContext(Dispatchers.IO) {
         getBodyPartSetCounts(range).filter { it.setVolume > 0 }
@@ -45,53 +59,67 @@ class BalanceUseCase @Inject constructor(
 
     suspend fun getMuscleFreshness(): List<MuscleFreshnessStatus> = withContext(Dispatchers.IO) {
         val rawData = workoutDao.getMuscleLastTrainedDates()
-        val now = System.currentTimeMillis()
+        val now = clockMs()
 
         val allMuscles = muscleGroupDao.getAllMuscleGroupNames()
             .filterNot { it.isWarmupMuscleGroup() }
-        val knownFreshness = rawData.associateBy { it.muscle }
-        
+        val knownFreshness = mutableMapOf<String, Long>()
+        for (entry in rawData) {
+            if (entry.muscle.isWarmupMuscleGroup()) continue
+            val key = entry.muscle.trim().lowercase(Locale.US)
+            val existing = knownFreshness[key]
+            if (existing == null || entry.lastTrained > existing) {
+                knownFreshness[key] = entry.lastTrained
+            }
+        }
+
         allMuscles.map { muscle ->
-            val lastTrained = knownFreshness[muscle]?.lastTrained ?: 0L
-            val diffMs = now - lastTrained
+            val lastTrained = knownFreshness[muscle.trim().lowercase(Locale.US)] ?: 0L
+            val diffMs = (now - lastTrained).coerceAtLeast(0L)
             val daysSince = TimeUnit.MILLISECONDS.toDays(diffMs).toInt()
-            
+
             val status = when {
-                lastTrained == 0L -> RecoveryStatus.FRESH // Treat never trained as fresh
+                lastTrained <= 0L -> RecoveryStatus.FRESH // Treat never trained as fresh
                 diffMs < TimeUnit.HOURS.toMillis(24) -> RecoveryStatus.FATIGUED
                 diffMs < TimeUnit.DAYS.toMillis(3) -> RecoveryStatus.RECOVERING
                 else -> RecoveryStatus.FRESH
             }
 
-            val displayDays = if (lastTrained == 0L) 999 else daysSince
+            val displayDays = if (lastTrained <= 0L) 999 else daysSince
 
             MuscleFreshnessStatus(
                 muscle = muscle,
                 daysSince = displayDays,
                 status = status
             )
-        }.sortedBy { it.daysSince }
+        }.sortedWith(compareBy<MuscleFreshnessStatus> { it.daysSince }.thenBy { it.muscle })
     }
 
     private suspend fun getBodyPartSetCounts(range: BalanceTimeRange): List<MuscleDistribution> {
         val allMuscles = muscleGroupDao.getAllMuscleGroupNames()
             .filterNot { it.isWarmupMuscleGroup() }
-        val now = System.currentTimeMillis()
+        val now = clockMs()
         val start = range.days?.let { days ->
-            Calendar.getInstance().apply {
-                timeInMillis = now
-                add(Calendar.DAY_OF_YEAR, -days)
-            }.timeInMillis
+            Instant.ofEpochMilli(now)
+                .atZone(zoneId)
+                .minusDays(days.toLong())
+                .toInstant()
+                .toEpochMilli()
         } ?: 0L
 
-        val raw = if (range == BalanceTimeRange.THIRTY_DAYS) {
-            workoutDao.getMuscleSetCountsLast30Days()
-        } else {
-            workoutDao.getMuscleSetCountsInRange(start, now)
-        }.associateBy { it.muscle }
+        val raw = workoutDao.getMuscleSetCountsInRange(start, now)
+        val countsByMuscle = mutableMapOf<String, Int>()
+        for (entry in raw) {
+            if (entry.muscle.isWarmupMuscleGroup()) continue
+            val key = entry.muscle.trim().lowercase(Locale.US)
+            countsByMuscle[key] = (countsByMuscle[key] ?: 0) + entry.setVolume.coerceAtLeast(0)
+        }
 
         return allMuscles.map { muscle ->
-            raw[muscle] ?: MuscleDistribution(muscle = muscle, setVolume = 0)
+            MuscleDistribution(
+                muscle = muscle,
+                setVolume = countsByMuscle[muscle.trim().lowercase(Locale.US)] ?: 0
+            )
         }
     }
 }

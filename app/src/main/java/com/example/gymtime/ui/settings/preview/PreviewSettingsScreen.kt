@@ -4,7 +4,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.gymtime.BuildConfig
 import com.example.gymtime.ui.settings.SettingsViewModel
@@ -34,41 +33,23 @@ fun PreviewSettingsScreen(
     val fitNotesState by viewModel.importState.collectAsStateWithLifecycle()
     val exportState by viewModel.exportState.collectAsStateWithLifecycle()
     val ironLogState by viewModel.ironLogImportState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
 
     val fitNotesPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
-            try {
-                val input = context.contentResolver.openInputStream(uri)
-                    ?: error("The selected CSV file could not be opened.")
-                viewModel.importFitNotes(input)
-            } catch (error: Exception) {
-                viewModel.reportFitNotesFileError(error.message ?: "The selected CSV file could not be opened.")
-            }
+            viewModel.importFitNotes(uri)
         }
     }
     val backupCreator = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) {
-            try {
-                val output = context.contentResolver.openOutputStream(uri)
-                    ?: error("The backup file could not be opened for writing.")
-                viewModel.exportData(output)
-            } catch (error: Exception) {
-                viewModel.reportExportFileError(error.message ?: "The backup file could not be opened for writing.")
-            }
+            viewModel.exportData(uri)
         }
     }
     val backupPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
-            try {
-                val input = context.contentResolver.openInputStream(uri)
-                    ?: error("The selected ZIP backup could not be opened.")
-                viewModel.importIronLog(input)
-            } catch (error: Exception) {
-                viewModel.reportIronLogFileError(error.message ?: "The selected ZIP backup could not be opened.")
-            }
+            viewModel.importIronLog(uri)
         }
     }
+
     PreviewSettingsContent(
         state = SettingsPreviewState(
             userName = userName,
@@ -107,7 +88,7 @@ fun PreviewSettingsScreen(
                 is SettingsPreviewAction.RestDays -> viewModel.setRestDaysPerWeek(action.count)
                 is SettingsPreviewAction.BarWeight -> viewModel.setBarWeight(action.weight)
                 is SettingsPreviewAction.LoadingSides -> viewModel.setLoadingSides(action.sides)
-                is SettingsPreviewAction.Plate -> viewModel.togglePlate(action.weight, availablePlates)
+                is SettingsPreviewAction.Plate -> viewModel.togglePlate(action.weight)
                 is SettingsPreviewAction.PlateCount -> viewModel.setPlateInventoryCount(action.weight, action.count)
                 is SettingsPreviewAction.LimitPlates -> viewModel.setUsePlateInventory(action.enabled)
                 is SettingsPreviewAction.PlateCountDelta -> viewModel.adjustPlateInventoryCount(action.weight, action.delta)

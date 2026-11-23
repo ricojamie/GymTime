@@ -2,7 +2,6 @@ package com.example.gymtime.ui.routine
 
 import androidx.lifecycle.SavedStateHandle
 import com.example.gymtime.data.RoutineRepository
-import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.RoutineDayWithExercises
 import com.example.gymtime.data.db.dao.RoutineExerciseWithDetails
@@ -11,20 +10,22 @@ import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.RoutineDay
 import com.example.gymtime.data.db.entity.RoutineExercise
 import com.example.gymtime.util.TestDispatcherRule
-import io.mockk.every
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -36,9 +37,6 @@ class RoutineDayFormViewModelTest {
     val dispatcherRule = TestDispatcherRule()
 
     private val repository: RoutineRepository = mockk(relaxed = true)
-    private val preferences: UserPreferencesRepository = mockk {
-        every { newUiEnabled } returns flowOf(true)
-    }
     private val exerciseDao: ExerciseDao = mockk()
     private val bench = Exercise(
         id = 11L,
@@ -60,7 +58,7 @@ class RoutineDayFormViewModelTest {
         val viewModel = RoutineDayFormViewModel(
             repository,
             exerciseDao,
-            SavedStateHandle(mapOf("routineId" to 1L)), preferences
+            SavedStateHandle(mapOf("routineId" to 1L))
         )
         val job = launch { viewModel.hasUnsavedChanges.collect {} }
         advanceUntilIdle()
@@ -97,7 +95,7 @@ class RoutineDayFormViewModelTest {
         val viewModel = RoutineDayFormViewModel(
             repository,
             exerciseDao,
-            SavedStateHandle(mapOf("routineId" to 1L, "dayId" to "3")), preferences
+            SavedStateHandle(mapOf("routineId" to 1L, "dayId" to "3"))
         )
         val job = launch { viewModel.hasUnsavedChanges.collect {} }
         advanceUntilIdle()
@@ -117,27 +115,42 @@ class RoutineDayFormViewModelTest {
     fun `rename preserves all loaded notes and targets in atomic save`() = runTest {
         val notes = "Existing note ".repeat(600)
         val day = RoutineDay(id = 3L, routineId = 1L, name = "Push", orderIndex = 4)
-        val row = RoutineExercise(id = 4L, routineDayId = 3L, exerciseId = bench.id,
-            orderIndex = 0, targetSets = 4, targetRepsMin = 8, targetRepsMax = 12, targetRestSeconds = 0, notes = notes)
+        val row = RoutineExercise(
+            id = 4L,
+            routineDayId = 3L,
+            exerciseId = bench.id,
+            orderIndex = 0,
+            targetSets = 4,
+            targetRepsMin = 8,
+            targetRepsMax = 12,
+            targetRestSeconds = 0,
+            notes = notes
+        )
         every { repository.getRoutineDayWithExercises(3L) } returns flowOf(
-            RoutineDayWithExercises(day, listOf(RoutineExerciseWithDetails(row, bench))))
-        val vm = RoutineDayFormViewModel(repository, exerciseDao,
-            SavedStateHandle(mapOf("routineId" to 1L, "dayId" to "3")), preferences)
+            RoutineDayWithExercises(day, listOf(RoutineExerciseWithDetails(row, bench)))
+        )
+        val vm = RoutineDayFormViewModel(
+            repository,
+            exerciseDao,
+            SavedStateHandle(mapOf("routineId" to 1L, "dayId" to "3"))
+        )
         advanceUntilIdle()
         vm.updateDayName("New name")
         vm.saveDay()
         advanceUntilIdle()
-        coVerify(exactly = 1) { repository.saveRoutineDay(1L, 3L, "New name", match {
-            it.single().notes == notes && it.single().targetSets == 4 && it.single().targetRestSeconds == 0 &&
-                it.single().targetRepsMin == 8 && it.single().targetRepsMax == 12
-        }) }
+        coVerify(exactly = 1) {
+            repository.saveRoutineDay(1L, 3L, "New name", match {
+                it.single().notes == notes && it.single().targetSets == 4 && it.single().targetRestSeconds == 0 &&
+                    it.single().targetRepsMin == 8 && it.single().targetRepsMax == 12
+            })
+        }
         coVerify(exactly = 0) { repository.deleteAllExercisesForDay(any()) }
     }
 
     @Test
     fun `failure keeps draft and second rapid tap never starts a second save`() = runTest {
         coEvery { repository.saveRoutineDay(any(), any(), any(), any()) } throws IllegalStateException("Disk full")
-        val vm = RoutineDayFormViewModel(repository, exerciseDao, SavedStateHandle(mapOf("routineId" to 1L)), preferences)
+        val vm = RoutineDayFormViewModel(repository, exerciseDao, SavedStateHandle(mapOf("routineId" to 1L)))
         vm.updateDayName("Push")
         vm.addExercise(bench.id)
         vm.updateExerciseNotes(bench.id, "Keep my cues")
@@ -160,7 +173,7 @@ class RoutineDayFormViewModelTest {
         val second = bench.copy(id = 12L, name = "Row", targetMuscle = "Back")
         every { exerciseDao.getAllExercises() } returns flowOf(listOf(bench, second))
         val handle = SavedStateHandle(mapOf("routineId" to 1L))
-        val vm = RoutineDayFormViewModel(repository, exerciseDao, handle, preferences)
+        val vm = RoutineDayFormViewModel(repository, exerciseDao, handle)
         vm.updateDayName("Day draft")
         vm.addExercise(bench.id)
         vm.addExercise(second.id)
@@ -170,7 +183,7 @@ class RoutineDayFormViewModelTest {
         vm.updatePickerQuery("Bench")
         vm.updatePickerMuscle("Chest")
         advanceUntilIdle()
-        val restored = RoutineDayFormViewModel(repository, exerciseDao, handle, preferences)
+        val restored = RoutineDayFormViewModel(repository, exerciseDao, handle)
         assertEquals("Day draft", restored.dayName.value)
         assertEquals("5", restored.targetSets.value[bench.id])
         assertEquals("Pause", restored.notes.value[bench.id])
@@ -181,7 +194,7 @@ class RoutineDayFormViewModelTest {
 
     @Test
     fun `invalid rep range keeps draft without saving`() = runTest {
-        val vm = RoutineDayFormViewModel(repository, exerciseDao, SavedStateHandle(mapOf("routineId" to 1L)), preferences)
+        val vm = RoutineDayFormViewModel(repository, exerciseDao, SavedStateHandle(mapOf("routineId" to 1L)))
         vm.updateDayName("Push")
         vm.addExercise(bench.id)
         vm.updateTargetRepMin(bench.id, "12")
@@ -190,5 +203,58 @@ class RoutineDayFormViewModelTest {
         advanceUntilIdle()
         assertNotNull(vm.error.value)
         coVerify(exactly = 0) { repository.saveRoutineDay(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `superset block boundaries control move up and down availability and movement`() = runTest {
+        val second = bench.copy(id = 12L, name = "Row", targetMuscle = "Back")
+        val third = bench.copy(id = 13L, name = "Squat", targetMuscle = "Legs")
+        every { exerciseDao.getAllExercises() } returns flowOf(listOf(bench, second, third))
+        val vm = RoutineDayFormViewModel(repository, exerciseDao, SavedStateHandle(mapOf("routineId" to 1L)))
+        vm.addExercise(bench.id)
+        vm.addExercise(second.id)
+        vm.addExercise(third.id)
+        vm.toggleSupersetLink(0) // [bench, second] paired at top
+
+        assertFalse(canMoveRoutineExerciseBlock(index = 0, delta = -1, links = vm.supersetLinks.value, totalSize = 3))
+        assertFalse(canMoveRoutineExerciseBlock(index = 1, delta = -1, links = vm.supersetLinks.value, totalSize = 3))
+        assertTrue(canMoveRoutineExerciseBlock(index = 1, delta = 1, links = vm.supersetLinks.value, totalSize = 3))
+        assertTrue(canMoveRoutineExerciseBlock(index = 2, delta = -1, links = vm.supersetLinks.value, totalSize = 3))
+        assertFalse(canMoveRoutineExerciseBlock(index = 2, delta = 1, links = vm.supersetLinks.value, totalSize = 3))
+
+        // Moving second down moves the entire [bench, second] superset block past third
+        vm.moveExercise(second.id, 1)
+        assertEquals(listOf(third, bench, second), vm.selectedExercises.first())
+        assertEquals(setOf(1), vm.supersetLinks.value)
+        assertFalse(canMoveRoutineExerciseBlock(index = 1, delta = 1, links = vm.supersetLinks.value, totalSize = 3))
+    }
+
+    @Test
+    fun `edit mode load failure locks mutations until retry succeeds`() = runTest {
+        every { repository.getRoutineDayWithExercises(3L) } returns flow { error("Read failed") }
+        val vm = RoutineDayFormViewModel(
+            repository,
+            exerciseDao,
+            SavedStateHandle(mapOf("routineId" to 1L, "dayId" to "3"))
+        )
+        advanceUntilIdle()
+
+        assertFalse(vm.canEdit.value)
+        assertNotNull(vm.error.value)
+        vm.updateDayName("Ignored")
+        assertEquals("", vm.dayName.value)
+        assertNotNull(vm.error.value)
+
+        val day = RoutineDay(id = 3L, routineId = 1L, name = "Push", orderIndex = 0)
+        val row = RoutineExercise(id = 4L, routineDayId = 3L, exerciseId = bench.id, orderIndex = 0, targetSets = 3)
+        every { repository.getRoutineDayWithExercises(3L) } returns flowOf(
+            RoutineDayWithExercises(day, listOf(RoutineExerciseWithDetails(row, bench)))
+        )
+        vm.retryLoad()
+        advanceUntilIdle()
+
+        assertTrue(vm.canEdit.value)
+        assertNull(vm.error.value)
+        assertEquals("Push", vm.dayName.value)
     }
 }

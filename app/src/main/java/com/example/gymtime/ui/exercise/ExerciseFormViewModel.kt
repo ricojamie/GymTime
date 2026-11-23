@@ -3,7 +3,6 @@ package com.example.gymtime.ui.exercise
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.entity.DistanceUnit
@@ -46,8 +45,7 @@ private data class ExerciseFormCoreDraft(
 class ExerciseFormViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val exerciseDao: ExerciseDao,
-    private val muscleGroupDao: MuscleGroupDao,
-    userPreferencesRepository: UserPreferencesRepository
+    private val muscleGroupDao: MuscleGroupDao
 ) : ViewModel() {
 
     private val exerciseId: Long? = savedStateHandle.get<String>("exerciseId")?.toLongOrNull()
@@ -56,7 +54,6 @@ class ExerciseFormViewModel @Inject constructor(
     private val hasRestoredDraft = savedStateHandle.get<Boolean>(DRAFT_PRESENT) == true
     private val previewDefaultsPrepared = savedStateHandle.get<Boolean>(PREVIEW_DEFAULTS) == true
 
-    val newUiEnabled: Flow<Boolean> = userPreferencesRepository.newUiEnabled
     val isFromWorkout: StateFlow<Boolean> = MutableStateFlow(savedStateHandle["fromWorkout"] ?: false)
     val isFromWorkoutBuilder: StateFlow<Boolean> = MutableStateFlow(savedStateHandle["fromWorkoutBuilder"] ?: false)
     val isReturningToPicker: StateFlow<Boolean> = MutableStateFlow(savedStateHandle["returnToPicker"] ?: false)
@@ -136,10 +133,13 @@ class ExerciseFormViewModel @Inject constructor(
         groups.map { it.name }.sorted()
     }
 
-    val similarExercises: Flow<List<Exercise>> = if (exerciseId != null) flowOf(emptyList()) else combine(_exerciseName, exerciseDao.getAllExercises()) { name, exercises ->
+    val similarExercises: Flow<List<Exercise>> = if (exerciseId != null) flowOf(emptyList()) else combine(
+        _exerciseName,
+        flow { emitAll(exerciseDao.getAllExercises()) }
+    ) { name, exercises ->
         val query = name.trim()
         if (query.length < 3) emptyList() else exercises.asSequence()
-            .filter { it.id != exerciseId && namesAreSimilar(query, it.name) }
+            .filter { namesAreSimilar(query, it.name) }
             .sortedWith(compareBy<Exercise>(
                 { !it.name.equals(query, ignoreCase = true) },
                 { !it.name.startsWith(query, ignoreCase = true) },
@@ -198,6 +198,10 @@ class ExerciseFormViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val exercise = exerciseDao.getExerciseById(id).first()
+                if (exercise == null) {
+                    _loadError.value = "Couldn't load this exercise. Try again."
+                    return@launch
+                }
                 val baseline = ExerciseFormDraft(
                     exercise.name, exercise.targetMuscle, exercise.logType, exercise.defaultDistanceUnit,
                     exercise.notes.orEmpty(), exercise.defaultRestSeconds.toString(), exercise.repTarget?.toString().orEmpty()
@@ -239,7 +243,7 @@ class ExerciseFormViewModel @Inject constructor(
                     logType = selectedLogType,
                     defaultDistanceUnit = draft.distanceUnit,
                     isCustom = existingIsCustom,
-                    notes = draft.notes.takeIf { it.isNotBlank() },
+                    notes = draft.notes.trim().takeIf { it.isNotBlank() },
                     defaultRestSeconds = draft.restSeconds.toInt(),
                     isStarred = existingIsStarred,
                     repTarget = draft.repTarget.toIntOrNull()?.takeIf {

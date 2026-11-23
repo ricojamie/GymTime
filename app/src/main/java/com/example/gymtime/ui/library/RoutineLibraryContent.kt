@@ -1,277 +1,34 @@
 package com.example.gymtime.ui.library
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import com.example.gymtime.data.db.entity.Routine
 import com.example.gymtime.navigation.Screen
-import com.example.gymtime.ui.components.GlowCard
-import com.example.gymtime.ui.theme.*
+import com.example.gymtime.navigation.navigateResumed
 import com.example.gymtime.ui.routine.preview.PreviewRoutineBrowseContent
 
 /**
  * Routine library content for the Library screen's Routines tab.
- * Shows list of routines with tap-to-edit navigation.
+ * Shows list of routines with tap-to-open navigation.
  */
 @Composable
 fun RoutineLibraryContent(
     navController: NavController,
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
-    val newUiEnabled by viewModel.newUiEnabled.collectAsStateWithLifecycle(initialValue = false)
-    if (newUiEnabled) {
-        val state by viewModel.routinePreviewState.collectAsStateWithLifecycle()
-        LoggerPreviewTheme {
-            PreviewRoutineBrowseContent(
-                state = state, embedded = true,
-                onCreate = { navController.navigate(Screen.RoutineForm.createRoute()) },
-                onOpen = { navController.navigate(Screen.RoutineDetail.createRoute(it)) },
-                onSetActive = viewModel::setActiveRoutine,
-                onRename = { navController.navigate(Screen.RoutineForm.createRoute(it)) },
-                onDuplicate = viewModel::duplicateRoutine, onDelete = viewModel::deleteRoutineById,
-                onRetry = viewModel::retryRoutines, onDismissError = viewModel::dismissRoutineError
-            )
-        }
-    } else LegacyRoutineLibraryContent(navController, viewModel)
-}
-
-@Composable
-private fun LegacyRoutineLibraryContent(navController: NavController, viewModel: LibraryViewModel) {
-    val routines by viewModel.routines.collectAsStateWithLifecycle(initialValue = emptyList())
-    val activeRoutineId by viewModel.activeRoutineId.collectAsStateWithLifecycle(initialValue = null)
-    val canCreateMore by viewModel.canCreateMoreRoutines.collectAsStateWithLifecycle()
-    val accentColor = MaterialTheme.colorScheme.primary
-
-    var showMaxRoutinesDialog by remember { mutableStateOf(false) }
-    var routineToDelete by remember { mutableStateOf<Routine?>(null) }
-
-    Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
-                    if (canCreateMore) {
-                        navController.navigate(Screen.RoutineForm.createRoute())
-                    } else {
-                        showMaxRoutinesDialog = true
-                    }
-                },
-                containerColor = if (canCreateMore) accentColor else LocalAppColors.current.textTertiary,
-                contentColor = Color.Black,
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Create Routine", modifier = Modifier.size(32.dp))
-            }
-        },
-        containerColor = Color.Transparent
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp)
-        ) {
-            if (routines.isEmpty()) {
-                // Empty state
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No routines yet.\nTap + to create your first routine!",
-                        color = LocalAppColors.current.textTertiary,
-                        fontSize = 16.sp,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(routines) { routine ->
-                        RoutineLibraryItem(
-                            routine = routine,
-                            isSelectedActive = routine.id == activeRoutineId,
-                            onTap = { navController.navigate(Screen.RoutineDetail.createRoute(routine.id)) },
-                            onToggleActive = { viewModel.toggleRoutineActive(routine) },
-                            onDelete = { routineToDelete = routine }
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    // Max routines dialog
-    if (showMaxRoutinesDialog) {
-        AlertDialog(
-            onDismissRequest = { showMaxRoutinesDialog = false },
-            title = { Text("Maximum Routines Reached", color = LocalAppColors.current.textPrimary) },
-            text = { Text("You can only create up to 10 routines. Delete an existing routine to create a new one.", color = LocalAppColors.current.textSecondary) },
-            confirmButton = {
-                TextButton(onClick = { showMaxRoutinesDialog = false }) {
-                    Text("OK", color = accentColor)
-                }
-            },
-            containerColor = LocalAppColors.current.surfaceCards
-        )
-    }
-
-    // Delete confirmation dialog
-    routineToDelete?.let { routine ->
-        AlertDialog(
-            onDismissRequest = { routineToDelete = null },
-            title = { Text("Delete Routine?", color = LocalAppColors.current.textPrimary) },
-            text = { Text("This will permanently delete \"${routine.name}\" and all its days and exercises.", color = LocalAppColors.current.textSecondary) },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.deleteRoutine(routine)
-                        routineToDelete = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { routineToDelete = null }) {
-                    Text("Cancel", color = LocalAppColors.current.textPrimary)
-                }
-            },
-            containerColor = LocalAppColors.current.surfaceCards
-        )
-    }
-}
-
-@Composable
-private fun RoutineLibraryItem(
-    routine: Routine,
-    isSelectedActive: Boolean,
-    onTap: () -> Unit,
-    onToggleActive: () -> Unit,
-    onDelete: () -> Unit
-) {
-    var showMenu by remember { mutableStateOf(false) }
-    val isRoutineActive = routine.isActive
-    val accentColor = MaterialTheme.colorScheme.primary
-
-    GlowCard(
-        onClick = onTap,
-        onLongClick = { showMenu = true },
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(
-                if (!isRoutineActive) Modifier else Modifier
-            )
-    ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = routine.name,
-                        color = if (isRoutineActive) LocalAppColors.current.textPrimary else LocalAppColors.current.textTertiary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Inactive badge
-                        if (!isRoutineActive) {
-                            Surface(
-                                color = LocalAppColors.current.textTertiary.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = "INACTIVE",
-                                    color = LocalAppColors.current.textTertiary,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.sp,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                                )
-                            }
-                        }
-
-                        // Active badge (currently selected routine)
-                        if (isSelectedActive && isRoutineActive) {
-                            Surface(
-                                color = accentColor.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = "ACTIVE",
-                                    color = accentColor,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.sp,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Text(
-                    text = if (isRoutineActive) "Tap to view and edit" else "Tap to view (inactive)",
-                    color = LocalAppColors.current.textTertiary,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-
-            // Context menu
-            DropdownMenu(
-                expanded = showMenu,
-                onDismissRequest = { showMenu = false }
-            ) {
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = if (isRoutineActive) "Deactivate" else "Activate",
-                            color = LocalAppColors.current.textPrimary
-                        )
-                    },
-                    onClick = {
-                        showMenu = false
-                        onToggleActive()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                    onClick = {
-                        showMenu = false
-                        onDelete()
-                    }
-                )
-            }
-        }
-    }
+    val state by viewModel.routinePreviewState.collectAsStateWithLifecycle()
+    PreviewRoutineBrowseContent(
+        state = state,
+        embedded = true,
+        onCreate = { navController.navigateResumed(Screen.RoutineForm.createRoute()) },
+        onOpen = { navController.navigateResumed(Screen.RoutineDetail.createRoute(it)) },
+        onSetActive = viewModel::setActiveRoutine,
+        onRename = { navController.navigateResumed(Screen.RoutineForm.createRoute(it)) },
+        onDuplicate = viewModel::duplicateRoutine,
+        onDelete = viewModel::deleteRoutineById,
+        onRetry = viewModel::retryRoutines,
+        onDismissError = viewModel::dismissRoutineError
+    )
 }

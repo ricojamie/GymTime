@@ -1,8 +1,10 @@
 package com.example.gymtime.ui.theme
 
 import android.graphics.Color.parseColor
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 
+@Immutable
 data class AppColorScheme(
     val primaryAccent: Color,
     val primaryAccentDark: Color,

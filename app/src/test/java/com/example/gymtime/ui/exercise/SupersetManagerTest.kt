@@ -47,6 +47,21 @@ class SupersetManagerTest {
         supersetManager.startSuperset(listOf(exercise1))
     }
 
+    @Test(expected = IllegalArgumentException::class)
+    fun `startSuperset throws exception on duplicate exercises`() {
+        supersetManager.startSuperset(listOf(exercise1, exercise1))
+    }
+
+    @Test
+    fun `startSuperset clears prior last logged values`() {
+        supersetManager.startSuperset(listOf(exercise1, exercise2))
+        supersetManager.saveLastLoggedValues(exercise1.id, LastLoggedValues(weight = "225", reps = "5"))
+
+        supersetManager.startSuperset(listOf(exercise1, exercise3))
+
+        assertNull(supersetManager.getLastLoggedValues(exercise1.id))
+    }
+
     @Test
     fun `switchToNextExercise rotates through exercises`() {
         val exercises = listOf(exercise1, exercise2, exercise3)
@@ -155,5 +170,41 @@ class SupersetManagerTest {
 
         assertEquals(values, supersetManager.getLastLoggedValues(exercise1.id))
         assertNull(supersetManager.getLastLoggedValues(exercise2.id))
+    }
+
+    @Test
+    fun `syncPlanSuperset updates swapped member while keeping ad-hoc added exercise`() {
+        val replacement = Exercise(id = 4, name = "Pull-Up", targetMuscle = "Back", logType = LogType.REPS_ONLY, isCustom = false, notes = null, defaultRestSeconds = 90)
+        supersetManager.syncPlanSuperset(10L, "g1", listOf(exercise1, exercise2), exercise1.id)
+        supersetManager.addExercise(exercise3)
+
+        supersetManager.syncPlanSuperset(10L, "g1", listOf(exercise1, replacement), exercise1.id)
+
+        assertEquals(listOf(exercise1, replacement, exercise3), supersetManager.supersetExercises.value)
+        assertEquals(0, supersetManager.currentExerciseIndex.value)
+    }
+
+    @Test
+    fun `dissolvePlanSupersetIfMissing exits dissolved plan superset but keeps ad-hoc superset`() {
+        supersetManager.syncPlanSuperset(10L, "g1", listOf(exercise1, exercise2), exercise1.id)
+        supersetManager.dissolvePlanSupersetIfMissing(10L, emptySet())
+        assertFalse(supersetManager.isInSupersetMode.value)
+
+        supersetManager.startSuperset(listOf(exercise1, exercise2))
+        supersetManager.dissolvePlanSupersetIfMissing(10L, emptySet())
+        assertTrue(supersetManager.isInSupersetMode.value)
+    }
+
+    @Test
+    fun `exitPlanSuperset blocks re-sync for same workout until cleared`() {
+        supersetManager.syncPlanSuperset(10L, "g1", listOf(exercise1, exercise2), exercise1.id)
+        supersetManager.exitPlanSuperset(10L, "g1")
+
+        assertTrue(supersetManager.isPlanGroupExited(10L, "g1"))
+        supersetManager.syncPlanSuperset(10L, "g1", listOf(exercise1, exercise2), exercise2.id)
+        assertFalse(supersetManager.isInSupersetMode.value)
+
+        supersetManager.clearWorkoutExitedPlanGroups(10L)
+        assertFalse(supersetManager.isPlanGroupExited(10L, "g1"))
     }
 }

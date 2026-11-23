@@ -6,9 +6,12 @@ import com.example.gymtime.data.db.dao.SetWithExercisePerformanceInfo
 import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
 import com.example.gymtime.domain.progression.StrengthPerformanceCalculator
-import com.example.gymtime.util.WeekUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.DayOfWeek
+import java.time.Instant
+import java.time.ZoneId
+import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -76,11 +79,25 @@ class StrengthMomentumUseCase @Inject constructor(
     private val setDao: SetDao,
     private val muscleGroupDao: MuscleGroupDao
 ) {
+    private var zoneId: ZoneId = ZoneId.systemDefault()
+
+    internal constructor(
+        setDao: SetDao,
+        muscleGroupDao: MuscleGroupDao,
+        zoneId: ZoneId
+    ) : this(setDao, muscleGroupDao) {
+        this.zoneId = zoneId
+    }
 
     suspend fun getStrengthMomentum(nowMs: Long = System.currentTimeMillis()): StrengthMomentumState =
         withContext(Dispatchers.IO) {
             val historyStart = nowMs - TimeUnit.DAYS.toMillis(HISTORY_DAYS.toLong())
             val staleBefore = nowMs - TimeUnit.DAYS.toMillis(STALE_AFTER_DAYS.toLong())
+
+            val nowDate = Instant.ofEpochMilli(nowMs).atZone(zoneId).toLocalDate()
+            val currentWeekStart = nowDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
+            val currentWeekStartMs = currentWeekStart.atStartOfDay(zoneId).toInstant().toEpochMilli()
+            val previousWeekStartMs = currentWeekStart.minusWeeks(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
 
             val allSets = setDao.getPerformanceSetsWithExerciseInRange(
                 startDate = historyStart,
@@ -88,15 +105,31 @@ class StrengthMomentumUseCase @Inject constructor(
             ).filter {
                 it.set.isComplete &&
                     !it.set.isWarmup &&
+                    !it.targetMuscle.isWarmupMuscleGroup() &&
                     it.logType in STRENGTH_LOG_TYPES
             }
 
             val exerciseMomentum = buildExerciseMomentum(allSets, staleBefore)
-            val weeklyVolumeByMuscle = setDao.getMuscleWeeklyVolumeComparison(
-                previousWeekStartMs = WeekUtils.getLastWeekStartMs(),
-                currentWeekStartMs = WeekUtils.getCurrentWeekStartMs(),
+            val weeklyVolumeByMuscle = mutableMapOf<String, WeeklyVolumeTotals>()
+            setDao.getMuscleWeeklyVolumeComparison(
+                previousWeekStartMs = previousWeekStartMs,
+                currentWeekStartMs = currentWeekStartMs,
                 nowMs = nowMs
-            ).associateBy { it.muscle.lowercase(Locale.US) }
+            ).forEach { row ->
+                if (row.muscle.isWarmupMuscleGroup()) return@forEach
+                val key = canonicalMuscleName(row.muscle).lowercase(Locale.US)
+                val currentVol = row.currentWeekVolume.takeIf { it.isFinite() && it >= 0f } ?: 0f
+                val previousVol = row.previousWeekVolume.takeIf { it.isFinite() && it >= 0f } ?: 0f
+                val existing = weeklyVolumeByMuscle[key]
+                weeklyVolumeByMuscle[key] = if (existing == null) {
+                    WeeklyVolumeTotals(currentVol, previousVol)
+                } else {
+                    WeeklyVolumeTotals(
+                        currentWeekVolume = (existing.currentWeekVolume.toDouble() + currentVol).toFloat(),
+                        previousWeekVolume = (existing.previousWeekVolume.toDouble() + previousVol).toFloat()
+                    )
+                }
+            }
 
             val muscles = buildMuscleList(exerciseMomentum).map { muscle ->
                 val allContributions = exerciseMomentum
@@ -104,7 +137,7 @@ class StrengthMomentumUseCase @Inject constructor(
                 val ready = allContributions
                     .filter { it.status == MomentumDataStatus.READY && it.percentChange != null }
                     .sortedByDescending { kotlin.math.abs(it.percentChange ?: 0f) }
-                val weeklyVolume = weeklyVolumeByMuscle[muscle.lowercase(Locale.US)]
+                val weeklyVolume = weeklyVolumeByMuscle[canonicalMuscleName(muscle).lowercase(Locale.US)]
 
                 if (ready.isEmpty()) {
                     val latestTimestamp = allContributions.maxOfOrNull { it.latestSessionTimestamp }
@@ -185,8 +218,8 @@ class StrengthMomentumUseCase @Inject constructor(
             val sample = exerciseSets.maxByOrNull { it.set.timestamp.time } ?: return@mapNotNull null
             val sessions = exerciseSets
                 .groupBy { it.set.workoutId }
-                .mapNotNull { (_, workoutSets) -> sessionScore(workoutSets) }
-                .sortedByDescending { it.timestamp }
+                .mapNotNull { (workoutId, workoutSets) -> sessionScore(workoutId, workoutSets) }
+                .sortedWith(compareByDescending<SessionScore> { it.timestamp }.thenByDescending { it.workoutId })
             if (sessions.isEmpty()) return@mapNotNull null
 
             val latestTimestamp = sessions.first().timestamp
@@ -219,9 +252,12 @@ class StrengthMomentumUseCase @Inject constructor(
 
             val recentValue = median(sessions.take(matchedCount).map { it.value })
             val baselineValue = median(sessions.drop(matchedCount).take(matchedCount).map { it.value })
-            if (baselineValue <= 0f) return@mapNotNull null
-            val percentChange = (((recentValue - baselineValue) / baselineValue) * 100f)
-                .roundToSingleDecimal()
+            if (!recentValue.isFinite() || !baselineValue.isFinite() || baselineValue <= 0f) {
+                return@mapNotNull null
+            }
+            val rawPercent = ((recentValue - baselineValue) / baselineValue) * 100f
+            if (!rawPercent.isFinite()) return@mapNotNull null
+            val percentChange = rawPercent.roundToSingleDecimal()
 
             ExerciseMomentum(
                 exerciseId = exerciseId,
@@ -239,11 +275,12 @@ class StrengthMomentumUseCase @Inject constructor(
         }
     }
 
-    private fun sessionScore(sets: List<SetWithExercisePerformanceInfo>): SessionScore? {
+    private fun sessionScore(workoutId: Long, sets: List<SetWithExercisePerformanceInfo>): SessionScore? {
         val value = sets.mapNotNull { setInfo ->
             StrengthPerformanceCalculator.strengthValue(setInfo.set, setInfo.logType)
         }.maxOrNull() ?: return null
         return SessionScore(
+            workoutId = workoutId,
             value = value,
             timestamp = sets.maxOf { it.set.timestamp.time }
         )
@@ -251,6 +288,7 @@ class StrengthMomentumUseCase @Inject constructor(
 
     private fun robustMusclePercent(contributions: List<ExerciseMomentum>): Float {
         val values = contributions.mapNotNull { it.percentChange }
+            .filter { it.isFinite() }
             .map { it.coerceIn(-MAX_EXERCISE_CHANGE, MAX_EXERCISE_CHANGE) }
         return median(values).roundToSingleDecimal()
     }
@@ -277,18 +315,23 @@ class StrengthMomentumUseCase @Inject constructor(
     private fun displayMuscleFor(setInfo: SetWithExercisePerformanceInfo): String =
         canonicalMuscleName(setInfo.targetMuscle)
 
-    private fun canonicalMuscleName(raw: String): String = when {
-        raw.equals("Core", ignoreCase = true) || raw.equals("Abs", ignoreCase = true) -> "Abs"
-        else -> raw
+    private fun canonicalMuscleName(raw: String): String {
+        val trimmed = raw.trim()
+        return when {
+            trimmed.equals("Core", ignoreCase = true) || trimmed.equals("Abs", ignoreCase = true) -> "Abs"
+            else -> trimmed
+        }
     }
 
     private fun preferredMuscleIndex(muscle: String): Int =
         DEFAULT_MUSCLES.indexOfFirst { it.equals(muscle, ignoreCase = true) }
             .takeIf { it >= 0 } ?: Int.MAX_VALUE
 
-    private fun Float.roundToSingleDecimal(): Float = (this * 10f).roundToInt() / 10f
+    private fun Float.roundToSingleDecimal(): Float =
+        if (!isFinite()) 0f else (this * 10f).roundToInt() / 10f
 
-    private data class SessionScore(val value: Float, val timestamp: Long)
+    private data class SessionScore(val workoutId: Long, val value: Float, val timestamp: Long)
+    private data class WeeklyVolumeTotals(val currentWeekVolume: Float, val previousWeekVolume: Float)
 
     companion object {
         const val MAX_SESSIONS_PER_SIDE = 3

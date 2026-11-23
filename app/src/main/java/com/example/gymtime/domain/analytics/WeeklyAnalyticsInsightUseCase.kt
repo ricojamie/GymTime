@@ -66,13 +66,14 @@ class WeeklyAnalyticsInsightUseCase @Inject constructor(
             twentyEightDaysAgo.toInstant().toEpochMilli()
         )
         val rows = setDao.getAnalyticsInsightSets(queryStart, nowMs)
+            .filterNot { it.muscle.isWarmupMuscleGroup() }
+        val storedMuscles = muscleGroupDao.getAllMuscleGroupNames()
+            .filterNot { it.isWarmupMuscleGroup() }
         val context = InsightContext(
             now = now,
             currentWeekStart = currentWeekStart,
             rows = rows,
-            knownMuscleNames = muscleGroupDao.getAllMuscleGroupNames()
-                .filterNot { it.isWarmupMuscleGroup() }
-                .toSet()
+            knownMuscleNames = (storedMuscles + storedMuscles.map(::canonicalMuscleName)).toSet()
         )
 
         persistentPushPullGap(context)?.let { return@withContext it }
@@ -116,16 +117,19 @@ class WeeklyAnalyticsInsightUseCase @Inject constructor(
             val leading = if (push.volume > pull.volume) TrainingSide.PUSH else TrainingSide.PULL
             val leadingVolume = maxOf(push.volume, pull.volume)
             val trailingVolume = minOf(push.volume, pull.volume)
-            val gapPercent = ((leadingVolume - trailingVolume) / leadingVolume) * 100f
-            WeeklySideComparison(leading, gapPercent)
+            val gapPercent = ((leadingVolume.toDouble() - trailingVolume.toDouble()) / leadingVolume.toDouble()) * 100.0
+            if (!gapPercent.isFinite()) return null
+            WeeklySideComparison(leading, gapPercent.toFloat())
         }
 
         val leadingSide = weeklyComparisons.firstOrNull()?.leading ?: return null
-        if (weeklyComparisons.any { it.leading != leadingSide || it.gapPercent < MIN_PERCENT_CHANGE }) {
+        if (weeklyComparisons.any { it.leading != leadingSide || !it.gapPercent.isFinite() || it.gapPercent < MIN_PERCENT_CHANGE }) {
             return null
         }
 
-        val averageGap = weeklyComparisons.map { it.gapPercent }.average().roundToInt()
+        val avgGap = weeklyComparisons.map { it.gapPercent.toDouble() }.average()
+        if (!avgGap.isFinite()) return null
+        val averageGap = avgGap.roundToInt()
         val leadingLabel = leadingSide.label
         val trailingLabel = leadingSide.opposite.label
         return context.facts(
@@ -143,7 +147,7 @@ class WeeklyAnalyticsInsightUseCase @Inject constructor(
         improving: Boolean
     ): WeeklyAnalyticsInsightFacts? {
         val candidates = momentum.muscles.filter { muscle ->
-            val percent = muscle.percentChange ?: return@filter false
+            val percent = muscle.percentChange?.takeIf { it.isFinite() } ?: return@filter false
             muscle.status == MomentumDataStatus.READY &&
                 muscle.confidence == MomentumConfidence.STANDARD &&
                 !muscle.hasMixedContributors &&
@@ -155,7 +159,8 @@ class WeeklyAnalyticsInsightUseCase @Inject constructor(
             candidates.minByOrNull { it.percentChange ?: 0f }
         } ?: return null
 
-        val magnitude = abs(selected.percentChange ?: return null).roundToInt()
+        val rawPercent = selected.percentChange?.takeIf { it.isFinite() } ?: return null
+        val magnitude = abs(rawPercent).roundToInt()
         val direction = if (improving) "up" else "down"
         val kind = if (improving) {
             WeeklyAnalyticsInsightKind.STRENGTH_IMPROVEMENT
@@ -172,19 +177,31 @@ class WeeklyAnalyticsInsightUseCase @Inject constructor(
     }
 
     private suspend fun staleMuscle(context: InsightContext): WeeklyAnalyticsInsightFacts? {
-        val selected = workoutDao.getMuscleLastTrainedDates()
+        val latestByMuscle = mutableMapOf<String, Pair<String, Long>>()
+        workoutDao.getMuscleLastTrainedDates()
             .asSequence()
-            .filterNot { it.muscle.equals(CARDIO_MUSCLE, ignoreCase = true) }
-            .map { freshness ->
-                val lastTrained = Instant.ofEpochMilli(freshness.lastTrained).atZone(context.now.zone)
+            .filterNot { it.muscle.isWarmupMuscleGroup() || it.muscle.equals(CARDIO_MUSCLE, ignoreCase = true) }
+            .forEach { freshness ->
+                val canonical = canonicalMuscleName(freshness.muscle)
+                val key = canonical.lowercase(Locale.US)
+                val existing = latestByMuscle[key]
+                if (existing == null || freshness.lastTrained > existing.second) {
+                    latestByMuscle[key] = canonical to freshness.lastTrained
+                }
+            }
+
+        val selected = latestByMuscle.values
+            .asSequence()
+            .map { (muscle, lastTrainedMs) ->
+                val lastTrained = Instant.ofEpochMilli(lastTrainedMs).atZone(context.now.zone)
                 val days = java.time.temporal.ChronoUnit.DAYS.between(
                     lastTrained.toLocalDate(),
                     context.now.toLocalDate()
-                ).toInt()
-                freshness.muscle to days
+                ).toInt().coerceAtLeast(0)
+                muscle to days
             }
             .filter { (_, days) -> days >= STALE_MUSCLE_DAYS }
-            .maxByOrNull { (_, days) -> days }
+            .maxWithOrNull(compareBy<Pair<String, Int>> { it.second }.thenBy { it.first })
             ?: return null
 
         val (muscle, days) = selected
@@ -211,13 +228,15 @@ class WeeklyAnalyticsInsightUseCase @Inject constructor(
         if (
             current.setCount < MIN_COMPARABLE_WEEK_SETS ||
             previous.setCount < MIN_COMPARABLE_WEEK_SETS ||
+            !current.volume.isFinite() ||
+            !previous.volume.isFinite() ||
             previous.volume <= 0f
         ) {
             return null
         }
 
-        val percent = ((current.volume - previous.volume) / previous.volume) * 100f
-        if (abs(percent) < MIN_PERCENT_CHANGE) return null
+        val percent = ((current.volume.toDouble() - previous.volume.toDouble()) / previous.volume.toDouble()) * 100.0
+        if (!percent.isFinite() || abs(percent) < MIN_PERCENT_CHANGE) return null
         val magnitude = abs(percent).roundToInt()
         val direction = if (percent > 0f) "up" else "down"
         return context.facts(
@@ -249,7 +268,7 @@ class WeeklyAnalyticsInsightUseCase @Inject constructor(
         val recentStart = context.now.minusDays(FALLBACK_LOOKBACK_DAYS.toLong())
         val topMuscle = context.rows
             .inWindow(recentStart, context.now)
-            .groupingBy { it.muscle }
+            .groupingBy { canonicalMuscleName(it.muscle) }
             .eachCount()
             .filterValues { it >= MIN_TOP_MUSCLE_SETS }
             .entries
@@ -320,17 +339,30 @@ class WeeklyAnalyticsInsightUseCase @Inject constructor(
     private fun List<AnalyticsInsightSetRow>.weightedAggregate(
         muscles: Set<String>? = null
     ): WeightedAggregate {
-        var volume = 0f
+        var volume = 0.0
         var setCount = 0
         for (row in this) {
+            if (row.muscle.isWarmupMuscleGroup()) continue
             if (muscles != null && row.muscle.lowercase(Locale.US) !in muscles) continue
             val weight = row.weight ?: continue
             val reps = row.reps ?: continue
-            if (weight <= 0f || reps <= 0) continue
-            volume += weight * reps
+            if (!weight.isFinite() || weight <= 0f || reps <= 0) continue
+            volume += weight.toDouble() * reps
             setCount++
         }
-        return WeightedAggregate(volume, setCount)
+        val volumeFloat = volume.toFloat()
+        return WeightedAggregate(
+            volume = if (volumeFloat.isFinite()) volumeFloat else 0f,
+            setCount = setCount
+        )
+    }
+
+    private fun canonicalMuscleName(raw: String): String {
+        val trimmed = raw.trim()
+        return when {
+            trimmed.equals("Core", ignoreCase = true) || trimmed.equals("Abs", ignoreCase = true) -> "Abs"
+            else -> trimmed
+        }
     }
 
     private data class InsightContext(

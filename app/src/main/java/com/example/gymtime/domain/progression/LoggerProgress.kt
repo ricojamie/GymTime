@@ -62,7 +62,12 @@ fun buildLoggerProgress(
         }
         .sortedWith(compareByDescending<LoggerSession> { it.date }.thenByDescending { it.workoutId })
 
-    val workingSets = sessions.flatMap { it.sets }.filter { it.isComplete && !it.isWarmup }
+    val isWarmupExercise = exercise.isWarmupLibraryExercise
+    val workingSets = if (isWarmupExercise) {
+        emptyList()
+    } else {
+        sessions.flatMap { it.sets }.filter { it.isComplete && !it.isWarmup }
+    }
     // Record cards remain actual logged lifts even when the chart uses estimated strength.
     val metric = metricFor(exercise)
     val comparator = compareBy<Set> { metric.value(it) ?: Float.NEGATIVE_INFINITY }
@@ -70,9 +75,12 @@ fun buildLoggerProgress(
         .thenBy { if (exercise.logType == LogType.WEIGHT_TIME) it.durationSeconds ?: 0 else 0 }
         .thenBy { it.timestamp }
 
-    fun best(sets: List<Set>): Set? = sets
-        .filter { it.isComplete && !it.isWarmup && metric.value(it) != null }
-        .maxWithOrNull(comparator)
+    fun best(sets: List<Set>): Set? = if (isWarmupExercise) {
+        null
+    } else {
+        sets.filter { it.isComplete && !it.isWarmup && metric.value(it) != null }
+            .maxWithOrNull(comparator)
+    }
 
     val allTimeBest = best(workingSets)
     // Choose the actual previous completed session first, even when it has only warmups.
@@ -85,11 +93,15 @@ fun buildLoggerProgress(
     val chartValue: (Set) -> Float? = if (hasStrengthEstimates) {
         StrengthPerformanceCalculator::estimatedOneRepMax
     } else metric.value
-    val points = sessions.asReversed().mapNotNull { session ->
-        session.sets.filter { it.isComplete && !it.isWarmup }
-            .mapNotNull { set -> chartValue(set)?.let { set to it } }
-            .maxWithOrNull(compareBy<Pair<Set, Float>> { it.second }.thenBy { it.first.timestamp })
-            ?.let { (set, value) -> LoggerProgressPoint(session.workoutId, session.date, value, set) }
+    val points = if (isWarmupExercise) {
+        emptyList()
+    } else {
+        sessions.asReversed().mapNotNull { session ->
+            session.sets.filter { it.isComplete && !it.isWarmup }
+                .mapNotNull { set -> chartValue(set)?.let { set to it } }
+                .maxWithOrNull(compareBy<Pair<Set, Float>> { it.second }.thenBy { it.first.timestamp })
+                ?.let { (set, value) -> LoggerProgressPoint(session.workoutId, session.date, value, set) }
+        }
     }
     val records = buildList {
         allTimeBest?.let { add(LoggerRecord(metric.recordLabel, it)) }

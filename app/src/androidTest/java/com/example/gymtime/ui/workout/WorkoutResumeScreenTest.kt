@@ -79,4 +79,32 @@ class WorkoutResumeScreenTest {
         composeRule.onNodeWithContentDescription("Exercise actions for Incline Bench Press")
             .assertDoesNotExist()
     }
+
+    @Test
+    fun warmupOnlyExerciseDisplaysWarmingUpAndHidesPlanEditingActions() {
+        composeRule.setContent {
+            IronLogTheme {
+                ExerciseSummaryCard(
+                    exercise = ResumeExerciseItem(
+                        instanceId = 11L,
+                        exerciseId = 4L,
+                        exerciseName = "Incline Bench Press",
+                        targetMuscle = "Chest",
+                        setCount = 0,
+                        anySetCount = 1,
+                        bestWeight = null,
+                        supersetGroupId = null,
+                        orderIndex = 1
+                    ),
+                    onClick = {},
+                    onSwap = {},
+                    onRemove = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("WARMING UP").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Exercise actions for Incline Bench Press")
+            .assertDoesNotExist()
+    }
 }

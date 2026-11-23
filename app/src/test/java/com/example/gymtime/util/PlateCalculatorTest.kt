@@ -430,6 +430,19 @@ class PlateCalculatorTest {
         assertWithinInventory(result, inventory, 1)
     }
 
+    @Test
+    fun `coprime fine decimal plates with finite inventory solve cleanly`() {
+        val options = listOf(45f, 1.01f, 0.5f)
+        val inventory = mapOf(45f to 4, 1.01f to 4, 0.5f to 4)
+        // Target = 45 (bar) + 2 * (45 + 1.01 + 0.5) = 138.02
+        val result = PlateCalculator.calculatePlates(138.02f, options, 45f, 2, inventory)
+
+        assertEquals(listOf(45f, 1.01f, 0.5f), result.platesPerSide)
+        assertEquals(138.02f, result.totalWeight, 0.001f)
+        assertTrue(result.isExact)
+        assertWithinInventory(result, inventory, 2)
+    }
+
     private fun assertWithinInventory(loadout: PlateLoadout, inventory: Map<Float, Int>, sides: Int) {
         val stock = PlateCalculator.sanitizePlateInventory(inventory)
         loadout.platesPerSide.groupingBy { it }.eachCount().forEach { (plate, count) ->

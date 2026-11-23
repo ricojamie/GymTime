@@ -5,28 +5,30 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.WorkoutDao
-import com.example.gymtime.data.db.dao.WorkoutPlanSummary
 import com.example.gymtime.data.db.dao.WorkoutExerciseSummary
+import com.example.gymtime.data.db.dao.WorkoutPlanSummary
 import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
-import com.example.gymtime.data.UserPreferencesRepository
-import com.example.gymtime.data.repository.WorkoutRepository
 import com.example.gymtime.data.repository.WorkoutPlanEditResult
+import com.example.gymtime.data.repository.WorkoutRepository
 import com.example.gymtime.ui.exercise.SupersetManager
+import com.example.gymtime.ui.workout.preview.CurrentWorkoutUiState
 import com.example.gymtime.wear.ActiveWearSessionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import com.example.gymtime.ui.workout.preview.CurrentWorkoutUiState
 import javax.inject.Inject
 
 data class ResumeExerciseItem(
@@ -56,11 +58,8 @@ class WorkoutResumeViewModel @Inject constructor(
     private val setDao: SetDao,
     private val workoutRepository: WorkoutRepository,
     private val activeWearSessionRepository: ActiveWearSessionRepository,
-    private val supersetManager: SupersetManager,
-    private val userPreferencesRepository: UserPreferencesRepository
+    private val supersetManager: SupersetManager
 ) : ViewModel() {
-
-    val newUiEnabled: Flow<Boolean> = userPreferencesRepository.newUiEnabled
 
     private val _currentWorkout = MutableStateFlow<Workout?>(null)
     val currentWorkout: StateFlow<Workout?> = _currentWorkout
@@ -78,14 +77,14 @@ class WorkoutResumeViewModel @Inject constructor(
     ) { workout, exercises, loading, finishing, error ->
         val workingExercises = exercises.filterNot { it.targetMuscle.isWarmupMuscleGroup() }
         val targets = workingExercises.filter { !it.isSkipped && (it.plannedSets ?: 0) > 0 }
-        val incompleteTargets = targets.filter { it.setCount < it.plannedSets!! }
+        val incompleteTargets = targets.filter { it.setCount < (it.plannedSets ?: 0) }
         val firstIncomplete = incompleteTargets.firstOrNull()
         val next = firstIncomplete?.supersetGroupId?.let { groupId ->
             incompleteTargets.filter { it.supersetGroupId == groupId }
                 .minWithOrNull(compareBy<ResumeExerciseItem> { it.setCount }.thenBy { it.orderIndex })
         } ?: firstIncomplete
         val last = exercises.filter { !it.isSkipped && it.lastLoggedAtMs != null }
-            .maxByOrNull { it.lastLoggedAtMs!! }
+            .maxByOrNull { it.lastLoggedAtMs ?: Long.MIN_VALUE }
         CurrentWorkoutUiState(
             workoutId = workout?.id,
             name = workout?.name?.takeIf(String::isNotBlank)
@@ -99,9 +98,9 @@ class WorkoutResumeViewModel @Inject constructor(
                 if (it.targetMuscle.isWarmupMuscleGroup()) it.completedEntryCount
                 else (it.completedEntryCount - it.setCount).coerceAtLeast(0)
             },
-            plannedWorkingSets = targets.sumOf { it.plannedSets!! },
-            completedPlannedSets = targets.sumOf { it.setCount.coerceAtMost(it.plannedSets!!) },
-            completedTargets = targets.count { it.setCount >= it.plannedSets!! },
+            plannedWorkingSets = targets.sumOf { it.plannedSets ?: 0 },
+            completedPlannedSets = targets.sumOf { it.setCount.coerceAtMost(it.plannedSets ?: 0) },
+            completedTargets = targets.count { it.setCount >= (it.plannedSets ?: 0) },
             targetExercises = targets.size,
             continueExercise = next ?: last,
             hasNextTarget = next != null,
@@ -109,7 +108,9 @@ class WorkoutResumeViewModel @Inject constructor(
             isFinishing = finishing,
             finishError = error
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CurrentWorkoutUiState())
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CurrentWorkoutUiState())
 
     init {
         loadTodaysWorkout()
@@ -123,34 +124,57 @@ class WorkoutResumeViewModel @Inject constructor(
 
     private fun loadTodaysWorkout() {
         viewModelScope.launch {
-            workoutDao.getOngoingWorkout().collectLatest { workout ->
-                _currentWorkout.value = workout
-                if (workout == null) {
-                    _todaysExercises.value = emptyList()
-                    _isLoading.value = false
-                    Log.d("WorkoutResumeVM", "No ongoing workout found")
-                    return@collectLatest
-                }
-
-                Log.d("WorkoutResumeVM", "Ongoing workout found: ${workout.id}, startedFromRoutine=${workout.startedFromRoutine}")
-
-                _isLoading.value = true
-                _todaysExercises.value = emptyList()
-                val summaries: Flow<List<ResumeExerciseItem>> = if (workoutRepository.hasWorkoutPlan(workout.id)) {
-                    combine(workoutRepository.getWorkoutPlanSummaries(workout.id), setDao.getSetsForWorkout(workout.id)) { plan, sets ->
-                        plan.map { it.toResumeExerciseItem().withLoggedSets(sets) }
+            var activeWorkoutId: Long? = null
+            workoutDao.getOngoingWorkout()
+                .distinctUntilChanged()
+                .collectLatest { workout ->
+                    _currentWorkout.value = workout
+                    if (workout == null) {
+                        activeWorkoutId = null
+                        _todaysExercises.value = emptyList()
+                        _isLoading.value = false
+                        Log.d("WorkoutResumeVM", "No ongoing workout found")
+                        return@collectLatest
                     }
-                } else {
-                    combine(setDao.getWorkoutExerciseSummaries(workout.id), setDao.getSetsForWorkout(workout.id)) { exercises, sets ->
-                        exercises.mapIndexed { index, exercise -> exercise.toResumeExerciseItem(index).withLoggedSets(sets) }
+
+                    Log.d("WorkoutResumeVM", "Ongoing workout found: ${workout.id}, startedFromRoutine=${workout.startedFromRoutine}")
+
+                    // Only clear and show loading when switching to a different workout session.
+                    if (workout.id != activeWorkoutId) {
+                        activeWorkoutId = workout.id
+                        _isLoading.value = true
+                        _todaysExercises.value = emptyList()
+                    }
+                    val summaries: Flow<List<ResumeExerciseItem>> = if (workoutRepository.hasWorkoutPlan(workout.id)) {
+                        combine(
+                            workoutRepository.getWorkoutPlanSummaries(workout.id),
+                            setDao.getSetsForWorkout(workout.id)
+                        ) { plan, sets ->
+                            val setsByExercise = sets.groupBy { it.exerciseId }
+                            plan.map { it.toResumeExerciseItem().withLoggedSets(setsByExercise[it.exerciseId].orEmpty()) }
+                        }
+                    } else {
+                        combine(
+                            setDao.getWorkoutExerciseSummaries(workout.id),
+                            setDao.getSetsForWorkout(workout.id)
+                        ) { exercises, sets ->
+                            val setsByExercise = sets.groupBy { it.exerciseId }
+                            exercises.mapIndexed { index, exercise ->
+                                exercise.toResumeExerciseItem(index).withLoggedSets(setsByExercise[exercise.exerciseId].orEmpty())
+                            }
+                        }
+                    }.flowOn(Dispatchers.Default)
+
+                    summaries.collectLatest { exercises ->
+                        _todaysExercises.value = exercises
+                        _isLoading.value = false
                     }
                 }
-                summaries.collectLatest { exercises ->
-                    _todaysExercises.value = exercises
-                    _isLoading.value = false
-                }
-            }
         }
+    }
+
+    fun clearFinishError() {
+        _finishError.value = null
     }
 
     fun finishWorkout() {
@@ -202,8 +226,7 @@ class WorkoutResumeViewModel @Inject constructor(
     }
 }
 
-private fun ResumeExerciseItem.withLoggedSets(sets: List<com.example.gymtime.data.db.entity.Set>): ResumeExerciseItem {
-    val matching = sets.filter { it.exerciseId == exerciseId }
+private fun ResumeExerciseItem.withLoggedSets(matching: List<com.example.gymtime.data.db.entity.Set>): ResumeExerciseItem {
     val completed = matching.filter { it.isComplete }
     val working = completed.filterNot { it.isWarmup }
     val best = working.filter { it.weight != null }.maxWithOrNull(

@@ -86,6 +86,41 @@ class ExerciseAttemptRecommendationUseCaseTest {
         assertNull(result?.targetReps)
     }
 
+    @Test
+    fun `reopened older workout with newer set timestamp does not override latest workout by startTime`() = runTest {
+        val exercise = exercise(repTarget = 10)
+        // SetDao.getExerciseHistoryByWorkout orders by w.startTime DESC, so workout 2 comes first
+        // even though workout 1 was reopened and has a newer set timestamp.
+        val newerWorkoutSet = weightSet(weight = 185f, reps = 8).copy(
+            workoutId = 2L,
+            timestamp = Date(1_000_000L)
+        )
+        val reopenedOlderWorkoutSet = weightSet(weight = 135f, reps = 5).copy(
+            workoutId = 1L,
+            timestamp = Date(2_000_000L)
+        )
+        coEvery { setDao.getExerciseHistoryByWorkout(1L) } returns listOf(
+            newerWorkoutSet,
+            reopenedOlderWorkoutSet
+        )
+
+        val result = useCase.getRecommendation(exercise)
+
+        assertEquals(185f, result?.targetWeight)
+        assertEquals(9, result?.targetReps)
+    }
+
+    @Test
+    fun `non-finite and non-positive weights are ignored cleanly`() = runTest {
+        val exercise = exercise(repTarget = 10)
+        coEvery { setDao.getExerciseHistoryByWorkout(1L) } returns listOf(
+            weightSet(weight = Float.NaN, reps = 10),
+            weightSet(weight = 0f, reps = 10)
+        )
+
+        assertNull(useCase.getRecommendation(exercise))
+    }
+
     private fun exercise(
         logType: LogType = LogType.WEIGHT_REPS,
         repTarget: Int?

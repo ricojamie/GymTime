@@ -12,7 +12,6 @@ import com.example.gymtime.data.db.entity.WorkoutWithMuscles
 import com.example.gymtime.ui.components.PlateCalculatorTestActivity
 import com.example.gymtime.ui.history.preview.PreviewWorkoutDetailsSheet
 import com.example.gymtime.ui.theme.IronLogTheme
-import com.example.gymtime.ui.theme.LoggerPreviewTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -42,9 +41,7 @@ class WorkoutHistoryFlingTest {
         }
         rule.setContent {
             IronLogTheme {
-                LoggerPreviewTheme {
-                    PreviewWorkoutDetailsSheet(workout, sets, null, {}, {}, {}, {}, {}, {}, {}, {})
-                }
+                PreviewWorkoutDetailsSheet(workout, sets, null, {}, {}, {}, {}, {}, {}, {}, {})
             }
         }
         val list = rule.onNode(hasScrollToIndexAction())

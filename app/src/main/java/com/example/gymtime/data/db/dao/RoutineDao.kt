@@ -43,6 +43,15 @@ data class RoutineWithNextDay(
     val nextDayOrderIndex: Int
 )
 
+data class RoutineBrowseSummary(
+    val id: Long,
+    val name: String,
+    val isActive: Boolean,
+    val dayCount: Int,
+    val exerciseCount: Int,
+    val nextDayName: String?
+)
+
 @Dao
 interface RoutineDao {
     @Insert
@@ -56,6 +65,38 @@ interface RoutineDao {
 
     @Query("SELECT * FROM routines ORDER BY isActive DESC, name ASC")
     fun getAllRoutines(): Flow<List<Routine>>
+
+    @Query("""
+        SELECT
+            r.id,
+            r.name,
+            r.isActive,
+            COUNT(DISTINCT rd.id) AS dayCount,
+            COUNT(re.id) AS exerciseCount,
+            COALESCE(
+                (
+                    SELECT rd_next.name
+                    FROM routine_days rd_next
+                    WHERE rd_next.routineId = r.id
+                      AND rd_next.orderIndex = r.nextDayOrderIndex
+                    ORDER BY rd_next.orderIndex ASC
+                    LIMIT 1
+                ),
+                (
+                    SELECT rd_first.name
+                    FROM routine_days rd_first
+                    WHERE rd_first.routineId = r.id
+                    ORDER BY rd_first.orderIndex ASC
+                    LIMIT 1
+                )
+            ) AS nextDayName
+        FROM routines r
+        LEFT JOIN routine_days rd ON rd.routineId = r.id
+        LEFT JOIN routine_exercises re ON re.routineDayId = rd.id
+        GROUP BY r.id
+        ORDER BY r.isActive DESC, r.name ASC
+    """)
+    fun getRoutineBrowseSummaries(): Flow<List<RoutineBrowseSummary>>
 
     @Query("SELECT * FROM routines WHERE isActive = 1")
     fun getActiveRoutines(): Flow<List<Routine>>
@@ -122,6 +163,10 @@ interface RoutineDao {
     @Transaction
     @Query("SELECT * FROM routine_days WHERE routineId = :routineId ORDER BY orderIndex ASC")
     fun getDaysWithExercisesForRoutine(routineId: Long): Flow<List<RoutineDayWithExercises>>
+
+    @Transaction
+    @Query("SELECT * FROM routine_days WHERE routineId = :routineId ORDER BY orderIndex ASC")
+    suspend fun getDaysWithExercisesForRoutineSync(routineId: Long): List<RoutineDayWithExercises>
 
     @Query("UPDATE routine_days SET orderIndex = :orderIndex WHERE id = :dayId")
     suspend fun updateDayOrderIndex(dayId: Long, orderIndex: Int)

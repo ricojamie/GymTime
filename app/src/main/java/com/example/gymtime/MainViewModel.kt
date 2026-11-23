@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.WorkoutDao
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import java.util.Date
@@ -18,7 +19,11 @@ class MainViewModel @Inject constructor(
     private val setDao: SetDao
 ) : ViewModel() {
 
+    private var hasCheckedActiveSession = false
+
     fun checkActiveSession() {
+        if (hasCheckedActiveSession) return
+        hasCheckedActiveSession = true
         viewModelScope.launch {
             try {
                 val ongoing = workoutDao.getOngoingWorkout().firstOrNull() ?: return@launch
@@ -26,7 +31,7 @@ class MainViewModel @Inject constructor(
                 val lastSetTime = setDao.getLastSetTimestamp(ongoing.id)
                 // Use last set time, or workout start time if no sets
                 val lastActivityTime = lastSetTime ?: ongoing.startTime
-                
+
                 val currentTime = Date()
                 val diffInMillis = currentTime.time - lastActivityTime.time
                 val hoursElapsed = TimeUnit.MILLISECONDS.toHours(diffInMillis)
@@ -43,6 +48,8 @@ class MainViewModel @Inject constructor(
                         workoutDao.updateWorkout(finishedWorkout)
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e("MainViewModel", "Error checking active session", e)
             }

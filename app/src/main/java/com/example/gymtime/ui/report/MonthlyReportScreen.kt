@@ -1,34 +1,62 @@
 package com.example.gymtime.ui.report
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.gymtime.domain.report.MonthlyPR
 import com.example.gymtime.domain.report.MonthlyReport
 import com.example.gymtime.domain.report.MuscleTotal
-import com.example.gymtime.navigation.navigateHomeAndClearStack
 import com.example.gymtime.navigation.navigateBackOrHome
+import com.example.gymtime.navigation.navigateHomeAndClearStack
+import com.example.gymtime.ui.ai.OnDeviceAiDownloadCard
 import com.example.gymtime.ui.components.BackNavigationIcon
 import com.example.gymtime.ui.components.HomeNavigationAction
-import com.example.gymtime.ui.ai.OnDeviceAiDownloadCard
-import com.example.gymtime.ui.theme.LocalAppColors
-import com.example.gymtime.ui.theme.LocalLoggerPreviewThemeActive
+import com.example.gymtime.ui.components.IronLogCard
+import com.example.gymtime.ui.components.IronLogDivider
+import com.example.gymtime.ui.components.IronLogEmptyState
+import com.example.gymtime.ui.components.IronLogGroupedCard
+import com.example.gymtime.ui.components.IronLogMetric
+import com.example.gymtime.ui.components.IronLogMetricRow
+import com.example.gymtime.ui.components.IronLogSectionHeader
+import com.example.gymtime.ui.components.IronLogStatusChip
+import com.example.gymtime.ui.components.IronLogStatusTone
+import com.example.gymtime.ui.theme.IronLogBorder
+import com.example.gymtime.ui.theme.IronLogRadius
+import com.example.gymtime.ui.theme.IronLogSpace
+import com.example.gymtime.ui.theme.IronLogType
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -38,8 +66,10 @@ fun MonthlyReportScreen(navController: NavController) {
     val viewModel: MonthlyReportViewModel = hiltViewModel()
     val report by viewModel.report.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
     val narrative by viewModel.narrative.collectAsStateWithLifecycle()
-    val accent = MaterialTheme.colorScheme.primary
+    val scheme = MaterialTheme.colorScheme
+    val accent = scheme.primary
 
     LifecycleResumeEffect(viewModel) {
         viewModel.refreshIfDateChanged()
@@ -52,7 +82,7 @@ fun MonthlyReportScreen(navController: NavController) {
                 title = {
                     Text(
                         text = "Monthly Report",
-                        color = LocalAppColors.current.textPrimary,
+                        color = scheme.onSurface,
                         fontWeight = FontWeight.Bold
                     )
                 },
@@ -65,27 +95,49 @@ fun MonthlyReportScreen(navController: NavController) {
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         },
-        containerColor = Color.Transparent
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         when {
-            isLoading -> Box(
-                modifier = Modifier.fillMaxSize().padding(padding),
+            isLoading && report == null -> Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
                 contentAlignment = Alignment.Center
             ) { CircularProgressIndicator(color = accent) }
 
-            report == null -> Box(
-                modifier = Modifier.fillMaxSize().padding(padding),
+            report == null && error != null -> Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    "No data yet.",
-                    color = LocalAppColors.current.textTertiary
+                IronLogEmptyState(
+                    title = "Couldn't load monthly report",
+                    body = error ?: "Please try again.",
+                    actionLabel = "Retry",
+                    onAction = viewModel::retry
+                )
+            }
+
+            report == null -> Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                IronLogEmptyState(
+                    title = "No data yet",
+                    body = "Completed workouts from the previous calendar month will appear here."
                 )
             }
 
             else -> ReportBody(
                 report = report!!,
                 narrative = narrative,
+                error = error,
+                isLoading = isLoading,
+                onRetry = viewModel::retry,
                 padding = padding,
                 accent = accent
             )
@@ -97,54 +149,81 @@ fun MonthlyReportScreen(navController: NavController) {
 private fun ReportBody(
     report: MonthlyReport,
     narrative: String?,
+    error: String?,
+    isLoading: Boolean,
+    onRetry: () -> Unit,
     padding: PaddingValues,
     accent: Color
 ) {
+    val scheme = MaterialTheme.colorScheme
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.getDefault()) }
-    val previewActive = LocalLoggerPreviewThemeActive.current
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(padding)
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(if (previewActive) 12.dp else 16.dp)
+            .padding(horizontal = IronLogSpace.ScreenHorizontal),
+        verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
     ) {
         item {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(IronLogSpace.CompactGap))
             Text(
                 text = report.monthLabel,
-                color = LocalAppColors.current.textPrimary,
-                fontSize = if (previewActive) 26.sp else 28.sp,
+                color = scheme.onSurface,
+                style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold
             )
             Text(
                 text = "Here's how last month went",
-                color = LocalAppColors.current.textTertiary,
-                fontSize = 14.sp
+                color = scheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium
             )
+        }
+
+        if (error != null) {
+            item {
+                IronLogCard(
+                    containerColor = scheme.errorContainer,
+                    contentColor = scheme.onErrorContainer,
+                    showBorder = true,
+                    borderColor = scheme.error.copy(alpha = 0.35f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(text = error, style = MaterialTheme.typography.bodyMedium)
+                    TextButton(
+                        onClick = onRetry,
+                        enabled = !isLoading,
+                        shape = IronLogRadius.ControlShape,
+                        modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
+                    ) {
+                        Text("Retry")
+                    }
+                }
+            }
         }
 
         item { OnDeviceAiDownloadCard() }
 
         narrative?.takeIf { it.isNotBlank() }?.let { recap ->
             item {
-                ReportCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = "MONTH IN REVIEW",
-                            color = accent,
-                            fontSize = if (previewActive) 12.sp else 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.3.sp
-                        )
-                        Text(
-                            text = recap,
-                            color = LocalAppColors.current.textPrimary,
-                            fontSize = 15.sp,
-                            lineHeight = 21.sp
-                        )
-                    }
+                IronLogCard(
+                    highlighted = true,
+                    showBorder = true,
+                    containerColor = scheme.primaryContainer,
+                    contentColor = scheme.onPrimaryContainer,
+                    borderColor = IronLogBorder.borderColor(scheme, highlighted = true),
+                    verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
+                ) {
+                    Text(
+                        text = "MONTH IN REVIEW",
+                        color = scheme.onPrimaryContainer,
+                        style = IronLogType.sectionEyebrow()
+                    )
+                    Text(
+                        text = recap,
+                        color = scheme.onPrimaryContainer,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 }
             }
         }
@@ -154,44 +233,45 @@ private fun ReportBody(
         }
 
         if (report.topMuscles.isNotEmpty()) {
-            item { SectionTitle("Top muscles trained") }
+            item { IronLogSectionHeader(title = "Top muscles trained") }
             item { MuscleList(report.topMuscles, accent) }
         }
 
         if (report.undertrainedMuscles.isNotEmpty()) {
-            item { SectionTitle("Could use more attention") }
+            item { IronLogSectionHeader(title = "Could use more attention") }
             item {
-                ReportCard {
+                IronLogCard(showBorder = true) {
                     Text(
-                        text = report.undertrainedMuscles.joinToString(" • "),
-                        color = LocalAppColors.current.textPrimary,
-                        fontSize = 14.sp
+                        text = report.undertrainedMuscles.joinToString(" · "),
+                        color = scheme.onSurface,
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
             }
         }
 
         if (report.newPRs.isNotEmpty()) {
-            item { SectionTitle("New personal records") }
-            item { PRList(report.newPRs, accent) }
+            item { IronLogSectionHeader(title = "New personal records") }
+            item { PRList(report.newPRs) }
         }
 
         report.averageRating?.let { rating ->
-            item { SectionTitle("Average rating") }
+            item { IronLogSectionHeader(title = "Average rating") }
             item {
-                ReportCard {
+                IronLogCard(showBorder = true) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = String.format(Locale.getDefault(), "%.1f", rating),
                             color = accent,
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.ExtraBold
+                            style = IronLogType.tabular(MaterialTheme.typography.headlineMedium).copy(
+                                fontWeight = FontWeight.ExtraBold
+                            )
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(IronLogSpace.CompactGap))
                         Text(
                             text = "out of 5 flames",
-                            color = LocalAppColors.current.textTertiary,
-                            fontSize = 14.sp
+                            color = scheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium
                         )
                     }
                 }
@@ -204,117 +284,108 @@ private fun ReportBody(
 
 @Composable
 private fun HeroStats(report: MonthlyReport, accent: Color, numberFormat: NumberFormat) {
-    val previewActive = LocalLoggerPreviewThemeActive.current
-    ReportCard {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                val statModifier = if (previewActive) Modifier.weight(1f) else Modifier
-                StatBlock("WORKOUTS", report.workoutCount.toString(), statModifier)
-                StatBlock("SETS", report.totalWorkingSets.toString(), statModifier)
-                StatBlock("EXERCISES", report.exerciseCount.toString(), statModifier)
-            }
-            Spacer(modifier = Modifier.height(if (previewActive) 12.dp else 20.dp))
-            HorizontalDivider(color = if (previewActive) MaterialTheme.colorScheme.outlineVariant else LocalAppColors.current.textTertiary.copy(alpha = 0.15f))
-            Spacer(modifier = Modifier.height(if (previewActive) 12.dp else 20.dp))
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "VOLUME",
-                    color = LocalAppColors.current.textTertiary,
-                    fontSize = if (previewActive) 12.sp else 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.5.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "${numberFormat.format(report.totalVolume.toLong())} lbs",
-                    color = accent,
-                    fontSize = if (previewActive) 28.sp else 36.sp,
+    val scheme = MaterialTheme.colorScheme
+    IronLogCard(
+        showBorder = true,
+        verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
+    ) {
+        IronLogMetricRow(
+            metrics = listOf(
+                IronLogMetric(label = "Workouts", value = report.workoutCount.toString()),
+                IronLogMetric(label = "Sets", value = report.totalWorkingSets.toString()),
+                IronLogMetric(label = "Exercises", value = report.exerciseCount.toString())
+            )
+        )
+        IronLogDivider(insetStart = 0.dp)
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "VOLUME",
+                color = scheme.onSurfaceVariant,
+                style = IronLogType.sectionEyebrow()
+            )
+            Text(
+                text = "${numberFormat.format(report.totalVolume.toLong())} lbs",
+                color = accent,
+                style = IronLogType.tabular(MaterialTheme.typography.headlineLarge).copy(
                     fontWeight = FontWeight.ExtraBold
                 )
-            }
+            )
         }
-    }
-}
-
-@Composable
-private fun StatBlock(label: String, value: String, modifier: Modifier = Modifier) {
-    val previewActive = LocalLoggerPreviewThemeActive.current
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = label,
-            color = LocalAppColors.current.textTertiary,
-            fontSize = if (previewActive) 12.sp else 10.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = value,
-            color = LocalAppColors.current.textPrimary,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold
-        )
     }
 }
 
 @Composable
 private fun MuscleList(items: List<MuscleTotal>, accent: Color) {
-    ReportCard {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items.forEach { m ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(m.muscle, color = LocalAppColors.current.textPrimary, fontSize = 15.sp)
-                    Text(
-                        text = "${m.setCount} sets",
-                        color = accent,
-                        fontSize = 13.sp,
+    val scheme = MaterialTheme.colorScheme
+    IronLogGroupedCard(showBorder = true) {
+        items.forEachIndexed { index, m ->
+            if (index > 0) {
+                IronLogDivider()
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = IronLogSpace.CardPadding, vertical = IronLogSpace.RowVertical),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = m.muscle,
+                    color = scheme.onSurface,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Text(
+                    text = "${m.setCount} sets",
+                    color = accent,
+                    style = IronLogType.tabular(MaterialTheme.typography.bodyMedium).copy(
                         fontWeight = FontWeight.SemiBold
                     )
-                }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun PRList(items: List<MonthlyPR>, accent: Color) {
-    val previewActive = LocalLoggerPreviewThemeActive.current
-    ReportCard {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            items.forEach { pr ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+private fun PRList(items: List<MonthlyPR>) {
+    val scheme = MaterialTheme.colorScheme
+    IronLogGroupedCard(showBorder = true) {
+        items.forEachIndexed { index, pr ->
+            if (index > 0) {
+                IronLogDivider()
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = IronLogSpace.CardPadding, vertical = IronLogSpace.RowVertical),
+                horizontalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = pr.exerciseName,
-                            color = LocalAppColors.current.textPrimary,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "${formatWeight(pr.weight)} lbs × ${pr.reps}",
-                            color = LocalAppColors.current.textTertiary,
-                            fontSize = 12.sp
-                        )
-                    }
-                    if (previewActive) {
-                        Icon(
-                            Icons.Default.EmojiEvents,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.tertiary
-                        )
-                    } else {
-                        Text(text = "🏆", fontSize = 22.sp)
-                    }
+                    Text(
+                        text = pr.exerciseName,
+                        color = scheme.onSurface,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "${formatWeight(pr.weight)} lbs × ${pr.reps}",
+                        color = scheme.onSurfaceVariant,
+                        style = IronLogType.tabular(MaterialTheme.typography.bodySmall)
+                    )
                 }
+                IronLogStatusChip(
+                    label = "PR",
+                    tone = IronLogStatusTone.PR,
+                    icon = Icons.Default.EmojiEvents
+                )
             }
         }
     }
@@ -322,28 +393,3 @@ private fun PRList(items: List<MonthlyPR>, accent: Color) {
 
 private fun formatWeight(weight: Float): String =
     if (weight % 1f == 0f) weight.toInt().toString() else weight.toString()
-
-@Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text = text.uppercase(),
-        color = LocalAppColors.current.textTertiary,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Bold,
-        letterSpacing = 1.5.sp
-    )
-}
-
-@Composable
-private fun ReportCard(content: @Composable () -> Unit) {
-    val previewActive = LocalLoggerPreviewThemeActive.current
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.surfaceCards),
-        shape = RoundedCornerShape(if (previewActive) 22.dp else 16.dp),
-        border = if (previewActive) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
-        elevation = CardDefaults.cardElevation(defaultElevation = if (previewActive) 1.dp else 0.dp)
-    ) {
-        Box(modifier = Modifier.padding(if (previewActive) 14.dp else 20.dp)) { content() }
-    }
-}

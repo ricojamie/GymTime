@@ -12,11 +12,14 @@ class WearSessionTest {
     fun `canLog accepts every supported log type with its required fields`() {
         val validSessions = listOf(
             WearSession(logType = "WEIGHT_REPS", weight = "135", reps = "5"),
+            WearSession(logType = "WEIGHT_REPS", weight = "0", reps = "8"),
             WearSession(logType = "REPS_ONLY", reps = "12"),
             WearSession(logType = "DURATION", duration = "00:30"),
             WearSession(logType = "WEIGHT_DISTANCE", weight = "25", distance = "0.5"),
+            WearSession(logType = "WEIGHT_DISTANCE", weight = "0", distance = "1.0"),
             WearSession(logType = "DISTANCE_TIME", distance = "1.0", duration = "08:00"),
             WearSession(logType = "WEIGHT_TIME", weight = "45", duration = "01:00"),
+            WearSession(logType = "WEIGHT_TIME", weight = "0", duration = "01:00"),
             WearSession(logType = "CALORIES_TIME", calories = "100", duration = "12:00")
         )
 
@@ -45,6 +48,50 @@ class WearSessionTest {
         invalidSessions.forEach { session ->
             assertFalse("${session.logType} should require all of its fields", session.canLog)
         }
+    }
+
+    @Test
+    fun `canLog rejects zero non-positive and malformed values aligned with phone validation`() {
+        val invalidSessions = listOf(
+            WearSession(logType = "WEIGHT_REPS", weight = "135", reps = "0"),
+            WearSession(logType = "WEIGHT_REPS", weight = "135", reps = "5.5"),
+            WearSession(logType = "WEIGHT_REPS", weight = "-10", reps = "5"),
+            WearSession(logType = "WEIGHT_REPS", weight = "NaN", reps = "5"),
+            WearSession(logType = "WEIGHT_REPS", weight = "Infinity", reps = "5"),
+            WearSession(logType = "REPS_ONLY", reps = "0"),
+            WearSession(logType = "DURATION", duration = "0"),
+            WearSession(logType = "DURATION", duration = "00:00"),
+            WearSession(logType = "DURATION", duration = "0:00:00"),
+            WearSession(logType = "DURATION", duration = "::"),
+            WearSession(logType = "DURATION", duration = "00:65"),
+            WearSession(logType = "DURATION", duration = "1::30"),
+            WearSession(logType = "DURATION", duration = "999999999999999"),
+            WearSession(logType = "WEIGHT_DISTANCE", weight = "25", distance = "0"),
+            WearSession(logType = "WEIGHT_DISTANCE", weight = "25", distance = "0.0"),
+            WearSession(logType = "DISTANCE_TIME", distance = "0", duration = "08:00"),
+            WearSession(logType = "DISTANCE_TIME", distance = "1.0", duration = "00:00"),
+            WearSession(logType = "WEIGHT_TIME", weight = "45", duration = "00:00"),
+            WearSession(logType = "CALORIES_TIME", calories = "0", duration = "12:00"),
+            WearSession(logType = "CALORIES_TIME", calories = ".", duration = "12:00"),
+            WearSession(logType = "CALORIES_TIME", calories = "100", duration = "00:00")
+        )
+
+        invalidSessions.forEach { session ->
+            assertFalse("Expected invalid session to be rejected: $session", session.canLog)
+        }
+    }
+
+    @Test
+    fun `canLog validates optional rpe range from 0 to 10`() {
+        assertTrue(WearSession(logType = "REPS_ONLY", reps = "10", rpe = "").canLog)
+        assertTrue(WearSession(logType = "REPS_ONLY", reps = "10", rpe = "0").canLog)
+        assertTrue(WearSession(logType = "REPS_ONLY", reps = "10", rpe = "8.5").canLog)
+        assertTrue(WearSession(logType = "REPS_ONLY", reps = "10", rpe = "10").canLog)
+
+        assertFalse(WearSession(logType = "REPS_ONLY", reps = "10", rpe = "-0.5").canLog)
+        assertFalse(WearSession(logType = "REPS_ONLY", reps = "10", rpe = "10.5").canLog)
+        assertFalse(WearSession(logType = "REPS_ONLY", reps = "10", rpe = "11").canLog)
+        assertFalse(WearSession(logType = "REPS_ONLY", reps = "10", rpe = "bad").canLog)
     }
 
     @Test

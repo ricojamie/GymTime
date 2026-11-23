@@ -1,27 +1,31 @@
 package com.example.gymtime.ui.exercise
 
 import androidx.lifecycle.SavedStateHandle
-import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.MuscleGroupDao
-import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.Exercise
+import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.MuscleGroup
 import com.example.gymtime.util.TestDispatcherRule
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import io.mockk.every
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ExerciseFormViewModelTest {
@@ -31,18 +35,16 @@ class ExerciseFormViewModelTest {
 
     private val exerciseDao: ExerciseDao = mockk(relaxed = true)
     private val muscleGroupDao: MuscleGroupDao = mockk()
-    private val userPreferencesRepository: UserPreferencesRepository = mockk()
     private lateinit var viewModel: ExerciseFormViewModel
 
     @Before
     fun setup() {
-        every { userPreferencesRepository.newUiEnabled } returns flowOf(false)
         every { muscleGroupDao.getAllMuscleGroups() } returns flowOf(listOf(MuscleGroup(name = "Chest")))
+        every { exerciseDao.getAllExercises() } returns flowOf(emptyList())
         viewModel = ExerciseFormViewModel(
             savedStateHandle = SavedStateHandle(),
             exerciseDao = exerciseDao,
-            muscleGroupDao = muscleGroupDao,
-            userPreferencesRepository = userPreferencesRepository
+            muscleGroupDao = muscleGroupDao
         )
     }
 
@@ -79,8 +81,7 @@ class ExerciseFormViewModelTest {
         val prefilled = ExerciseFormViewModel(
             savedStateHandle = SavedStateHandle(mapOf("initialName" to "Incline Dumbbell Press")),
             exerciseDao = exerciseDao,
-            muscleGroupDao = muscleGroupDao,
-            userPreferencesRepository = userPreferencesRepository
+            muscleGroupDao = muscleGroupDao
         )
 
         assertEquals("Incline Dumbbell Press", prefilled.exerciseName.value)
@@ -117,8 +118,7 @@ class ExerciseFormViewModelTest {
         val editing = ExerciseFormViewModel(
             savedStateHandle = SavedStateHandle(mapOf("exerciseId" to "7")),
             exerciseDao = exerciseDao,
-            muscleGroupDao = muscleGroupDao,
-            userPreferencesRepository = userPreferencesRepository
+            muscleGroupDao = muscleGroupDao
         )
         val job = launch { editing.hasUnsavedChanges.collect {} }
         advanceUntilIdle()
@@ -132,5 +132,70 @@ class ExerciseFormViewModelTest {
         advanceUntilIdle()
         assertFalse(editing.hasUnsavedChanges.value)
         job.cancel()
+    }
+
+    @Test
+    fun `loadExercise surfaces loadError cleanly when exercise is missing`() = runTest {
+        every { exerciseDao.getExerciseById(99L) } returns flowOf(null)
+        val missing = ExerciseFormViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("exerciseId" to "99")),
+            exerciseDao = exerciseDao,
+            muscleGroupDao = muscleGroupDao
+        )
+        advanceUntilIdle()
+
+        assertFalse(missing.isLoading.value)
+        assertNotNull(missing.loadError.value)
+    }
+
+    @Test
+    fun `saveExercise trims notes before persisting`() = runTest {
+        var inserted: Exercise? = null
+        coEvery { exerciseDao.insertExercise(any()) } coAnswers {
+            inserted = firstArg()
+            42L
+        }
+        viewModel.updateExerciseName("  Bench Press ")
+        viewModel.updateTargetMuscle("Chest")
+        viewModel.updateLogType(LogType.WEIGHT_REPS)
+        viewModel.updateNotes("  Pause on chest  ")
+
+        viewModel.saveExercise()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { exerciseDao.insertExercise(any()) }
+        assertEquals("Bench Press", inserted?.name)
+        assertEquals("Pause on chest", inserted?.notes)
+
+        val blankNotesVm = ExerciseFormViewModel(
+            savedStateHandle = SavedStateHandle(),
+            exerciseDao = exerciseDao,
+            muscleGroupDao = muscleGroupDao
+        )
+        blankNotesVm.updateExerciseName("Bench Press")
+        blankNotesVm.updateTargetMuscle("Chest")
+        blankNotesVm.updateLogType(LogType.WEIGHT_REPS)
+        blankNotesVm.updateNotes("   ")
+        blankNotesVm.saveExercise()
+        advanceUntilIdle()
+        assertNull(inserted?.notes)
+    }
+
+    @Test
+    fun `similarExercises matches queries during creation and stays empty when editing`() = runTest {
+        val bench = Exercise(1L, "Bench Press", "Chest", LogType.WEIGHT_REPS, isCustom = false, notes = null, defaultRestSeconds = 90)
+        every { exerciseDao.getAllExercises() } returns flowOf(listOf(bench))
+
+        viewModel.updateExerciseName("bench")
+        val matches = viewModel.similarExercises.first()
+        assertEquals(listOf(bench), matches)
+
+        every { exerciseDao.getExerciseById(1L) } returns flowOf(bench)
+        val editing = ExerciseFormViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("exerciseId" to "1")),
+            exerciseDao = exerciseDao,
+            muscleGroupDao = muscleGroupDao
+        )
+        assertTrue(editing.similarExercises.first().isEmpty())
     }
 }

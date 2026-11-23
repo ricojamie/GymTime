@@ -10,7 +10,12 @@ import java.util.Date
     tableName = "workouts",
     // Removed ForeignKey constraint to RoutineDay to avoid complex migration issues.
     // We handle the "orphan" logic manually or accept that history points to deleted days.
-    indices = [Index("routineDayId"), Index("routineId")]
+    indices = [
+        Index("routineDayId"),
+        Index("routineId"),
+        Index(value = ["endTime", "startTime"]),
+        Index("startTime")
+    ]
 )
 data class Workout(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

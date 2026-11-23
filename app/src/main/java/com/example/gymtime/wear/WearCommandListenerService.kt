@@ -1,6 +1,5 @@
 package com.example.gymtime.wear
 
-import android.content.Intent
 import com.example.gymtime.service.RestTimerService
 import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.MessageEvent
@@ -16,25 +15,34 @@ class WearCommandListenerService : WearableListenerService() {
     override fun onMessageReceived(messageEvent: MessageEvent) {
         when (messageEvent.path) {
             WearContract.MESSAGE_UPDATE_DRAFT -> {
-                activeWearSessionRepository.applyDraftPatch(messageEvent.toDraftPatch())
+                if (activeWearSessionRepository.hasActivePublisher()) {
+                    activeWearSessionRepository.applyDraftPatch(messageEvent.toDraftPatch())
+                } else {
+                    activeWearSessionRepository.clear()
+                }
             }
             WearContract.MESSAGE_LOG_SET -> {
-                activeWearSessionRepository.requestLogSet(messageEvent.toDraftPatch())
+                if (activeWearSessionRepository.hasActivePublisher()) {
+                    activeWearSessionRepository.requestLogSet(messageEvent.toDraftPatch())
+                } else {
+                    activeWearSessionRepository.clear()
+                }
             }
             WearContract.MESSAGE_ADJUST_TIMER -> {
                 val dataMap = messageEvent.safeDataMap()
                 val deltaSeconds = dataMap.getInt(WearContract.KEY_DELTA_SECONDS, 0)
-                val intent = Intent(this, RestTimerService::class.java).apply {
-                    action = RestTimerService.ACTION_ADJUST_TIME
-                    putExtra(RestTimerService.EXTRA_DELTA_SECONDS, deltaSeconds)
+                if (!RestTimerService.adjustActiveTimer(deltaSeconds) &&
+                    !activeWearSessionRepository.hasActivePublisher()
+                ) {
+                    activeWearSessionRepository.clear()
                 }
-                startService(intent)
             }
             WearContract.MESSAGE_STOP_TIMER -> {
-                val intent = Intent(this, RestTimerService::class.java).apply {
-                    action = RestTimerService.ACTION_STOP_TIMER
+                if (!RestTimerService.stopActiveTimer() &&
+                    !activeWearSessionRepository.hasActivePublisher()
+                ) {
+                    activeWearSessionRepository.clear()
                 }
-                startService(intent)
             }
             else -> super.onMessageReceived(messageEvent)
         }

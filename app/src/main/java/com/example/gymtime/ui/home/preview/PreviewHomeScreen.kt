@@ -12,7 +12,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -20,8 +19,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -32,9 +33,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavController
 import com.example.gymtime.navigation.Screen
+import com.example.gymtime.navigation.navigateResumed
 import com.example.gymtime.navigation.navigateToWorkoutExercise
 import com.example.gymtime.navigation.navigateToWorkoutOverview
+import com.example.gymtime.ui.components.IronLogDivider
+import com.example.gymtime.ui.components.IronLogGroupedCard
+import com.example.gymtime.ui.components.IronLogSheetHeader
 import com.example.gymtime.ui.home.HomeViewModel
+import com.example.gymtime.ui.theme.IronLogRadius
+import com.example.gymtime.ui.theme.IronLogSpace
+import com.example.gymtime.ui.theme.IronLogType
 import com.example.gymtime.util.StreakCalculator
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
@@ -68,10 +76,12 @@ fun PreviewHomeScreen(
     var homeMessage by rememberSaveable { mutableStateOf<String?>(null) }
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Returning from a completed workout must refresh trends even on the same day.
+    // Refresh when returning after pause or a date change without duplicating initial init.
     LifecycleResumeEffect(viewModel) {
-        viewModel.refreshData()
-        onPauseOrDispose { }
+        viewModel.refreshOnResume()
+        onPauseOrDispose {
+            viewModel.onScreenPaused()
+        }
     }
     LaunchedEffect(viewModel, lifecycleOwner, navController) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -82,7 +92,7 @@ fun PreviewHomeScreen(
             }
             launch {
                 viewModel.createRoutineEvent.collect {
-                    navController.navigate(Screen.RoutineForm.createRoute()) { launchSingleTop = true }
+                    navController.navigateResumed(Screen.RoutineForm.createRoute())
                 }
             }
             launch { viewModel.homeMessage.collect { homeMessage = it } }
@@ -92,31 +102,26 @@ fun PreviewHomeScreen(
     PreviewHomeContent(
         modifier = modifier,
         userName = userName,
-        newUiEnabled = true,
         ongoingWorkout = ongoingWorkout,
         routine = routine,
-        routineStarting = routineStarting,
         strengthMomentum = strength,
         strengthLoading = strengthLoading,
         strengthError = strengthError,
         volumeState = volume,
         streakResult = streak,
-        onNewUiEnabledChange = viewModel::setNewUiEnabled,
         onSettingsClick = {
-            if (!routineStarting) navController.navigate(Screen.Settings.route)
+            if (!routineStarting) navController.navigateResumed(Screen.Settings.route)
         },
         onStartWorkoutClick = {
             if (!routineStarting && ongoingWorkout != null) {
                 navController.navigateToWorkoutOverview()
             } else if (!routineStarting) {
-                navController.navigate(Screen.ExerciseSelection.createRoute(workoutMode = true)) {
-                    launchSingleTop = true
-                }
+                navController.navigateResumed(Screen.ExerciseSelection.createRoute(workoutMode = true))
             }
         },
         onPlanWorkoutClick = {
             if (ongoingWorkout == null && !routineStarting) {
-                navController.navigate(Screen.WorkoutBuilder.route) { launchSingleTop = true }
+                navController.navigateResumed(Screen.WorkoutBuilder.route)
             }
         },
         onRoutineStartClick = {
@@ -124,19 +129,20 @@ fun PreviewHomeScreen(
         },
         onRoutineDetailsClick = {
             if (!routineStarting) {
-                routine?.routineId?.let { navController.navigate(Screen.RoutineDetail.createRoute(it)) }
+                routine?.routineId?.let { navController.navigateResumed(Screen.RoutineDetail.createRoute(it)) }
             }
         },
         onChooseRoutineClick = {
             if (!routineStarting) {
-                navController.navigate(Screen.RoutineList.route) { launchSingleTop = true }
+                navController.navigateResumed(Screen.RoutineList.route)
             }
         },
         onCreateRoutineClick = viewModel::requestCreateRoutine,
         onStreakClick = { showStreak = true },
         onTrendClick = { muscle -> selectedMuscle = muscle; showStrength = true },
         onTrendInfoClick = { selectedMuscle = null; showStrength = true },
-        onRetryTrendsClick = viewModel::retryStrengthMomentum
+        onRetryTrendsClick = viewModel::retryStrengthMomentum,
+        routineStarting = routineStarting
     )
 
     val colors = MaterialTheme.colorScheme
@@ -144,6 +150,7 @@ fun PreviewHomeScreen(
         ModalBottomSheet(
             onDismissRequest = { showStrength = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            shape = IronLogRadius.SheetShape,
             containerColor = colors.surface,
             contentColor = colors.onSurface
         ) {
@@ -159,6 +166,7 @@ fun PreviewHomeScreen(
         ModalBottomSheet(
             onDismissRequest = { showStreak = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            shape = IronLogRadius.SheetShape,
             containerColor = colors.surface,
             contentColor = colors.onSurface
         ) {
@@ -190,66 +198,85 @@ private fun PreviewStreakDetails(
     onClose: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
-    val year = LocalDate.now().year
-    val numbers = NumberFormat.getIntegerInstance()
+    val year = remember { LocalDate.now().year }
+    val numbers = remember { NumberFormat.getIntegerInstance() }
+    val statusText = when {
+        streak.state == StreakCalculator.StreakState.BROKEN -> "Your next workout starts a fresh streak."
+        streak.streakDays == 0 -> "Your next workout starts your streak."
+        streak.state == StreakCalculator.StreakState.ACTIVE -> "You've trained today."
+        else -> "Rest days can be part of your streak."
+    }
+
+    val rows = listOf(
+        "Rest days remaining this week" to "${streak.skipsRemaining}",
+        "All-time best" to "$bestStreak days",
+        "$year workouts" to "$ytdWorkouts",
+        "$year volume" to "${numbers.format(ytdVolume.toLong())} lb",
+        "${year - 1} volume" to "${numbers.format(lastYearVolume.toLong())} lb"
+    )
+
     Column(
-        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, end = 20.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Your streak", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            TextButton(onClick = onClose) { Text("Done") }
-        }
-        Text(
-            "${streak.streakDays} days",
-            style = MaterialTheme.typography.headlineLarge,
-            color = colors.primary,
-            fontWeight = FontWeight.Bold
+        IronLogSheetHeader(
+            title = "Your streak",
+            subtitle = statusText,
+            onClose = onClose
         )
         Text(
-            text = when {
-                streak.state == StreakCalculator.StreakState.BROKEN -> "Your next workout starts a fresh streak."
-                streak.streakDays == 0 -> "Your next workout starts your streak."
-                streak.state == StreakCalculator.StreakState.ACTIVE -> "You've trained today."
-                else -> "Rest days can be part of your streak."
+            text = "${streak.streakDays} days",
+            style = IronLogType.tabular(MaterialTheme.typography.headlineLarge).copy(
+                fontWeight = FontWeight.ExtraBold
+            ),
+            color = colors.primary
+        )
+        IronLogGroupedCard(showBorder = true) {
+            rows.forEachIndexed { index, (label, value) ->
+                if (index > 0) {
+                    IronLogDivider()
+                }
+                StreakDetailRow(label = label, value = value)
+            }
+        }
+        Text(
+            text = buildString {
+                append("Allows ${streak.allowedSkipsPerWeek} rest days per week.")
+                if (lastYearVolume > 0f) {
+                    append(" ${numbers.format(ytdVolume / lastYearVolume * 100)}% of last year's volume.")
+                }
             },
+            style = IronLogType.tabular(MaterialTheme.typography.bodySmall),
             color = colors.onSurfaceVariant
         )
-        StreakDetailRow("Rest days remaining this week", "${streak.skipsRemaining}")
-        Text(
-            "Your setting allows ${streak.allowedSkipsPerWeek} rest days per week.",
-            style = MaterialTheme.typography.bodySmall,
-            color = colors.onSurfaceVariant
-        )
-        StreakDetailRow("All-time best", "$bestStreak days")
-        StreakDetailRow("$year workouts", "$ytdWorkouts")
-        StreakDetailRow("$year volume", "${numbers.format(ytdVolume.toLong())} lb")
-        StreakDetailRow("${year - 1} volume", "${numbers.format(lastYearVolume.toLong())} lb")
-        if (lastYearVolume > 0f) {
-            Text(
-                "${numbers.format(ytdVolume / lastYearVolume * 100)}% of last year's volume",
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.onSurfaceVariant
-            )
-        }
     }
 }
 
 @Composable
 private fun StreakDetailRow(label: String, value: String) {
-    val colors = MaterialTheme.colorScheme
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = colors.surfaceContainerHigh,
-        contentColor = colors.onSurface,
-        shape = MaterialTheme.shapes.medium
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = IronLogSpace.TouchTargetMin)
+            .padding(horizontal = IronLogSpace.CardPadding, vertical = IronLogSpace.RowVertical),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.heightIn(min = 48.dp).padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-            Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-        }
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = IronLogType.tabular(MaterialTheme.typography.bodyMedium).copy(
+                fontWeight = FontWeight.SemiBold
+            ),
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }

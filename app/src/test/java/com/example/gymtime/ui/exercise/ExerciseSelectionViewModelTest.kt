@@ -2,7 +2,6 @@ package com.example.gymtime.ui.exercise
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
-import com.example.gymtime.data.UserPreferencesRepository
 import com.example.gymtime.data.db.dao.ExerciseLastSetRow
 import com.example.gymtime.data.db.dao.ExerciseUsageRow
 import com.example.gymtime.data.db.entity.Exercise
@@ -18,33 +17,32 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import java.util.Date
-import java.util.concurrent.atomic.AtomicInteger
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ExerciseSelectionViewModelTest {
@@ -55,8 +53,6 @@ class ExerciseSelectionViewModelTest {
     private val exerciseRepository: ExerciseRepository = mockk()
     private val workoutRepository: WorkoutRepository = mockk()
     private val supersetManager: SupersetManager = mockk(relaxed = true)
-    private val preferences: UserPreferencesRepository = mockk()
-    private val newUiEnabled = MutableStateFlow(true)
     private val usageRows = MutableStateFlow<List<ExerciseUsageRow>>(emptyList())
     private val lastSets = MutableStateFlow<List<ExerciseLastSetRow>>(emptyList())
     private val ongoingWorkout = MutableStateFlow<Workout?>(null)
@@ -69,7 +65,6 @@ class ExerciseSelectionViewModelTest {
         every { exerciseRepository.getExercisesWithUsageStats(any()) } returns usageRows
         every { exerciseRepository.observeLastWorkoutSets() } returns lastSets
         every { exerciseRepository.getAllMuscleGroups() } returns flowOf(emptyList())
-        every { preferences.newUiEnabled } returns newUiEnabled
         every { workoutRepository.getOngoingWorkoutFlow() } returns ongoingWorkout
         coEvery { workoutRepository.getLastCompletedWorkout() } answers { lastCompletedWorkout }
         every { supersetManager.supersetExercises } returns MutableStateFlow(emptyList())
@@ -77,8 +72,8 @@ class ExerciseSelectionViewModelTest {
 
     @After
     fun clearViewModels() = runTest {
-        // stateIn belongs to the ViewModel, not this test's backgroundScope.
-        // Wait for its Default-dispatcher children before the rule resets Main.
+        // stateIn/subscription jobs belong to the ViewModel, not this test's backgroundScope.
+        // Wait for Default-dispatcher children before the rule resets Main.
         val jobs = createdViewModels.mapNotNull { it.viewModelScope.coroutineContext[Job] }
         jobs.forEach { it.cancel() }
         jobs.joinAll()
@@ -86,32 +81,15 @@ class ExerciseSelectionViewModelTest {
     }
 
     @Test
-    fun `preview history is not queried while flag is off and stops when disabled`() = runTest {
-        newUiEnabled.value = false
-        val subscriptions = AtomicInteger()
-        every { exerciseRepository.observeLastWorkoutSets() } returns flow {
-            subscriptions.incrementAndGet()
-            try {
-                emit(emptyList())
-                awaitCancellation()
-            } finally {
-                subscriptions.decrementAndGet()
-            }
-        }
+    fun `preview picker loads unconditionally when observed`() = runTest {
+        usageRows.value = listOf(row(1, "Bench", 10))
         val vm = viewModel()
         collectPreview(vm)
-        advanceUntilIdle()
-        assertEquals(0, subscriptions.get())
-        verify(exactly = 0) { exerciseRepository.observeLastWorkoutSets() }
-        verify(exactly = 0) { workoutRepository.getOngoingWorkoutFlow() }
+        val state = vm.previewPickerState.first { !it.isLoading }
 
-        newUiEnabled.value = true
-        vm.previewPickerState.first { !it.isLoading }
-        assertEquals(1, subscriptions.get())
-
-        newUiEnabled.value = false
-        vm.previewPickerState.first { it.isLoading }
-        assertEquals(0, subscriptions.get())
+        assertEquals(listOf(1L), state.ids())
+        verify(exactly = 1) { exerciseRepository.observeLastWorkoutSets() }
+        verify(exactly = 1) { workoutRepository.getOngoingWorkoutFlow() }
     }
 
     @Test
@@ -138,8 +116,7 @@ class ExerciseSelectionViewModelTest {
         advanceTimeBy(5_001)
         advanceUntilIdle()
         stopped.await()
-        advanceUntilIdle()
-        assertTrue(vm.previewPickerState.value.isLoading)
+        assertTrue(vm.previewPickerState.first { it.isLoading }.isLoading)
     }
 
     @Test
@@ -404,6 +381,62 @@ class ExerciseSelectionViewModelTest {
     }
 
     @Test
+    fun `ad hoc superset rejects selecting the parent exercise itself`() = runTest {
+        val parent = exercise(1, "Bench")
+        val other = exercise(2, "Row")
+        every { exerciseRepository.getExercise(1) } returns flowOf(parent)
+        val vm = viewModel(args = mapOf("supersetMode" to true, "adHocParentId" to 1L))
+        val messages = mutableListOf<String>()
+        val started = mutableListOf<Long>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.selectionMessages.collect { messages += it } }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.supersetStarted.collect { started += it } }
+
+        vm.toggleExerciseSelection(parent)
+        advanceUntilIdle()
+
+        assertTrue(started.isEmpty())
+        assertTrue(messages.any { it.contains("different", ignoreCase = true) })
+        verify(exactly = 0) { supersetManager.startSuperset(any(), any()) }
+
+        // User can immediately select a different exercise afterwards.
+        vm.toggleExerciseSelection(other)
+        advanceUntilIdle()
+        assertEquals(listOf(2L), started)
+    }
+
+    @Test
+    fun `rapid double tap on addToSuperset and adHocSuperset only emits once`() = runTest {
+        val selected = exercise(2, "Row")
+        val addVm = viewModel(args = mapOf("addToSuperset" to true))
+        val addedEvents = mutableListOf<Long>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { addVm.exerciseAddedToSuperset.collect { addedEvents += it } }
+
+        addVm.toggleExerciseSelection(selected)
+        addVm.toggleExerciseSelection(selected)
+        advanceUntilIdle()
+        assertEquals(listOf(2L), addedEvents)
+        verify(exactly = 1) { supersetManager.addExercise(selected) }
+
+        val parent = exercise(1, "Bench")
+        val gate = CompletableDeferred<Unit>()
+        every { exerciseRepository.getExercise(1) } returns flow {
+            gate.await()
+            emit(parent)
+        }
+        val adHocVm = viewModel(args = mapOf("supersetMode" to true, "adHocParentId" to 1L))
+        val startedEvents = mutableListOf<Long>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { adHocVm.supersetStarted.collect { startedEvents += it } }
+
+        adHocVm.toggleExerciseSelection(selected)
+        adHocVm.toggleExerciseSelection(selected)
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(listOf(2L), startedEvents)
+        verify(exactly = 1) { supersetManager.startSuperset(listOf(parent, selected), any()) }
+    }
+
+    @Test
     fun `add to existing superset completes immediately`() = runTest {
         val selected = exercise(2, "Row")
         val vm = viewModel(args = mapOf("addToSuperset" to true))
@@ -451,6 +484,31 @@ class ExerciseSelectionViewModelTest {
     }
 
     @Test
+    fun `concurrent starring of two exercises respects three-starred cap`() = runTest {
+        val starred = MutableStateFlow((1L..2L).map { exercise(it, "Tracked $it").copy(isStarred = true) })
+        val gate = CompletableDeferred<Unit>()
+        every { exerciseRepository.getStarredExercises() } returns starred
+        coEvery { exerciseRepository.updateStarredStatus(any(), true) } coAnswers {
+            gate.await()
+            val id = firstArg<Long>()
+            starred.value = starred.value + exercise(id, "Tracked $id").copy(isStarred = true)
+        }
+        val vm = viewModel()
+        val messages = mutableListOf<String>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.selectionMessages.collect { messages += it } }
+
+        vm.toggleExerciseStarred(exercise(3, "Third"))
+        vm.toggleExerciseStarred(exercise(4, "Fourth"))
+        advanceUntilIdle()
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(3, starred.value.size)
+        coVerify(exactly = 1) { exerciseRepository.updateStarredStatus(any(), true) }
+        assertTrue(messages.any { it.contains("up to 3") })
+    }
+
+    @Test
     fun `swap mode replaces the plan slot and emits the selected exercise`() = runTest {
         coEvery { workoutRepository.swapWorkoutPlanExercise(41L, 9L) } returns
             WorkoutPlanEditResult.Updated
@@ -468,6 +526,27 @@ class ExerciseSelectionViewModelTest {
             event.await()
         )
         coVerify(exactly = 1) { workoutRepository.swapWorkoutPlanExercise(41L, 9L) }
+    }
+
+    @Test
+    fun `rapid double tap on swapPlannedExercise only calls repository once`() = runTest {
+        val gate = CompletableDeferred<WorkoutPlanEditResult>()
+        coEvery { workoutRepository.swapWorkoutPlanExercise(41L, 9L) } coAnswers { gate.await() }
+        val viewModel = viewModel(swapInstanceId = 41L)
+        val events = mutableListOf<ExerciseSelectionViewModel.SwapExerciseEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.swapExerciseEvent.collect { events += it } }
+
+        viewModel.swapPlannedExercise(9L)
+        viewModel.swapPlannedExercise(9L)
+        gate.complete(WorkoutPlanEditResult.Updated)
+        advanceUntilIdle()
+
+        // Subsequent tap after success is also ignored.
+        viewModel.swapPlannedExercise(10L)
+        advanceUntilIdle()
+
+        assertEquals(listOf(ExerciseSelectionViewModel.SwapExerciseEvent.Success(9L)), events)
+        coVerify(exactly = 1) { workoutRepository.swapWorkoutPlanExercise(any(), any()) }
     }
 
     @Test
@@ -490,12 +569,37 @@ class ExerciseSelectionViewModelTest {
         )
     }
 
+    @Test
+    fun `channel-backed events deliver emissions sent before collector starts`() = runTest {
+        val selected = exercise(2, "Row")
+        val addVm = viewModel(args = mapOf("addToSuperset" to true))
+        addVm.toggleExerciseSelection(selected)
+        advanceUntilIdle()
+        assertEquals(2L, addVm.exerciseAddedToSuperset.first())
+
+        coEvery { workoutRepository.swapWorkoutPlanExercise(41L, 9L) } returns WorkoutPlanEditResult.Updated
+        val swapVm = viewModel(swapInstanceId = 41L)
+        swapVm.swapPlannedExercise(9L)
+        advanceUntilIdle()
+        assertEquals(ExerciseSelectionViewModel.SwapExerciseEvent.Success(9L), swapVm.swapExerciseEvent.first())
+    }
+
+    @Test
+    fun `handleCreatedExercise completes without hanging when preview is unobserved`() = runTest {
+        val created = exercise(55L, "Bulgarian Split Squat", "Legs")
+        every { exerciseRepository.getExercise(55L) } returns flowOf(created)
+        val vm = viewModel()
+
+        vm.handleCreatedExercise(55L)
+
+        assertEquals("Bulgarian Split Squat", vm.searchQuery.value)
+    }
+
     private fun viewModel(swapInstanceId: Long = -1, args: Map<String, Any> = emptyMap()) = ExerciseSelectionViewModel(
         exerciseRepository = exerciseRepository,
         workoutRepository = workoutRepository,
         supersetManager = supersetManager,
         pickerSessionState = pickerSessionState,
-        userPreferencesRepository = preferences,
         savedStateHandle = SavedStateHandle(
             mapOf(
                 "workoutMode" to true,

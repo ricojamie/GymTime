@@ -5,7 +5,12 @@ import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.dao.RoutineDao
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.dao.WorkoutDao
+import com.example.gymtime.data.db.dao.WorkoutPlanDao
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.BufferedWriter
 import java.io.OutputStream
+import java.io.OutputStreamWriter
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import javax.inject.Inject
@@ -15,7 +20,8 @@ class IronLogExporter @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val setDao: SetDao,
     private val routineDao: RoutineDao,
-    private val muscleGroupDao: MuscleGroupDao
+    private val muscleGroupDao: MuscleGroupDao,
+    private val workoutPlanDao: WorkoutPlanDao
 ) {
     data class ExportResult(
         val exerciseCount: Int,
@@ -24,32 +30,29 @@ class IronLogExporter @Inject constructor(
         val routineCount: Int,
         val routineDayCount: Int,
         val routineExerciseCount: Int,
-        val muscleGroupCount: Int
+        val muscleGroupCount: Int,
+        val workoutExerciseInstanceCount: Int = 0
     )
 
-    suspend fun export(outputStream: OutputStream): ExportResult {
-        val exercises = exerciseDao.getAllExercisesSync()
-        val workouts = workoutDao.getAllWorkoutsSync()
-        val sets = setDao.getAllSets()
-        val routines = routineDao.getAllRoutinesSync()
-        val routineDays = routineDao.getAllRoutineDays()
-        val routineExercises = routineDao.getAllRoutineExercises()
-        val muscleGroups = muscleGroupDao.getAllMuscleGroupNames()
+    suspend fun export(outputStream: OutputStream): ExportResult = withContext(Dispatchers.IO) {
+        outputStream.use { stream ->
+            ZipOutputStream(stream).use { zip ->
+                val writer = BufferedWriter(OutputStreamWriter(zip, Charsets.UTF_8))
 
-        ZipOutputStream(outputStream).use { zip ->
-            // muscle_groups.csv
-            zip.putNextEntry(ZipEntry("muscle_groups.csv"))
-            zip.write(buildCsv(
-                header = "name",
-                rows = muscleGroups.map { listOf(it) }
-            ))
-            zip.closeEntry()
+                // Write entries in dependency order so streaming import requires zero buffering.
+                val muscleGroups = muscleGroupDao.getAllMuscleGroupNames()
+                writeCsvEntry(zip, writer, "muscle_groups.csv", "name", muscleGroups) { mg ->
+                    listOf(mg)
+                }
 
-            // exercises.csv
-            zip.putNextEntry(ZipEntry("exercises.csv"))
-            zip.write(buildCsv(
-                header = "id,name,targetMuscle,logType,defaultDistanceUnit,isCustom,notes,defaultRestSeconds,isStarred,repTarget",
-                rows = exercises.map { e ->
+                val exercises = exerciseDao.getAllExercisesSync()
+                writeCsvEntry(
+                    zip = zip,
+                    writer = writer,
+                    entryName = "exercises.csv",
+                    header = "id,name,targetMuscle,logType,defaultDistanceUnit,isCustom,notes,defaultRestSeconds,isStarred,repTarget",
+                    items = exercises
+                ) { e ->
                     listOf(
                         e.id.toString(),
                         e.name,
@@ -63,14 +66,37 @@ class IronLogExporter @Inject constructor(
                         e.repTarget?.toString() ?: ""
                     )
                 }
-            ))
-            zip.closeEntry()
 
-            // workouts.csv
-            zip.putNextEntry(ZipEntry("workouts.csv"))
-            zip.write(buildCsv(
-                header = "id,startTime,endTime,name,note,rating,ratingNote,routineDayId,routineId,routineNameSnapshot,routineDayNameSnapshot,startedFromRoutine",
-                rows = workouts.map { w ->
+                val routines = routineDao.getAllRoutinesSync()
+                writeCsvEntry(
+                    zip = zip,
+                    writer = writer,
+                    entryName = "routines.csv",
+                    header = "id,name,isActive,nextDayOrderIndex",
+                    items = routines
+                ) { r ->
+                    listOf(r.id.toString(), r.name, r.isActive.toString(), r.nextDayOrderIndex.toString())
+                }
+
+                val routineDays = routineDao.getAllRoutineDays()
+                writeCsvEntry(
+                    zip = zip,
+                    writer = writer,
+                    entryName = "routine_days.csv",
+                    header = "id,routineId,name,orderIndex",
+                    items = routineDays
+                ) { d ->
+                    listOf(d.id.toString(), d.routineId.toString(), d.name, d.orderIndex.toString())
+                }
+
+                val workouts = workoutDao.getAllWorkoutsSync()
+                writeCsvEntry(
+                    zip = zip,
+                    writer = writer,
+                    entryName = "workouts.csv",
+                    header = "id,startTime,endTime,name,note,rating,ratingNote,routineDayId,routineId,routineNameSnapshot,routineDayNameSnapshot,startedFromRoutine",
+                    items = workouts
+                ) { w ->
                     listOf(
                         w.id.toString(),
                         w.startTime.time.toString(),
@@ -86,14 +112,38 @@ class IronLogExporter @Inject constructor(
                         w.startedFromRoutine.toString()
                     )
                 }
-            ))
-            zip.closeEntry()
 
-            // sets.csv
-            zip.putNextEntry(ZipEntry("sets.csv"))
-            zip.write(buildCsv(
-                header = "id,workoutId,exerciseId,weight,calories,reps,rpe,durationSeconds,distanceValue,distanceUnit,distanceMeters,isWarmup,isComplete,timestamp,note,supersetGroupId,supersetOrderIndex",
-                rows = sets.map { s ->
+                val routineExercises = routineDao.getAllRoutineExercises()
+                writeCsvEntry(
+                    zip = zip,
+                    writer = writer,
+                    entryName = "routine_exercises.csv",
+                    header = "id,routineDayId,exerciseId,orderIndex,targetSets,targetRepsMin,targetRepsMax,targetRestSeconds,notes,supersetGroupId,supersetOrderIndex",
+                    items = routineExercises
+                ) { re ->
+                    listOf(
+                        re.id.toString(),
+                        re.routineDayId.toString(),
+                        re.exerciseId.toString(),
+                        re.orderIndex.toString(),
+                        re.targetSets.toString(),
+                        re.targetRepsMin?.toString() ?: "",
+                        re.targetRepsMax?.toString() ?: "",
+                        re.targetRestSeconds?.toString() ?: "",
+                        re.notes ?: "",
+                        re.supersetGroupId ?: "",
+                        re.supersetOrderIndex.toString()
+                    )
+                }
+
+                val sets = setDao.getAllSets()
+                writeCsvEntry(
+                    zip = zip,
+                    writer = writer,
+                    entryName = "sets.csv",
+                    header = "id,workoutId,exerciseId,weight,calories,reps,rpe,durationSeconds,distanceValue,distanceUnit,distanceMeters,isWarmup,isComplete,timestamp,note,supersetGroupId,supersetOrderIndex",
+                    items = sets
+                ) { s ->
                     listOf(
                         s.id.toString(),
                         s.workoutId.toString(),
@@ -114,74 +164,77 @@ class IronLogExporter @Inject constructor(
                         s.supersetOrderIndex.toString()
                     )
                 }
-            ))
-            zip.closeEntry()
 
-            // routines.csv
-            zip.putNextEntry(ZipEntry("routines.csv"))
-            zip.write(buildCsv(
-                header = "id,name,isActive,nextDayOrderIndex",
-                rows = routines.map { r ->
-                    listOf(r.id.toString(), r.name, r.isActive.toString(), r.nextDayOrderIndex.toString())
-                }
-            ))
-            zip.closeEntry()
-
-            // routine_days.csv
-            zip.putNextEntry(ZipEntry("routine_days.csv"))
-            zip.write(buildCsv(
-                header = "id,routineId,name,orderIndex",
-                rows = routineDays.map { d ->
-                    listOf(d.id.toString(), d.routineId.toString(), d.name, d.orderIndex.toString())
-                }
-            ))
-            zip.closeEntry()
-
-            // routine_exercises.csv
-            zip.putNextEntry(ZipEntry("routine_exercises.csv"))
-            zip.write(buildCsv(
-                header = "id,routineDayId,exerciseId,orderIndex,targetSets,targetRepsMin,targetRepsMax,targetRestSeconds,notes,supersetGroupId,supersetOrderIndex",
-                rows = routineExercises.map { re ->
+                val workoutInstances = workoutPlanDao.getAllInstancesSync()
+                writeCsvEntry(
+                    zip = zip,
+                    writer = writer,
+                    entryName = "workout_exercise_instances.csv",
+                    header = "id,workoutId,exerciseId,routineExerciseId,orderIndex,plannedSets,repMin,repMax,restSeconds,notes,supersetGroupId,supersetOrderIndex,isSkipped,addedDuringWorkout",
+                    items = workoutInstances
+                ) { inst ->
                     listOf(
-                        re.id.toString(),
-                        re.routineDayId.toString(),
-                        re.exerciseId.toString(),
-                        re.orderIndex.toString(),
-                        re.targetSets.toString(),
-                        re.targetRepsMin?.toString() ?: "",
-                        re.targetRepsMax?.toString() ?: "",
-                        re.targetRestSeconds?.toString() ?: "",
-                        re.notes ?: "",
-                        re.supersetGroupId ?: "",
-                        re.supersetOrderIndex.toString()
+                        inst.id.toString(),
+                        inst.workoutId.toString(),
+                        inst.exerciseId.toString(),
+                        inst.routineExerciseId?.toString() ?: "",
+                        inst.orderIndex.toString(),
+                        inst.plannedSets?.toString() ?: "",
+                        inst.repMin?.toString() ?: "",
+                        inst.repMax?.toString() ?: "",
+                        inst.restSeconds?.toString() ?: "",
+                        inst.notes ?: "",
+                        inst.supersetGroupId ?: "",
+                        inst.supersetOrderIndex.toString(),
+                        inst.isSkipped.toString(),
+                        inst.addedDuringWorkout.toString()
                     )
                 }
-            ))
-            zip.closeEntry()
-        }
 
-        return ExportResult(
-            exerciseCount = exercises.size,
-            workoutCount = workouts.size,
-            setCount = sets.size,
-            routineCount = routines.size,
-            routineDayCount = routineDays.size,
-            routineExerciseCount = routineExercises.size,
-            muscleGroupCount = muscleGroups.size
-        )
+                ExportResult(
+                    exerciseCount = exercises.size,
+                    workoutCount = workouts.size,
+                    setCount = sets.size,
+                    routineCount = routines.size,
+                    routineDayCount = routineDays.size,
+                    routineExerciseCount = routineExercises.size,
+                    muscleGroupCount = muscleGroups.size,
+                    workoutExerciseInstanceCount = workoutInstances.size
+                )
+            }
+        }
     }
 
-    private fun buildCsv(header: String, rows: List<List<String>>): ByteArray {
-        val sb = StringBuilder()
-        sb.appendLine(header)
-        for (row in rows) {
-            sb.appendLine(row.joinToString(",") { escapeCsvField(it) })
+    private fun <T> writeCsvEntry(
+        zip: ZipOutputStream,
+        writer: BufferedWriter,
+        entryName: String,
+        header: String,
+        items: List<T>,
+        rowMapper: (T) -> List<String>
+    ) {
+        zip.putNextEntry(ZipEntry(entryName))
+        writer.write(header)
+        writer.write("\n")
+        for (item in items) {
+            val fields = rowMapper(item)
+            for (i in fields.indices) {
+                if (i > 0) writer.write(",")
+                writer.write(escapeCsvField(fields[i]))
+            }
+            writer.write("\n")
         }
-        return sb.toString().toByteArray(Charsets.UTF_8)
+        writer.flush()
+        zip.closeEntry()
     }
 
     private fun escapeCsvField(field: String): String {
-        return if (field.contains(',') || field.contains('"') || field.contains('\n')) {
+        return if (
+            field.contains(',') ||
+            field.contains('"') ||
+            field.contains('\n') ||
+            field.contains('\r')
+        ) {
             "\"${field.replace("\"", "\"\"")}\""
         } else {
             field

@@ -1,6 +1,9 @@
 package com.example.gymtime.util
 
-import java.util.Calendar
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.temporal.TemporalAdjusters
 import java.util.Date
 
 /**
@@ -36,9 +39,22 @@ object StreakCalculator {
         workoutDates: List<Date>,
         allowedSkipsPerWeek: Int = 2,
         asOf: Date = Date()
+    ): StreakResult = calculateStreakForZone(
+        workoutDates = workoutDates,
+        allowedSkipsPerWeek = allowedSkipsPerWeek,
+        asOf = asOf,
+        zoneId = ZoneId.systemDefault()
+    )
+
+    internal fun calculateStreakForZone(
+        workoutDates: List<Date>,
+        allowedSkipsPerWeek: Int = 2,
+        asOf: Date = Date(),
+        zoneId: ZoneId = ZoneId.systemDefault()
     ): StreakResult {
         val safeAllowedSkips = allowedSkipsPerWeek.coerceIn(0, 7)
-        val today = normalizeToMidnight(asOf)
+        val today = toLocalDate(asOf, zoneId)
+        val nextResetDate = toMidnightDate(getNextSunday(today), zoneId)
 
         if (workoutDates.isEmpty()) {
             return StreakResult(
@@ -46,19 +62,20 @@ object StreakCalculator {
                 streakDays = 0,
                 skipsRemaining = safeAllowedSkips,
                 allowedSkipsPerWeek = safeAllowedSkips,
-                nextResetDate = getNextSunday(today)
+                nextResetDate = nextResetDate
             )
         }
 
         val workoutDaysNormalized = workoutDates
-            .map { normalizeToMidnight(it) }
-            .filterNot { it.after(today) }
+            .asSequence()
+            .map { toLocalDate(it, zoneId) }
+            .filterNot { it.isAfter(today) }
             .toSet()
         val earliestWorkout = workoutDaysNormalized.minOrNull() ?: today
 
         // 1. Calculate how many skips have been used THIS calendar week (Sun-Sat)
         val currentWeekStart = getStartOfWeek(today)
-        val effectiveCurrentWeekStart = if (currentWeekStart.before(earliestWorkout)) {
+        val effectiveCurrentWeekStart = if (currentWeekStart.isBefore(earliestWorkout)) {
             earliestWorkout
         } else {
             currentWeekStart
@@ -67,7 +84,7 @@ object StreakCalculator {
         val skipsRemaining = (safeAllowedSkips - usedSkipsThisWeek).coerceAtLeast(0)
 
         // 2. Determine current state
-        val workedOutToday = workoutDaysNormalized.contains(today)
+        val workedOutToday = today in workoutDaysNormalized
         val state = when {
             usedSkipsThisWeek > safeAllowedSkips -> StreakState.BROKEN
             workedOutToday -> StreakState.ACTIVE
@@ -75,7 +92,7 @@ object StreakCalculator {
         }
 
         // 3. Calculate streak length
-        // We walk back week by week. A week is "safe" if it has 2 or fewer misses.
+        // We walk back week by week. A week is "safe" if it has allowedSkipsPerWeek or fewer misses.
         // We count total workout days in consecutive safe weeks.
         var totalStreakDays = 0
         if (state != StreakState.BROKEN) {
@@ -89,68 +106,67 @@ object StreakCalculator {
 
         // 4. Determine if streak broke TODAY (exactly one miss over the weekly allowance)
         val brokeToday = state == StreakState.BROKEN &&
-                         usedSkipsThisWeek == safeAllowedSkips + 1 &&
-                         !workedOutToday
+            usedSkipsThisWeek == safeAllowedSkips + 1 &&
+            !workedOutToday
 
         return StreakResult(
             state = state,
             streakDays = totalStreakDays,
             skipsRemaining = skipsRemaining,
             allowedSkipsPerWeek = safeAllowedSkips,
-            nextResetDate = getNextSunday(today),
+            nextResetDate = nextResetDate,
             brokeToday = brokeToday
         )
     }
 
-    private fun countUsedSkipsInWeek(weekStart: Date, today: Date, workoutDays: Set<Date>): Int {
+    private fun countUsedSkipsInWeek(
+        weekStart: LocalDate,
+        today: LocalDate,
+        workoutDays: Set<LocalDate>
+    ): Int {
         var misses = 0
-        val cal = Calendar.getInstance()
-        cal.time = weekStart
-        
+        var day = weekStart
         // Count days from week start to today (inclusive)
-        while (!cal.time.after(today)) {
-            if (!workoutDays.contains(cal.time)) {
+        while (!day.isAfter(today)) {
+            if (day !in workoutDays) {
                 misses++
             }
-            cal.add(Calendar.DAY_OF_YEAR, 1)
+            day = day.plusDays(1)
         }
         return misses
     }
 
     private fun calculateTotalStreakDays(
-        today: Date,
-        workoutDays: Set<Date>,
-        earliestWorkout: Date,
+        today: LocalDate,
+        workoutDays: Set<LocalDate>,
+        earliestWorkout: LocalDate,
         allowedSkipsPerWeek: Int
     ): Int {
         var totalDays = 0
         var currentWeekEnd = today
-        val cal = Calendar.getInstance()
 
         while (true) {
             val weekStart = getStartOfWeek(currentWeekEnd)
-            
-            // For the first week (the one containing 'earliestWorkout'), we only count misses 
+
+            // For the first week (the one containing 'earliestWorkout'), we only count misses
             // from the day of the first workout onwards.
-            val effectiveWeekStart = if (weekStart.before(earliestWorkout)) earliestWorkout else weekStart
-            
+            val effectiveWeekStart = if (weekStart.isBefore(earliestWorkout)) earliestWorkout else weekStart
+
             var missesInWeek = 0
             var workoutDaysInWeek = 0
-            
-            val walkCal = Calendar.getInstance()
-            walkCal.time = effectiveWeekStart
-            
-            // For the current week, we only walk up to today. 
+
+            // For the current week, we only walk up to today.
             // For past weeks, we walk the full Sun-Sat range (or earliestWorkout-Sat).
-            val walkEnd = if (currentWeekEnd.after(today)) today else currentWeekEnd
-            
-            while (!walkCal.time.after(walkEnd)) {
-                if (workoutDays.contains(walkCal.time)) {
+            val walkEnd = if (currentWeekEnd.isAfter(today)) today else currentWeekEnd
+            var day = effectiveWeekStart
+
+            while (!day.isAfter(walkEnd)) {
+                if (day in workoutDays) {
                     workoutDaysInWeek++
                 } else {
                     missesInWeek++
                 }
-                walkCal.add(Calendar.DAY_OF_YEAR, 1)
+                day = day.plusDays(1)
             }
 
             if (missesInWeek > allowedSkipsPerWeek) {
@@ -161,40 +177,23 @@ object StreakCalculator {
             totalDays += workoutDaysInWeek
 
             // Move to previous week (the Saturday before this week's Sunday)
-            cal.time = weekStart
-            cal.add(Calendar.DAY_OF_YEAR, -1)
-            currentWeekEnd = cal.time
+            currentWeekEnd = weekStart.minusDays(1)
 
-            if (currentWeekEnd.before(earliestWorkout)) break
+            if (currentWeekEnd.isBefore(earliestWorkout)) break
         }
 
         return totalDays
     }
 
-    private fun getStartOfWeek(date: Date): Date {
-        val cal = Calendar.getInstance()
-        cal.time = date
-        cal.set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY)
-        return normalizeToMidnight(cal.time)
-    }
+    private fun getStartOfWeek(date: LocalDate): LocalDate =
+        date.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
 
-    private fun getNextSunday(referenceDate: Date): Date {
-        val cal = Calendar.getInstance()
-        cal.time = referenceDate
-        cal.add(Calendar.DAY_OF_YEAR, 1) // Start from tomorrow
-        while (cal.get(Calendar.DAY_OF_WEEK) != Calendar.SUNDAY) {
-            cal.add(Calendar.DAY_OF_YEAR, 1)
-        }
-        return normalizeToMidnight(cal.time)
-    }
+    private fun getNextSunday(referenceDate: LocalDate): LocalDate =
+        referenceDate.with(TemporalAdjusters.next(DayOfWeek.SUNDAY))
 
-    private fun normalizeToMidnight(date: Date): Date {
-        val calendar = Calendar.getInstance()
-        calendar.time = date
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        return calendar.time
-    }
+    private fun toLocalDate(date: Date, zoneId: ZoneId): LocalDate =
+        date.toInstant().atZone(zoneId).toLocalDate()
+
+    private fun toMidnightDate(localDate: LocalDate, zoneId: ZoneId): Date =
+        Date.from(localDate.atStartOfDay(zoneId).toInstant())
 }

@@ -31,11 +31,13 @@ class GymTimeMigrationTest {
     private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
     private val v11DatabaseName = "migration-v11-to-v14-test"
     private val v5DatabaseName = "migration-v5-to-v14-test"
+    private val v14DatabaseName = "migration-v14-to-v15-test"
 
     @After
     fun cleanup() {
         context.deleteDatabase(v11DatabaseName)
         context.deleteDatabase(v5DatabaseName)
+        context.deleteDatabase(v14DatabaseName)
     }
 
     @Test
@@ -148,6 +150,69 @@ class GymTimeMigrationTest {
             assertEquals(listOf(20L, 21L), migratedExercises.map { it.exerciseId })
             assertEquals(listOf(0, 1), migratedExercises.map { it.orderIndex })
             assertEquals(listOf(3, 3), migratedExercises.map { it.targetSets })
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun migrate14To15_createsCompositeIndexesAndPreservesData() = runBlocking {
+        helper.createDatabase(v14DatabaseName, 14).apply {
+            execStatements(
+                "INSERT INTO `muscle_groups` (`name`) VALUES ('Chest')",
+                """
+                INSERT INTO `exercises`
+                    (`id`, `name`, `targetMuscle`, `logType`, `defaultDistanceUnit`, `isCustom`, `notes`, `defaultRestSeconds`, `isStarred`, `repTarget`)
+                VALUES
+                    (1, 'Bench Press', 'Chest', 'WEIGHT_REPS', 'MILES', 0, NULL, 180, 0, NULL)
+                """.trimIndent(),
+                """
+                INSERT INTO `workouts`
+                    (`id`, `startTime`, `endTime`, `name`, `note`, `rating`, `ratingNote`, `routineDayId`, `routineId`, `routineNameSnapshot`, `routineDayNameSnapshot`, `startedFromRoutine`)
+                VALUES
+                    (1, 1700000000000, 1700003600000, 'Chest Day', NULL, 5, NULL, NULL, NULL, NULL, NULL, 0)
+                """.trimIndent(),
+                """
+                INSERT INTO `sets`
+                    (`id`, `workoutId`, `exerciseId`, `weight`, `calories`, `reps`, `rpe`, `durationSeconds`, `distanceValue`, `distanceUnit`, `distanceMeters`, `isWarmup`, `isComplete`, `timestamp`, `note`, `supersetGroupId`, `supersetOrderIndex`)
+                VALUES
+                    (1, 1, 1, 225.0, NULL, 5, NULL, NULL, NULL, NULL, NULL, 0, 1, 1700000100000, NULL, NULL, 0)
+                """.trimIndent()
+            )
+            close()
+        }
+
+        val migratedDb = helper.runMigrationsAndValidate(
+            v14DatabaseName,
+            15,
+            true,
+            *DatabaseModule.ALL_MIGRATIONS
+        )
+        try {
+            val indexes = mutableSetOf<String>()
+            migratedDb.query("SELECT name FROM sqlite_master WHERE type = 'index'").use { cursor ->
+                while (cursor.moveToNext()) {
+                    indexes += cursor.getString(0)
+                }
+            }
+            assertTrue(indexes.contains("index_workouts_endTime_startTime"))
+            assertTrue(indexes.contains("index_workouts_startTime"))
+            assertTrue(indexes.contains("index_sets_exerciseId_timestamp"))
+            assertTrue(indexes.contains("index_sets_workoutId_exerciseId"))
+            assertTrue(indexes.contains("index_sets_exerciseId_workoutId"))
+            assertTrue(indexes.contains("index_sets_isWarmup_isComplete_timestamp"))
+        } finally {
+            migratedDb.close()
+        }
+
+        val database = openMigratedDatabase(v14DatabaseName)
+        try {
+            val workouts = database.workoutDao().getAllWorkoutsSync()
+            val sets = database.setDao().getAllSets()
+            assertEquals(1, workouts.size)
+            assertEquals("Chest Day", workouts.single().name)
+            assertEquals(1, sets.size)
+            assertEquals(225f, sets.single().weight ?: 0f, 0.01f)
         } finally {
             database.close()
         }

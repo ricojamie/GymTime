@@ -4,7 +4,9 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Embedded
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.Set
@@ -28,14 +30,58 @@ interface ExerciseDao {
     @Insert
     suspend fun insertExercise(exercise: Exercise): Long
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAll(exercises: List<Exercise>)
+
     @Update
     suspend fun updateExercise(exercise: Exercise)
 
     @Delete
     suspend fun deleteExercise(exercise: Exercise)
 
+    @Query("SELECT DISTINCT supersetGroupId FROM routine_exercises WHERE exerciseId = :id AND supersetGroupId IS NOT NULL")
+    suspend fun getRoutineSupersetGroupsForExercise(id: Long): List<String>
+
+    @Query("SELECT DISTINCT supersetGroupId FROM workout_exercise_instances WHERE exerciseId = :id AND supersetGroupId IS NOT NULL")
+    suspend fun getWorkoutPlanSupersetGroupsForExercise(id: Long): List<String>
+
+    @Query("""
+        UPDATE routine_exercises
+        SET supersetGroupId = NULL, supersetOrderIndex = 0
+        WHERE supersetGroupId = :groupId
+          AND (
+              SELECT COUNT(*) FROM routine_exercises re2
+              WHERE re2.routineDayId = routine_exercises.routineDayId
+                AND re2.supersetGroupId = :groupId
+          ) <= 1
+    """)
+    suspend fun dissolveOrphanedRoutineSupersetGroup(groupId: String)
+
+    @Query("""
+        UPDATE workout_exercise_instances
+        SET supersetGroupId = NULL, supersetOrderIndex = 0
+        WHERE supersetGroupId = :groupId
+          AND isSkipped = 0
+          AND (
+              SELECT COUNT(*) FROM workout_exercise_instances wei2
+              WHERE wei2.workoutId = workout_exercise_instances.workoutId
+                AND wei2.supersetGroupId = :groupId
+                AND wei2.isSkipped = 0
+          ) <= 1
+    """)
+    suspend fun dissolveOrphanedWorkoutPlanSupersetGroup(groupId: String)
+
     @Query("DELETE FROM exercises WHERE id = :id")
-    suspend fun deleteExerciseById(id: Long)
+    suspend fun deleteExerciseRowById(id: Long)
+
+    @Transaction
+    suspend fun deleteExerciseById(id: Long) {
+        val routineGroups = getRoutineSupersetGroupsForExercise(id)
+        val workoutPlanGroups = getWorkoutPlanSupersetGroupsForExercise(id)
+        deleteExerciseRowById(id)
+        routineGroups.forEach { dissolveOrphanedRoutineSupersetGroup(it) }
+        workoutPlanGroups.forEach { dissolveOrphanedWorkoutPlanSupersetGroup(it) }
+    }
 
     @Query("SELECT * FROM exercises")
     fun getAllExercises(): Flow<List<Exercise>>
@@ -88,7 +134,7 @@ interface ExerciseDao {
     fun observeLastWorkoutSets(): Flow<List<ExerciseLastSetRow>>
 
     @Query("SELECT * FROM exercises WHERE id = :id")
-    fun getExerciseById(id: Long): Flow<Exercise>
+    fun getExerciseById(id: Long): Flow<Exercise?>
 
     @Query("SELECT * FROM exercises WHERE id = :id")
     suspend fun getExerciseByIdSync(id: Long): Exercise?

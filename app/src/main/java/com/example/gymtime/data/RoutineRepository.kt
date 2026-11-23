@@ -2,8 +2,12 @@ package com.example.gymtime.data
 
 import androidx.room.withTransaction
 import com.example.gymtime.data.db.GymTimeDatabase
+import com.example.gymtime.data.db.dao.RoutineBrowseSummary
 import com.example.gymtime.data.db.dao.RoutineDao
+import com.example.gymtime.data.db.dao.RoutineDayStat
 import com.example.gymtime.data.db.dao.RoutineDayWithExercises
+import com.example.gymtime.data.db.dao.SetDao
+import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.dao.WorkoutPlanDao
 import com.example.gymtime.data.db.entity.Routine
 import com.example.gymtime.data.db.entity.RoutineDay
@@ -11,17 +15,13 @@ import com.example.gymtime.data.db.entity.RoutineExercise
 import com.example.gymtime.data.db.entity.Workout
 import com.example.gymtime.data.db.entity.WorkoutExerciseInstance
 import com.example.gymtime.data.repository.WorkoutStartResult
-import com.example.gymtime.data.db.dao.RoutineDayStat
-import com.example.gymtime.data.db.dao.SetDao
-import com.example.gymtime.data.db.dao.WorkoutDao
+import com.example.gymtime.util.TimeFormatter
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import com.example.gymtime.util.TimeFormatter
 import java.util.Date
 import java.util.UUID
 import javax.inject.Inject
@@ -75,6 +75,9 @@ class RoutineRepository @Inject constructor(
 
     fun getAllRoutines(): Flow<List<Routine>> = routineDao.getAllRoutines()
 
+    fun getRoutineBrowseSummaries(): Flow<List<RoutineBrowseSummary>> =
+        routineDao.getRoutineBrowseSummaries()
+
     fun getRoutineById(id: Long): Flow<Routine?> = routineDao.getRoutineById(id)
 
     fun getDaysForRoutine(routineId: Long): Flow<List<RoutineDay>> =
@@ -83,30 +86,41 @@ class RoutineRepository @Inject constructor(
     fun getRoutineDayWithExercises(dayId: Long): Flow<RoutineDayWithExercises?> =
         routineDao.getRoutineDayWithExercises(dayId)
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun getActiveRoutineStatus(): Flow<ActiveRoutineStatus?> {
-        val activeRoutineFlow = routineDao.getActiveRoutine().distinctUntilChanged()
-        return activeRoutineFlow.combine(
-            activeRoutineFlow.flatMapLatest { routine ->
-                if (routine == null) flowOf(emptyList()) else routineDao.getDaysForRoutine(routine.id)
+        return routineDao.getActiveRoutine()
+            .distinctUntilChanged()
+            .flatMapLatest { routine ->
+                if (routine == null) {
+                    flowOf(null)
+                } else {
+                    routineDao.getDaysForRoutine(routine.id).map { days ->
+                        val nextDay = days.firstOrNull { it.orderIndex == routine.nextDayOrderIndex }
+                            ?: days.firstOrNull()
+                        ActiveRoutineStatus(
+                            routine = routine,
+                            nextDay = nextDay,
+                            dayCount = days.size,
+                            nextDayPosition = nextDay?.let { days.indexOf(it) + 1 }
+                        )
+                    }
+                }
             }
-        ) { routine, days ->
-            if (routine == null) {
-                null
-            } else {
-                val nextDay = days.firstOrNull { it.orderIndex == routine.nextDayOrderIndex } ?: days.firstOrNull()
-                ActiveRoutineStatus(
-                    routine = routine,
-                    nextDay = nextDay,
-                    dayCount = days.size,
-                    nextDayPosition = nextDay?.let { days.indexOf(it) + 1 }
-                )
-            }
-        }
     }
 
-    suspend fun insertRoutine(routine: Routine): Long = routineDao.insertRoutine(routine)
+    suspend fun insertRoutine(routine: Routine): Long = database.withTransaction {
+        if (routine.isActive) {
+            routineDao.clearActiveRoutine()
+        }
+        routineDao.insertRoutine(routine)
+    }
 
-    suspend fun updateRoutine(routine: Routine) = routineDao.updateRoutine(routine)
+    suspend fun updateRoutine(routine: Routine) = database.withTransaction {
+        if (routine.isActive) {
+            routineDao.clearActiveRoutine()
+        }
+        routineDao.updateRoutine(routine)
+    }
 
     suspend fun deleteRoutine(routine: Routine) {
         database.withTransaction {
@@ -189,6 +203,9 @@ class RoutineRepository @Inject constructor(
 
     suspend fun startNextRoutineWorkout(): WorkoutStartResult? {
         return database.withTransaction {
+            check(workoutDao.getOngoingWorkoutSync() == null) {
+                "Finish your current workout first"
+            }
             val active = routineDao.getActiveRoutineSync() ?: return@withTransaction null
             val days = routineDao.getDaysForRoutineSync(active.id)
             if (days.isEmpty()) return@withTransaction null
@@ -200,6 +217,9 @@ class RoutineRepository @Inject constructor(
 
     suspend fun startRoutineDay(dayId: Long): WorkoutStartResult? {
         return database.withTransaction {
+            check(workoutDao.getOngoingWorkoutSync() == null) {
+                "Finish your current workout first"
+            }
             val dayWithExercises = routineDao.getRoutineDayWithExercisesSync(dayId) ?: return@withTransaction null
             val routine = routineDao.getRoutineByIdSync(dayWithExercises.day.routineId) ?: return@withTransaction null
             startRoutineDayInternal(routine, dayWithExercises.day, dayWithExercises)
@@ -255,12 +275,12 @@ class RoutineRepository @Inject constructor(
         return database.withTransaction {
             val routine = routineDao.getRoutineByIdSync(routineId) ?: return@withTransaction null
             require(routineDao.getAllRoutinesSync().size < MAX_ROUTINES) { "You can have up to $MAX_ROUTINES routines." }
-            val days = routineDao.getDaysForRoutineSync(routineId)
+            val daysWithExercises = routineDao.getDaysWithExercisesForRoutineSync(routineId)
             val newRoutineId = routineDao.insertRoutine(
                 Routine(name = "${routine.name} (copy)", isActive = false, nextDayOrderIndex = 0)
             )
-            days.forEach { day ->
-                copyDayInternal(day, newRoutineId, day.name, day.orderIndex)
+            daysWithExercises.forEach { template ->
+                copyDayInternal(template, newRoutineId, template.day.name, template.day.orderIndex)
             }
             newRoutineId
         }
@@ -273,17 +293,16 @@ class RoutineRepository @Inject constructor(
             val days = routineDao.getDaysForRoutineSync(template.day.routineId)
             require(days.size < MAX_DAYS_PER_ROUTINE) { "A routine can have up to $MAX_DAYS_PER_ROUTINE days." }
             val nextOrderIndex = (days.maxOfOrNull { it.orderIndex } ?: -1) + 1
-            copyDayInternal(template.day, template.day.routineId, "${template.day.name} (copy)", nextOrderIndex)
+            copyDayInternal(template, template.day.routineId, "${template.day.name} (copy)", nextOrderIndex)
         }
     }
 
     private suspend fun copyDayInternal(
-        sourceDay: RoutineDay,
+        template: RoutineDayWithExercises,
         targetRoutineId: Long,
         newName: String,
         newOrderIndex: Int
-    ): Long? {
-        val template = routineDao.getRoutineDayWithExercisesSync(sourceDay.id) ?: return null
+    ): Long {
         val newDayId = routineDao.insertRoutineDay(
             RoutineDay(routineId = targetRoutineId, name = newName, orderIndex = newOrderIndex)
         )
@@ -411,7 +430,7 @@ class RoutineRepository @Inject constructor(
         val instances = workoutPlanDao.getInstancesForWorkoutSync(workoutId)
             .filterNot { it.isSkipped }
         if (instances.isNotEmpty()) {
-            return instances.map { instance ->
+            val raw = instances.map { instance ->
                 WorkoutBlueprintItem(
                     exerciseId = instance.exerciseId,
                     orderIndex = instance.orderIndex,
@@ -424,13 +443,14 @@ class RoutineRepository @Inject constructor(
                     supersetOrderIndex = instance.supersetOrderIndex
                 )
             }
+            return clearSingleMemberSupersets(raw)
         }
 
         // Ad-hoc workout: derive targets from what was actually logged.
         // getWorkoutSetsWithExercises orders by timestamp ASC, so groupBy keeps
         // exercises in the order they were first performed.
         val sets = setDao.getWorkoutSetsWithExercises(workoutId)
-        return sets.groupBy { it.set.exerciseId }.entries.mapIndexed { index, (exerciseId, exerciseSets) ->
+        val raw = sets.groupBy { it.set.exerciseId }.entries.mapIndexed { index, (exerciseId, exerciseSets) ->
             val workingSets = exerciseSets.filter { !it.set.isWarmup }
             val workingReps = workingSets.mapNotNull { it.set.reps }
             val firstSet = exerciseSets.first().set
@@ -446,6 +466,19 @@ class RoutineRepository @Inject constructor(
                 supersetOrderIndex = firstSet.supersetOrderIndex
             )
         }
+        return clearSingleMemberSupersets(raw)
+    }
+
+    private fun clearSingleMemberSupersets(items: List<WorkoutBlueprintItem>): List<WorkoutBlueprintItem> {
+        val groupCounts = items.mapNotNull { it.sourceSupersetKey }.groupingBy { it }.eachCount()
+        return items.map { item ->
+            val key = item.sourceSupersetKey
+            if (key != null && (groupCounts[key] ?: 0) <= 1) {
+                item.copy(sourceSupersetKey = null, supersetOrderIndex = 0)
+            } else {
+                item
+            }
+        }
     }
 
     /**
@@ -454,7 +487,7 @@ class RoutineRepository @Inject constructor(
      */
     suspend fun repeatWorkout(sourceWorkoutId: Long): RepeatWorkoutResult {
         return database.withTransaction {
-            if (workoutDao.getOngoingWorkout().first() != null) {
+            if (workoutDao.getOngoingWorkoutSync() != null) {
                 return@withTransaction RepeatWorkoutResult.OngoingWorkoutExists
             }
             val source = workoutDao.getWorkoutByIdSync(sourceWorkoutId)
@@ -510,8 +543,8 @@ class RoutineRepository @Inject constructor(
                     return@withTransaction AddToRoutineResult.RoutineFull
                 }
                 val workout = workoutDao.getWorkoutByIdSync(workoutId)
-                val dayName = workout?.routineDayNameSnapshot
-                    ?: workout?.name
+                val dayName = workout?.routineDayNameSnapshot?.trim()?.takeIf { it.isNotBlank() }
+                    ?: workout?.name?.trim()?.takeIf { it.isNotBlank() }
                     ?: "Workout ${TimeFormatter.formatShortDate(workout?.startTime ?: Date())}"
                 targetDayId = routineDao.insertRoutineDay(
                     RoutineDay(

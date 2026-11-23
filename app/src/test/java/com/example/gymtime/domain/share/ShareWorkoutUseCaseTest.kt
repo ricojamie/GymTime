@@ -8,9 +8,7 @@ import com.example.gymtime.data.db.dao.WorkoutDao
 import com.example.gymtime.data.db.entity.Set
 import com.example.gymtime.data.db.entity.Workout
 import io.mockk.coEvery
-import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -39,7 +37,7 @@ class ShareWorkoutUseCaseTest {
     @Before
     fun setup() {
         useCase = ShareWorkoutUseCase(workoutDao, setDao, generatedNarrativeRepository)
-        every { workoutDao.getWorkoutById(1L) } returns flowOf(workout)
+        coEvery { workoutDao.getWorkoutByIdSync(1L) } returns workout
         coEvery { generatedNarrativeRepository.getLatest(any(), any()) } returns null
     }
 
@@ -128,12 +126,47 @@ class ShareWorkoutUseCaseTest {
         assertNull(useCase.buildShareableWorkout(1L))
     }
 
+    @Test
+    fun `missing workout returns null safely`() = runTest {
+        coEvery { workoutDao.getWorkoutByIdSync(99L) } returns null
+
+        assertNull(useCase.buildShareableWorkout(99L))
+        assertNull(useCase(99L))
+    }
+
+    @Test
+    fun `warmup-only or warmup-library-only workout returns null`() = runTest {
+        coEvery { setDao.getWorkoutSetsWithExercises(1L) } returns listOf(
+            setInfo(id = 1L, weight = 100f, reps = 10, isWarmup = true, timestamp = workoutStart + 1_000L),
+            setInfo(id = 2L, weight = 25f, reps = 10, isWarmup = false, muscle = "Warmups", timestamp = workoutStart + 2_000L)
+        )
+
+        assertNull(useCase.buildShareableWorkout(1L))
+    }
+
+    @Test
+    fun `zero and non-finite weights are never crowned as PRs`() = runTest {
+        coEvery { setDao.getWorkoutSetsWithExercises(1L) } returns listOf(
+            setInfo(id = 1L, weight = 0f, reps = 10, timestamp = workoutStart + 1_000L),
+            setInfo(id = 2L, weight = Float.NaN, reps = 8, timestamp = workoutStart + 2_000L)
+        )
+        coEvery { setDao.getPersonalBestsWithTimestampsBefore(1L, workoutStart) } returns emptyList()
+
+        val result = useCase.buildShareableWorkout(1L)!!
+        val sets = result.exercises.single().sets
+
+        assertFalse(sets[0].isPersonalRecord)
+        assertFalse(sets[1].isPersonalRecord)
+        assertEquals(0f, result.totalVolume, 0.01f)
+    }
+
     private fun setInfo(
         id: Long,
         weight: Float,
         reps: Int,
         isWarmup: Boolean = false,
         isComplete: Boolean = true,
+        muscle: String = "Chest",
         timestamp: Long
     ): SetWithExerciseInfo {
         return SetWithExerciseInfo(
@@ -151,7 +184,7 @@ class ShareWorkoutUseCaseTest {
                 timestamp = Date(timestamp)
             ),
             exerciseName = "Bench Press",
-            targetMuscle = "Chest"
+            targetMuscle = muscle
         )
     }
 }

@@ -1,23 +1,45 @@
 package com.example.gymtime.data.repository
 
+import androidx.room.withTransaction
+import com.example.gymtime.data.db.GymTimeDatabase
 import com.example.gymtime.data.db.dao.ExerciseDao
 import com.example.gymtime.data.db.dao.ExerciseHistorySet
 import com.example.gymtime.data.db.dao.ExerciseLastSetRow
 import com.example.gymtime.data.db.dao.ExerciseUsageRow
+import com.example.gymtime.data.db.dao.MuscleGroupDao
 import com.example.gymtime.data.db.dao.SetDao
 import com.example.gymtime.data.db.entity.Exercise
+import com.example.gymtime.data.db.entity.MuscleGroup
 import com.example.gymtime.data.db.entity.Set
-import com.example.gymtime.ui.exercise.PersonalRecords
+import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
 import com.example.gymtime.util.OneRepMaxCalculator
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
 
-import com.example.gymtime.data.db.dao.MuscleGroupDao
-import com.example.gymtime.data.db.entity.MuscleGroup
+data class PersonalRecords(
+    val heaviestWeight: Set?,
+    val bestE1RM: Pair<Set, Float>?,
+    val bestE10RM: Pair<Set, Float>?
+)
+
+sealed interface MuscleGroupMutationResult {
+    data object Success : MuscleGroupMutationResult
+    data object InvalidName : MuscleGroupMutationResult
+    data object DuplicateExists : MuscleGroupMutationResult
+    data object ProtectedCategory : MuscleGroupMutationResult
+}
+
+sealed interface MuscleGroupDeleteResult {
+    data object Deleted : MuscleGroupDeleteResult
+    data class HasExercises(val exerciseCount: Int) : MuscleGroupDeleteResult
+    data class BlockedByLoggedSets(val setCount: Int) : MuscleGroupDeleteResult
+    data object ProtectedCategory : MuscleGroupDeleteResult
+}
 
 @Singleton
 class ExerciseRepository @Inject constructor(
+    private val database: GymTimeDatabase,
     private val exerciseDao: ExerciseDao,
     private val setDao: SetDao,
     private val muscleGroupDao: MuscleGroupDao
@@ -36,6 +58,76 @@ class ExerciseRepository @Inject constructor(
 
     fun getAllMuscleGroups(): Flow<List<MuscleGroup>> {
         return muscleGroupDao.getAllMuscleGroups()
+    }
+
+    suspend fun createMuscleGroup(name: String): MuscleGroupMutationResult {
+        val trimmed = name.trim()
+        if (trimmed.length < 2) return MuscleGroupMutationResult.InvalidName
+        if (trimmed.isWarmupMuscleGroup()) return MuscleGroupMutationResult.ProtectedCategory
+
+        return database.withTransaction {
+            if (muscleGroupDao.muscleGroupExists(trimmed) > 0) {
+                return@withTransaction MuscleGroupMutationResult.DuplicateExists
+            }
+            muscleGroupDao.insertMuscleGroup(MuscleGroup(trimmed))
+            MuscleGroupMutationResult.Success
+        }
+    }
+
+    suspend fun renameMuscleGroup(oldName: String, newName: String): MuscleGroupMutationResult {
+        val trimmedOld = oldName.trim()
+        val trimmedNew = newName.trim()
+        if (trimmedOld.isWarmupMuscleGroup() || trimmedNew.isWarmupMuscleGroup()) {
+            return MuscleGroupMutationResult.ProtectedCategory
+        }
+        if (trimmedNew.length < 2) return MuscleGroupMutationResult.InvalidName
+
+        return database.withTransaction {
+            val existing = muscleGroupDao.findByNameIgnoreCase(trimmedNew)
+            if (existing != null && !existing.name.equals(trimmedOld, ignoreCase = true)) {
+                return@withTransaction MuscleGroupMutationResult.DuplicateExists
+            }
+            if (trimmedOld != trimmedNew) {
+                exerciseDao.updateExercisesTargetMuscle(trimmedOld, trimmedNew)
+                muscleGroupDao.deleteMuscleGroupByName(trimmedOld)
+                muscleGroupDao.insertMuscleGroup(MuscleGroup(trimmedNew))
+            }
+            MuscleGroupMutationResult.Success
+        }
+    }
+
+    suspend fun deleteMuscleGroupSafely(
+        name: String,
+        reassignTo: String? = null
+    ): MuscleGroupDeleteResult {
+        if (name.isWarmupMuscleGroup()) return MuscleGroupDeleteResult.ProtectedCategory
+
+        return database.withTransaction {
+            val setCount = muscleGroupDao.getLoggedSetCountForMuscle(name)
+            if (setCount > 0) {
+                return@withTransaction MuscleGroupDeleteResult.BlockedByLoggedSets(setCount)
+            }
+
+            val exerciseCount = muscleGroupDao.getExerciseCountForMuscle(name)
+            if (exerciseCount > 0) {
+                if (reassignTo == null) {
+                    return@withTransaction MuscleGroupDeleteResult.HasExercises(exerciseCount)
+                }
+                val target = reassignTo.trim().ifBlank { "Uncategorized" }
+                if (target.isWarmupMuscleGroup()) {
+                    return@withTransaction MuscleGroupDeleteResult.ProtectedCategory
+                }
+                val existingTarget = muscleGroupDao.findByNameIgnoreCase(target)
+                val canonicalTarget = existingTarget?.name ?: target
+                if (existingTarget == null) {
+                    muscleGroupDao.insertMuscleGroup(MuscleGroup(canonicalTarget))
+                }
+                exerciseDao.updateExercisesTargetMuscle(name, canonicalTarget)
+            }
+
+            muscleGroupDao.deleteMuscleGroupByName(name)
+            MuscleGroupDeleteResult.Deleted
+        }
     }
 
     suspend fun deleteExercise(exerciseId: Long) {

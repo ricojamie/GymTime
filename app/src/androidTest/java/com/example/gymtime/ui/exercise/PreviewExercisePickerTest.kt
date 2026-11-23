@@ -32,7 +32,6 @@ import com.example.gymtime.ui.exercise.preview.PickerUiState
 import com.example.gymtime.ui.exercise.preview.PreviewExercisePicker
 import com.example.gymtime.ui.theme.AppColorScheme
 import com.example.gymtime.ui.theme.IronLogTheme
-import com.example.gymtime.ui.theme.LoggerPreviewTheme
 import com.example.gymtime.ui.theme.ThemeColors
 import com.example.gymtime.ui.theme.ThemeFontOption
 import org.junit.Assert.assertEquals
@@ -301,36 +300,34 @@ class PreviewExercisePickerTest {
             val density = LocalDensity.current.density
             CompositionLocalProvider(LocalDensity provides Density(density, fontScale)) {
                 IronLogTheme(darkMode = dark, appColorScheme = colors, themeFontKey = font) {
-                    LoggerPreviewTheme {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                            PreviewExercisePicker(
-                                state = state.value,
-                                onAction = { action ->
-                                    onAction(action)
-                                    if (action == PickerAction.ClearFilters) {
-                                        state.value = state.value.copy(selectedMuscles = emptySet())
-                                    }
-                                },
-                                onSelectExercise = { exercise ->
-                                    onSelect(exercise)
-                                    if (state.value.mode == PickerMode.BUILD_SUPERSET) {
-                                        val selected = state.value.selectedExercises
-                                        state.value = state.value.copy(selectedExercises =
-                                            if (selected.any { it.id == exercise.id }) selected.filterNot { it.id == exercise.id }
-                                            else selected + exercise
-                                        )
-                                    }
-                                },
-                                onQueryChange = { onQuery(it); state.value = state.value.copy(query = it) },
-                                onMuscleToggle = { muscle ->
-                                    onMuscle(muscle)
-                                    val selected = state.value.selectedMuscles
-                                    state.value = state.value.copy(selectedMuscles = if (muscle in selected) selected - muscle else selected + muscle)
-                                },
-                                onSortChange = { state.value = state.value.copy(sortMode = it) },
-                                modifier = if (width == null) Modifier.fillMaxSize() else Modifier.width(width.dp)
-                            )
-                        }
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                        PreviewExercisePicker(
+                            state = state.value,
+                            onAction = { action ->
+                                onAction(action)
+                                if (action == PickerAction.ClearFilters) {
+                                    state.value = state.value.copy(selectedMuscles = emptySet())
+                                }
+                            },
+                            onSelectExercise = { exercise ->
+                                onSelect(exercise)
+                                if (state.value.mode == PickerMode.BUILD_SUPERSET) {
+                                    val selected = state.value.selectedExercises
+                                    state.value = state.value.copy(selectedExercises =
+                                        if (selected.any { it.id == exercise.id }) selected.filterNot { it.id == exercise.id }
+                                        else selected + exercise
+                                    )
+                                }
+                            },
+                            onQueryChange = { onQuery(it); state.value = state.value.copy(query = it) },
+                            onMuscleToggle = { muscle ->
+                                onMuscle(muscle)
+                                val selected = state.value.selectedMuscles
+                                state.value = state.value.copy(selectedMuscles = if (muscle in selected) selected - muscle else selected + muscle)
+                            },
+                            onSortChange = { state.value = state.value.copy(sortMode = it) },
+                            modifier = if (width == null) Modifier.fillMaxSize() else Modifier.width(width.dp)
+                        )
                     }
                 }
             }
