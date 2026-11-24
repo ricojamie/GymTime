@@ -20,7 +20,46 @@ import kotlin.math.min
 @Immutable
 data class LoggerActionColors(val fill: Color, val onFill: Color)
 
+/**
+ * Physical material surface & rim-lighting tokens for Dark ("Obsidian Telemetry") and
+ * Light ("Machined Ceramic") palettes, dynamically tinted from the user's active accent.
+ */
+@Immutable
+data class IronLogSurfacePalette(
+    val isDark: Boolean,
+    val accent: Color,
+    val canvas: Color,
+    val canvasBottom: Color,
+    val plateTop: Color,
+    val plateBottom: Color,
+    val plateElevatedTop: Color,
+    val plateElevatedBottom: Color,
+    val rimTop: Color,
+    val rimMid: Color,
+    val rimBottom: Color,
+    val rimAccentTop: Color,
+    val wellFill: Color,
+    val wellInnerShadow: Color,
+    val wellCatchlight: Color,
+    val telemetryStageTop: Color,
+    val telemetryStageBottom: Color,
+    val telemetrySpotlight: Color,
+    val keycapTop: Color,
+    val keycapBottom: Color,
+    val keycapPressedTop: Color,
+    val keycapPressedBottom: Color,
+    val keycapRimTop: Color,
+    val keycapShadowLip: Color,
+    val glassDockFill: Color,
+    val glassDockRimTop: Color,
+    val ledGlow: Color
+)
+
 val LocalLoggerActionColors = staticCompositionLocalOf { loggerActionColors(PrimaryAccent) }
+
+val LocalIronLogSurfaces = staticCompositionLocalOf {
+    ironLogSurfacePalette(PrimaryAccent, darkMode = true)
+}
 
 val LocalGradientColors = staticCompositionLocalOf<Pair<Color, Color>> {
     error("No gradient colors provided")
@@ -31,11 +70,90 @@ internal fun loggerActionColors(accent: Color): LoggerActionColors {
     return LoggerActionColors(fill = fill, onFill = strongestTextOn(fill))
 }
 
+internal fun ironLogSurfacePalette(accent: Color, darkMode: Boolean): IronLogSurfacePalette {
+    val seed = accent.copy(alpha = 1f)
+    return if (darkMode) {
+        val canvas = lerp(IronLogDarkCanvasNeutral, seed, 0.02f)
+        val canvasBottom = lerp(Color(0xFF040507), seed, 0.015f)
+        val plateTop = lerp(Color(0xFF171A21), seed, 0.03f)
+        val plateBottom = lerp(Color(0xFF0E1015), seed, 0.015f)
+        val plateElevatedTop = lerp(Color(0xFF1E222B), seed, 0.045f)
+        // Check against the brightest dark surface so accent text maintains >= 4.5:1 across all plates/wells.
+        val accentReadable = readableOn(seed, plateElevatedTop)
+        IronLogSurfacePalette(
+            isDark = true,
+            accent = accentReadable,
+            canvas = canvas,
+            canvasBottom = canvasBottom,
+            plateTop = plateTop,
+            plateBottom = plateBottom,
+            plateElevatedTop = plateElevatedTop,
+            plateElevatedBottom = lerp(Color(0xFF13161D), seed, 0.025f),
+            rimTop = Color.White.copy(alpha = 0.14f),
+            rimMid = Color.White.copy(alpha = 0.04f),
+            rimBottom = Color.Black.copy(alpha = 0.45f),
+            rimAccentTop = accentReadable.copy(alpha = 0.48f),
+            wellFill = lerp(Color(0xFF0A0C10), seed, 0.015f),
+            wellInnerShadow = Color.Black.copy(alpha = 0.55f),
+            wellCatchlight = Color.White.copy(alpha = 0.06f),
+            telemetryStageTop = lerp(Color(0xFF131720), seed, 0.04f),
+            telemetryStageBottom = lerp(Color(0xFF0B0D12), seed, 0.02f),
+            telemetrySpotlight = seed.copy(alpha = 0.18f),
+            keycapTop = lerp(Color(0xFF232730), seed, 0.025f),
+            keycapBottom = lerp(Color(0xFF171A20), seed, 0.015f),
+            keycapPressedTop = lerp(Color(0xFF13161B), seed, 0.015f),
+            keycapPressedBottom = lerp(Color(0xFF1F232B), seed, 0.025f),
+            keycapRimTop = Color.White.copy(alpha = 0.16f),
+            keycapShadowLip = Color.Black.copy(alpha = 0.60f),
+            glassDockFill = lerp(Color(0xFF0D0F14), seed, 0.02f).copy(alpha = 0.88f),
+            glassDockRimTop = Color.White.copy(alpha = 0.18f),
+            ledGlow = accentReadable
+        )
+    } else {
+        val canvas = lerp(IronLogLightCanvasNeutral, seed, 0.02f)
+        val canvasBottom = lerp(Color(0xFFDFE3E8), seed, 0.02f)
+        val plateTop = Color.White
+        val plateBottom = lerp(Color(0xFFF2F4F7), seed, 0.015f)
+        val wellFill = lerp(Color(0xFFDFE3E8), seed, 0.015f)
+        // Check against the darkest light surface (wellFill) so accent text maintains >= 4.5:1 across plates, canvas, and wells.
+        val accentReadable = readableOn(seed, wellFill)
+        IronLogSurfacePalette(
+            isDark = false,
+            accent = accentReadable,
+            canvas = canvas,
+            canvasBottom = canvasBottom,
+            plateTop = plateTop,
+            plateBottom = plateBottom,
+            plateElevatedTop = Color.White,
+            plateElevatedBottom = lerp(Color(0xFFEDF0F4), seed, 0.03f),
+            rimTop = Color.White.copy(alpha = 0.90f),
+            rimMid = Color(0xFFDCE1E7),
+            rimBottom = Color(0xFFC7CDD4),
+            rimAccentTop = accentReadable.copy(alpha = 0.55f),
+            wellFill = wellFill,
+            wellInnerShadow = Color.Black.copy(alpha = 0.10f),
+            wellCatchlight = Color.White.copy(alpha = 0.85f),
+            telemetryStageTop = Color.White,
+            telemetryStageBottom = lerp(Color(0xFFF3F5F8), seed, 0.025f),
+            telemetrySpotlight = accentReadable.copy(alpha = 0.14f),
+            keycapTop = Color.White,
+            keycapBottom = lerp(Color(0xFFE8ECF1), seed, 0.015f),
+            keycapPressedTop = lerp(Color(0xFFDCDFE5), seed, 0.015f),
+            keycapPressedBottom = lerp(Color(0xFFF5F7FA), seed, 0.01f),
+            keycapRimTop = Color.White.copy(alpha = 0.95f),
+            keycapShadowLip = Color(0xFFB8BFC8),
+            glassDockFill = Color(0xFFF7F8FA).copy(alpha = 0.90f),
+            glassDockRimTop = Color.White.copy(alpha = 0.92f),
+            ledGlow = accentReadable
+        )
+    }
+}
+
 /** Pure palette construction covering all preset and arbitrary custom hex colors, including black and white. */
 internal fun ironLogColorScheme(accent: Color, darkMode: Boolean): ColorScheme {
     val seed = accent.copy(alpha = 1f)
     val neutral = if (darkMode) IronLogDarkCanvasNeutral else IronLogLightCanvasNeutral
-    val canvas = lerp(neutral, seed, if (darkMode) 0.025f else 0.035f)
+    val canvas = lerp(neutral, seed, if (darkMode) 0.02f else 0.025f)
     val surface = lerp(if (darkMode) IronLogDarkSurfaceBase else Color.White, seed, 0.025f)
     val surfaceLow = lerp(canvas, surface, 0.55f)
     val surfaceHigh = lerp(surface, seed, if (darkMode) 0.08f else 0.06f)
@@ -114,14 +232,22 @@ fun IronLogTheme(
     val actionColors = remember(appColorScheme.primaryAccent) {
         loggerActionColors(appColorScheme.primaryAccent)
     }
-    val gradientColors = remember(scheme) {
-        scheme.background to scheme.surfaceContainerLow
+    val surfaces = remember(appColorScheme.primaryAccent, darkMode) {
+        ironLogSurfacePalette(appColorScheme.primaryAccent, darkMode)
+    }
+    val gradientColors = remember(surfaces) {
+        surfaces.canvas to surfaces.canvasBottom
     }
     val shapes = remember { IronLogShapes }
+    val reducedMotion = rememberReducedMotion()
+    val haptics = rememberIronHaptics()
 
     CompositionLocalProvider(
         LocalGradientColors provides gradientColors,
-        LocalLoggerActionColors provides actionColors
+        LocalLoggerActionColors provides actionColors,
+        LocalIronLogSurfaces provides surfaces,
+        LocalReducedMotion provides reducedMotion,
+        LocalIronHaptics provides haptics
     ) {
         MaterialTheme(
             colorScheme = scheme,

@@ -1,7 +1,30 @@
 package com.example.gymtime.ui.exercise.preview
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +48,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -42,40 +68,52 @@ import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Whatshot
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.gymtime.data.db.entity.DistanceUnit
 import com.example.gymtime.data.db.entity.Exercise
 import com.example.gymtime.data.db.entity.LogType
@@ -83,11 +121,15 @@ import com.example.gymtime.data.db.entity.Set as WorkoutSet
 import com.example.gymtime.data.db.entity.isWarmupLibraryExercise
 import com.example.gymtime.ui.components.IronLogCard
 import com.example.gymtime.ui.components.IronLogDivider
-import com.example.gymtime.ui.components.IronLogGroupedCard
+import com.example.gymtime.ui.components.IronLogFilterPill
+import com.example.gymtime.ui.components.IronLogLedPip
 import com.example.gymtime.ui.components.IronLogPrimaryButton
+import com.example.gymtime.ui.components.IronLogRecessedWell
+import com.example.gymtime.ui.components.IronLogSculptedKeycap
 import com.example.gymtime.ui.components.IronLogSecondaryButton
 import com.example.gymtime.ui.components.IronLogStatusChip
 import com.example.gymtime.ui.components.IronLogStatusTone
+import com.example.gymtime.ui.components.KeycapHaptic
 import com.example.gymtime.ui.exercise.LoggerCelebration
 import com.example.gymtime.ui.exercise.LoggingInput
 import com.example.gymtime.ui.exercise.LoggingInputs
@@ -97,7 +139,17 @@ import com.example.gymtime.ui.theme.IronLogBorder
 import com.example.gymtime.ui.theme.IronLogRadius
 import com.example.gymtime.ui.theme.IronLogSpace
 import com.example.gymtime.ui.theme.IronLogType
+import com.example.gymtime.ui.theme.IronMotion
+import com.example.gymtime.ui.theme.LocalIronHaptics
+import com.example.gymtime.ui.theme.LocalIronLogSurfaces
+import com.example.gymtime.ui.theme.LocalReducedMotion
+import com.example.gymtime.ui.theme.MachinedPressIndication
+import com.example.gymtime.ui.theme.OdometerText
+import com.example.gymtime.ui.theme.anodizedMicroGrain
+import com.example.gymtime.ui.theme.obsidianAmbientBackdrop
+import com.example.gymtime.ui.theme.shakeOnTrigger
 import com.example.gymtime.util.TimeFormatter
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.StateFlow
 
 enum class LoggerField { WEIGHT, REPS, DURATION, DISTANCE, CALORIES, RPE, NOTE }
@@ -156,8 +208,12 @@ fun PreviewLoggerContent(
     remainingSecondsFlow: StateFlow<Int>? = null
 ) {
     val colors = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
+    val reducedMotion = LocalReducedMotion.current
     val listState = rememberLazyListState()
     val focus = LocalFocusManager.current
+
     var showMenu by remember { mutableStateOf(false) }
     var showSetDetails by rememberSaveable(state.exercise?.id) { mutableStateOf(false) }
     var activeInput by rememberSaveable(state.exercise?.id, state.exercise?.logType, state.editingSetId) {
@@ -170,12 +226,50 @@ fun PreviewLoggerContent(
     var warmupsExpanded by rememberSaveable(state.exercise?.id, state.workoutId, hasWorkingSet) {
         mutableStateOf(!hasWorkingSet)
     }
+
+    var prevSetCount by remember(state.exercise?.id, state.workoutId) { mutableIntStateOf(state.sets.size) }
+    var logPulseTrigger by remember { mutableIntStateOf(0) }
+    val logPulseAnim = remember { Animatable(0f) }
+
+    LaunchedEffect(state.sets.size) {
+        if (state.sets.size > prevSetCount) {
+            logPulseTrigger++
+        }
+        prevSetCount = state.sets.size
+    }
+
+    LaunchedEffect(logPulseTrigger, reducedMotion) {
+        if (logPulseTrigger > 0 && !reducedMotion) {
+            logPulseAnim.snapTo(0.001f)
+            logPulseAnim.animateTo(1f, tween(durationMillis = 420, easing = FastOutSlowInEasing))
+            logPulseAnim.snapTo(0f)
+        } else {
+            logPulseAnim.snapTo(0f)
+        }
+    }
+
+    var lastValidation by remember { mutableStateOf<String?>(null) }
+    var invalidShakeTrigger by remember { mutableIntStateOf(0) }
+    LaunchedEffect(state.validation) {
+        if (state.validation != null && state.validation != lastValidation) {
+            invalidShakeTrigger++
+            haptics.reject()
+        }
+        lastValidation = state.validation
+    }
+
+    var lastCelebration by remember { mutableStateOf(state.celebration) }
+    if (state.celebration != null) {
+        lastCelebration = state.celebration
+    }
+
     LaunchedEffect(state.editingSetId) {
         if (state.editingSetId != null) {
             showSetDetails = state.fields.note.isNotBlank() || state.fields.rpe.isNotBlank()
             listState.animateScrollToItem(0)
         }
     }
+
     activeInput?.let { field ->
         val order = state.exercise?.logType?.inputFields().orEmpty() +
             if (showSetDetails) listOf(LoggerField.RPE) else emptyList()
@@ -190,12 +284,21 @@ fun PreviewLoggerContent(
             onLog = { onAction(LoggerAction.LOG) }
         )
     }
-    Box(modifier.fillMaxSize()) {
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .obsidianAmbientBackdrop(accent = surfaces.accent, isDark = surfaces.isDark)
+    ) {
         Scaffold(
             modifier = Modifier.imePadding(),
-            containerColor = colors.background,
+            containerColor = Color.Transparent,
             topBar = {
-                Column {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(surfaces.glassDockFill.copy(alpha = if (surfaces.isDark) 0.72f else 0.84f))
+                ) {
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -204,21 +307,37 @@ fun PreviewLoggerContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(
-                            onClick = { onAction(LoggerAction.BACK) },
+                            onClick = {
+                                haptics.keyTap()
+                                onAction(LoggerAction.BACK)
+                            },
                             modifier = Modifier.size(IronLogSpace.TouchTargetMin)
                         ) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to workout")
                         }
-                        Text(
-                            text = "Workout",
+                        Row(
                             modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            IronLogLedPip(
+                                color = surfaces.ledGlow,
+                                size = 5.dp,
+                                pulsing = state.timerRunning
+                            )
+                            Text(
+                                text = "Workout",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                         TextButton(
-                            onClick = { onAction(LoggerAction.FINISH) },
+                            onClick = {
+                                haptics.tick()
+                                onAction(LoggerAction.FINISH)
+                            },
                             enabled = !state.saving,
                             modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
                         ) {
@@ -226,7 +345,10 @@ fun PreviewLoggerContent(
                         }
                         Box {
                             IconButton(
-                                onClick = { showMenu = true },
+                                onClick = {
+                                    haptics.tick()
+                                    showMenu = true
+                                },
                                 modifier = Modifier.size(IronLogSpace.TouchTargetMin)
                             ) {
                                 Icon(Icons.Default.MoreVert, "More workout options")
@@ -254,35 +376,45 @@ fun PreviewLoggerContent(
                 }
             },
             bottomBar = {
-                Surface(
-                    color = colors.surface,
-                    contentColor = colors.onSurface,
-                    tonalElevation = 0.dp,
-                    shadowElevation = 0.dp
-                ) {
-                    Column {
-                        IronLogDivider(insetStart = 0.dp)
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            TextButton(
-                                onClick = { onAction(LoggerAction.ADD_EXERCISE) },
-                                modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
-                            ) {
-                                Icon(Icons.Default.Add, null, Modifier.size(18.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Exercise", fontWeight = FontWeight.SemiBold)
-                            }
-                            IronLogSecondaryButton(
-                                text = "Workout overview",
-                                onClick = { onAction(LoggerAction.OVERVIEW) },
-                                modifier = Modifier.weight(1f)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(surfaces.glassDockFill)
+                        .anodizedMicroGrain(alpha = if (surfaces.isDark) 0.02f else 0.012f)
+                        .drawBehind {
+                            drawLine(
+                                brush = Brush.horizontalGradient(
+                                    listOf(Color.Transparent, surfaces.rimTop, Color.Transparent)
+                                ),
+                                start = Offset(0f, 0.5.dp.toPx()),
+                                end = Offset(size.width, 0.5.dp.toPx()),
+                                strokeWidth = 1.dp.toPx()
                             )
                         }
+                ) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = {
+                                haptics.keyTap()
+                                onAction(LoggerAction.ADD_EXERCISE)
+                            },
+                            modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
+                        ) {
+                            Icon(Icons.Default.Add, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Exercise", fontWeight = FontWeight.SemiBold)
+                        }
+                        IronLogSecondaryButton(
+                            text = "Workout overview",
+                            onClick = { onAction(LoggerAction.OVERVIEW) },
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
             }
@@ -311,7 +443,10 @@ fun PreviewLoggerContent(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (state.hasPrevious) {
                                 IconButton(
-                                    onClick = { onAction(LoggerAction.PREVIOUS) },
+                                    onClick = {
+                                        haptics.keyTap()
+                                        onAction(LoggerAction.PREVIOUS)
+                                    },
                                     modifier = Modifier.size(IronLogSpace.TouchTargetMin)
                                 ) {
                                     Icon(Icons.AutoMirrored.Filled.ArrowBack, "Previous exercise")
@@ -324,7 +459,8 @@ fun PreviewLoggerContent(
                                 Text(
                                     text = exercise.name,
                                     style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.onSurface
                                 )
                                 Text(
                                     text = "${exercise.targetMuscle} · ${when {
@@ -332,13 +468,16 @@ fun PreviewLoggerContent(
                                         state.isWarmup -> "Warm-up ${warmupSets.size + 1}"
                                         else -> "Working set ${workingSets.size + 1}"
                                     }}",
-                                    style = IronLogType.tabular(MaterialTheme.typography.bodySmall),
+                                    style = IronLogType.telemetryLabel(MaterialTheme.typography.bodySmall),
                                     color = colors.onSurfaceVariant
                                 )
                             }
                             if (state.hasNext) {
                                 IconButton(
-                                    onClick = { onAction(LoggerAction.NEXT) },
+                                    onClick = {
+                                        haptics.keyTap()
+                                        onAction(LoggerAction.NEXT)
+                                    },
                                     modifier = Modifier.size(IronLogSpace.TouchTargetMin)
                                 ) {
                                     Icon(Icons.AutoMirrored.Filled.ArrowForward, "Next exercise")
@@ -346,13 +485,18 @@ fun PreviewLoggerContent(
                             }
                         }
                     }
+
                     item(key = "records") {
-                        IronLogGroupedCard(showBorder = true) {
+                        IronLogCard(
+                            spotlight = true,
+                            showBorder = true,
+                            shape = IronLogRadius.PlateShape,
+                            contentPadding = PaddingValues(horizontal = IronLogSpace.CardPadding, vertical = 12.dp)
+                        ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(IntrinsicSize.Min)
-                                    .padding(horizontal = IronLogSpace.CardPadding, vertical = 12.dp),
+                                    .height(IntrinsicSize.Min),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 RecordMetricCell(
@@ -383,6 +527,7 @@ fun PreviewLoggerContent(
                             }
                         }
                     }
+
                     item(key = "tools") {
                         Row(horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
                             ToolButton("History", Icons.Default.History, Modifier.weight(1f)) {
@@ -398,28 +543,29 @@ fun PreviewLoggerContent(
                             }
                         }
                     }
+
                     state.plan?.let { plan ->
                         item(key = "plan") {
                             IronLogCard(
-                                showBorder = false,
-                                shape = IronLogRadius.ControlShape,
-                                containerColor = colors.surfaceContainerLow,
+                                showBorder = true,
+                                shape = IronLogRadius.KeycapShape,
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                                 verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 Text(
                                     text = "PLANNED",
-                                    style = IronLogType.sectionEyebrow(),
-                                    color = colors.primary
+                                    style = IronLogType.technicalEyebrow(),
+                                    color = surfaces.accent
                                 )
                                 Text(
                                     text = plan,
-                                    style = IronLogType.tabular(MaterialTheme.typography.bodySmall),
+                                    style = IronLogType.telemetryLabel(MaterialTheme.typography.bodySmall),
                                     color = colors.onSurfaceVariant
                                 )
                             }
                         }
                     }
+
                     if (state.superset.isNotEmpty()) {
                         item(key = "superset") {
                             Column(verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
@@ -434,7 +580,10 @@ fun PreviewLoggerContent(
                                         icon = Icons.Default.Sync
                                     )
                                     TextButton(
-                                        onClick = { onAction(LoggerAction.EXIT_SUPERSET) },
+                                        onClick = {
+                                            haptics.tick()
+                                            onAction(LoggerAction.EXIT_SUPERSET)
+                                        },
                                         modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
                                     ) {
                                         Text("Exit superset")
@@ -445,24 +594,25 @@ fun PreviewLoggerContent(
                                     horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
                                 ) {
                                     state.superset.forEach { member ->
-                                        FilterChip(
+                                        IronLogFilterPill(
+                                            label = member.name,
                                             selected = member.id == exercise.id,
                                             onClick = { onSelectExercise(member.id) },
-                                            label = { Text(member.name) },
-                                            shape = IronLogRadius.ControlShape,
-                                            modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
+                                            showLedPip = true
                                         )
                                     }
                                 }
                             }
                         }
                     }
+
                     state.smartQueue?.let { queue ->
                         item(key = "queue") {
                             IronLogCard(
                                 highlighted = true,
+                                spotlight = true,
                                 showBorder = true,
-                                shape = IronLogRadius.ControlShape,
+                                shape = IronLogRadius.KeycapShape,
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                             ) {
                                 Row(
@@ -473,17 +623,20 @@ fun PreviewLoggerContent(
                                     Icon(
                                         imageVector = Icons.Default.AutoAwesome,
                                         contentDescription = null,
-                                        tint = colors.primary,
+                                        tint = surfaces.accent,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Text(
                                         text = queue,
                                         modifier = Modifier.weight(1f),
-                                        style = IronLogType.tabular(MaterialTheme.typography.labelLarge),
+                                        style = IronLogType.telemetryLabel(MaterialTheme.typography.labelLarge),
                                         fontWeight = FontWeight.SemiBold
                                     )
                                     TextButton(
-                                        onClick = { onAction(LoggerAction.CANCEL_SMART_LOG) },
+                                        onClick = {
+                                            haptics.tick()
+                                            onAction(LoggerAction.CANCEL_SMART_LOG)
+                                        },
                                         modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
                                     ) {
                                         Text("Cancel queue")
@@ -492,8 +645,13 @@ fun PreviewLoggerContent(
                             }
                         }
                     }
+
                     item(key = "inputs") {
-                        LoggingInputs(exercise.logType, state.fields) {
+                        LoggingInputs(
+                            type = exercise.logType,
+                            fields = state.fields,
+                            activeField = activeInput
+                        ) {
                             focus.clearFocus()
                             activeInput = it
                         }
@@ -501,7 +659,10 @@ fun PreviewLoggerContent(
                             var unitMenu by remember { mutableStateOf(false) }
                             Box {
                                 TextButton(
-                                    onClick = { unitMenu = true },
+                                    onClick = {
+                                        haptics.tick()
+                                        unitMenu = true
+                                    },
                                     modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
                                 ) {
                                     Text("Distance: ${state.fields.distanceUnit.displayName}")
@@ -511,6 +672,7 @@ fun PreviewLoggerContent(
                                         DropdownMenuItem(
                                             text = { Text(unit.displayName) },
                                             onClick = {
+                                                haptics.segmentTick()
                                                 onDistanceUnitChange(unit)
                                                 unitMenu = false
                                             }
@@ -520,6 +682,7 @@ fun PreviewLoggerContent(
                             }
                         }
                     }
+
                     item(key = "extras") {
                         Column(verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
                             FlowRow(
@@ -540,24 +703,19 @@ fun PreviewLoggerContent(
                                         )
                                     }
                                 } else {
-                                    FilterChip(
-                                        selected = state.isWarmup,
-                                        onClick = { onAction(LoggerAction.TOGGLE_WARMUP) },
-                                        label = { Text("Warm-up") },
-                                        modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin),
-                                        shape = IronLogRadius.ControlShape,
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = colors.tertiaryContainer,
-                                            selectedLabelColor = colors.onTertiaryContainer,
-                                            selectedLeadingIconColor = colors.onTertiaryContainer
-                                        ),
-                                        leadingIcon = if (state.isWarmup) {
-                                            { Icon(Icons.Default.Check, null, Modifier.size(18.dp)) }
-                                        } else null
+                                    WarmupTogglePill(
+                                        checked = state.isWarmup,
+                                        onToggle = {
+                                            haptics.toggle(!state.isWarmup)
+                                            onAction(LoggerAction.TOGGLE_WARMUP)
+                                        }
                                     )
                                 }
                                 TextButton(
-                                    onClick = { showSetDetails = !showSetDetails },
+                                    onClick = {
+                                        haptics.tick()
+                                        showSetDetails = !showSetDetails
+                                    },
                                     modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
                                 ) {
                                     Icon(Icons.Default.EditNote, null, Modifier.size(20.dp))
@@ -571,22 +729,65 @@ fun PreviewLoggerContent(
                                     )
                                 }
                             }
-                            if (showSetDetails) {
+
+                            AnimatedVisibility(
+                                visible = showSetDetails,
+                                enter = if (reducedMotion) {
+                                    fadeIn(tween(80))
+                                } else {
+                                    fadeIn(IronMotion.EffectDefault) +
+                                        expandVertically(IronMotion.SpatialLayoutSize)
+                                },
+                                exit = if (reducedMotion) {
+                                    fadeOut(tween(80))
+                                } else {
+                                    fadeOut(IronMotion.EffectFast) +
+                                        shrinkVertically(IronMotion.SpatialLayoutSize)
+                                }
+                            ) {
                                 Column(verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
-                                    OutlinedTextField(
-                                        value = state.fields.note,
-                                        onValueChange = { onFieldChange(LoggerField.NOTE, it) },
-                                        label = { Text("Set note") },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        maxLines = 3,
-                                        shape = IronLogRadius.ControlShape,
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedContainerColor = colors.surfaceContainerLow,
-                                            unfocusedContainerColor = colors.surfaceContainerLow,
-                                            focusedBorderColor = colors.primary,
-                                            unfocusedBorderColor = colors.outlineVariant
-                                        )
-                                    )
+                                    var noteFocused by remember { mutableStateOf(false) }
+                                    IronLogRecessedWell(
+                                        active = noteFocused,
+                                        accentColor = surfaces.accent,
+                                        shape = IronLogRadius.KeycapShape,
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = "SET NOTE",
+                                                style = IronLogType.technicalEyebrow(),
+                                                color = if (noteFocused) surfaces.accent else colors.onSurfaceVariant
+                                            )
+                                            BasicTextField(
+                                                value = state.fields.note,
+                                                onValueChange = { onFieldChange(LoggerField.NOTE, it) },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .onFocusChanged { noteFocused = it.isFocused },
+                                                maxLines = 3,
+                                                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                                    color = colors.onSurface
+                                                ),
+                                                cursorBrush = SolidColor(surfaces.accent),
+                                                decorationBox = { innerTextField ->
+                                                    Box {
+                                                        if (state.fields.note.isEmpty()) {
+                                                            Text(
+                                                                text = "Add a cue or feeling…",
+                                                                style = MaterialTheme.typography.bodyMedium,
+                                                                color = colors.onSurfaceVariant.copy(alpha = 0.55f)
+                                                            )
+                                                        }
+                                                        innerTextField()
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    }
                                     LoggingInput(
                                         field = LoggerField.RPE,
                                         fields = state.fields,
@@ -594,47 +795,78 @@ fun PreviewLoggerContent(
                                             focus.clearFocus()
                                             activeInput = it
                                         },
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier.fillMaxWidth(),
+                                        isActive = activeInput == LoggerField.RPE
                                     )
                                 }
                             }
                         }
                     }
+
                     item(key = "log") {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(
+                                modifier = Modifier.shakeOnTrigger(invalidShakeTrigger),
                                 horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 if (state.editingSetId != null) {
                                     TextButton(
-                                        onClick = { onAction(LoggerAction.CANCEL_EDIT) },
+                                        onClick = {
+                                            haptics.tick()
+                                            onAction(LoggerAction.CANCEL_EDIT)
+                                        },
                                         enabled = !state.saving,
                                         modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
                                     ) {
                                         Text("Cancel")
                                     }
                                 }
-                                IronLogPrimaryButton(
-                                    text = if (state.saving) "Saving…" else if (state.editingSetId != null) "Save changes" else "Log set",
-                                    onClick = {
-                                        focus.clearFocus()
-                                        onAction(LoggerAction.LOG)
-                                    },
-                                    enabled = state.canLog && !state.saving,
-                                    loading = state.saving,
-                                    leadingIcon = Icons.Default.Check,
+                                Box(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .heightIn(min = 56.dp),
-                                    shape = IronLogRadius.ControlShape
-                                )
+                                        .drawWithCache {
+                                            val corner = IronLogRadius.Control.toPx()
+                                            val cornerRadius = CornerRadius(corner, corner)
+                                            val baseStrokePx = 1.dp.toPx()
+                                            val deltaStrokePx = 3.dp.toPx()
+                                            onDrawWithContent {
+                                                drawContent()
+                                                val p = logPulseAnim.value
+                                                if (p in 0.001f..0.999f) {
+                                                    val alpha = (1f - p) * 0.65f
+                                                    val strokeW = baseStrokePx + deltaStrokePx * (1f - p)
+                                                    drawRoundRect(
+                                                        color = surfaces.accent.copy(alpha = alpha),
+                                                        cornerRadius = cornerRadius,
+                                                        style = Stroke(width = strokeW)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                ) {
+                                    IronLogPrimaryButton(
+                                        text = if (state.saving) "Saving…" else if (state.editingSetId != null) "Save changes" else "Log set",
+                                        onClick = {
+                                            focus.clearFocus()
+                                            onAction(LoggerAction.LOG)
+                                        },
+                                        enabled = state.canLog && !state.saving,
+                                        loading = state.saving,
+                                        leadingIcon = Icons.Default.Check,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(min = 56.dp),
+                                        shape = IronLogRadius.ControlShape
+                                    )
+                                }
                             }
                             state.validation?.let {
                                 Text(it, style = MaterialTheme.typography.bodySmall, color = colors.error)
                             }
                         }
                     }
+
                     item(key = "timer") {
                         RestTimerCard(
                             restSeconds = state.restSeconds,
@@ -644,6 +876,7 @@ fun PreviewLoggerContent(
                             onAction = onAction
                         )
                     }
+
                     item(key = "sets-header") {
                         Column {
                             Row(
@@ -660,7 +893,7 @@ fun PreviewLoggerContent(
                                 )
                                 Text(
                                     text = "${workingSets.size} working · ${warmupSets.size} warm-up",
-                                    style = IronLogType.tabular(MaterialTheme.typography.bodySmall),
+                                    style = IronLogType.telemetryLabel(MaterialTheme.typography.bodySmall),
                                     color = colors.onSurfaceVariant
                                 )
                             }
@@ -674,18 +907,21 @@ fun PreviewLoggerContent(
                             }
                         }
                     }
+
                     if (warmupSets.isNotEmpty()) {
                         item(key = "warmups-toggle") {
                             IronLogCard(
                                 onClick = { warmupsExpanded = !warmupsExpanded },
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .animateContentSize(
+                                        IronMotion.orSnap(reducedMotion, IronMotion.SpatialLayoutSize)
+                                    )
                                     .semantics {
                                         stateDescription = if (warmupsExpanded) "Expanded" else "Collapsed"
                                     },
-                                containerColor = colors.surfaceContainerHigh,
-                                showBorder = false,
-                                shape = IronLogRadius.ControlShape,
+                                showBorder = true,
+                                shape = IronLogRadius.KeycapShape,
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                             ) {
                                 Row(
@@ -705,12 +941,12 @@ fun PreviewLoggerContent(
                                         modifier = Modifier
                                             .weight(1f)
                                             .padding(horizontal = 10.dp),
-                                        style = IronLogType.tabular(MaterialTheme.typography.labelLarge)
+                                        style = IronLogType.telemetryLabel(MaterialTheme.typography.labelLarge)
                                     )
                                     Text(
                                         text = if (warmupsExpanded) "Hide" else "Show",
                                         style = MaterialTheme.typography.labelLarge,
-                                        color = colors.primary,
+                                        color = surfaces.accent,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                     Spacer(Modifier.width(4.dp))
@@ -724,30 +960,185 @@ fun PreviewLoggerContent(
                         }
                         if (warmupsExpanded) {
                             itemsIndexed(warmupSets, key = { _, set -> set.id }) { index, set ->
-                                CompactSetRow(set, index + 1, onEditSet, onDeleteSet, onSetNote)
+                                CompactSetRow(
+                                    set = set,
+                                    number = index + 1,
+                                    onEdit = onEditSet,
+                                    onDelete = onDeleteSet,
+                                    onNote = onSetNote,
+                                    modifier = Modifier.animateItem(
+                                        fadeInSpec = if (reducedMotion) null else IronMotion.EffectDefault,
+                                        placementSpec = if (reducedMotion) null else IronMotion.SpatialLayoutOffset,
+                                        fadeOutSpec = if (reducedMotion) null else IronMotion.EffectFast
+                                    )
+                                )
                             }
                         }
                     }
+
                     itemsIndexed(workingSets, key = { _, set -> set.id }) { index, set ->
+                        val itemMod = Modifier.animateItem(
+                            fadeInSpec = if (reducedMotion) null else IronMotion.EffectDefault,
+                            placementSpec = if (reducedMotion) null else IronMotion.SpatialLayoutOffset,
+                            fadeOutSpec = if (reducedMotion) null else IronMotion.EffectFast
+                        )
                         if (set.id in state.personalBestSetIds) {
-                            PrSetRow(set, index + 1, state.recordLabels[set.id].orEmpty(), onEditSet, onDeleteSet, onSetNote)
+                            PrSetRow(
+                                set = set,
+                                number = index + 1,
+                                recordLabels = state.recordLabels[set.id].orEmpty(),
+                                onEdit = onEditSet,
+                                onDelete = onDeleteSet,
+                                onNote = onSetNote,
+                                modifier = itemMod
+                            )
                         } else {
-                            CompactSetRow(set, index + 1, onEditSet, onDeleteSet, onSetNote)
+                            CompactSetRow(
+                                set = set,
+                                number = index + 1,
+                                onEdit = onEditSet,
+                                onDelete = onDeleteSet,
+                                onNote = onSetNote,
+                                modifier = itemMod
+                            )
                         }
                     }
                 }
             }
         }
+
         state.celebration?.let { event ->
             PrConfettiBurst(event.id, event.expiresAt - 4_000L, Modifier.fillMaxSize())
-            PrCelebrationBanner(
-                exerciseName = event.exerciseName,
-                setSummary = previewSetSummary(event.set),
-                recordLabels = event.recordLabels,
-                onDismiss = { onAction(LoggerAction.DISMISS_PR) },
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(start = 12.dp, end = 12.dp, top = 52.dp)
+        }
+
+        AnimatedVisibility(
+            visible = state.celebration != null,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(start = 12.dp, end = 12.dp, top = 52.dp),
+            enter = if (reducedMotion) {
+                fadeIn(tween(90))
+            } else {
+                fadeIn(IronMotion.EffectDefault) +
+                    scaleIn(animationSpec = IronMotion.RewardPop, initialScale = 0.92f) +
+                    slideInVertically(animationSpec = IronMotion.SpatialLayoutOffset) { -it / 4 }
+            },
+            exit = if (reducedMotion) {
+                fadeOut(tween(90))
+            } else {
+                fadeOut(IronMotion.EffectFast) +
+                    scaleOut(animationSpec = IronMotion.EffectFast, targetScale = 0.94f) +
+                    slideOutVertically(
+                        animationSpec = IronMotion.effectFast(visibilityThreshold = IntOffset.VisibilityThreshold)
+                    ) { -it / 4 }
+            }
+        ) {
+            lastCelebration?.let { event ->
+                PrCelebrationBanner(
+                    exerciseName = event.exerciseName,
+                    setSummary = previewSetSummary(event.set),
+                    recordLabels = event.recordLabels,
+                    onDismiss = { onAction(LoggerAction.DISMISS_PR) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WarmupTogglePill(
+    checked: Boolean,
+    onToggle: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val reducedMotion = LocalReducedMotion.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressIndication = remember {
+        MachinedPressIndication(
+            pressedScale = 0.95f,
+            highlightAlpha = 0.08f,
+            cornerRadius = IronLogRadius.Capsule
+        )
+    }
+
+    val warmAccent = colors.tertiary
+    val borderColorState = animateColorAsState(
+        targetValue = if (checked) warmAccent.copy(alpha = 0.72f) else colors.outlineVariant.copy(alpha = 0.65f),
+        animationSpec = if (reducedMotion) snap() else IronMotion.effectFast(),
+        label = "warmupPillBorder"
+    )
+    val contentColorState = animateColorAsState(
+        targetValue = if (checked) colors.onSurface else colors.onSurfaceVariant,
+        animationSpec = if (reducedMotion) snap() else IronMotion.effectFast(),
+        label = "warmupPillText"
+    )
+    val bgBrush = remember(checked, surfaces, warmAccent) {
+        if (checked) {
+            Brush.verticalGradient(
+                listOf(
+                    surfaces.plateElevatedTop,
+                    surfaces.plateElevatedBottom
+                )
+            )
+        } else {
+            Brush.verticalGradient(listOf(surfaces.plateTop, surfaces.plateBottom))
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .heightIn(min = IronLogSpace.TouchTargetMin)
+            .toggleable(
+                value = checked,
+                role = Role.Switch,
+                interactionSource = interactionSource,
+                indication = pressIndication,
+                onValueChange = { onToggle() }
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            modifier = Modifier
+                .heightIn(min = 38.dp)
+                .clip(IronLogRadius.CapsuleShape)
+                .background(brush = bgBrush)
+                .drawWithCache {
+                    val strokeWidth = (if (checked) 1.25.dp else IronLogBorder.Hairline).toPx()
+                    val inset = strokeWidth * 0.5f
+                    val corner = IronLogRadius.Capsule.toPx()
+                    val strokeSize = Size(
+                        (size.width - strokeWidth).coerceAtLeast(1f),
+                        (size.height - strokeWidth).coerceAtLeast(1f)
+                    )
+                    val stroke = Stroke(width = strokeWidth)
+                    onDrawWithContent {
+                        drawContent()
+                        drawRoundRect(
+                            color = borderColorState.value,
+                            topLeft = Offset(inset, inset),
+                            size = strokeSize,
+                            cornerRadius = CornerRadius(corner, corner),
+                            style = stroke
+                        )
+                    }
+                }
+                .padding(horizontal = 14.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            IronLogLedPip(
+                color = if (checked) warmAccent else colors.onSurfaceVariant.copy(alpha = 0.35f),
+                size = 5.dp,
+                pulsing = checked
+            )
+            BasicText(
+                text = "Warm-up",
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = if (checked) FontWeight.Bold else FontWeight.Medium
+                ),
+                color = { contentColorState.value },
+                maxLines = 1
             )
         }
     }
@@ -762,56 +1153,167 @@ private fun RestTimerCard(
     onAction: (LoggerAction) -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
+    val reducedMotion = LocalReducedMotion.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
     val liveRemaining = remainingSecondsFlow?.collectAsStateWithLifecycle()?.value ?: fallbackRemainingSeconds
     val displaySeconds = if (timerRunning) liveRemaining else restSeconds
-    val contentColor = if (timerRunning) colors.onPrimaryContainer else colors.onSurface
+    val isUrgent = timerRunning && displaySeconds in 1..3
+
+    var isStarted by remember(lifecycleOwner) {
+        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
+    }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            isStarted = true
+            try {
+                awaitCancellation()
+            } finally {
+                isStarted = false
+            }
+        }
+    }
+
+    val urgencyBreathState: State<Float>? = if (isUrgent && !reducedMotion && isStarted) {
+        val transition = rememberInfiniteTransition(label = "restTimerUrgency")
+        transition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 520, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "restTimerUrgencyAlpha"
+        )
+    } else {
+        null
+    }
+
+    var prevRunning by remember { mutableStateOf(timerRunning) }
+    var prevDisplay by remember { mutableIntStateOf(displaySeconds) }
+    var completionTrigger by remember { mutableIntStateOf(0) }
+    val completionScale = remember { Animatable(1f) }
+    LaunchedEffect(timerRunning, displaySeconds) {
+        val justFinishedNaturally = prevRunning && prevDisplay == 1 && (displaySeconds == 0 || !timerRunning)
+        prevRunning = timerRunning
+        prevDisplay = displaySeconds
+        if (justFinishedNaturally) {
+            completionTrigger++
+        }
+    }
+    LaunchedEffect(completionTrigger, reducedMotion) {
+        if (completionTrigger > 0) {
+            haptics.confirm()
+            if (!reducedMotion) {
+                completionScale.snapTo(1.035f)
+                completionScale.animateTo(1f, IronMotion.RewardPop)
+            }
+        }
+    }
+
     IronLogCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                val s = completionScale.value
+                scaleX = s
+                scaleY = s
+            }
+            .drawWithCache {
+                val corner = IronLogRadius.Plate.toPx()
+                val cornerRadius = CornerRadius(corner, corner)
+                val borderStroke = Stroke(width = 1.5.dp.toPx())
+                onDrawWithContent {
+                    drawContent()
+                    if (isUrgent) {
+                        val breath = urgencyBreathState?.value ?: 0.5f
+                        drawRoundRect(
+                            color = colors.error.copy(alpha = 0.45f + 0.45f * breath),
+                            cornerRadius = cornerRadius,
+                            style = borderStroke
+                        )
+                    }
+                }
+            },
         highlighted = timerRunning,
-        showBorder = true,
-        shape = IronLogRadius.CardShape,
-        containerColor = if (timerRunning) colors.primaryContainer else colors.surfaceContainerLow,
-        contentColor = contentColor,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+        spotlight = timerRunning,
+        showBorder = !isUrgent,
+        shape = IronLogRadius.PlateShape,
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             TextButton(
-                onClick = { onAction(LoggerAction.TIMER) },
+                onClick = {
+                    haptics.keyTap()
+                    onAction(LoggerAction.TIMER)
+                },
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = IronLogSpace.TouchTargetMin),
-                colors = ButtonDefaults.textButtonColors(contentColor = contentColor)
+                    .heightIn(min = IronLogSpace.TouchTargetMin)
             ) {
-                Icon(Icons.Default.Timer, null, Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = "Rest ${TimeFormatter.formatSecondsToMMSS(displaySeconds)}",
-                    style = IronLogType.tabular(MaterialTheme.typography.labelLarge).copy(
-                        fontWeight = FontWeight.Bold
-                    ),
-                    maxLines = 1
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IronLogLedPip(
+                        color = if (isUrgent) colors.error else if (timerRunning) surfaces.ledGlow else colors.onSurfaceVariant.copy(alpha = 0.4f),
+                        size = 5.dp,
+                        pulsing = timerRunning
+                    )
+                    Icon(
+                        imageVector = Icons.Default.Timer,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = if (timerRunning) surfaces.accent else colors.onSurfaceVariant
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val timerColor = if (isUrgent) colors.error else colors.onSurface
+                        val timerStyle = IronLogType.tabular(MaterialTheme.typography.labelLarge).copy(
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Rest",
+                            style = timerStyle,
+                            color = timerColor,
+                            maxLines = 1
+                        )
+                        OdometerText(
+                            text = TimeFormatter.formatSecondsToMMSS(displaySeconds),
+                            style = timerStyle,
+                            color = timerColor,
+                            maxLines = 1
+                        )
+                    }
+                }
             }
-            TextButton(
+            IronLogSculptedKeycap(
                 onClick = { onAction(LoggerAction.ADD_REST) },
-                modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin),
-                colors = ButtonDefaults.textButtonColors(contentColor = contentColor)
+                hapticType = KeycapHaptic.TICK,
+                shape = IronLogRadius.KeycapShape,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 Text(
                     text = "+30s",
-                    style = IronLogType.tabular(MaterialTheme.typography.labelLarge).copy(
+                    style = IronLogType.telemetryLabel(MaterialTheme.typography.labelLarge).copy(
                         fontWeight = FontWeight.SemiBold
                     )
                 )
             }
-            TextButton(
+            IronLogSculptedKeycap(
                 onClick = { onAction(if (timerRunning) LoggerAction.SKIP_TIMER else LoggerAction.START_TIMER) },
-                modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin),
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = if (timerRunning) contentColor else colors.primary
-                )
+                accented = !timerRunning,
+                hapticType = KeycapHaptic.KEY_TAP,
+                shape = IronLogRadius.KeycapShape,
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
             ) {
                 Text(
                     text = if (timerRunning) "Skip" else "Start",
@@ -834,27 +1336,36 @@ private fun RecordMetricCell(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        Text(
-            text = title,
-            style = IronLogType.sectionEyebrow(),
-            color = if (emphasized) colors.primary else colors.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            if (emphasized) {
+                IronLogLedPip(color = surfaces.ledGlow, size = 4.dp)
+            }
+            Text(
+                text = title,
+                style = IronLogType.technicalEyebrow(),
+                color = if (emphasized) surfaces.accent else colors.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        OdometerText(
             text = value,
-            style = IronLogType.tabular(MaterialTheme.typography.titleLarge).copy(
+            style = IronLogType.monumentalNumeral(MaterialTheme.typography.titleLarge).copy(
                 fontWeight = FontWeight.Bold
             ),
             color = colors.onSurface
         )
         Text(
             text = caption,
-            style = MaterialTheme.typography.labelSmall,
+            style = IronLogType.telemetryLabel(MaterialTheme.typography.labelSmall),
             color = colors.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -870,22 +1381,30 @@ private fun ToolButton(
     onClick: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
-    OutlinedButton(
+    val surfaces = LocalIronLogSurfaces.current
+    IronLogSculptedKeycap(
         onClick = onClick,
         modifier = modifier.heightIn(min = IronLogSpace.TouchTargetMin),
-        contentPadding = PaddingValues(horizontal = 8.dp),
-        shape = IronLogRadius.ControlShape,
-        border = IronLogBorder.stroke(colors.outlineVariant),
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = colors.surfaceContainerLow,
-            contentColor = colors.onSurface
-        )
+        hapticType = KeycapHaptic.KEY_TAP,
+        shape = IronLogRadius.KeycapShape,
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
     ) {
-        if (LocalDensity.current.fontScale <= 1.3f) {
-            Icon(icon, null, Modifier.size(18.dp), tint = colors.primary)
-            Spacer(Modifier.width(6.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            if (LocalDensity.current.fontScale <= 1.3f) {
+                Icon(icon, null, Modifier.size(18.dp), tint = surfaces.accent)
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.onSurface,
+                maxLines = 1
+            )
         }
-        Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
     }
 }
 
@@ -895,11 +1414,23 @@ private fun CompactSetRow(
     number: Int,
     onEdit: (WorkoutSet) -> Unit,
     onDelete: (WorkoutSet) -> Unit,
-    onNote: (WorkoutSet) -> Unit
+    onNote: (WorkoutSet) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var menu by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
-    Column {
+    val haptics = LocalIronHaptics.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressIndication = remember {
+        MachinedPressIndication(
+            pressedScale = 0.985f,
+            highlightAlpha = 0.05f,
+            cornerRadius = IronLogRadius.Keycap
+        )
+    }
+    val indexText = if (set.isWarmup) "W" else number.toString().padStart(2, '0')
+
+    Column(modifier = modifier) {
         Row(
             Modifier
                 .fillMaxWidth()
@@ -907,16 +1438,24 @@ private fun CompactSetRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (set.isWarmup) "W" else number.toString(),
-                modifier = Modifier.width(28.dp),
-                style = IronLogType.tabular(MaterialTheme.typography.labelLarge),
+                text = indexText,
+                modifier = Modifier.width(34.dp),
+                style = IronLogType.telemetryLabel(MaterialTheme.typography.labelLarge),
                 color = colors.onSurfaceVariant
             )
             Column(
                 Modifier
                     .weight(1f)
-                    .clickable(onClickLabel = "Edit set $number") { onEdit(set) }
-                    .padding(vertical = 8.dp),
+                    .clip(IronLogRadius.KeycapShape)
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = pressIndication,
+                        onClickLabel = "Edit set $number"
+                    ) {
+                        haptics.keyTap()
+                        onEdit(set)
+                    }
+                    .padding(vertical = 8.dp, horizontal = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Row(
@@ -939,20 +1478,26 @@ private fun CompactSetRow(
                 set.rpe?.let {
                     Text(
                         text = "RPE $it",
-                        style = IronLogType.tabular(MaterialTheme.typography.labelSmall),
+                        style = IronLogType.telemetryLabel(MaterialTheme.typography.labelSmall),
                         color = colors.onSurfaceVariant
                     )
                 }
             }
             IconButton(
-                onClick = { onEdit(set) },
+                onClick = {
+                    haptics.keyTap()
+                    onEdit(set)
+                },
                 modifier = Modifier.size(IronLogSpace.TouchTargetMin)
             ) {
                 Icon(Icons.Default.Edit, "Edit set $number", Modifier.size(20.dp))
             }
             Box {
                 IconButton(
-                    onClick = { menu = true },
+                    onClick = {
+                        haptics.tick()
+                        menu = true
+                    },
                     modifier = Modifier.size(IronLogSpace.TouchTargetMin)
                 ) {
                     Icon(Icons.Default.MoreVert, "Options for set $number", Modifier.size(20.dp))
@@ -963,7 +1508,7 @@ private fun CompactSetRow(
                 }
             }
         }
-        IronLogDivider(insetStart = 28.dp)
+        IronLogDivider(insetStart = 34.dp)
     }
 }
 

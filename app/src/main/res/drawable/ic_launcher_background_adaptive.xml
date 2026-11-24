@@ -1,4 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="#1A1A1A"/>
-</shape>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Obsidian Telemetry void base with subtle overhead gunmetal spotlight -->
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="54"
+                android:centerY="46"
+                android:gradientRadius="62">
+                <item
+                    android:color="#FF181D27"
+                    android:offset="0.0" />
+                <item
+                    android:color="#FF0D1016"
+                    android:offset="0.52" />
+                <item
+                    android:color="#FF07080B"
+                    android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Subtle top telemetry lime ambient aura -->
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="54"
+                android:centerY="30"
+                android:gradientRadius="46">
+                <item
+                    android:color="#14A3E635"
+                    android:offset="0.0" />
+                <item
+                    android:color="#08A3E635"
+                    android:offset="0.45" />
+                <item
+                    android:color="#00A3E635"
+                    android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

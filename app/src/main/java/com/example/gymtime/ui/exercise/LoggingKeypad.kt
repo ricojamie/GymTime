@@ -1,26 +1,40 @@
 package com.example.gymtime.ui.exercise
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -28,9 +42,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -41,8 +61,13 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.gymtime.data.db.entity.LogType
-import com.example.gymtime.ui.components.IronLogCard
+import com.example.gymtime.ui.components.IronLogLedPip
 import com.example.gymtime.ui.components.IronLogPrimaryButton
+import com.example.gymtime.ui.components.IronLogRecessedWell
+import com.example.gymtime.ui.components.IronLogSculptedKeycap
+import com.example.gymtime.ui.components.IronLogSegmentOption
+import com.example.gymtime.ui.components.IronLogSegmentedControl
+import com.example.gymtime.ui.components.KeycapHaptic
 import com.example.gymtime.ui.components.RulerSliderInput
 import com.example.gymtime.ui.exercise.preview.LoggerField
 import com.example.gymtime.ui.exercise.preview.LoggerFields
@@ -50,6 +75,12 @@ import com.example.gymtime.ui.exercise.preview.shortLabel
 import com.example.gymtime.ui.theme.IronLogRadius
 import com.example.gymtime.ui.theme.IronLogSpace
 import com.example.gymtime.ui.theme.IronLogType
+import com.example.gymtime.ui.theme.IronMotion
+import com.example.gymtime.ui.theme.LocalIronHaptics
+import com.example.gymtime.ui.theme.LocalIronLogSurfaces
+import com.example.gymtime.ui.theme.LocalReducedMotion
+import com.example.gymtime.ui.theme.OdometerText
+import com.example.gymtime.ui.theme.anodizedMicroGrain
 import kotlinx.coroutines.awaitCancellation
 import java.math.BigDecimal
 
@@ -84,53 +115,98 @@ private fun LoggerFields.value(field: LoggerField): String = when (field) {
 }
 
 @Composable
-internal fun LoggingInputs(type: LogType, fields: LoggerFields, onSelect: (LoggerField) -> Unit) {
+internal fun LoggingInputs(
+    type: LogType,
+    fields: LoggerFields,
+    activeField: LoggerField? = null,
+    onSelect: (LoggerField) -> Unit
+) {
     val inputs = type.inputFields()
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         if (maxWidth < 328.dp || LocalDensity.current.fontScale > 1.3f) {
             Column(verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
-                inputs.forEach { LoggingInput(it, fields, onSelect, Modifier.fillMaxWidth()) }
+                inputs.forEach {
+                    LoggingInput(
+                        field = it,
+                        fields = fields,
+                        onSelect = onSelect,
+                        modifier = Modifier.fillMaxWidth(),
+                        isActive = activeField == it
+                    )
+                }
             }
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
-                inputs.forEach { LoggingInput(it, fields, onSelect, Modifier.weight(1f)) }
+                inputs.forEach {
+                    LoggingInput(
+                        field = it,
+                        fields = fields,
+                        onSelect = onSelect,
+                        modifier = Modifier.weight(1f),
+                        isActive = activeField == it
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-internal fun LoggingInput(field: LoggerField, fields: LoggerFields, onSelect: (LoggerField) -> Unit, modifier: Modifier) {
+internal fun LoggingInput(
+    field: LoggerField,
+    fields: LoggerFields,
+    onSelect: (LoggerField) -> Unit,
+    modifier: Modifier,
+    isActive: Boolean = false
+) {
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
     val label = field.label(fields)
     val rawValue = fields.value(field)
-    IronLogCard(
-        onClick = { onSelect(field) },
+    val isLargeFont = LocalDensity.current.fontScale > 1.3f
+    val numeralStyle = IronLogType.monumentalNumeral(
+        if (isLargeFont) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineLarge
+    ).copy(fontWeight = FontWeight.Bold)
+
+    IronLogRecessedWell(
         modifier = modifier
             .heightIn(min = IronLogSpace.TouchTargetMin)
             .semantics { contentDescription = label },
-        shape = IronLogRadius.ControlShape,
-        containerColor = scheme.surfaceContainerLow,
-        showBorder = true,
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+        active = isActive,
+        accentColor = surfaces.accent,
+        shape = IronLogRadius.KeycapShape,
+        onClick = { onSelect(field) },
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
     ) {
-        Text(
-            text = label,
-            style = IronLogType.sectionEyebrow(MaterialTheme.typography.labelMedium),
-            color = scheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = rawValue.ifEmpty { "—" },
-            style = IronLogType.tabular(MaterialTheme.typography.headlineMedium).copy(
-                fontWeight = FontWeight.Bold
-            ),
-            color = if (rawValue.isEmpty()) scheme.onSurfaceVariant else scheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = label,
+                    style = IronLogType.technicalEyebrow(MaterialTheme.typography.labelMedium),
+                    color = if (isActive) surfaces.accent else scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (isActive) {
+                    IronLogLedPip(color = surfaces.ledGlow, size = 5.dp, pulsing = true)
+                }
+            }
+            OdometerText(
+                text = rawValue.ifEmpty { "—" },
+                style = numeralStyle,
+                color = if (rawValue.isEmpty()) scheme.onSurfaceVariant.copy(alpha = 0.65f) else scheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -171,12 +247,23 @@ private class KeypadBuffer(initialText: String) {
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 internal fun LoggingKeypad(
-    field: LoggerField, fields: LoggerFields, order: List<LoggerField>,
-    onChange: (LoggerField, String) -> Unit, onSelect: (LoggerField?) -> Unit,
-    canLog: Boolean, editing: Boolean, onLog: () -> Unit,
-    lastValue: Int? = null, bestValue: Int? = null, goalValue: Int? = null
+    field: LoggerField,
+    fields: LoggerFields,
+    order: List<LoggerField>,
+    onChange: (LoggerField, String) -> Unit,
+    onSelect: (LoggerField?) -> Unit,
+    canLog: Boolean,
+    editing: Boolean,
+    onLog: () -> Unit,
+    lastValue: Int? = null,
+    bestValue: Int? = null,
+    goalValue: Int? = null
 ) {
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
+    val reducedMotion = LocalReducedMotion.current
+
     val label = field.label(fields)
     val raw = fields.value(field)
     val next = order.getOrNull(order.indexOf(field) + 1)
@@ -188,12 +275,24 @@ internal fun LoggingKeypad(
     }
     var dial by rememberSaveable { mutableStateOf(false) }
     val usingDial = dial && hasDial
+
+    val deckBrush = remember(surfaces) {
+        Brush.verticalGradient(listOf(surfaces.plateElevatedTop, surfaces.plateBottom))
+    }
+    val selectionColors = remember(surfaces.accent) {
+        TextSelectionColors(
+            handleColor = surfaces.accent,
+            backgroundColor = surfaces.accent.copy(alpha = 0.28f)
+        )
+    }
+
     ModalBottomSheet(
         onDismissRequest = { onSelect(null) },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         shape = RoundedCornerShape(topStart = IronLogRadius.Sheet, topEnd = IronLogRadius.Sheet),
-        containerColor = scheme.surface,
+        containerColor = surfaces.plateBottom,
         contentColor = scheme.onSurface,
+        scrimColor = Color.Black.copy(alpha = 0.68f),
         dragHandle = null
     ) {
         key(field) {
@@ -218,6 +317,8 @@ internal fun LoggingKeypad(
                 if (valid && (text.length <= maxLength || text.length < activeText.length)) {
                     buffer.applyLocalEdit(text, cursor)
                     onChange(field, text)
+                } else {
+                    haptics.reject()
                 }
             }
 
@@ -234,133 +335,297 @@ internal fun LoggingKeypad(
                 edit(text, TextRange(start + keyValue.length))
             }
 
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = IronLogSpace.ScreenHorizontal, vertical = IronLogSpace.ItemGap),
-                verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
-            ) {
-                // Keep hardware keyboard, selection, paste and accessibility editing on the actual field.
-                InterceptPlatformTextInput(interceptor = { _, _ -> awaitCancellation() }) {
-                    OutlinedTextField(
-                        value = editor,
-                        onValueChange = { edit(it.text, it.selection) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focus),
-                        singleLine = true,
-                        shape = IronLogRadius.ControlShape,
-                        textStyle = IronLogType.tabular(MaterialTheme.typography.headlineSmall).copy(
-                            fontWeight = FontWeight.Bold
-                        ),
-                        label = { Text(label) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = scheme.surfaceContainerLow,
-                            unfocusedContainerColor = scheme.surfaceContainerLow,
-                            focusedBorderColor = scheme.primary,
-                            unfocusedBorderColor = scheme.outlineVariant
+                    .background(brush = deckBrush)
+                    .anodizedMicroGrain(alpha = if (surfaces.isDark) 0.025f else 0.015f)
+                    .drawBehind {
+                        drawLine(
+                            brush = Brush.horizontalGradient(
+                                listOf(Color.Transparent, surfaces.rimTop, Color.Transparent)
+                            ),
+                            start = Offset(0f, 0.5.dp.toPx()),
+                            end = Offset(size.width, 0.5.dp.toPx()),
+                            strokeWidth = 1.dp.toPx()
                         )
-                    )
-                }
-                LaunchedEffect(focus) { focus.requestFocus() }
-                if (usingDial) {
-                    RulerSliderInput(
-                        label = label,
-                        value = currentText,
-                        onValueChange = { edit(it, TextRange(it.length)) },
-                        step = if (field == LoggerField.WEIGHT) 5 else 1,
-                        minValue = if (field == LoggerField.REPS) 1 else 0,
-                        centered = field == LoggerField.WEIGHT,
-                        compact = lastValue == null && bestValue == null && goalValue == null,
-                        lastValue = lastValue,
-                        bestValue = bestValue,
-                        goalValue = goalValue
-                    )
-                }
-                val nextLabel = if (next == null) "Done" else "Next"
-                val separator = if (field == LoggerField.DURATION) ":" else "."
-                val toggle = if (usingDial) "Keypad" else "Dial"
-                val rows = if (usingDial) listOf(listOf("−", "+", toggle, nextLabel)) else listOf(
-                    listOf("1", "2", "3", "+"),
-                    listOf("4", "5", "6", "−"),
-                    listOf("7", "8", "9", "⌫"),
-                    listOf(separator, "0", toggle, nextLabel)
-                )
-                rows.forEach { keys ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
-                        keys.forEach { keyLabel ->
-                            val enabled = when (keyLabel) {
-                                toggle -> hasDial
-                                "." -> field != LoggerField.REPS
-                                else -> true
-                            }
-                            val isNextKey = keyLabel == nextLabel
-                            val isUtilityKey = keyLabel == "+" || keyLabel == "−" || keyLabel == "⌫" || keyLabel == toggle
-                            val buttonColors = when {
-                                isNextKey -> ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = scheme.primaryContainer,
-                                    contentColor = scheme.onPrimaryContainer
-                                )
-                                isUtilityKey -> ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = scheme.surfaceContainerHighest,
-                                    contentColor = scheme.onSurface
-                                )
-                                else -> ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = scheme.surfaceContainerHigh,
-                                    contentColor = scheme.onSurface
-                                )
-                            }
-                            FilledTonalButton(
-                                onClick = {
-                                    when (keyLabel) {
-                                        toggle -> dial = !dial
-                                        nextLabel -> onSelect(next)
-                                        "⌫" -> insert("")
-                                        "+", "−" -> {
-                                            val value = nudge(field, buffer.text, if (keyLabel == "+") 1 else -1)
-                                            edit(value, TextRange(value.length))
-                                        }
-                                        else -> insert(keyLabel)
-                                    }
-                                },
-                                enabled = enabled,
-                                colors = buttonColors,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .heightIn(min = IronLogSpace.TouchTargetMin)
-                                    .semantics {
-                                        when (keyLabel) {
-                                            "⌫" -> contentDescription = "Backspace"
-                                            "+" -> contentDescription = "Increase $label"
-                                            "−" -> contentDescription = "Decrease $label"
-                                        }
-                                    },
-                                contentPadding = PaddingValues(2.dp),
-                                shape = IronLogRadius.ControlShape
+                    }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = IronLogSpace.ScreenHorizontal, vertical = IronLogSpace.ItemGap),
+                    verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
+                ) {
+                    // Recessed instrument readout well preserving hardware keyboard, selection, and SetText semantics.
+                    IronLogRecessedWell(
+                        active = true,
+                        accentColor = surfaces.accent,
+                        shape = IronLogRadius.KeycapShape,
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = keyLabel,
-                                    style = IronLogType.tabular(MaterialTheme.typography.titleMedium).copy(
-                                        fontWeight = FontWeight.Bold
-                                    ),
-                                    maxLines = 1
+                                    text = label,
+                                    style = IronLogType.technicalEyebrow(MaterialTheme.typography.labelMedium),
+                                    color = surfaces.accent,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
                                 )
+                                IronLogLedPip(color = surfaces.ledGlow, size = 5.dp, pulsing = true)
+                            }
+                            CompositionLocalProvider(LocalTextSelectionColors provides selectionColors) {
+                                InterceptPlatformTextInput(interceptor = { _, _ -> awaitCancellation() }) {
+                                    BasicTextField(
+                                        value = editor,
+                                        onValueChange = { edit(it.text, it.selection) },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(focus),
+                                        singleLine = true,
+                                        textStyle = IronLogType.monumentalNumeral(MaterialTheme.typography.headlineLarge)
+                                            .copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = scheme.onSurface
+                                            ),
+                                        cursorBrush = SolidColor(surfaces.accent),
+                                        decorationBox = { innerTextField ->
+                                            Box(contentAlignment = Alignment.CenterStart) {
+                                                if (currentText.isEmpty()) {
+                                                    Text(
+                                                        text = "—",
+                                                        style = IronLogType.monumentalNumeral(
+                                                            MaterialTheme.typography.headlineLarge
+                                                        ).copy(fontWeight = FontWeight.Bold),
+                                                        color = scheme.onSurfaceVariant.copy(alpha = 0.45f)
+                                                    )
+                                                }
+                                                innerTextField()
+                                            }
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
+                    LaunchedEffect(focus) { focus.requestFocus() }
+
+                    val modeOptions = remember(hasDial) {
+                        listOf(
+                            IronLogSegmentOption(label = "Keypad", enabled = true),
+                            IronLogSegmentOption(label = "Dial", enabled = hasDial)
+                        )
+                    }
+                    IronLogSegmentedControl(
+                        options = modeOptions,
+                        selectedIndex = if (usingDial) 1 else 0,
+                        onSelect = { selectedIdx -> dial = (selectedIdx == 1) },
+                        shape = IronLogRadius.KeycapShape
+                    )
+
+                    val nextLabel = if (next == null) "Done" else "Next"
+                    val separator = if (field == LoggerField.DURATION) ":" else "."
+
+                    AnimatedContent(
+                        targetState = usingDial,
+                        transitionSpec = {
+                            if (reducedMotion) {
+                                fadeIn(tween(80)) togetherWith fadeOut(tween(80))
+                            } else {
+                                (fadeIn(IronMotion.EffectDefault) +
+                                    scaleIn(IronMotion.SpatialLayout, initialScale = 0.96f))
+                                    .togetherWith(
+                                        fadeOut(IronMotion.EffectFast) +
+                                            scaleOut(IronMotion.SpatialLayout, targetScale = 0.98f)
+                                    )
+                                    .using(
+                                        SizeTransform(
+                                            clip = false,
+                                            sizeAnimationSpec = { _, _ -> IronMotion.SpatialLayoutSize }
+                                        )
+                                    )
+                            }
+                        },
+                        label = "keypadDialMorph"
+                    ) { dialActive ->
+                        Column(verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
+                            if (dialActive) {
+                                RulerSliderInput(
+                                    label = label,
+                                    value = currentText,
+                                    onValueChange = { edit(it, TextRange(it.length)) },
+                                    step = if (field == LoggerField.WEIGHT) 5 else 1,
+                                    minValue = if (field == LoggerField.REPS) 1 else 0,
+                                    centered = field == LoggerField.WEIGHT,
+                                    compact = lastValue == null && bestValue == null && goalValue == null,
+                                    lastValue = lastValue,
+                                    bestValue = bestValue,
+                                    goalValue = goalValue
+                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(IntrinsicSize.Max),
+                                    horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
+                                ) {
+                                    KeypadDeckKey(
+                                        keyLabel = "−",
+                                        fieldLabel = label,
+                                        enabled = true,
+                                        accented = false,
+                                        hapticType = KeycapHaptic.TICK,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                    ) {
+                                        val value = nudge(field, buffer.text, -1)
+                                        if (value == buffer.text) haptics.reject()
+                                        edit(value, TextRange(value.length))
+                                    }
+                                    KeypadDeckKey(
+                                        keyLabel = "+",
+                                        fieldLabel = label,
+                                        enabled = true,
+                                        accented = false,
+                                        hapticType = KeycapHaptic.TICK,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                    ) {
+                                        val value = nudge(field, buffer.text, 1)
+                                        if (value == buffer.text) haptics.reject()
+                                        edit(value, TextRange(value.length))
+                                    }
+                                    KeypadDeckKey(
+                                        keyLabel = nextLabel,
+                                        fieldLabel = label,
+                                        enabled = true,
+                                        accented = true,
+                                        hapticType = KeycapHaptic.KEY_TAP,
+                                        modifier = Modifier
+                                            .weight(2f)
+                                            .fillMaxHeight()
+                                    ) {
+                                        onSelect(next)
+                                    }
+                                }
+                            } else {
+                                val rows = listOf(
+                                    listOf("1", "2", "3", "+"),
+                                    listOf("4", "5", "6", "−"),
+                                    listOf("7", "8", "9", "⌫"),
+                                    listOf(separator, "0", nextLabel)
+                                )
+                                rows.forEach { keys ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(IntrinsicSize.Max),
+                                        horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
+                                    ) {
+                                        keys.forEach { keyLabel ->
+                                            val isNextKey = keyLabel == nextLabel
+                                            val isUtilityKey = keyLabel == "+" || keyLabel == "−" || keyLabel == "⌫"
+                                            val keyEnabled = when (keyLabel) {
+                                                "." -> field != LoggerField.REPS
+                                                else -> true
+                                            }
+                                            val keyWeight = if (isNextKey) 2f else 1f
+                                            val haptic = when {
+                                                isUtilityKey -> KeycapHaptic.TICK
+                                                else -> KeycapHaptic.KEY_TAP
+                                            }
+                                            KeypadDeckKey(
+                                                keyLabel = keyLabel,
+                                                fieldLabel = label,
+                                                enabled = keyEnabled,
+                                                accented = isNextKey,
+                                                hapticType = haptic,
+                                                modifier = Modifier
+                                                    .weight(keyWeight)
+                                                    .fillMaxHeight()
+                                            ) {
+                                                when (keyLabel) {
+                                                    nextLabel -> onSelect(next)
+                                                    "⌫" -> insert("")
+                                                    "+", "−" -> {
+                                                        val value = nudge(
+                                                            field,
+                                                            buffer.text,
+                                                            if (keyLabel == "+") 1 else -1
+                                                        )
+                                                        if (value == buffer.text) haptics.reject()
+                                                        edit(value, TextRange(value.length))
+                                                    }
+                                                    else -> insert(keyLabel)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(2.dp))
+                    IronLogPrimaryButton(
+                        text = if (editing) "Save changes" else "Log set",
+                        onClick = {
+                            onSelect(null)
+                            onLog()
+                        },
+                        enabled = canLog,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
-                IronLogPrimaryButton(
-                    text = if (editing) "Save changes" else "Log set",
-                    onClick = {
-                        onSelect(null)
-                        onLog()
-                    },
-                    enabled = canLog,
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
         }
+    }
+}
+
+@Composable
+private fun KeypadDeckKey(
+    keyLabel: String,
+    fieldLabel: String,
+    enabled: Boolean,
+    accented: Boolean,
+    hapticType: KeycapHaptic,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    IronLogSculptedKeycap(
+        onClick = onClick,
+        modifier = modifier
+            .heightIn(min = IronLogSpace.TouchTargetMin)
+            .semantics {
+                when (keyLabel) {
+                    "⌫" -> contentDescription = "Backspace"
+                    "+" -> contentDescription = "Increase $fieldLabel"
+                    "−" -> contentDescription = "Decrease $fieldLabel"
+                }
+            },
+        enabled = enabled,
+        accented = accented,
+        hapticType = hapticType,
+        shape = IronLogRadius.KeycapShape,
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 10.dp)
+    ) {
+        Text(
+            text = keyLabel,
+            style = IronLogType.tabular(MaterialTheme.typography.titleMedium).copy(
+                fontWeight = FontWeight.Bold
+            ),
+            maxLines = 1
+        )
     }
 }
 

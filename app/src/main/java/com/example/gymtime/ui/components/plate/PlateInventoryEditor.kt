@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -11,16 +12,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -37,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -48,8 +48,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.gymtime.ui.components.IronLogDivider
 import com.example.gymtime.ui.components.IronLogGroupedCard
+import com.example.gymtime.ui.components.IronLogRecessedWell
+import com.example.gymtime.ui.components.IronLogSculptedKeycap
+import com.example.gymtime.ui.components.IronLogTactileSwitch
+import com.example.gymtime.ui.components.KeycapHaptic
 import com.example.gymtime.ui.theme.IronLogRadius
 import com.example.gymtime.ui.theme.IronLogSpace
+import com.example.gymtime.ui.theme.LocalIronLogSurfaces
 import com.example.gymtime.ui.theme.tabular
 import com.example.gymtime.util.PlateCalculator
 
@@ -90,7 +95,7 @@ fun PlateInventoryEditor(
         } else {
             IronLogGroupedCard(
                 showBorder = true,
-                containerColor = scheme.surfaceContainerLow
+                shape = IronLogRadius.PlateShape
             ) {
                 plates.forEachIndexed { index, plate ->
                     key(plate) {
@@ -120,6 +125,7 @@ fun PlateInventoryEditor(
 @Composable
 internal fun InventoryLimitRow(enabled: Boolean, onChange: (Boolean) -> Unit) {
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -133,9 +139,10 @@ internal fun InventoryLimitRow(enabled: Boolean, onChange: (Boolean) -> Unit) {
                 color = scheme.onSurfaceVariant
             )
         }
-        Switch(
+        IronLogTactileSwitch(
             checked = enabled,
             onCheckedChange = onChange,
+            accentColor = surfaces.accent,
             modifier = Modifier
                 .testTag("plate_inventory_limit")
                 .semantics {
@@ -154,6 +161,7 @@ private fun InventoryCountRow(
     onEditingChange: (Boolean) -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
     val weight = PlateCalculator.formatWeight(plate)
     var countText by rememberSaveable(plate) { mutableStateOf(count.toString()) }
     var draftEdited by rememberSaveable(plate) { mutableStateOf(false) }
@@ -220,8 +228,9 @@ private fun InventoryCountRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Box(
             Modifier
@@ -235,46 +244,65 @@ private fun InventoryCountRow(
             color = scheme.onSurface,
             modifier = Modifier
                 .weight(1f)
-                .padding(start = 8.dp)
+                .padding(start = 4.dp)
         )
-        IconButton(
+        IronLogSculptedKeycap(
             onClick = { step(-1) },
             enabled = displayedCount > 0,
+            hapticType = KeycapHaptic.TICK,
+            shape = IronLogRadius.KeycapShape,
+            contentPadding = PaddingValues(0.dp),
             modifier = Modifier
                 .size(IronLogSpace.TouchTargetMin)
                 .testTag("plate_stock_remove_$weight")
         ) {
             Icon(Icons.Rounded.Remove, contentDescription = "One fewer $weight pound plate")
         }
-        OutlinedTextField(
-            value = countText,
-            onValueChange = { value ->
-                if (value.length <= 3 && value.all(Char::isDigit)) {
-                    val next = (value.toIntOrNull() ?: 0).coerceIn(0, PlateCalculator.MAX_PLATE_COUNT)
-                    countText = if (value.toIntOrNull()?.let { it > PlateCalculator.MAX_PLATE_COUNT } == true) {
-                        next.toString()
-                    } else {
-                        value
-                    }
-                    draftEdited = true
-                    onEditingChange(true)
-                }
-            },
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyLarge.tabular().copy(textAlign = TextAlign.Center),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-            shape = IronLogRadius.ControlShape,
+        IronLogRecessedWell(
+            active = focused,
+            accentColor = surfaces.accent,
+            shape = IronLogRadius.KeycapShape,
+            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 10.dp),
             modifier = Modifier
-                .width(64.dp)
+                .width(60.dp)
                 .heightIn(min = IronLogSpace.TouchTargetMin)
-                .onFocusChanged { focused = it.isFocused }
-                .testTag("plate_stock_count_$weight")
-                .semantics { contentDescription = "Total $weight pound plates available" }
-        )
-        IconButton(
+        ) {
+            BasicTextField(
+                value = countText,
+                onValueChange = { value ->
+                    if (value.length <= 3 && value.all(Char::isDigit)) {
+                        val next = (value.toIntOrNull() ?: 0).coerceIn(0, PlateCalculator.MAX_PLATE_COUNT)
+                        countText = if (value.toIntOrNull()?.let { it > PlateCalculator.MAX_PLATE_COUNT } == true) {
+                            next.toString()
+                        } else {
+                            value
+                        }
+                        draftEdited = true
+                        onEditingChange(true)
+                    }
+                },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyLarge.tabular().copy(
+                    color = scheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                ),
+                cursorBrush = SolidColor(surfaces.accent),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { focused = it.isFocused }
+                    .testTag("plate_stock_count_$weight")
+                    .semantics { contentDescription = "Total $weight pound plates available" }
+            )
+        }
+        IronLogSculptedKeycap(
             onClick = { step(1) },
             enabled = displayedCount < PlateCalculator.MAX_PLATE_COUNT,
+            hapticType = KeycapHaptic.TICK,
+            shape = IronLogRadius.KeycapShape,
+            contentPadding = PaddingValues(0.dp),
             modifier = Modifier
                 .size(IronLogSpace.TouchTargetMin)
                 .testTag("plate_stock_add_$weight")

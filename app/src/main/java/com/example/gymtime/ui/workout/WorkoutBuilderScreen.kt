@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,11 +31,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -49,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -68,13 +70,19 @@ import com.example.gymtime.navigation.navigateToWorkoutExercise
 import com.example.gymtime.ui.components.IronLogCard
 import com.example.gymtime.ui.components.IronLogDivider
 import com.example.gymtime.ui.components.IronLogEmptyState
+import com.example.gymtime.ui.components.IronLogFilterPill
+import com.example.gymtime.ui.components.IronLogLedPip
 import com.example.gymtime.ui.components.IronLogPrimaryButton
+import com.example.gymtime.ui.components.IronLogRecessedWell
 import com.example.gymtime.ui.components.IronLogSecondaryButton
 import com.example.gymtime.ui.components.IronLogSectionHeader
 import com.example.gymtime.ui.components.rememberGuardedNavigationActions
 import com.example.gymtime.ui.theme.IronLogRadius
 import com.example.gymtime.ui.theme.IronLogSpace
 import com.example.gymtime.ui.theme.IronLogType
+import com.example.gymtime.ui.theme.LocalIronHaptics
+import com.example.gymtime.ui.theme.LocalIronLogSurfaces
+import com.example.gymtime.ui.theme.OdometerText
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,6 +91,8 @@ fun WorkoutBuilderScreen(
     viewModel: WorkoutBuilderViewModel = hiltViewModel()
 ) {
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedMuscle by viewModel.selectedMuscle.collectAsStateWithLifecycle()
     val selectedIds by viewModel.selectedExerciseIds.collectAsStateWithLifecycle()
@@ -136,7 +146,7 @@ fun WorkoutBuilderScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = scheme.background,
+        containerColor = Color.Transparent,
         contentColor = scheme.onBackground,
         topBar = {
             TopAppBar(
@@ -176,24 +186,24 @@ fun WorkoutBuilderScreen(
                         Icon(
                             imageVector = Icons.Default.Home,
                             contentDescription = "Home",
-                            tint = if (!isStarting) scheme.primary else scheme.onSurfaceVariant.copy(alpha = 0.45f)
+                            tint = if (!isStarting) surfaces.accent else scheme.onSurfaceVariant.copy(alpha = 0.45f)
                         )
                     }
                 },
                 windowInsets = WindowInsets(0, 0, 0, 0),
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = scheme.background)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         },
         bottomBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = scheme.surfaceContainerLow,
+                color = surfaces.glassDockFill,
                 contentColor = scheme.onSurface,
                 tonalElevation = 0.dp,
                 shadowElevation = 0.dp
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    IronLogDivider(insetStart = 0.dp)
+                    IronLogDivider(insetStart = 0.dp, color = surfaces.glassDockRimTop)
                     IronLogPrimaryButton(
                         text = when {
                             isStarting -> "Starting…"
@@ -205,6 +215,7 @@ fun WorkoutBuilderScreen(
                         loading = isStarting,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .navigationBarsPadding()
                             .padding(
                                 horizontal = IronLogSpace.ScreenHorizontal,
                                 vertical = IronLogSpace.ItemGap
@@ -224,16 +235,32 @@ fun WorkoutBuilderScreen(
         ) {
             IronLogSectionHeader(
                 title = "Your plan",
-                modifier = Modifier.padding(top = IronLogSpace.CompactGap)
+                modifier = Modifier.padding(top = IronLogSpace.CompactGap),
+                trailingAction = if (selectedExercises.isNotEmpty()) {
+                    {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            IronLogLedPip(color = surfaces.ledGlow, size = 5.dp)
+                            OdometerText(
+                                text = "${selectedExercises.size}",
+                                style = IronLogType.telemetryLabel().copy(fontWeight = FontWeight.Bold),
+                                color = surfaces.accent
+                            )
+                        }
+                    }
+                } else null
             )
             Spacer(Modifier.height(IronLogSpace.CompactGap))
 
             if (selectedExercises.isEmpty()) {
-                IronLogCard(
-                    showBorder = true,
+                IronLogRecessedWell(
                     shape = IronLogRadius.CardShape,
                     contentPadding = PaddingValues(IronLogSpace.ItemGap),
-                    modifier = Modifier.heightIn(min = 72.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 68.dp)
                 ) {
                     Box(
                         modifier = Modifier.fillMaxWidth(),
@@ -255,9 +282,19 @@ fun WorkoutBuilderScreen(
                             enabled = !isStarting,
                             canMoveBack = index > 0,
                             canMoveForward = index < selectedExercises.lastIndex,
-                            onMoveBack = { viewModel.moveExercise(exercise.id, -1) },
-                            onMoveForward = { viewModel.moveExercise(exercise.id, 1) },
-                            onRemove = { viewModel.toggleExercise(exercise.id) }
+                            onMoveBack = {
+                                haptics.tick()
+                                viewModel.moveExercise(exercise.id, -1)
+                            },
+                            onMoveForward = {
+                                haptics.tick()
+                                viewModel.moveExercise(exercise.id, 1)
+                            },
+                            onRemove = {
+                                haptics.keyTap()
+                                viewModel.toggleExercise(exercise.id)
+                            },
+                            modifier = Modifier.animateItem()
                         )
                     }
                 }
@@ -271,7 +308,13 @@ fun WorkoutBuilderScreen(
                 singleLine = true,
                 label = { Text("Search exercises") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                shape = IronLogRadius.ControlShape
+                shape = IronLogRadius.KeycapShape,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = surfaces.wellFill,
+                    unfocusedContainerColor = surfaces.wellFill,
+                    focusedBorderColor = surfaces.accent,
+                    unfocusedBorderColor = scheme.outlineVariant.copy(alpha = 0.65f)
+                )
             )
             Spacer(Modifier.height(IronLogSpace.CompactGap))
             IronLogSecondaryButton(
@@ -293,21 +336,19 @@ fun WorkoutBuilderScreen(
 
             LazyRow(horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
                 item(key = "all-muscles") {
-                    FilterChip(
+                    IronLogFilterPill(
+                        label = "All",
                         selected = selectedMuscle == null,
                         onClick = { viewModel.selectMuscle(null) },
-                        label = { Text("All") },
-                        modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin),
-                        shape = IronLogRadius.ControlShape
+                        showLedPip = true
                     )
                 }
                 items(availableMuscles, key = { it }) { muscle ->
-                    FilterChip(
+                    IronLogFilterPill(
+                        label = muscle,
                         selected = selectedMuscle == muscle,
                         onClick = { viewModel.selectMuscle(if (selectedMuscle == muscle) null else muscle) },
-                        label = { Text(muscle) },
-                        modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin),
-                        shape = IronLogRadius.ControlShape
+                        showLedPip = true
                     )
                 }
             }
@@ -343,7 +384,11 @@ fun WorkoutBuilderScreen(
                             exercise = exercise,
                             isSelected = exercise.id in selectedIds,
                             enabled = !isStarting,
-                            onClick = { viewModel.toggleExercise(exercise.id) }
+                            onClick = {
+                                haptics.keyTap()
+                                viewModel.toggleExercise(exercise.id)
+                            },
+                            modifier = Modifier.animateItem()
                         )
                     }
                 }
@@ -361,12 +406,14 @@ private fun SelectedExerciseCard(
     canMoveForward: Boolean,
     onMoveBack: () -> Unit,
     onMoveForward: () -> Unit,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
     IronLogCard(
-        modifier = Modifier.width(204.dp),
+        modifier = modifier.width(204.dp),
         highlighted = true,
+        spotlight = true,
         showBorder = true,
         shape = IronLogRadius.CardShape,
         contentPadding = PaddingValues(horizontal = IronLogSpace.ItemGap, vertical = IronLogSpace.CompactGap),
@@ -377,7 +424,7 @@ private fun SelectedExerciseCard(
                 text = "$position",
                 modifier = Modifier.padding(end = IronLogSpace.CompactGap),
                 style = IronLogType.tabular(MaterialTheme.typography.labelLarge),
-                color = scheme.primary,
+                color = surfaces.accent,
                 fontWeight = FontWeight.Bold
             )
             Text(
@@ -427,9 +474,11 @@ private fun ExercisePickerRow(
     exercise: Exercise,
     isSelected: Boolean,
     enabled: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
     IronLogCard(
         onClick = onClick,
         enabled = enabled,
@@ -437,12 +486,16 @@ private fun ExercisePickerRow(
         showBorder = true,
         shape = IronLogRadius.CardShape,
         contentPadding = PaddingValues(horizontal = IronLogSpace.CardPadding, vertical = IronLogSpace.RowVertical),
-        modifier = Modifier.heightIn(min = 64.dp)
+        modifier = modifier.heightIn(min = 64.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            if (isSelected) {
+                IronLogLedPip(color = surfaces.ledGlow, size = 5.dp)
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = exercise.name,
@@ -452,15 +505,15 @@ private fun ExercisePickerRow(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = exercise.targetMuscle,
-                    style = MaterialTheme.typography.bodySmall,
+                    text = exercise.targetMuscle.uppercase(),
+                    style = IronLogType.technicalEyebrow(),
                     color = scheme.onSurfaceVariant
                 )
             }
             Icon(
                 imageVector = if (isSelected) Icons.Default.Check else Icons.Default.Add,
                 contentDescription = if (isSelected) "Selected" else "Add ${exercise.name}",
-                tint = scheme.primary
+                tint = surfaces.accent
             )
         }
     }

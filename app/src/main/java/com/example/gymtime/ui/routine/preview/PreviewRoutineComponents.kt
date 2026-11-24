@@ -1,16 +1,22 @@
 package com.example.gymtime.ui.routine.preview
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
@@ -27,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,18 +48,24 @@ import com.example.gymtime.ui.components.IronLogStatusTone
 import com.example.gymtime.ui.theme.IronLogRadius
 import com.example.gymtime.ui.theme.IronLogSpace
 import com.example.gymtime.ui.theme.IronLogType
+import com.example.gymtime.ui.theme.LocalIronHaptics
+import com.example.gymtime.ui.theme.LocalIronLogSurfaces
 import com.example.gymtime.util.TimeFormatter
 
 @Composable
 internal fun RoutinePanel(
     modifier: Modifier = Modifier,
     highlighted: Boolean = false,
+    spotlight: Boolean = highlighted,
     showBorder: Boolean = true,
+    onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     IronLogCard(
         modifier = modifier,
+        onClick = onClick,
         highlighted = highlighted,
+        spotlight = spotlight,
         showBorder = showBorder,
         shape = IronLogRadius.CardShape,
         contentPadding = PaddingValues(IronLogSpace.CardPadding),
@@ -70,45 +83,56 @@ internal fun RoutineHeader(
     enabled: Boolean = true
 ) {
     val scheme = MaterialTheme.colorScheme
-    TopAppBar(
-        title = {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        },
-        navigationIcon = {
-            IconButton(
-                onClick = onBack,
-                enabled = enabled,
-                modifier = Modifier.size(IronLogSpace.TouchTargetMin)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = if (enabled) scheme.onSurface else scheme.onSurfaceVariant.copy(alpha = 0.45f)
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
+    Column(modifier = Modifier.fillMaxWidth()) {
+        TopAppBar(
+            title = {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-            }
-        },
-        actions = {
-            IconButton(
-                onClick = onHome,
-                enabled = enabled,
-                modifier = Modifier.size(IronLogSpace.TouchTargetMin)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Home,
-                    contentDescription = "Home",
-                    tint = if (enabled) scheme.primary else scheme.onSurfaceVariant.copy(alpha = 0.45f)
-                )
-            }
-        },
-        windowInsets = WindowInsets(0, 0, 0, 0),
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = scheme.background)
-    )
+            },
+            navigationIcon = {
+                IconButton(
+                    onClick = {
+                        haptics.tick()
+                        onBack()
+                    },
+                    enabled = enabled,
+                    modifier = Modifier.size(IronLogSpace.TouchTargetMin)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = if (enabled) scheme.onSurface else scheme.onSurfaceVariant.copy(alpha = 0.45f)
+                    )
+                }
+            },
+            actions = {
+                IconButton(
+                    onClick = {
+                        haptics.tick()
+                        onHome()
+                    },
+                    enabled = enabled,
+                    modifier = Modifier.size(IronLogSpace.TouchTargetMin)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Home,
+                        contentDescription = "Home",
+                        tint = if (enabled) surfaces.accent else scheme.onSurfaceVariant.copy(alpha = 0.45f)
+                    )
+                }
+            },
+            windowInsets = WindowInsets(0, 0, 0, 0),
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+        )
+        IronLogDivider(insetStart = 0.dp)
+    }
 }
 
 @Composable
@@ -132,6 +156,7 @@ internal fun RoutinePrimaryAction(
 @Composable
 internal fun RoutineError(message: String, onDismiss: () -> Unit, onRetry: (() -> Unit)? = null) {
     val scheme = MaterialTheme.colorScheme
+    val haptics = LocalIronHaptics.current
     IronLogCard(
         containerColor = scheme.errorContainer,
         contentColor = scheme.onErrorContainer,
@@ -145,14 +170,20 @@ internal fun RoutineError(message: String, onDismiss: () -> Unit, onRetry: (() -
         Row(horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
             if (onRetry != null) {
                 TextButton(
-                    onClick = onRetry,
+                    onClick = {
+                        haptics.tick()
+                        onRetry()
+                    },
                     modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
                 ) {
                     Text("Try again", color = scheme.onErrorContainer, fontWeight = FontWeight.SemiBold)
                 }
             }
             TextButton(
-                onClick = onDismiss,
+                onClick = {
+                    haptics.tick()
+                    onDismiss()
+                },
                 modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
             ) {
                 Text("Dismiss", color = scheme.onErrorContainer)
@@ -185,6 +216,7 @@ private sealed interface ExercisePlanBlock {
 /** Targets and notes are read directly from the saved plan; grouped exercises keep their rotation order. */
 @Composable
 internal fun RoutineExerciseBlocks(exercises: List<RoutineExerciseWithDetails>) {
+    val surfaces = LocalIronLogSurfaces.current
     val blocks = remember(exercises) {
         val sorted = exercises.sortedBy { it.routineExercise.orderIndex }
         val groups = sorted.groupBy { it.routineExercise.supersetGroupId }
@@ -210,10 +242,7 @@ internal fun RoutineExerciseBlocks(exercises: List<RoutineExerciseWithDetails>) 
         }
     }
 
-    IronLogGroupedCard(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        showBorder = true
-    ) {
+    IronLogGroupedCard(showBorder = true) {
         blocks.forEachIndexed { blockIndex, block ->
             if (blockIndex > 0) {
                 IronLogDivider()
@@ -258,13 +287,25 @@ internal fun RoutineExerciseBlocks(exercises: List<RoutineExerciseWithDetails>) 
                                 Spacer(modifier = Modifier.size(2.dp))
                                 IronLogDivider(insetStart = IronLogSpace.CardPadding)
                             }
-                            RoutineExerciseLine(
-                                item = member,
-                                modifier = Modifier.padding(
-                                    horizontal = IronLogSpace.CardPadding,
-                                    vertical = 10.dp
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(IntrinsicSize.Min)
+                                    .padding(horizontal = IronLogSpace.CardPadding, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(2.dp)
+                                        .fillMaxHeight()
+                                        .background(surfaces.accent.copy(alpha = 0.65f), IronLogRadius.CapsuleShape)
                                 )
-                            )
+                                RoutineExerciseLine(
+                                    item = member,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
                 }

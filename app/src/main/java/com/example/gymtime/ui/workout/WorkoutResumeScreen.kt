@@ -39,12 +39,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
 import com.example.gymtime.ui.components.IronLogCard
+import com.example.gymtime.ui.components.IronLogLedPip
 import com.example.gymtime.ui.components.IronLogStatusChip
 import com.example.gymtime.ui.components.IronLogStatusTone
 import com.example.gymtime.ui.theme.IronLogRadius
 import com.example.gymtime.ui.theme.IronLogSpace
 import com.example.gymtime.ui.theme.IronLogTheme
 import com.example.gymtime.ui.theme.IronLogType
+import com.example.gymtime.ui.theme.LocalIronHaptics
+import com.example.gymtime.ui.theme.LocalIronLogSurfaces
 import com.example.gymtime.ui.workout.preview.CurrentWorkoutAction
 import com.example.gymtime.ui.workout.preview.PreviewCurrentWorkoutContent
 import kotlinx.coroutines.launch
@@ -101,6 +104,8 @@ internal fun ExerciseSummaryCard(
     onRemove: (() -> Unit)? = null
 ) {
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
     val isWarmupLibraryExercise = exercise.targetMuscle.isWarmupMuscleGroup()
     val displayedEntryCount = if (isWarmupLibraryExercise) exercise.anySetCount else exercise.setCount
     val isUnstarted = exercise.anySetCount == 0 && !exercise.isSkipped
@@ -108,7 +113,10 @@ internal fun ExerciseSummaryCard(
     var showActions by remember { mutableStateOf(false) }
 
     IronLogCard(
-        onClick = onClick,
+        onClick = {
+            haptics.keyTap()
+            onClick()
+        },
         highlighted = !isUnstarted,
         showBorder = true,
         shape = IronLogRadius.CardShape,
@@ -122,17 +130,25 @@ internal fun ExerciseSummaryCard(
         ) {
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
-                Text(
-                    text = exercise.exerciseName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (isUnstarted) FontWeight.Medium else FontWeight.Bold,
-                    color = if (isUnstarted) scheme.onSurfaceVariant else scheme.onSurface
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (!isUnstarted && !isWarmupOnly) {
+                        IronLogLedPip(color = surfaces.ledGlow, size = 5.dp)
+                    }
+                    Text(
+                        text = exercise.exerciseName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = if (isUnstarted) FontWeight.Medium else FontWeight.Bold,
+                        color = if (isUnstarted) scheme.onSurfaceVariant else scheme.onSurface
+                    )
+                }
                 Text(
                     text = exercise.targetMuscle.uppercase(),
-                    style = IronLogType.sectionEyebrow(),
+                    style = IronLogType.technicalEyebrow(),
                     color = scheme.onSurfaceVariant
                 )
             }
@@ -163,7 +179,7 @@ internal fun ExerciseSummaryCard(
                                         }
                                     },
                                     style = IronLogType.tabular(MaterialTheme.typography.labelMedium),
-                                    color = scheme.primary
+                                    color = surfaces.accent
                                 )
                             }
                         }
@@ -184,7 +200,7 @@ internal fun ExerciseSummaryCard(
                                 },
                                 style = IronLogType.tabular(MaterialTheme.typography.titleSmall),
                                 fontWeight = FontWeight.SemiBold,
-                                color = scheme.primary
+                                color = surfaces.accent
                             )
                             exercise.bestWeight?.let { weight ->
                                 val weightLabel = if (weight % 1f == 0f) {

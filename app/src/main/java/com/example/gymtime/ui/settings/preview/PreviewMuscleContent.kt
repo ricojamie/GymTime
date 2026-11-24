@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -36,20 +38,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.example.gymtime.ui.components.IronLogDivider
 import com.example.gymtime.ui.components.IronLogEmptyState
 import com.example.gymtime.ui.components.IronLogGroupedCard
+import com.example.gymtime.ui.components.IronLogLedPip
 import com.example.gymtime.ui.components.IronLogPrimaryButton
 import com.example.gymtime.ui.components.IronLogSectionHeader
 import com.example.gymtime.ui.components.IronLogStatusChip
 import com.example.gymtime.ui.components.IronLogStatusTone
 import com.example.gymtime.ui.theme.IronLogRadius
 import com.example.gymtime.ui.theme.IronLogSpace
+import com.example.gymtime.ui.theme.IronLogType
+import com.example.gymtime.ui.theme.LocalIronHaptics
+import com.example.gymtime.ui.theme.LocalIronLogSurfaces
 import com.example.gymtime.ui.theme.LocalLoggerActionColors
-import com.example.gymtime.ui.theme.tabular
+import com.example.gymtime.ui.theme.OdometerText
+import com.example.gymtime.ui.theme.staggeredEntranceOnce
 
 @Immutable
 data class PreviewMuscleRow(val name: String, val protectedLibrary: Boolean)
@@ -84,10 +92,12 @@ fun PreviewMuscleContent(
     onDismissDelete: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
     val editableCount = remember(state.groups) { state.groups.count { !it.protectedLibrary } }
 
     Scaffold(
-        containerColor = colors.background,
+        containerColor = Color.Transparent,
         contentColor = colors.onBackground,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
@@ -108,14 +118,15 @@ fun PreviewMuscleContent(
                     ) { Text("Home") }
                 },
                 windowInsets = WindowInsets(0, 0, 0, 0),
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.background)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         }
     ) { padding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .padding(padding)
+                .navigationBarsPadding(),
             contentPadding = PaddingValues(
                 start = IronLogSpace.ScreenHorizontal,
                 end = IronLogSpace.ScreenHorizontal,
@@ -125,8 +136,22 @@ fun PreviewMuscleContent(
             verticalArrangement = Arrangement.spacedBy(IronLogSpace.SectionGap)
         ) {
             item(key = "header") {
-                Column(verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)) {
+                Column(
+                    modifier = Modifier.staggeredEntranceOnce("muscle", 0),
+                    verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
+                ) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            IronLogLedPip(color = surfaces.ledGlow, size = 5.dp)
+                            Text(
+                                text = "MUSCLE TAXONOMY",
+                                style = IronLogType.technicalEyebrow(),
+                                color = surfaces.accent
+                            )
+                        }
                         Text(
                             text = "Your training, organized",
                             style = MaterialTheme.typography.headlineSmall,
@@ -155,20 +180,33 @@ fun PreviewMuscleContent(
                 }
             } else {
                 item(key = "groups-list") {
-                    Column(verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
+                    Column(
+                        modifier = Modifier.staggeredEntranceOnce("muscle", 1),
+                        verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
+                    ) {
                         IronLogSectionHeader(
                             title = "Body parts",
                             trailingAction = {
-                                Text(
-                                    text = "$editableCount ${if (editableCount == 1) "group" else "groups"}",
-                                    style = MaterialTheme.typography.labelMedium.tabular(),
-                                    color = colors.onSurfaceVariant
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    OdometerText(
+                                        text = editableCount.toString(),
+                                        style = IronLogType.telemetryLabel().copy(fontWeight = FontWeight.Bold),
+                                        color = surfaces.accent
+                                    )
+                                    Text(
+                                        text = if (editableCount == 1) "group" else "groups",
+                                        style = IronLogType.telemetryLabel(),
+                                        color = colors.onSurfaceVariant
+                                    )
+                                }
                             }
                         )
                         IronLogGroupedCard(
                             showBorder = true,
-                            containerColor = colors.surfaceContainerLow
+                            shape = IronLogRadius.PlateShape
                         ) {
                             state.groups.forEachIndexed { index, group ->
                                 if (index > 0) {
@@ -217,11 +255,17 @@ fun PreviewMuscleContent(
                                     }
                                     if (!group.protectedLibrary) {
                                         TextButton(
-                                            onClick = { onEdit(group.name) },
+                                            onClick = {
+                                                haptics.tick()
+                                                onEdit(group.name)
+                                            },
                                             modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
                                         ) { Text("Rename") }
                                         TextButton(
-                                            onClick = { onDelete(group.name) },
+                                            onClick = {
+                                                haptics.tick()
+                                                onDelete(group.name)
+                                            },
                                             modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
                                         ) { Text("Delete", color = colors.error) }
                                     }
@@ -261,7 +305,7 @@ fun PreviewMuscleContent(
                     }
                 )
             },
-            containerColor = colors.surface,
+            containerColor = surfaces.plateBottom,
             titleContentColor = colors.onSurface,
             textContentColor = colors.onSurface,
             confirmButton = {
@@ -305,6 +349,7 @@ private fun PreviewMuscleEditor(
 ) {
     val focus = remember { FocusRequester() }
     val action = LocalLoggerActionColors.current
+    val surfaces = LocalIronLogSurfaces.current
     val colors = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = { if (!saving) onDismiss() },
@@ -316,12 +361,18 @@ private fun PreviewMuscleEditor(
                 onValueChange = onNameChange,
                 label = { Text("Body part name") },
                 singleLine = true,
-                shape = IronLogRadius.ControlShape,
+                shape = IronLogRadius.KeycapShape,
                 isError = error != null,
                 enabled = !saving,
                 supportingText = { Text(error ?: "At least two characters. Warmups is reserved.") },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { if (!saving) onSave() }),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = surfaces.wellFill,
+                    unfocusedContainerColor = surfaces.wellFill,
+                    focusedBorderColor = surfaces.accent,
+                    unfocusedBorderColor = colors.outlineVariant.copy(alpha = 0.65f)
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focus)
@@ -329,7 +380,7 @@ private fun PreviewMuscleEditor(
             LaunchedEffect(original) { focus.requestFocus() }
             LaunchedEffect(error) { if (error != null && !saving) focus.requestFocus() }
         },
-        containerColor = colors.surface,
+        containerColor = surfaces.plateBottom,
         titleContentColor = colors.onSurface,
         textContentColor = colors.onSurface,
         confirmButton = {

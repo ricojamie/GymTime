@@ -1,9 +1,9 @@
 package com.example.gymtime.ui.exercise
 
 import android.os.SystemClock
-import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,8 +24,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -37,7 +35,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -60,6 +57,10 @@ import com.example.gymtime.navigation.navigateToWorkoutExercise
 import com.example.gymtime.navigation.navigateToWorkoutOverview
 import com.example.gymtime.navigation.navigateToWorkoutSummary
 import com.example.gymtime.ui.components.IronLogDivider
+import com.example.gymtime.ui.components.IronLogRecessedWell
+import com.example.gymtime.ui.components.IronLogSculptedKeycap
+import com.example.gymtime.ui.components.IronLogTactileSwitch
+import com.example.gymtime.ui.components.KeycapHaptic
 import com.example.gymtime.ui.components.PlateCalculatorSheet
 import com.example.gymtime.ui.exercise.preview.LoggerAction
 import com.example.gymtime.ui.exercise.preview.LoggerField
@@ -74,6 +75,9 @@ import com.example.gymtime.ui.theme.IronLogRadius
 import com.example.gymtime.ui.theme.IronLogSpace
 import com.example.gymtime.ui.theme.IronLogTheme
 import com.example.gymtime.ui.theme.IronLogType
+import com.example.gymtime.ui.theme.LocalIronHaptics
+import com.example.gymtime.ui.theme.LocalIronLogSurfaces
+import com.example.gymtime.ui.theme.OdometerText
 import com.example.gymtime.util.PlateCalculator
 import com.example.gymtime.util.TimeFormatter
 import com.example.gymtime.util.TimeUtils
@@ -145,7 +149,8 @@ private fun ExerciseLoggingScreenBody(
     var noteText by remember { mutableStateOf("") }
     var showExerciseQuickEdit by remember { mutableStateOf(false) }
 
-    val view = LocalView.current
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(viewModel) {
@@ -181,7 +186,7 @@ private fun ExerciseLoggingScreenBody(
             launch {
                 viewModel.autoSwitchEvent.collect { nextId ->
                     navigateToLoggerExercise(nextId)
-                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                    haptics.confirm()
                 }
             }
         }
@@ -192,7 +197,7 @@ private fun ExerciseLoggingScreenBody(
         val remaining = event.expiresAt - SystemClock.elapsedRealtime()
         if (remaining > 0) {
             if (viewModel.claimPrCelebrationHaptic(event.id)) {
-                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                haptics.confirm()
             }
             delay(remaining)
         }
@@ -200,7 +205,7 @@ private fun ExerciseLoggingScreenBody(
     }
 
     val submitSet: () -> Unit = {
-        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        haptics.confirm()
         if (editingSet != null) viewModel.saveEditedSet() else viewModel.logSet(startTimerAfterSave = timerAutoStart)
     }
 
@@ -363,8 +368,8 @@ private fun ExerciseLoggingScreenBody(
     selectedSetToDelete?.let { setToDelete ->
         AlertDialog(
             onDismissRequest = { selectedSetToDelete = null },
-            shape = IronLogRadius.CardShape,
-            containerColor = scheme.surface,
+            shape = IronLogRadius.PlateShape,
+            containerColor = surfaces.plateElevatedTop,
             title = {
                 Text(
                     text = "Delete Set?",
@@ -409,8 +414,8 @@ private fun ExerciseLoggingScreenBody(
                 setToAddNote = null
                 noteText = ""
             },
-            shape = IronLogRadius.CardShape,
-            containerColor = scheme.surface,
+            shape = IronLogRadius.PlateShape,
+            containerColor = surfaces.plateElevatedTop,
             title = {
                 Text(
                     text = if (target.set.note.isNullOrBlank()) "Add Note" else "Edit Note",
@@ -479,8 +484,8 @@ private fun ExerciseLoggingScreenBody(
 
             AlertDialog(
                 onDismissRequest = { showExerciseQuickEdit = false },
-                shape = IronLogRadius.CardShape,
-                containerColor = scheme.surface,
+                shape = IronLogRadius.PlateShape,
+                containerColor = surfaces.plateElevatedTop,
                 title = {
                     Text(
                         text = "Edit Exercise",
@@ -554,8 +559,8 @@ private fun ExerciseLoggingScreenBody(
     if (showFinishDialog) {
         AlertDialog(
             onDismissRequest = { if (!finishRequested) showFinishDialog = false },
-            shape = IronLogRadius.CardShape,
-            containerColor = scheme.surface,
+            shape = IronLogRadius.PlateShape,
+            containerColor = surfaces.plateElevatedTop,
             title = {
                 Text(
                     text = "Finish Workout?",
@@ -660,8 +665,8 @@ private fun ExerciseLoggingScreenBody(
     if (showExerciseNotes) {
         AlertDialog(
             onDismissRequest = { showExerciseNotes = false },
-            shape = IronLogRadius.CardShape,
-            containerColor = scheme.surface,
+            shape = IronLogRadius.PlateShape,
+            containerColor = surfaces.plateElevatedTop,
             title = {
                 Text(
                     text = "Exercise Notes",
@@ -705,6 +710,8 @@ private fun RestTimerDialog(
     onDismiss: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
     val countdownTimer by viewModel.countdownTimer.collectAsStateWithLifecycle()
     val timerAudioEnabled by viewModel.timerAudioEnabled.collectAsStateWithLifecycle(initialValue = true)
     val timerVibrateEnabled by viewModel.timerVibrateEnabled.collectAsStateWithLifecycle(initialValue = true)
@@ -712,8 +719,8 @@ private fun RestTimerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        shape = IronLogRadius.CardShape,
-        containerColor = scheme.surface,
+        shape = IronLogRadius.PlateShape,
+        containerColor = surfaces.plateElevatedTop,
         title = {
             Text(
                 text = "Rest Timer",
@@ -727,28 +734,49 @@ private fun RestTimerDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = TimeFormatter.formatSecondsToMMSS(displayedSeconds),
-                    style = IronLogType.tabular(MaterialTheme.typography.displayLarge).copy(
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = scheme.primary
-                )
+                IronLogRecessedWell(
+                    active = isTimerRunning,
+                    accentColor = surfaces.accent,
+                    shape = IronLogRadius.KeycapShape,
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
+                ) {
+                    OdometerText(
+                        text = TimeFormatter.formatSecondsToMMSS(displayedSeconds),
+                        style = IronLogType.monumentalNumeral(MaterialTheme.typography.displayLarge).copy(
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = if (isTimerRunning) surfaces.accent else scheme.onSurface,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)) {
-                    OutlinedButton(
+                    IronLogSculptedKeycap(
                         onClick = { viewModel.adjustRestTime(-5) },
-                        shape = IronLogRadius.ControlShape,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = scheme.onSurfaceVariant)
+                        hapticType = KeycapHaptic.TICK,
+                        shape = IronLogRadius.KeycapShape,
+                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
                     ) {
-                        Text("-5s", style = IronLogType.tabular(MaterialTheme.typography.labelLarge))
+                        Text(
+                            text = "-5s",
+                            style = IronLogType.telemetryLabel(MaterialTheme.typography.labelLarge).copy(
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
                     }
-                    OutlinedButton(
+                    IronLogSculptedKeycap(
                         onClick = { viewModel.adjustRestTime(5) },
-                        shape = IronLogRadius.ControlShape,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = scheme.onSurfaceVariant)
+                        hapticType = KeycapHaptic.TICK,
+                        shape = IronLogRadius.KeycapShape,
+                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
                     ) {
-                        Text("+5s", style = IronLogType.tabular(MaterialTheme.typography.labelLarge))
+                        Text(
+                            text = "+5s",
+                            style = IronLogType.telemetryLabel(MaterialTheme.typography.labelLarge).copy(
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
                     }
                 }
 
@@ -767,16 +795,16 @@ private fun RestTimerDialog(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                             contentDescription = null,
-                            tint = if (timerAudioEnabled) scheme.primary else scheme.onSurfaceVariant,
+                            tint = if (timerAudioEnabled) surfaces.accent else scheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Audio", style = MaterialTheme.typography.bodyMedium, color = scheme.onSurface)
                     }
-                    Switch(
+                    IronLogTactileSwitch(
                         checked = timerAudioEnabled,
                         onCheckedChange = viewModel::toggleTimerAudio,
-                        colors = SwitchDefaults.colors(checkedThumbColor = scheme.primary)
+                        accentColor = surfaces.accent
                     )
                 }
 
@@ -791,16 +819,16 @@ private fun RestTimerDialog(
                         Icon(
                             imageVector = Icons.Filled.Vibration,
                             contentDescription = null,
-                            tint = if (timerVibrateEnabled) scheme.primary else scheme.onSurfaceVariant,
+                            tint = if (timerVibrateEnabled) surfaces.accent else scheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Vibration", style = MaterialTheme.typography.bodyMedium, color = scheme.onSurface)
                     }
-                    Switch(
+                    IronLogTactileSwitch(
                         checked = timerVibrateEnabled,
                         onCheckedChange = viewModel::toggleTimerVibrate,
-                        colors = SwitchDefaults.colors(checkedThumbColor = scheme.primary)
+                        accentColor = surfaces.accent
                     )
                 }
             }
@@ -809,7 +837,10 @@ private fun RestTimerDialog(
             if (isTimerRunning) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
-                        onClick = { viewModel.stopTimer() },
+                        onClick = {
+                            haptics.tick()
+                            viewModel.stopTimer()
+                        },
                         shape = IronLogRadius.ControlShape,
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = scheme.primary)
                     ) {
@@ -817,6 +848,7 @@ private fun RestTimerDialog(
                     }
                     Button(
                         onClick = {
+                            haptics.keyTap()
                             viewModel.stopTimer()
                             viewModel.startTimer()
                             onDismiss()
@@ -833,6 +865,7 @@ private fun RestTimerDialog(
             } else {
                 Button(
                     onClick = {
+                        haptics.keyTap()
                         viewModel.startTimer()
                         onDismiss()
                     },
@@ -848,7 +881,12 @@ private fun RestTimerDialog(
         },
         dismissButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = { viewModel.resetTimerToDefault() }) {
+                TextButton(
+                    onClick = {
+                        haptics.tick()
+                        viewModel.resetTimerToDefault()
+                    }
+                ) {
                     Text("Reset", color = scheme.onSurfaceVariant)
                 }
                 TextButton(onClick = onDismiss) {

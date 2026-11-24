@@ -1,7 +1,12 @@
 package com.example.gymtime.ui.analytics.preview
 
-import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -17,9 +22,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,19 +50,27 @@ import com.example.gymtime.domain.analytics.TrainingInsightRecordEvent
 import com.example.gymtime.domain.analytics.TrainingInsightRecordKind
 import com.example.gymtime.domain.analytics.TrainingInsightsDashboard
 import com.example.gymtime.domain.analytics.TrainingInsightsPeriod
+import com.example.gymtime.ui.components.IronLogCalibrationBar
 import com.example.gymtime.ui.components.IronLogCard
 import com.example.gymtime.ui.components.IronLogDivider
 import com.example.gymtime.ui.components.IronLogEmptyState
 import com.example.gymtime.ui.components.IronLogGroupedCard
-import com.example.gymtime.ui.components.IronLogMetric
-import com.example.gymtime.ui.components.IronLogMetricRow
-import com.example.gymtime.ui.components.IronLogSectionHeader
+import com.example.gymtime.ui.components.IronLogLedPip
+import com.example.gymtime.ui.components.IronLogRecessedWell
+import com.example.gymtime.ui.components.IronLogSegmentedControl
 import com.example.gymtime.ui.components.IronLogStatusChip
 import com.example.gymtime.ui.components.IronLogStatusTone
 import com.example.gymtime.ui.theme.IronLogBorder
 import com.example.gymtime.ui.theme.IronLogRadius
 import com.example.gymtime.ui.theme.IronLogSpace
 import com.example.gymtime.ui.theme.IronLogType
+import com.example.gymtime.ui.theme.IronMotion
+import com.example.gymtime.ui.theme.LocalIronHaptics
+import com.example.gymtime.ui.theme.LocalIronLogSurfaces
+import com.example.gymtime.ui.theme.LocalReducedMotion
+import com.example.gymtime.ui.theme.MachinedPressIndication
+import com.example.gymtime.ui.theme.OdometerText
+import com.example.gymtime.ui.theme.staggeredEntranceOnce
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -88,17 +98,24 @@ fun PreviewTrainingInsightsContent(
     val dashboard = state.dashboard
     val exercise = dashboard?.exercises?.firstOrNull { it.id == state.selectedExerciseId }
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
+    val rowIndication = remember {
+        MachinedPressIndication(pressedScale = 0.98f, highlightAlpha = 0.06f, cornerRadius = IronLogRadius.Control)
+    }
     val actionableObservations = remember(dashboard?.observations) {
         dashboard?.observations
             .orEmpty()
             .filter { it.exerciseId != null || it.muscle != null }
             .take(2)
     }
+    val windowOptions = remember { listOf(28 to "4 weeks", 84 to "12 weeks") }
+    val selectedWindowIndex = remember(state.windowDays) {
+        windowOptions.indexOfFirst { it.first == state.windowDays }.coerceAtLeast(0)
+    }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(scheme.background),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = IronLogSpace.ScreenHorizontal,
             end = IronLogSpace.ScreenHorizontal,
@@ -107,22 +124,37 @@ fun PreviewTrainingInsightsContent(
         ),
         verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
     ) {
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
+        item(key = "insights-header") {
+            Column(verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)) {
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = "Training insights",
+                    Column(
                         modifier = Modifier
                             .weight(1f)
-                            .align(Alignment.CenterVertically)
-                            .semantics { heading() },
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.ExtraBold
-                    )
+                            .align(Alignment.CenterVertically),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            IronLogLedPip(color = surfaces.ledGlow, size = 5.dp)
+                            Text(
+                                text = "TELEMETRY · LOCAL LOG",
+                                style = IronLogType.technicalEyebrow(),
+                                color = scheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            text = "Training insights",
+                            modifier = Modifier.semantics { heading() },
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
                     TextButton(
                         onClick = { showMethods = true },
                         shape = IronLogRadius.ControlShape,
@@ -131,21 +163,15 @@ fun PreviewTrainingInsightsContent(
                         Text("How to read this")
                     }
                 }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
-                    listOf(28 to "4 weeks", 84 to "12 weeks").forEach { (days, label) ->
-                        FilterChip(
-                            selected = state.windowDays == days,
-                            onClick = { onWindowChange(days) },
-                            shape = IronLogRadius.ControlShape,
-                            label = { Text(label) },
-                            modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
-                        )
-                    }
-                }
+                IronLogSegmentedControl(
+                    options = windowOptions.map { it.second },
+                    selectedIndex = selectedWindowIndex,
+                    onSelect = { index -> onWindowChange(windowOptions[index].first) }
+                )
             }
         }
         state.error?.let { message ->
-            item {
+            item(key = "insights-error") {
                 IronLogCard(
                     containerColor = scheme.errorContainer,
                     contentColor = scheme.onErrorContainer,
@@ -166,9 +192,14 @@ fun PreviewTrainingInsightsContent(
             }
         }
         if (state.isLoading) {
-            item {
+            item(key = "insights-loading") {
                 Column(verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
-                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                    IronLogCalibrationBar(
+                        progress = if (dashboard == null) 0.45f else 0.78f,
+                        accentColor = surfaces.accent,
+                        tickCount = 12,
+                        height = 10.dp
+                    )
                     Text(
                         text = if (dashboard == null) "Reading your workout history…" else "Updating your insights…",
                         style = MaterialTheme.typography.bodyMedium,
@@ -178,7 +209,7 @@ fun PreviewTrainingInsightsContent(
             }
         }
         if (dashboard != null && dashboard.period.windowDays != state.windowDays) {
-            item {
+            item(key = "insights-stale-window") {
                 Text(
                     text = "Showing the last loaded ${dashboard.period.windowDays / 7}-week period while the requested ${state.windowDays / 7}-week view ${if (state.error != null) "is unavailable. Tap Try again to refresh." else "loads."}",
                     style = MaterialTheme.typography.bodyMedium,
@@ -187,9 +218,14 @@ fun PreviewTrainingInsightsContent(
             }
         }
         if (dashboard != null) {
-            item {
+            item(key = "insights-overview") {
                 if (dashboard.cadence.totalCompletedWorkouts == 0) {
-                    IronLogCard(highlighted = true, shape = IronLogRadius.CardShape) {
+                    IronLogCard(
+                        highlighted = true,
+                        spotlight = true,
+                        shape = IronLogRadius.PlateShape,
+                        modifier = Modifier.staggeredEntranceOnce("insights", 0)
+                    ) {
                         IronLogEmptyState(
                             title = "Your next workout starts the story",
                             body = "Completed workouts with working sets will appear here. Warmups and unfinished sets stay out of the comparisons.",
@@ -207,12 +243,19 @@ fun PreviewTrainingInsightsContent(
                         }
                     }
                 } else {
-                    InsightOverview(dashboard)
+                    InsightOverview(
+                        dashboard = dashboard,
+                        modifier = Modifier.staggeredEntranceOnce("insights", 0)
+                    )
                 }
             }
             if (actionableObservations.isNotEmpty()) {
-                item {
-                    IronLogGroupedCard(showBorder = true) {
+                item(key = "insights-observations") {
+                    IronLogGroupedCard(
+                        showBorder = true,
+                        shape = IronLogRadius.PlateShape,
+                        modifier = Modifier.staggeredEntranceOnce("insights", 1)
+                    ) {
                         actionableObservations.forEachIndexed { index, observation ->
                             if (index > 0) {
                                 IronLogDivider()
@@ -221,13 +264,18 @@ fun PreviewTrainingInsightsContent(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .heightIn(min = 64.dp)
-                                    .clickable {
-                                        if (observation.exerciseId != null) {
-                                            detailExerciseId = observation.exerciseId
-                                        } else if (observation.muscle != null) {
-                                            detailMuscle = observation.muscle
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = rowIndication,
+                                        onClick = {
+                                            haptics.tick()
+                                            if (observation.exerciseId != null) {
+                                                detailExerciseId = observation.exerciseId
+                                            } else if (observation.muscle != null) {
+                                                detailMuscle = observation.muscle
+                                            }
                                         }
-                                    }
+                                    )
                                     .padding(IronLogSpace.CardPadding),
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
@@ -235,32 +283,41 @@ fun PreviewTrainingInsightsContent(
                                 Text(
                                     text = "See the sets behind this",
                                     style = MaterialTheme.typography.labelLarge,
-                                    color = scheme.primary
+                                    color = surfaces.accent
                                 )
                             }
                         }
                     }
                 }
             }
-            item {
+            item(key = "insights-lift-progress") {
                 LiftProgressPanel(
                     exercise = exercise,
                     onChoose = { showPicker = true },
-                    onEvidence = { detailExerciseId = exercise?.id }
+                    onEvidence = { detailExerciseId = exercise?.id },
+                    modifier = Modifier.staggeredEntranceOnce("insights", 2)
                 )
             }
-            item {
+            item(key = "insights-body-parts") {
                 BodyPartsPanel(
                     muscles = dashboard.muscles,
-                    onSelectMuscle = { detailMuscle = it }
+                    onSelectMuscle = { detailMuscle = it },
+                    modifier = Modifier.staggeredEntranceOnce("insights", 3)
                 )
             }
-            item { RhythmPanel(dashboard, onHistory) }
-            item {
+            item(key = "insights-rhythm") {
+                RhythmPanel(
+                    dashboard = dashboard,
+                    onHistory = onHistory,
+                    modifier = Modifier.staggeredEntranceOnce("insights", 4)
+                )
+            }
+            item(key = "insights-records") {
                 RecentRecordsPanel(
                     dashboard = dashboard,
                     onChooseExercise = { showPicker = true },
-                    onOpenExercise = { detailExerciseId = it }
+                    onOpenExercise = { detailExerciseId = it },
+                    modifier = Modifier.staggeredEntranceOnce("insights", 5)
                 )
             }
         }
@@ -295,24 +352,153 @@ fun PreviewTrainingInsightsContent(
 }
 
 @Composable
-private fun InsightOverview(dashboard: TrainingInsightsDashboard) {
+private fun InsightOverview(
+    dashboard: TrainingInsightsDashboard,
+    modifier: Modifier = Modifier
+) {
     val scheme = MaterialTheme.colorScheme
-    InsightPanel(highlighted = false) {
-        InsightSectionTitle("Your training, in view", periodLabel(dashboard.period))
-        IronLogMetricRow(
-            metrics = listOf(
-                IronLogMetric(
-                    label = "Completed workouts",
-                    value = dashboard.cadence.currentWorkouts.toString(),
-                    emphasized = false
-                ),
-                IronLogMetric(
-                    label = "Working sets",
-                    value = dashboard.cadence.currentWorkingSets.toString()
+    val surfaces = LocalIronLogSurfaces.current
+    val cadence = dashboard.cadence
+    val prevWorkouts = cadence.previousWorkouts.coerceAtLeast(1)
+    val workoutRatio = if (cadence.currentWorkouts == 0 && cadence.previousWorkouts == 0) {
+        0f
+    } else {
+        (cadence.currentWorkouts.toFloat() / prevWorkouts.toFloat()).coerceIn(0f, 1f)
+    }
+
+    InsightPanel(modifier = modifier, highlighted = true) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                IronLogLedPip(color = surfaces.ledGlow, size = 6.dp, pulsing = cadence.currentWorkouts > 0)
+                Text(
+                    text = "TRAINING IN VIEW",
+                    style = IronLogType.technicalEyebrow(),
+                    color = surfaces.accent
                 )
+            }
+            Text(
+                text = periodLabel(dashboard.period),
+                style = IronLogType.telemetryLabel(),
+                color = scheme.onSurfaceVariant
             )
-        )
-        if (dashboard.cadence.currentWorkouts == 0) {
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min),
+            horizontalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IronLogRecessedWell(
+                modifier = Modifier
+                    .weight(1.15f)
+                    .fillMaxHeight(),
+                active = cadence.currentWorkouts > 0,
+                accentColor = surfaces.accent,
+                shape = IronLogRadius.ControlShape,
+                contentPadding = PaddingValues(14.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "COMPLETED WORKOUTS",
+                        style = IronLogType.technicalEyebrow(),
+                        color = scheme.onSurfaceVariant
+                    )
+                    OdometerText(
+                        text = cadence.currentWorkouts.toString(),
+                        style = IronLogType.monumentalNumeral(MaterialTheme.typography.displaySmall).copy(
+                            fontWeight = FontWeight.ExtraBold
+                        ),
+                        color = surfaces.accent
+                    )
+                    Text(
+                        text = "vs ${cadence.previousWorkouts} prior",
+                        style = IronLogType.telemetryLabel(),
+                        color = scheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
+            ) {
+                IronLogRecessedWell(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = IronLogRadius.ControlShape,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = "WORKING SETS",
+                            style = IronLogType.technicalEyebrow(),
+                            color = scheme.onSurfaceVariant
+                        )
+                        OdometerText(
+                            text = cadence.currentWorkingSets.toString(),
+                            style = IronLogType.monumentalNumeral(MaterialTheme.typography.titleLarge).copy(
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = scheme.onSurface
+                        )
+                    }
+                }
+                IronLogRecessedWell(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = IronLogRadius.ControlShape,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = "ACTIVE DAYS",
+                            style = IronLogType.technicalEyebrow(),
+                            color = scheme.onSurfaceVariant
+                        )
+                        OdometerText(
+                            text = cadence.currentActiveDays.toString(),
+                            style = IronLogType.monumentalNumeral(MaterialTheme.typography.titleLarge).copy(
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = scheme.onSurface
+                        )
+                    }
+                }
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "PERIOD CADENCE VS PRIOR",
+                    style = IronLogType.technicalEyebrow(),
+                    color = scheme.onSurfaceVariant
+                )
+                Text(
+                    text = "${cadence.currentWorkouts} / ${cadence.previousWorkouts}",
+                    style = IronLogType.telemetryLabel(),
+                    color = scheme.onSurface
+                )
+            }
+            IronLogCalibrationBar(
+                progress = workoutRatio,
+                accentColor = surfaces.accent,
+                tickCount = 10,
+                height = 10.dp
+            )
+        }
+
+        if (cadence.currentWorkouts == 0) {
             Text(
                 text = "A quiet period in your log. Earlier workouts are still in your history.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -326,26 +512,42 @@ private fun InsightOverview(dashboard: TrainingInsightsDashboard) {
 private fun LiftProgressPanel(
     exercise: TrainingInsightExercise?,
     onChoose: () -> Unit,
-    onEvidence: () -> Unit
+    onEvidence: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val reducedMotion = LocalReducedMotion.current
     var showValues by rememberSaveable(exercise?.id) { mutableStateOf(false) }
     var showMetricHelp by rememberSaveable(exercise?.id) { mutableStateOf(false) }
 
-    InsightPanel {
-        InsightSectionTitle("Lift progress", "Compare an exercise with its own history")
+    InsightPanel(modifier = modifier) {
+        InsightSectionTitle(
+            title = "Lift progress",
+            detail = "Compare an exercise with its own history",
+            eyebrow = "STRENGTH TELEMETRY"
+        )
         IronLogCard(
             onClick = onChoose,
-            containerColor = scheme.surfaceContainerHigh,
-            borderColor = IronLogBorder.borderColor(scheme),
+            highlighted = exercise != null,
             shape = IronLogRadius.ControlShape,
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Text(
-                text = exercise?.name ?: "Choose an exercise",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (exercise != null) {
+                    IronLogLedPip(color = surfaces.ledGlow, size = 5.dp)
+                }
+                Text(
+                    text = exercise?.name ?: "Choose an exercise",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+            }
             Text(
                 text = exercise?.let { "${it.muscle} · Tap to change" } ?: "Search or filter by body part",
                 style = MaterialTheme.typography.bodySmall,
@@ -357,15 +559,16 @@ private fun LiftProgressPanel(
             progress.latestBestSet?.let { set ->
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        text = "Latest best working set · ${insightDate(set.timestampMs)}",
-                        style = IronLogType.tabular(MaterialTheme.typography.labelLarge),
+                        text = "LATEST BEST WORKING SET · ${insightDate(set.timestampMs).uppercase()}",
+                        style = IronLogType.technicalEyebrow(),
                         color = scheme.onSurfaceVariant
                     )
-                    Text(
+                    OdometerText(
                         text = insightSetLabel(set, exercise.logType),
-                        style = IronLogType.tabular(MaterialTheme.typography.headlineSmall).copy(
-                            fontWeight = FontWeight.Bold
-                        )
+                        style = IronLogType.monumentalNumeral(MaterialTheme.typography.headlineMedium).copy(
+                            fontWeight = FontWeight.ExtraBold
+                        ),
+                        color = surfaces.accent
                     )
                 }
             }
@@ -428,15 +631,27 @@ private fun LiftProgressPanel(
                         }
                     }
                 }
-                if (showMetricHelp) {
+                AnimatedVisibility(
+                    visible = showMetricHelp,
+                    enter = fadeIn(IronMotion.orSnap(reducedMotion, IronMotion.EffectDefault)) +
+                        expandVertically(IronMotion.orSnap(reducedMotion, IronMotion.SpatialLayoutSize)),
+                    exit = fadeOut(IronMotion.orSnap(reducedMotion, IronMotion.EffectFast)) +
+                        shrinkVertically(IronMotion.orSnap(reducedMotion, IronMotion.SpatialLayoutSize))
+                ) {
                     Text(
                         text = progress.explanation,
                         style = MaterialTheme.typography.bodySmall,
                         color = scheme.onSurfaceVariant
                     )
                 }
-                if (showValues && progress.chartPoints.isNotEmpty()) {
-                    IronLogGroupedCard(containerColor = scheme.surface, showBorder = true) {
+                AnimatedVisibility(
+                    visible = showValues && progress.chartPoints.isNotEmpty(),
+                    enter = fadeIn(IronMotion.orSnap(reducedMotion, IronMotion.EffectDefault)) +
+                        expandVertically(IronMotion.orSnap(reducedMotion, IronMotion.SpatialLayoutSize)),
+                    exit = fadeOut(IronMotion.orSnap(reducedMotion, IronMotion.EffectFast)) +
+                        shrinkVertically(IronMotion.orSnap(reducedMotion, IronMotion.SpatialLayoutSize))
+                ) {
+                    IronLogGroupedCard(showBorder = true) {
                         progress.chartPoints.forEachIndexed { index, point ->
                             if (index > 0) {
                                 IronLogDivider()
@@ -477,16 +692,28 @@ private fun LiftProgressPanel(
 @Composable
 private fun BodyPartsPanel(
     muscles: List<TrainingInsightMuscle>,
-    onSelectMuscle: (String) -> Unit
+    onSelectMuscle: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
     val dividerColor = IronLogBorder.dividerColor()
     val rows = remember(muscles) { muscles.chunked(2) }
+    val maxSets = remember(muscles) {
+        muscles.maxOfOrNull { it.currentWorkingSets }?.coerceAtLeast(1) ?: 1
+    }
+    val cellIndication = remember {
+        MachinedPressIndication(pressedScale = 0.97f, highlightAlpha = 0.06f, cornerRadius = IronLogRadius.Control)
+    }
 
-    InsightPanel {
-        InsightSectionTitle("Body parts", "Completed working sets · current vs prior period")
+    InsightPanel(modifier = modifier) {
+        InsightSectionTitle(
+            title = "Body parts",
+            detail = "Completed working sets · current vs prior period",
+            eyebrow = "MUSCLE DISTRIBUTION"
+        )
         IronLogGroupedCard(
-            containerColor = scheme.surface,
             showBorder = true,
             shape = IronLogRadius.ControlShape
         ) {
@@ -512,10 +739,17 @@ private fun BodyPartsPanel(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .heightIn(min = 84.dp)
-                                .clickable { onSelectMuscle(muscle.name) }
+                                .heightIn(min = 96.dp)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = cellIndication,
+                                    onClick = {
+                                        haptics.tick()
+                                        onSelectMuscle(muscle.name)
+                                    }
+                                )
                                 .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             Text(
                                 text = muscle.name,
@@ -527,6 +761,12 @@ private fun BodyPartsPanel(
                             Text(
                                 text = "${muscle.currentWorkingSets} sets · ${muscle.previousWorkingSets} prior",
                                 style = IronLogType.tabular(MaterialTheme.typography.bodyMedium)
+                            )
+                            IronLogCalibrationBar(
+                                progress = muscle.currentWorkingSets.toFloat() / maxSets.toFloat(),
+                                accentColor = surfaces.accent,
+                                tickCount = 6,
+                                height = 6.dp
                             )
                             Text(
                                 text = lastLoggedLabel(muscle.daysSinceLastLogged),
@@ -560,7 +800,8 @@ private fun BodyPartsPanel(
 private fun RecentRecordsPanel(
     dashboard: TrainingInsightsDashboard,
     onChooseExercise: () -> Unit,
-    onOpenExercise: (Long) -> Unit
+    onOpenExercise: (Long) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
     val recordSets = remember(dashboard.recentRecords) {
@@ -570,10 +811,11 @@ private fun RecentRecordsPanel(
         dashboard.exercises.associateBy { it.id }
     }
 
-    InsightPanel {
+    InsightPanel(modifier = modifier) {
         InsightSectionTitle(
             title = "Recent records",
-            detail = "First observations are benchmarks. A record must improve on earlier completed working sets."
+            detail = "First observations are benchmarks. A record must improve on earlier completed working sets.",
+            eyebrow = "PEAK OUTPUT"
         )
         if (recordSets.isEmpty()) {
             Text(
@@ -591,7 +833,6 @@ private fun RecentRecordsPanel(
         } else {
             val displayed = remember(recordSets) { recordSets.take(6) }
             IronLogGroupedCard(
-                containerColor = scheme.surface,
                 showBorder = true,
                 shape = IronLogRadius.ControlShape
             ) {
@@ -657,18 +898,40 @@ private fun ComparisonText(comparison: TrainingInsightComparison, metric: Traini
 }
 
 @Composable
-private fun RhythmPanel(dashboard: TrainingInsightsDashboard, onHistory: () -> Unit) {
+private fun RhythmPanel(
+    dashboard: TrainingInsightsDashboard,
+    onHistory: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val reducedMotion = LocalReducedMotion.current
     var showWeeks by rememberSaveable { mutableStateOf(false) }
     val cadence = dashboard.cadence
-    InsightPanel {
-        InsightSectionTitle("Training rhythm", "Completed workouts, counted once each")
-        Text(
-            text = "${cadence.thisWeekWorkouts} this week so far",
-            style = IronLogType.tabular(MaterialTheme.typography.headlineSmall).copy(
-                fontWeight = FontWeight.Bold
-            )
+    InsightPanel(modifier = modifier) {
+        InsightSectionTitle(
+            title = "Training rhythm",
+            detail = "Completed workouts, counted once each",
+            eyebrow = "WEEKLY CADENCE"
         )
+        Row(
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OdometerText(
+                text = cadence.thisWeekWorkouts.toString(),
+                style = IronLogType.monumentalNumeral(MaterialTheme.typography.displaySmall).copy(
+                    fontWeight = FontWeight.ExtraBold
+                ),
+                color = surfaces.accent
+            )
+            Text(
+                text = "this week so far",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+        }
         Text(
             text = "${cadence.currentWorkouts} in this period · ${cadence.previousWorkouts} in the previous ${dashboard.period.windowDays} days",
             style = IronLogType.tabular(MaterialTheme.typography.bodyMedium)
@@ -713,8 +976,14 @@ private fun RhythmPanel(dashboard: TrainingInsightsDashboard, onHistory: () -> U
                 Text("Open history")
             }
         }
-        if (showWeeks && cadence.weeks.isNotEmpty()) {
-            IronLogGroupedCard(containerColor = scheme.surface, showBorder = true) {
+        AnimatedVisibility(
+            visible = showWeeks && cadence.weeks.isNotEmpty(),
+            enter = fadeIn(IronMotion.orSnap(reducedMotion, IronMotion.EffectDefault)) +
+                expandVertically(IronMotion.orSnap(reducedMotion, IronMotion.SpatialLayoutSize)),
+            exit = fadeOut(IronMotion.orSnap(reducedMotion, IronMotion.EffectFast)) +
+                shrinkVertically(IronMotion.orSnap(reducedMotion, IronMotion.SpatialLayoutSize))
+        ) {
+            IronLogGroupedCard(showBorder = true) {
                 cadence.weeks.forEachIndexed { index, week ->
                     if (index > 0) {
                         IronLogDivider()
@@ -757,12 +1026,23 @@ private fun RecordEventRow(
     onClick: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    val haptics = LocalIronHaptics.current
+    val rowIndication = remember {
+        MachinedPressIndication(pressedScale = 0.98f, highlightAlpha = 0.06f, cornerRadius = IronLogRadius.Control)
+    }
     val isPr = event.kind == TrainingInsightRecordKind.PERSONAL_RECORD
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 72.dp)
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = rowIndication,
+                onClick = {
+                    haptics.tick()
+                    onClick()
+                }
+            )
             .padding(IronLogSpace.CardPadding),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {

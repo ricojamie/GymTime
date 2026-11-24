@@ -39,6 +39,27 @@ fun NavController.navigateHomeAndClearStack() {
     }
 }
 
+/**
+ * Switches between top-level bottom-bar tabs while keeping [Screen.Home] as the
+ * single root destination on the back stack.
+ */
+fun NavController.navigateToBottomTab(route: String) {
+    if (!isDestinationAttachedAndAlive()) return
+    if (currentDestination?.route == route) return
+    if (route == Screen.Home.route) {
+        navigateHomeAndClearStack()
+    } else {
+        navigate(route) {
+            popUpTo(Screen.Home.route) {
+                inclusive = false
+                saveState = false
+            }
+            launchSingleTop = true
+            restoreState = false
+        }
+    }
+}
+
 fun NavController.navigateBackOrHome() {
     if (!isDestinationAttachedAndAlive()) return
     if (!popBackStack()) {

@@ -1,6 +1,7 @@
 package com.example.gymtime.ui.analytics.preview
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -14,11 +15,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -36,9 +38,12 @@ import com.example.gymtime.domain.analytics.TrainingInsightMuscle
 import com.example.gymtime.domain.analytics.TrainingInsightSet
 import com.example.gymtime.domain.analytics.TrainingInsightsPeriod
 import com.example.gymtime.domain.progression.progressLabel
+import com.example.gymtime.ui.components.IronLogCalibrationBar
 import com.example.gymtime.ui.components.IronLogCard
 import com.example.gymtime.ui.components.IronLogDivider
+import com.example.gymtime.ui.components.IronLogFilterPill
 import com.example.gymtime.ui.components.IronLogGroupedCard
+import com.example.gymtime.ui.components.IronLogLedPip
 import com.example.gymtime.ui.components.IronLogSectionHeader
 import com.example.gymtime.ui.components.IronLogSheetHeader
 import com.example.gymtime.ui.components.IronLogStatusChip
@@ -46,6 +51,11 @@ import com.example.gymtime.ui.components.IronLogStatusTone
 import com.example.gymtime.ui.theme.IronLogRadius
 import com.example.gymtime.ui.theme.IronLogSpace
 import com.example.gymtime.ui.theme.IronLogType
+import com.example.gymtime.ui.theme.LocalIronHaptics
+import com.example.gymtime.ui.theme.LocalIronLogSurfaces
+import com.example.gymtime.ui.theme.MachinedPressIndication
+import com.example.gymtime.ui.theme.OdometerText
+import com.example.gymtime.ui.theme.staggeredEntranceOnce
 import com.example.gymtime.util.TimeUtils
 import java.time.Instant
 import java.time.ZoneId
@@ -61,12 +71,13 @@ private fun InsightSheet(
     onDismiss: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val surfaces = LocalIronLogSurfaces.current
     // The modal owns its separate system/IME insets. The parent NavHost already owns app insets.
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         shape = IronLogRadius.SheetShape,
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = surfaces.plateBottom,
         contentColor = MaterialTheme.colorScheme.onSurface
     ) {
         Column(
@@ -99,6 +110,8 @@ internal fun InsightExercisePicker(
     onSelect: (Long) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val surfaces = LocalIronLogSurfaces.current
+    val scheme = MaterialTheme.colorScheme
     val visible = remember(exercises, muscleFilter, query) {
         val needle = query.trim()
         exercises.filter {
@@ -126,7 +139,13 @@ internal fun InsightExercisePicker(
                     label = { Text("Search exercises") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = IronLogRadius.ControlShape
+                    shape = IronLogRadius.KeycapShape,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = surfaces.wellFill,
+                        unfocusedContainerColor = surfaces.wellFill,
+                        focusedBorderColor = surfaces.accent,
+                        unfocusedBorderColor = scheme.outlineVariant.copy(alpha = 0.65f)
+                    )
                 )
             }
             item {
@@ -134,20 +153,18 @@ internal fun InsightExercisePicker(
                     horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    FilterChip(
+                    IronLogFilterPill(
+                        label = "All body parts",
                         selected = muscleFilter == null,
                         onClick = { onMuscleChange(null) },
-                        shape = IronLogRadius.ControlShape,
-                        label = { Text("All body parts") },
-                        modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
+                        showLedPip = true
                     )
                     muscles.forEach { muscle ->
-                        FilterChip(
+                        IronLogFilterPill(
+                            label = muscle,
                             selected = muscleFilter == muscle,
                             onClick = { onMuscleChange(muscle) },
-                            shape = IronLogRadius.ControlShape,
-                            label = { Text(muscle) },
-                            modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
+                            showLedPip = true
                         )
                     }
                 }
@@ -157,29 +174,21 @@ internal fun InsightExercisePicker(
                     Text(
                         text = "No exercises match. Clear the search or choose another body part.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = scheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 16.dp)
                     )
                 }
             }
-            items(visible, key = { it.id }) { exercise ->
+            itemsIndexed(visible, key = { _, it -> it.id }) { index, exercise ->
                 val isSelected = exercise.id == selectedExerciseId
                 IronLogCard(
                     onClick = { onSelect(exercise.id) },
                     highlighted = isSelected,
+                    spotlight = isSelected,
                     showBorder = true,
-                    containerColor = if (isSelected) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainerLow
-                    },
-                    contentColor = if (isSelected) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
                     shape = IronLogRadius.CardShape,
                     modifier = Modifier
+                        .then(if (index < 6) Modifier.staggeredEntranceOnce("insight-picker", index) else Modifier)
                         .heightIn(min = 68.dp)
                         .semantics { selected = isSelected },
                     verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -189,6 +198,9 @@ internal fun InsightExercisePicker(
                         horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (isSelected) {
+                            IronLogLedPip(color = surfaces.ledGlow, size = 5.dp, pulsing = true)
+                        }
                         Text(
                             text = exercise.name,
                             modifier = Modifier.weight(1f),
@@ -202,11 +214,7 @@ internal fun InsightExercisePicker(
                     Text(
                         text = "${exercise.muscle}${if (exercise.isStarred) " · Favorite" else ""} · ${exercise.totalWorkingSets} working sets",
                         style = IronLogType.tabular(MaterialTheme.typography.bodyMedium),
-                        color = if (isSelected) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
+                        color = scheme.onSurfaceVariant
                     )
                 }
             }
@@ -217,6 +225,7 @@ internal fun InsightExercisePicker(
 @Composable
 internal fun InsightExerciseEvidenceSheet(exercise: TrainingInsightExercise, onDismiss: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
     InsightSheet(
         title = exercise.name,
         subtitle = "${exercise.muscle} · completed working history · read only",
@@ -241,10 +250,8 @@ internal fun InsightExerciseEvidenceSheet(exercise: TrainingInsightExercise, onD
             } else {
                 item {
                     IronLogGroupedCard(
-                        containerColor = scheme.primaryContainer,
-                        contentColor = scheme.onPrimaryContainer,
                         showBorder = true,
-                        shape = IronLogRadius.CardShape
+                        shape = IronLogRadius.PlateShape
                     ) {
                         exercise.records.forEachIndexed { index, record ->
                             if (index > 0) {
@@ -261,19 +268,30 @@ internal fun InsightExerciseEvidenceSheet(exercise: TrainingInsightExercise, onD
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(record.metric.label, style = MaterialTheme.typography.labelLarge)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        IronLogLedPip(color = surfaces.ledGlow, size = 5.dp)
+                                        Text(
+                                            text = record.metric.label.uppercase(),
+                                            style = IronLogType.technicalEyebrow(),
+                                            color = scheme.onSurfaceVariant
+                                        )
+                                    }
                                     IronLogStatusChip(label = "Record", tone = IronLogStatusTone.PR)
                                 }
-                                Text(
+                                OdometerText(
                                     text = "${insightNumber(record.value)} ${record.metric.unit}",
-                                    style = IronLogType.tabular(MaterialTheme.typography.titleLarge).copy(
+                                    style = IronLogType.monumentalNumeral(MaterialTheme.typography.titleLarge).copy(
                                         fontWeight = FontWeight.Bold
-                                    )
+                                    ),
+                                    color = surfaces.accent
                                 )
                                 Text(
                                     text = "${insightSetLabel(record.set, exercise.logType)} · ${insightDate(record.set.timestampMs)}",
                                     style = IronLogType.tabular(MaterialTheme.typography.bodyMedium),
-                                    color = scheme.onPrimaryContainer
+                                    color = scheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -343,6 +361,15 @@ internal fun InsightMuscleEvidenceSheet(
     onDismiss: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
+    val rowIndication = remember {
+        MachinedPressIndication(pressedScale = 0.98f, highlightAlpha = 0.06f, cornerRadius = IronLogRadius.Control)
+    }
+    val maxCurrentSets = remember(muscle.contributors) {
+        muscle.contributors.maxOfOrNull { it.currentWorkingSets }?.coerceAtLeast(1) ?: 1
+    }
+
     InsightSheet(
         title = muscle.name,
         subtitle = periodLabel(period),
@@ -388,7 +415,7 @@ internal fun InsightMuscleEvidenceSheet(
                 }
             } else {
                 item {
-                    IronLogGroupedCard(showBorder = true) {
+                    IronLogGroupedCard(showBorder = true, shape = IronLogRadius.PlateShape) {
                         muscle.contributors.forEachIndexed { index, contribution ->
                             if (index > 0) {
                                 IronLogDivider()
@@ -397,14 +424,27 @@ internal fun InsightMuscleEvidenceSheet(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .heightIn(min = 72.dp)
-                                    .clickable { onExercise(contribution.exerciseId) }
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = rowIndication,
+                                        onClick = {
+                                            haptics.tick()
+                                            onExercise(contribution.exerciseId)
+                                        }
+                                    )
                                     .padding(IronLogSpace.CardPadding),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
                                     text = contribution.exerciseName,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
+                                )
+                                IronLogCalibrationBar(
+                                    progress = contribution.currentWorkingSets.toFloat() / maxCurrentSets.toFloat(),
+                                    accentColor = surfaces.accent,
+                                    tickCount = 8,
+                                    height = 8.dp
                                 )
                                 Text(
                                     text = "${contribution.currentWorkingSets} current · ${contribution.previousWorkingSets} prior · ${contribution.totalWorkingSets} all time",
@@ -414,7 +454,7 @@ internal fun InsightMuscleEvidenceSheet(
                                 Text(
                                     text = "Open exercise history & records",
                                     style = MaterialTheme.typography.labelLarge,
-                                    color = scheme.primary
+                                    color = surfaces.accent
                                 )
                             }
                         }

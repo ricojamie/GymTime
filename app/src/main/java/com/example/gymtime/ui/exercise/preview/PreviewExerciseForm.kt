@@ -1,8 +1,16 @@
 package com.example.gymtime.ui.exercise.preview
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -24,6 +32,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -31,7 +40,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -45,14 +53,10 @@ import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -64,12 +68,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -81,12 +91,21 @@ import com.example.gymtime.data.db.entity.LogType
 import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
 import com.example.gymtime.ui.components.IronLogCard
 import com.example.gymtime.ui.components.IronLogDivider
+import com.example.gymtime.ui.components.IronLogFilterPill
 import com.example.gymtime.ui.components.IronLogGroupedCard
+import com.example.gymtime.ui.components.IronLogLedPip
 import com.example.gymtime.ui.components.IronLogPrimaryButton
+import com.example.gymtime.ui.components.IronLogRecessedWell
+import com.example.gymtime.ui.components.IronLogSecondaryButton
 import com.example.gymtime.ui.theme.IronLogBorder
 import com.example.gymtime.ui.theme.IronLogRadius
 import com.example.gymtime.ui.theme.IronLogSpace
 import com.example.gymtime.ui.theme.IronLogType
+import com.example.gymtime.ui.theme.IronMotion
+import com.example.gymtime.ui.theme.LocalIronHaptics
+import com.example.gymtime.ui.theme.LocalIronLogSurfaces
+import com.example.gymtime.ui.theme.LocalReducedMotion
+import com.example.gymtime.ui.theme.MachinedPressIndication
 
 data class ExerciseFormUiState(
     val name: String = "",
@@ -130,9 +149,10 @@ fun PreviewExerciseForm(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
+    val haptics = LocalIronHaptics.current
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = colors.background,
+        color = Color.Transparent,
         contentColor = colors.onBackground
     ) {
         Column(
@@ -149,7 +169,10 @@ fun PreviewExerciseForm(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
-                    onClick = { onAction(ExerciseFormAction.Back) },
+                    onClick = {
+                        haptics.tick()
+                        onAction(ExerciseFormAction.Back)
+                    },
                     enabled = !state.isSaving,
                     modifier = Modifier.size(IronLogSpace.TouchTargetMin)
                 ) {
@@ -199,15 +222,15 @@ fun PreviewExerciseForm(
                         color = colors.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 12.dp)
                     )
-                    Button(
-                        onClick = { onAction(ExerciseFormAction.RetryLoad) },
-                        shape = IronLogRadius.ControlShape,
-                        modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
-                    ) {
-                        Text("Try again")
-                    }
+                    IronLogSecondaryButton(
+                        text = "Try again",
+                        onClick = { onAction(ExerciseFormAction.RetryLoad) }
+                    )
                     TextButton(
-                        onClick = { onAction(ExerciseFormAction.Back) },
+                        onClick = {
+                            haptics.tick()
+                            onAction(ExerciseFormAction.Back)
+                        },
                         modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
                     ) {
                         Text("Go back")
@@ -230,6 +253,9 @@ private fun ExerciseFormFields(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
+    val reducedMotion = LocalReducedMotion.current
     val focus = LocalFocusManager.current
     var showMoreTracking by rememberSaveable { mutableStateOf(false) }
     var showDetails by rememberSaveable { mutableStateOf(state.isEditMode) }
@@ -256,23 +282,19 @@ private fun ExerciseFormFields(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
             Text(
-                text = if (state.isEditMode) "Fine-tune your setup." else "Make it yours.",
-                style = MaterialTheme.typography.labelLarge,
-                color = colors.primary
+                text = if (state.isEditMode) "FINE-TUNE SETUP" else "NEW INSTRUMENT",
+                style = IronLogType.technicalEyebrow(),
+                color = surfaces.accent
             )
-            OutlinedTextField(
+            FormRecessedInput(
+                label = "Exercise name",
                 value = state.name,
                 onValueChange = { onAction(ExerciseFormAction.Name(it)) },
-                modifier = Modifier.fillMaxWidth(),
+                placeholder = "e.g. Incline dumbbell press",
                 enabled = !state.isSaving,
-                label = { Text("Exercise name") },
-                placeholder = { Text("e.g. Incline dumbbell press") },
-                singleLine = true,
-                shape = IronLogRadius.ControlShape,
                 textStyle = MaterialTheme.typography.titleMedium,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
-                colors = formTextFieldColors()
+                keyboardActions = KeyboardActions(onDone = { focus.clearFocus() })
             )
         }
 
@@ -281,7 +303,7 @@ private fun ExerciseFormFields(
             IronLogGroupedCard(showBorder = true, shape = IronLogRadius.CardShape) {
                 Text(
                     text = "ALREADY IN YOUR LIBRARY",
-                    style = IronLogType.sectionEyebrow(),
+                    style = IronLogType.technicalEyebrow(),
                     color = colors.onSurfaceVariant,
                     modifier = Modifier.padding(
                         start = IronLogSpace.CardPadding,
@@ -291,11 +313,22 @@ private fun ExerciseFormFields(
                     )
                 )
                 matches.forEachIndexed { index, exercise ->
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val pressIndication = remember {
+                        MachinedPressIndication(pressedScale = 0.985f, highlightAlpha = 0.05f, cornerRadius = IronLogRadius.Control)
+                    }
                     Row(
                         Modifier
                             .fillMaxWidth()
                             .heightIn(min = 56.dp)
-                            .clickable(enabled = !state.isSaving) { reuseExerciseId = exercise.id }
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = pressIndication,
+                                enabled = !state.isSaving
+                            ) {
+                                haptics.tick()
+                                reuseExerciseId = exercise.id
+                            }
                             .padding(horizontal = IronLogSpace.CardPadding, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
@@ -315,7 +348,7 @@ private fun ExerciseFormFields(
                         Text(
                             text = "Use this",
                             style = MaterialTheme.typography.labelLarge,
-                            color = colors.primary,
+                            color = surfaces.accent,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -333,16 +366,15 @@ private fun ExerciseFormFields(
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 muscles.forEach { muscle ->
-                    FilterChip(
+                    IronLogFilterPill(
+                        label = muscle,
                         selected = state.muscle == muscle,
-                        onClick = { focus.clearFocus(); onAction(ExerciseFormAction.Muscle(muscle)) },
-                        label = { Text(muscle) },
-                        modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin),
+                        onClick = {
+                            focus.clearFocus()
+                            onAction(ExerciseFormAction.Muscle(muscle))
+                        },
                         enabled = !state.isSaving,
-                        leadingIcon = if (state.muscle == muscle) {
-                            { Icon(Icons.Default.Check, null, Modifier.size(16.dp)) }
-                        } else null,
-                        shape = IronLogRadius.ControlShape
+                        showLedPip = true
                     )
                 }
             }
@@ -362,7 +394,12 @@ private fun ExerciseFormFields(
             }
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
+        Column(
+            modifier = Modifier.animateContentSize(
+                animationSpec = if (reducedMotion) snap() else IronMotion.SpatialLayoutSize
+            ),
+            verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
+        ) {
             FormSectionHeading("What do you track?")
             TrackingOptions(
                 types = commonTypes,
@@ -380,7 +417,11 @@ private fun ExerciseFormFields(
                 )
             }
             TextButton(
-                onClick = { focus.clearFocus(); showMoreTracking = !showMoreTracking },
+                onClick = {
+                    haptics.segmentTick()
+                    focus.clearFocus()
+                    showMoreTracking = !showMoreTracking
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = IronLogSpace.TouchTargetMin),
@@ -394,7 +435,15 @@ private fun ExerciseFormFields(
                     modifier = Modifier.size(20.dp)
                 )
             }
-            AnimatedVisibility(showMoreTracking) {
+            AnimatedVisibility(
+                visible = showMoreTracking,
+                enter = expandVertically(
+                    animationSpec = if (reducedMotion) snap() else IronMotion.SpatialLayoutSize
+                ) + fadeIn(animationSpec = if (reducedMotion) snap() else IronMotion.EffectDefault),
+                exit = shrinkVertically(
+                    animationSpec = if (reducedMotion) snap() else IronMotion.SpatialLayoutSize
+                ) + fadeOut(animationSpec = if (reducedMotion) snap() else IronMotion.EffectFast)
+            ) {
                 TrackingOptions(
                     types = LogType.entries.filterNot { it in commonTypes },
                     selected = state.logType,
@@ -409,16 +458,12 @@ private fun ExerciseFormFields(
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     DistanceUnit.entries.forEach { unit ->
-                        FilterChip(
+                        IronLogFilterPill(
+                            label = unit.formLabel,
                             selected = state.distanceUnit == unit,
                             onClick = { onAction(ExerciseFormAction.Distance(unit)) },
-                            label = { Text(unit.formLabel) },
-                            modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin),
                             enabled = !state.isSaving,
-                            leadingIcon = if (state.distanceUnit == unit) {
-                                { Icon(Icons.Default.Check, null, Modifier.size(16.dp)) }
-                            } else null,
-                            shape = IronLogRadius.ControlShape
+                            showLedPip = true
                         )
                     }
                 }
@@ -426,7 +471,7 @@ private fun ExerciseFormFields(
             state.logType?.let { type ->
                 IronLogCard(
                     shape = IronLogRadius.CardShape,
-                    containerColor = colors.surfaceContainerLow,
+                    spotlight = true,
                     showBorder = true,
                     contentPadding = PaddingValues(14.dp)
                 ) {
@@ -435,12 +480,12 @@ private fun ExerciseFormFields(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
                     ) {
-                        Icon(type.formIcon, null, Modifier.size(24.dp), tint = colors.primary)
+                        Icon(type.formIcon, null, Modifier.size(24.dp), tint = surfaces.accent)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
                                 text = "EXAMPLE SET · ${type.formLabel.uppercase()}",
-                                style = IronLogType.sectionEyebrow(),
-                                color = colors.primary
+                                style = IronLogType.technicalEyebrow(),
+                                color = surfaces.accent
                             )
                             Text(
                                 text = sampleSet(type, state.distanceUnit, state.repTarget),
@@ -460,15 +505,26 @@ private fun ExerciseFormFields(
         }
 
         IronLogGroupedCard(
+            modifier = Modifier.animateContentSize(
+                animationSpec = if (reducedMotion) snap() else IronMotion.SpatialLayoutSize
+            ),
             showBorder = true,
-            shape = IronLogRadius.CardShape,
-            containerColor = colors.surfaceContainerLow
+            shape = IronLogRadius.CardShape
         ) {
+            val setupInteraction = remember { MutableInteractionSource() }
+            val setupIndication = remember {
+                MachinedPressIndication(pressedScale = 0.985f, highlightAlpha = 0.05f, cornerRadius = IronLogRadius.Card)
+            }
             Row(
                 Modifier
                     .fillMaxWidth()
                     .heightIn(min = 68.dp)
-                    .clickable(enabled = !state.isSaving) {
+                    .clickable(
+                        interactionSource = setupInteraction,
+                        indication = setupIndication,
+                        enabled = !state.isSaving
+                    ) {
+                        haptics.segmentTick()
                         focus.clearFocus()
                         showDetails = !showDetails
                     }
@@ -476,7 +532,7 @@ private fun ExerciseFormFields(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
             ) {
-                Icon(Icons.Default.Tune, null, tint = colors.primary)
+                Icon(Icons.Default.Tune, null, tint = surfaces.accent)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Your setup", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Text(
@@ -490,7 +546,15 @@ private fun ExerciseFormFields(
                     contentDescription = if (showDetails) "Collapse setup" else "Expand setup"
                 )
             }
-            AnimatedVisibility(showDetails) {
+            AnimatedVisibility(
+                visible = showDetails,
+                enter = expandVertically(
+                    animationSpec = if (reducedMotion) snap() else IronMotion.SpatialLayoutSize
+                ) + fadeIn(animationSpec = if (reducedMotion) snap() else IronMotion.EffectDefault),
+                exit = shrinkVertically(
+                    animationSpec = if (reducedMotion) snap() else IronMotion.SpatialLayoutSize
+                ) + fadeOut(animationSpec = if (reducedMotion) snap() else IronMotion.EffectFast)
+            ) {
                 Column {
                     IronLogDivider(insetStart = 0.dp)
                     FormSetupFields(state, onAction)
@@ -504,17 +568,24 @@ private fun ExerciseFormFields(
         AlertDialog(
             onDismissRequest = { reuseExerciseId = null },
             shape = IronLogRadius.CardShape,
-            containerColor = colors.surface,
+            containerColor = surfaces.plateElevatedTop,
             icon = { Icon(Icons.Default.FitnessCenter, null) },
             title = { Text("Use ${candidate.name}?") },
             text = { Text("Continue with the exercise already in your library. Unsaved changes on this page will be discarded.") },
             confirmButton = {
-                TextButton(onClick = { reuseExerciseId = null; onAction(ExerciseFormAction.UseExisting(candidate)) }) {
+                TextButton(onClick = {
+                    haptics.confirm()
+                    reuseExerciseId = null
+                    onAction(ExerciseFormAction.UseExisting(candidate))
+                }) {
                     Text("Use exercise")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { reuseExerciseId = null }) {
+                TextButton(onClick = {
+                    haptics.tick()
+                    reuseExerciseId = null
+                }) {
                     Text(if (state.isEditMode) "Keep editing" else "Keep creating")
                 }
             }
@@ -538,74 +609,156 @@ private fun FormSetupFields(state: ExerciseFormUiState, onAction: (ExerciseFormA
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             listOf(60, 90, 120, 180).forEach { seconds ->
-                FilterChip(
-                    selected = state.restSeconds.toIntOrNull() == seconds,
-                    onClick = { focus.clearFocus(); onAction(ExerciseFormAction.Rest(seconds.toString())) },
-                    label = {
-                        Text(
-                            when (seconds) {
-                                60 -> "1 min"
-                                90 -> "90 sec"
-                                120 -> "2 min"
-                                else -> "3 min"
-                            }
-                        )
+                IronLogFilterPill(
+                    label = when (seconds) {
+                        60 -> "1 min"
+                        90 -> "90 sec"
+                        120 -> "2 min"
+                        else -> "3 min"
                     },
-                    modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin),
+                    selected = state.restSeconds.toIntOrNull() == seconds,
+                    onClick = {
+                        focus.clearFocus()
+                        onAction(ExerciseFormAction.Rest(seconds.toString()))
+                    },
                     enabled = !state.isSaving,
-                    shape = IronLogRadius.ControlShape
+                    showLedPip = true
                 )
             }
         }
-        OutlinedTextField(
+        FormRecessedInput(
+            label = "Rest time",
             value = state.restSeconds,
             onValueChange = { onAction(ExerciseFormAction.Rest(it.filter(Char::isDigit).take(6))) },
-            label = { Text("Rest time") },
-            suffix = { Text("seconds") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
+            placeholder = "90",
+            suffixText = "seconds",
             enabled = !state.isSaving,
             isError = restInvalid,
-            supportingText = if (restInvalid) { { Text("Enter a rest time greater than zero.") } } else null,
+            supportingText = if (restInvalid) "Enter a rest time greater than zero." else null,
             textStyle = IronLogType.tabular(MaterialTheme.typography.bodyLarge),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
-            shape = IronLogRadius.ControlShape,
-            colors = formTextFieldColors()
+            keyboardActions = KeyboardActions(onDone = { focus.clearFocus() })
         )
         if (state.logType.usesFormRepTarget) {
-            OutlinedTextField(
+            FormRecessedInput(
+                label = "Rep target · optional",
                 value = state.repTarget,
                 onValueChange = { onAction(ExerciseFormAction.RepTarget(it.filter(Char::isDigit).take(3))) },
-                label = { Text("Rep target · optional") },
-                placeholder = { Text("e.g. 10") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
+                placeholder = "e.g. 10",
                 enabled = !state.isSaving,
                 isError = repsInvalid,
-                supportingText = {
-                    Text(if (repsInvalid) "Enter a target greater than zero, or leave it empty." else "A starting target for your sets.")
-                },
+                supportingText = if (repsInvalid) "Enter a target greater than zero, or leave it empty." else "A starting target for your sets.",
                 textStyle = IronLogType.tabular(MaterialTheme.typography.bodyLarge),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
-                shape = IronLogRadius.ControlShape,
-                colors = formTextFieldColors()
+                keyboardActions = KeyboardActions(onDone = { focus.clearFocus() })
             )
         }
-        OutlinedTextField(
+        FormRecessedInput(
+            label = "Exercise notes · optional",
             value = state.notes,
             onValueChange = { onAction(ExerciseFormAction.Notes(it)) },
-            label = { Text("Exercise notes · optional") },
-            placeholder = { Text("Seat height, grip, or a cue that clicks…") },
-            modifier = Modifier.fillMaxWidth(),
+            placeholder = "Seat height, grip, or a cue that clicks…",
+            enabled = !state.isSaving,
+            singleLine = false,
             minLines = 2,
             maxLines = 5,
-            enabled = !state.isSaving,
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            shape = IronLogRadius.ControlShape,
-            colors = formTextFieldColors()
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
         )
+    }
+}
+
+@Composable
+private fun FormRecessedInput(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    suffixText: String? = null,
+    enabled: Boolean = true,
+    isError: Boolean = false,
+    supportingText: String? = null,
+    singleLine: Boolean = true,
+    minLines: Int = 1,
+    maxLines: Int = if (singleLine) 1 else 5,
+    textStyle: TextStyle = MaterialTheme.typography.bodyLarge,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default
+) {
+    val colors = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    var isFocused by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = label.uppercase(),
+            style = IronLogType.technicalEyebrow(),
+            color = when {
+                isError -> colors.error
+                isFocused -> surfaces.accent
+                else -> colors.onSurfaceVariant
+            }
+        )
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            enabled = enabled,
+            singleLine = singleLine,
+            minLines = minLines,
+            maxLines = maxLines,
+            textStyle = textStyle.copy(color = if (enabled) colors.onSurface else colors.onSurfaceVariant),
+            cursorBrush = SolidColor(if (isError) colors.error else surfaces.accent),
+            keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { isFocused = it.isFocused },
+            decorationBox = { innerTextField ->
+                IronLogRecessedWell(
+                    modifier = Modifier.fillMaxWidth(),
+                    active = isFocused || isError,
+                    accentColor = if (isError) colors.error else surfaces.accent,
+                    shape = IronLogRadius.KeycapShape,
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = if (singleLine) 24.dp else 48.dp),
+                        verticalAlignment = if (singleLine) Alignment.CenterVertically else Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            if (value.isEmpty()) {
+                                Text(
+                                    text = placeholder,
+                                    style = textStyle,
+                                    color = colors.onSurfaceVariant.copy(alpha = 0.65f)
+                                )
+                            }
+                            innerTextField()
+                        }
+                        if (!suffixText.isNullOrBlank()) {
+                            Text(
+                                text = suffixText,
+                                style = IronLogType.telemetryLabel(),
+                                color = colors.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        )
+        if (!supportingText.isNullOrBlank()) {
+            Text(
+                text = supportingText,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (isError) colors.error else colors.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -618,6 +771,8 @@ private fun TrackingOptions(
     compact: Boolean = false
 ) {
     val colors = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
     val fontScale = LocalDensity.current.fontScale
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val columns = if (compact && maxWidth >= 320.dp && fontScale <= 1.3f) 3 else 1
@@ -626,65 +781,98 @@ private fun TrackingOptions(
                 Row(horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
                     row.forEach { type ->
                         val isSelected = type == selected
-                        Surface(
+                        val interactionSource = remember { MutableInteractionSource() }
+                        val pressIndication = remember {
+                            MachinedPressIndication(pressedScale = 0.97f, highlightAlpha = 0.08f, cornerRadius = IronLogRadius.Card)
+                        }
+                        val fillBrush = remember(isSelected, surfaces) {
+                            Brush.verticalGradient(
+                                if (isSelected) listOf(surfaces.telemetryStageTop, surfaces.telemetryStageBottom)
+                                else listOf(surfaces.plateTop, surfaces.plateBottom)
+                            )
+                        }
+                        val borderStroke = remember(isSelected, surfaces) {
+                            IronLogBorder.specularRimStroke(surfaces, highlighted = isSelected, width = IronLogBorder.Hairline)
+                        }
+                        Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .selectable(
                                     selected = isSelected,
                                     enabled = enabled,
                                     role = Role.RadioButton,
-                                    onClick = { onSelect(type) }
-                                ),
-                            shape = IronLogRadius.CardShape,
-                            color = if (isSelected) colors.primaryContainer else colors.surfaceContainerLow,
-                            contentColor = if (isSelected) colors.onPrimaryContainer else colors.onSurface,
-                            tonalElevation = 0.dp,
-                            shadowElevation = 0.dp,
-                            border = BorderStroke(
-                                width = IronLogBorder.Hairline,
-                                color = if (isSelected) colors.primary else colors.outlineVariant
-                            )
+                                    interactionSource = interactionSource,
+                                    indication = pressIndication,
+                                    onClick = {
+                                        haptics.segmentTick()
+                                        onSelect(type)
+                                    }
+                                )
+                                .clip(IronLogRadius.CardShape)
+                                .background(fillBrush)
+                                .border(borderStroke, IronLogRadius.CardShape)
                         ) {
                             if (columns == 3) {
                                 Column(
                                     Modifier
+                                        .fillMaxWidth()
                                         .heightIn(min = 100.dp)
                                         .padding(12.dp),
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = if (isSelected) Icons.Default.CheckCircle else type.formIcon,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(22.dp)
-                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = type.formIcon,
+                                            contentDescription = null,
+                                            tint = if (isSelected) surfaces.accent else colors.onSurfaceVariant,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                        if (isSelected) {
+                                            IronLogLedPip(color = surfaces.ledGlow, size = 5.dp)
+                                        }
+                                    }
                                     Text(
                                         text = type.formLabel,
                                         style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.SemiBold
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                        color = colors.onSurface
                                     )
                                 }
                             } else {
                                 Row(
                                     Modifier
+                                        .fillMaxWidth()
                                         .heightIn(min = 64.dp)
                                         .padding(12.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    Icon(type.formIcon, null, Modifier.size(24.dp))
+                                    Icon(
+                                        imageVector = type.formIcon,
+                                        contentDescription = null,
+                                        tint = if (isSelected) surfaces.accent else colors.onSurfaceVariant,
+                                        modifier = Modifier.size(24.dp)
+                                    )
                                     Column(Modifier.weight(1f)) {
                                         Text(
                                             text = type.formLabel,
                                             style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = colors.onSurface
                                         )
                                         Text(
                                             text = type.formDescription,
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = if (isSelected) colors.onPrimaryContainer else colors.onSurfaceVariant
+                                            color = colors.onSurfaceVariant
                                         )
                                     }
-                                    if (isSelected) Icon(Icons.Default.CheckCircle, null, Modifier.size(20.dp))
+                                    if (isSelected) {
+                                        IronLogLedPip(color = surfaces.ledGlow, size = 5.dp)
+                                    }
                                 }
                             }
                         }
@@ -698,7 +886,12 @@ private fun TrackingOptions(
 @Composable
 private fun ExerciseFormSaveBar(state: ExerciseFormUiState, onAction: (ExerciseFormAction) -> Unit) {
     val colors = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
     val focus = LocalFocusManager.current
+    val plateBrush = remember(surfaces) {
+        Brush.verticalGradient(listOf(surfaces.plateTop, surfaces.plateBottom))
+    }
     val hint = when {
         state.name.isBlank() && state.muscle.isBlank() -> "Add a name and choose a muscle group."
         state.name.isBlank() -> "Add an exercise name."
@@ -708,62 +901,62 @@ private fun ExerciseFormSaveBar(state: ExerciseFormUiState, onAction: (ExerciseF
         state.logType.usesFormRepTarget && state.repTarget.isNotBlank() && state.repTarget.toIntOrNull()?.let { it > 0 } != true -> "Check your rep target in Your setup."
         else -> null
     }
-    Surface(
-        color = colors.surface,
-        contentColor = colors.onSurface,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(plateBrush)
     ) {
-        Column {
-            IronLogDivider(insetStart = 0.dp)
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = IronLogSpace.ScreenHorizontal, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
-            ) {
-                if (state.error != null) {
-                    Surface(
-                        color = colors.errorContainer,
-                        contentColor = colors.onErrorContainer,
-                        shape = IronLogRadius.ControlShape
+        IronLogDivider(insetStart = 0.dp)
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = IronLogSpace.ScreenHorizontal, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
+        ) {
+            if (state.error != null) {
+                Surface(
+                    color = colors.errorContainer,
+                    contentColor = colors.onErrorContainer,
+                    shape = IronLogRadius.ControlShape
+                ) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(start = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(start = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Text(
+                            text = state.error,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(vertical = 10.dp),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        IconButton(
+                            onClick = {
+                                haptics.tick()
+                                onAction(ExerciseFormAction.DismissError)
+                            },
+                            modifier = Modifier.size(IronLogSpace.TouchTargetMin)
                         ) {
-                            Text(
-                                text = state.error,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(vertical = 10.dp),
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            IconButton(
-                                onClick = { onAction(ExerciseFormAction.DismissError) },
-                                modifier = Modifier.size(IronLogSpace.TouchTargetMin)
-                            ) {
-                                Icon(Icons.Default.Close, "Dismiss error", Modifier.size(20.dp))
-                            }
+                            Icon(Icons.Default.Close, "Dismiss error", Modifier.size(20.dp))
                         }
                     }
-                } else if (hint != null && !state.isSaving) {
-                    Text(hint, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                 }
-                IronLogPrimaryButton(
-                    text = if (state.isSaving) "Saving…" else state.saveLabel,
-                    onClick = { focus.clearFocus(); onAction(ExerciseFormAction.Save) },
-                    enabled = state.canSave && !state.isSaving,
-                    loading = state.isSaving,
-                    leadingIcon = if (state.isEditMode) Icons.Default.Check else Icons.Default.Add,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 54.dp),
-                    shape = IronLogRadius.ControlShape
-                )
+            } else if (hint != null && !state.isSaving) {
+                Text(hint, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             }
+            IronLogPrimaryButton(
+                text = if (state.isSaving) "Saving…" else state.saveLabel,
+                onClick = { focus.clearFocus(); onAction(ExerciseFormAction.Save) },
+                enabled = state.canSave && !state.isSaving,
+                loading = state.isSaving,
+                leadingIcon = if (state.isEditMode) Icons.Default.Check else Icons.Default.Add,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 54.dp),
+                shape = IronLogRadius.ControlShape
+            )
         }
     }
 }
@@ -782,14 +975,6 @@ private fun FormSectionHeading(title: String, subtitle: String? = null) {
         }
     }
 }
-
-@Composable
-private fun formTextFieldColors() = OutlinedTextFieldDefaults.colors(
-    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-    focusedBorderColor = MaterialTheme.colorScheme.primary
-)
 
 private val LogType?.usesFormDistance: Boolean
     get() = this == LogType.WEIGHT_DISTANCE || this == LogType.DISTANCE_TIME

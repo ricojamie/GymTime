@@ -1,6 +1,5 @@
 package com.example.gymtime.ui.workout.preview
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,7 +40,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -59,29 +57,32 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.gymtime.data.db.entity.isWarmupMuscleGroup
+import com.example.gymtime.ui.components.IronLogCalibrationBar
 import com.example.gymtime.ui.components.IronLogCard
 import com.example.gymtime.ui.components.IronLogDivider
 import com.example.gymtime.ui.components.IronLogEmptyState
-import com.example.gymtime.ui.components.IronLogGroupedCard
-import com.example.gymtime.ui.components.IronLogMetric
-import com.example.gymtime.ui.components.IronLogMetricRow
+import com.example.gymtime.ui.components.IronLogLedPip
 import com.example.gymtime.ui.components.IronLogPrimaryButton
+import com.example.gymtime.ui.components.IronLogRecessedWell
 import com.example.gymtime.ui.components.IronLogSecondaryButton
 import com.example.gymtime.ui.components.IronLogSectionHeader
 import com.example.gymtime.ui.components.IronLogStatusChip
 import com.example.gymtime.ui.components.IronLogStatusTone
-import com.example.gymtime.ui.theme.IronLogBorder
 import com.example.gymtime.ui.theme.IronLogRadius
 import com.example.gymtime.ui.theme.IronLogSpace
 import com.example.gymtime.ui.theme.IronLogTheme
 import com.example.gymtime.ui.theme.IronLogType
+import com.example.gymtime.ui.theme.LocalIronHaptics
+import com.example.gymtime.ui.theme.LocalIronLogSurfaces
+import com.example.gymtime.ui.theme.OdometerText
+import com.example.gymtime.ui.theme.staggeredEntranceOnce
 import com.example.gymtime.ui.workout.ResumeExerciseItem
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -127,6 +128,7 @@ fun PreviewCurrentWorkoutContent(
     snackbarHost: @Composable () -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
     val supersetIds = remember(state.exercises) { state.exercises.mapNotNull { it.supersetGroupId }.distinct() }
     var showFinish by rememberSaveable(state.workoutId) { mutableStateOf(false) }
     var removeInstanceId by rememberSaveable(state.workoutId) { mutableStateOf<Long?>(null) }
@@ -143,17 +145,16 @@ fun PreviewCurrentWorkoutContent(
         }
     }
     val elapsedMinutes = state.startedAtMs?.let { ((clockMs - it).coerceAtLeast(0) / 60_000).toInt() }
-    val progress by animateFloatAsState(
-        targetValue = if (state.plannedWorkingSets > 0) {
-            (state.completedPlannedSets.toFloat() / state.plannedWorkingSets).coerceIn(0f, 1f)
-        } else 0f,
-        label = "Workout plan progress"
-    )
+    val targetProgress = if (state.plannedWorkingSets > 0) {
+        (state.completedPlannedSets.toFloat() / state.plannedWorkingSets).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = colors.background,
+        containerColor = Color.Transparent,
         contentColor = colors.onBackground,
         topBar = {
             TopAppBar(
@@ -177,23 +178,23 @@ fun PreviewCurrentWorkoutContent(
                         onClick = { onAction(CurrentWorkoutAction.Home) },
                         modifier = Modifier.size(IronLogSpace.TouchTargetMin)
                     ) {
-                        Icon(Icons.Default.Home, "Home", tint = colors.primary)
+                        Icon(Icons.Default.Home, "Home", tint = surfaces.accent)
                     }
                 },
                 windowInsets = WindowInsets(0, 0, 0, 0),
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.background)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         },
         snackbarHost = snackbarHost,
         bottomBar = {
             Surface(
-                color = colors.surfaceContainerLow,
+                color = surfaces.glassDockFill,
                 contentColor = colors.onSurface,
                 tonalElevation = 0.dp,
                 shadowElevation = 0.dp
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    IronLogDivider(insetStart = 0.dp)
+                    IronLogDivider(insetStart = 0.dp, color = surfaces.glassDockRimTop)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -242,7 +243,14 @@ fun PreviewCurrentWorkoutContent(
             verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
         ) {
             item(key = "session-header") {
-                Column(verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)) {
+                IronLogCard(
+                    highlighted = true,
+                    spotlight = true,
+                    showBorder = true,
+                    shape = IronLogRadius.PlateShape,
+                    modifier = Modifier.staggeredEntranceOnce("current-workout", 0),
+                    verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.Top,
@@ -250,13 +258,18 @@ fun PreviewCurrentWorkoutContent(
                     ) {
                         Column(
                             modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            state.routineName?.takeIf { it != state.name }?.let { routineName ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                IronLogLedPip(color = surfaces.ledGlow, size = 6.dp, pulsing = true)
                                 Text(
-                                    text = routineName.uppercase(),
-                                    style = IronLogType.sectionEyebrow(),
-                                    color = colors.primary
+                                    text = state.routineName?.takeIf { it != state.name }?.uppercase()
+                                        ?: "ACTIVE TELEMETRY",
+                                    style = IronLogType.technicalEyebrow(),
+                                    color = surfaces.accent
                                 )
                             }
                             Text(
@@ -266,58 +279,60 @@ fun PreviewCurrentWorkoutContent(
                             )
                         }
                         elapsedMinutes?.let { minutes ->
-                            Surface(
-                                color = colors.surfaceContainerHigh,
+                            IronLogRecessedWell(
+                                active = true,
+                                accentColor = surfaces.accent,
                                 shape = IronLogRadius.ControlShape,
-                                border = IronLogBorder.stroke(colors.outlineVariant)
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Timer,
                                         contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                        tint = colors.onSurfaceVariant
+                                        modifier = Modifier.size(15.dp),
+                                        tint = surfaces.accent
                                     )
-                                    Text(
+                                    OdometerText(
                                         text = formatElapsed(minutes),
-                                        style = IronLogType.tabular(MaterialTheme.typography.labelLarge),
-                                        fontWeight = FontWeight.SemiBold,
+                                        style = IronLogType.tabular(MaterialTheme.typography.labelLarge).copy(
+                                            fontWeight = FontWeight.Bold
+                                        ),
                                         color = colors.onSurface
                                     )
                                 }
                             }
                         }
                     }
+
                     SessionStats(state)
+
                     if (state.plannedWorkingSets > 0) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Plan progress",
-                                    style = MaterialTheme.typography.labelMedium,
+                                    text = "PLAN PROGRESS",
+                                    style = IronLogType.technicalEyebrow(),
                                     color = colors.onSurfaceVariant
                                 )
                                 Text(
                                     text = "${state.completedPlannedSets} / ${state.plannedWorkingSets} working sets",
-                                    style = IronLogType.tabular(MaterialTheme.typography.labelMedium),
-                                    fontWeight = FontWeight.SemiBold
+                                    style = IronLogType.telemetryLabel(),
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.onSurface
                                 )
                             }
-                            LinearProgressIndicator(
-                                progress = { progress },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp)
-                                    .clip(IronLogRadius.MicroShape),
-                                color = colors.primary,
-                                trackColor = colors.surfaceContainerHighest
+                            IronLogCalibrationBar(
+                                progress = targetProgress,
+                                accentColor = surfaces.accent,
+                                tickCount = state.plannedWorkingSets.coerceIn(4, 12),
+                                height = 12.dp
                             )
                         }
                     }
@@ -338,9 +353,11 @@ fun PreviewCurrentWorkoutContent(
                 item(key = "empty") {
                     IronLogCard(
                         highlighted = true,
+                        spotlight = true,
                         showBorder = true,
-                        shape = IronLogRadius.CardShape,
-                        contentPadding = PaddingValues(0.dp)
+                        shape = IronLogRadius.PlateShape,
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.staggeredEntranceOnce("current-workout", 1)
                     ) {
                         IronLogEmptyState(
                             icon = Icons.Default.FitnessCenter,
@@ -358,7 +375,8 @@ fun PreviewCurrentWorkoutContent(
                             exercise = exercise,
                             hasNextTarget = state.hasNextTarget,
                             enabled = !state.isFinishing,
-                            onClick = { onAction(CurrentWorkoutAction.OpenExercise(exercise.exerciseId)) }
+                            onClick = { onAction(CurrentWorkoutAction.OpenExercise(exercise.exerciseId)) },
+                            modifier = Modifier.staggeredEntranceOnce("current-workout", 1)
                         )
                     }
                 }
@@ -368,7 +386,7 @@ fun PreviewCurrentWorkoutContent(
                         trailingAction = {
                             Text(
                                 text = "Tap to log",
-                                style = MaterialTheme.typography.labelMedium,
+                                style = IronLogType.telemetryLabel(),
                                 color = colors.onSurfaceVariant
                             )
                         }
@@ -383,7 +401,10 @@ fun PreviewCurrentWorkoutContent(
                     val inSuperset = exercise.supersetGroupId != null
                     val connectedTop = inSuperset && previous?.supersetGroupId == exercise.supersetGroupId
                     val connectedBottom = inSuperset && next?.supersetGroupId == exercise.supersetGroupId
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(
+                        modifier = Modifier.animateItem(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         if (inSuperset && !connectedTop) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -414,7 +435,7 @@ fun PreviewCurrentWorkoutContent(
                                         modifier = Modifier
                                             .width(2.dp)
                                             .weight(1f)
-                                            .background(if (connectedTop) colors.secondary else colors.background)
+                                            .background(if (connectedTop) colors.secondary else Color.Transparent)
                                     )
                                     Box(
                                         modifier = Modifier
@@ -425,7 +446,7 @@ fun PreviewCurrentWorkoutContent(
                                         modifier = Modifier
                                             .width(2.dp)
                                             .weight(1f)
-                                            .background(if (connectedBottom) colors.secondary else colors.background)
+                                            .background(if (connectedBottom) colors.secondary else Color.Transparent)
                                     )
                                 }
                             }
@@ -453,7 +474,7 @@ fun PreviewCurrentWorkoutContent(
                     onAction(CurrentWorkoutAction.ClearFinishError)
                 }
             },
-            icon = { Icon(Icons.Default.Flag, null, tint = colors.primary) },
+            icon = { Icon(Icons.Default.Flag, null, tint = surfaces.accent) },
             title = { Text("Finish this workout?") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -518,25 +539,82 @@ fun PreviewCurrentWorkoutContent(
 
 @Composable
 private fun SessionStats(state: CurrentWorkoutUiState) {
-    val metrics = if (state.targetExercises > 0) {
-        listOf(
-            IronLogMetric("Working sets", "${state.workingSets}", emphasized = true),
-            IronLogMetric("Exercises", "${state.startedExercises}"),
-            IronLogMetric("Targets met", "${state.completedTargets}/${state.targetExercises}")
-        )
+    val surfaces = LocalIronLogSurfaces.current
+    val thirdLabel = if (state.targetExercises > 0) "TARGETS MET" else "WARMUPS"
+    val thirdValue = if (state.targetExercises > 0) {
+        "${state.completedTargets}/${state.targetExercises}"
     } else {
-        listOf(
-            IronLogMetric("Working sets", "${state.workingSets}", emphasized = true),
-            IronLogMetric("Exercises", "${state.startedExercises}"),
-            IronLogMetric("Warmups", "${state.warmupEntries}")
-        )
+        "${state.warmupEntries}"
     }
 
-    IronLogGroupedCard(showBorder = true) {
-        IronLogMetricRow(
-            metrics = metrics,
-            modifier = Modifier.padding(IronLogSpace.CardPadding)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
+    ) {
+        SessionStatWell(
+            label = "WORKING SETS",
+            value = state.workingSets.toString(),
+            emphasized = true,
+            accentColor = surfaces.accent,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
         )
+        SessionStatWell(
+            label = "EXERCISES",
+            value = state.startedExercises.toString(),
+            emphasized = false,
+            accentColor = surfaces.accent,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+        )
+        SessionStatWell(
+            label = thirdLabel,
+            value = thirdValue,
+            emphasized = false,
+            accentColor = surfaces.accent,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+        )
+    }
+}
+
+@Composable
+private fun SessionStatWell(
+    label: String,
+    value: String,
+    emphasized: Boolean,
+    accentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    IronLogRecessedWell(
+        modifier = modifier,
+        active = emphasized,
+        accentColor = accentColor,
+        shape = IronLogRadius.ControlShape,
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = label,
+                style = IronLogType.technicalEyebrow(),
+                color = colors.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            OdometerText(
+                text = value,
+                style = IronLogType.monumentalNumeral(MaterialTheme.typography.titleLarge).copy(
+                    fontWeight = FontWeight.ExtraBold
+                ),
+                color = if (emphasized) accentColor else colors.onSurface
+            )
+        }
     }
 }
 
@@ -545,18 +623,23 @@ private fun ContinueCard(
     exercise: ResumeExerciseItem,
     hasNextTarget: Boolean,
     enabled: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val colors = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
     IronLogCard(
-        onClick = onClick,
+        onClick = {
+            haptics.keyTap()
+            onClick()
+        },
         enabled = enabled,
         highlighted = true,
+        spotlight = true,
         showBorder = true,
-        containerColor = colors.primaryContainer,
-        contentColor = colors.onPrimaryContainer,
         shape = IronLogRadius.CardShape,
-        contentPadding = PaddingValues(IronLogSpace.CardPadding)
+        contentPadding = PaddingValues(IronLogSpace.CardPadding),
+        modifier = modifier
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -565,13 +648,19 @@ private fun ContinueCard(
         ) {
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
-                Text(
-                    text = (if (hasNextTarget) "Up next" else "Keep logging").uppercase(),
-                    style = IronLogType.sectionEyebrow(),
-                    color = colors.onPrimaryContainer
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    IronLogLedPip(color = surfaces.ledGlow, size = 5.dp, pulsing = true)
+                    Text(
+                        text = (if (hasNextTarget) "Up next" else "Keep logging").uppercase(),
+                        style = IronLogType.technicalEyebrow(),
+                        color = surfaces.accent
+                    )
+                }
                 Text(
                     text = exercise.exerciseName,
                     style = MaterialTheme.typography.titleMedium,
@@ -584,7 +673,7 @@ private fun ContinueCard(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = "${if (hasNextTarget) "Continue" else "Log"} ${exercise.exerciseName}",
                 modifier = Modifier.size(22.dp),
-                tint = colors.onPrimaryContainer
+                tint = surfaces.accent
             )
         }
     }
@@ -601,6 +690,8 @@ private fun CurrentExerciseRow(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
     val warmupActivity = exercise.targetMuscle.isWarmupMuscleGroup()
     val count = if (warmupActivity) exercise.completedEntryCount else exercise.setCount
     val target = exercise.plannedSets?.takeIf { it > 0 }
@@ -615,7 +706,10 @@ private fun CurrentExerciseRow(
     var showMenu by remember(exercise.instanceId) { mutableStateOf(false) }
 
     IronLogCard(
-        onClick = onClick,
+        onClick = {
+            haptics.keyTap()
+            onClick()
+        },
         enabled = enabled,
         modifier = modifier,
         highlighted = reachedTarget,
@@ -634,17 +728,20 @@ private fun CurrentExerciseRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (!largeFont) {
-                Surface(
-                    color = if (reachedTarget) colors.primaryContainer else colors.surfaceContainerHighest,
-                    shape = IronLogRadius.MicroShape
+                IronLogRecessedWell(
+                    active = reachedTarget,
+                    accentColor = surfaces.accent,
+                    shape = IronLogRadius.TightShape,
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier.size(34.dp)
                 ) {
-                    Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         when {
                             reachedTarget -> Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp),
-                                tint = colors.onPrimaryContainer
+                                tint = surfaces.accent
                             )
                             warmupActivity -> Icon(
                                 imageVector = Icons.Default.Whatshot,
@@ -674,14 +771,14 @@ private fun CurrentExerciseRow(
                 )
                 Text(
                     text = buildString {
-                        append(exercise.targetMuscle)
+                        append(exercise.targetMuscle.uppercase())
                         exercise.repMin?.let { minimum ->
                             append(" · $minimum")
                             exercise.repMax?.takeIf { it != minimum }?.let { append("–$it") }
-                            append(" reps")
+                            append(" REPS")
                         }
                     },
-                    style = IronLogType.tabular(MaterialTheme.typography.labelMedium),
+                    style = IronLogType.technicalEyebrow(),
                     color = colors.onSurfaceVariant
                 )
                 exercise.bestWeight?.takeIf { !warmupActivity && count > 0 }?.let { weight ->
@@ -698,7 +795,7 @@ private fun CurrentExerciseRow(
                     Text(
                         text = countLabel,
                         style = IronLogType.tabular(MaterialTheme.typography.labelLarge),
-                        color = if (reachedTarget) colors.primary else colors.onSurfaceVariant
+                        color = if (reachedTarget) surfaces.accent else colors.onSurfaceVariant
                     )
                 }
             }
@@ -711,7 +808,7 @@ private fun CurrentExerciseRow(
                         text = countLabel,
                         style = IronLogType.tabular(MaterialTheme.typography.labelLarge),
                         fontWeight = FontWeight.Bold,
-                        color = if (reachedTarget) colors.primary else colors.onSurface
+                        color = if (reachedTarget) surfaces.accent else colors.onSurface
                     )
                     ExerciseProgressTag(
                         isSkipped = exercise.isSkipped,

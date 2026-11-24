@@ -5,10 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -38,11 +40,15 @@ import com.example.gymtime.navigation.navigateToWorkoutExercise
 import com.example.gymtime.navigation.navigateToWorkoutOverview
 import com.example.gymtime.ui.components.IronLogDivider
 import com.example.gymtime.ui.components.IronLogGroupedCard
+import com.example.gymtime.ui.components.IronLogLedPip
 import com.example.gymtime.ui.components.IronLogSheetHeader
 import com.example.gymtime.ui.home.HomeViewModel
 import com.example.gymtime.ui.theme.IronLogRadius
 import com.example.gymtime.ui.theme.IronLogSpace
 import com.example.gymtime.ui.theme.IronLogType
+import com.example.gymtime.ui.theme.LocalIronHaptics
+import com.example.gymtime.ui.theme.LocalIronLogSurfaces
+import com.example.gymtime.ui.theme.OdometerText
 import com.example.gymtime.util.StreakCalculator
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
@@ -75,6 +81,7 @@ fun PreviewHomeScreen(
     var selectedMuscle by rememberSaveable { mutableStateOf<String?>(null) }
     var homeMessage by rememberSaveable { mutableStateOf<String?>(null) }
     val lifecycleOwner = LocalLifecycleOwner.current
+    val haptics = LocalIronHaptics.current
 
     // Refresh when returning after pause or a date change without duplicating initial init.
     LifecycleResumeEffect(viewModel) {
@@ -109,6 +116,8 @@ fun PreviewHomeScreen(
         strengthError = strengthError,
         volumeState = volume,
         streakResult = streak,
+        bestStreak = bestStreak,
+        ytdWorkouts = ytdWorkouts,
         onSettingsClick = {
             if (!routineStarting) navController.navigateResumed(Screen.Settings.route)
         },
@@ -146,19 +155,24 @@ fun PreviewHomeScreen(
     )
 
     val colors = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
     if (showStrength) {
         ModalBottomSheet(
             onDismissRequest = { showStrength = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             shape = IronLogRadius.SheetShape,
-            containerColor = colors.surface,
-            contentColor = colors.onSurface
+            containerColor = surfaces.plateTop,
+            contentColor = colors.onSurface,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = colors.outlineVariant) }
         ) {
             PreviewStrengthTrendDetails(
                 state = strength,
                 selectedMuscle = selectedMuscle,
                 onSelectMuscle = { selectedMuscle = it },
-                onClose = { showStrength = false }
+                onClose = {
+                    haptics.keyTap()
+                    showStrength = false
+                }
             )
         }
     }
@@ -167,10 +181,12 @@ fun PreviewHomeScreen(
             onDismissRequest = { showStreak = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             shape = IronLogRadius.SheetShape,
-            containerColor = colors.surface,
-            contentColor = colors.onSurface
+            containerColor = surfaces.plateTop,
+            contentColor = colors.onSurface,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = colors.outlineVariant) }
         ) {
             PreviewStreakDetails(streak, bestStreak, ytdWorkouts, ytdVolume, lastYearVolume) {
+                haptics.keyTap()
                 showStreak = false
             }
         }
@@ -180,8 +196,15 @@ fun PreviewHomeScreen(
             onDismissRequest = { homeMessage = null },
             title = { Text("Routine") },
             text = { Text(message) },
-            confirmButton = { TextButton(onClick = { homeMessage = null }) { Text("Got it") } },
-            containerColor = colors.surface,
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        haptics.keyTap()
+                        homeMessage = null
+                    }
+                ) { Text("Got it") }
+            },
+            containerColor = surfaces.plateTop,
             titleContentColor = colors.onSurface,
             textContentColor = colors.onSurfaceVariant
         )
@@ -198,6 +221,7 @@ private fun PreviewStreakDetails(
     onClose: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
     val year = remember { LocalDate.now().year }
     val numbers = remember { NumberFormat.getIntegerInstance() }
     val statusText = when {
@@ -219,6 +243,7 @@ private fun PreviewStreakDetails(
         modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
             .padding(start = 20.dp, end = 20.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
     ) {
@@ -227,14 +252,32 @@ private fun PreviewStreakDetails(
             subtitle = statusText,
             onClose = onClose
         )
-        Text(
-            text = "${streak.streakDays} days",
-            style = IronLogType.tabular(MaterialTheme.typography.headlineLarge).copy(
-                fontWeight = FontWeight.ExtraBold
-            ),
-            color = colors.primary
-        )
-        IronLogGroupedCard(showBorder = true) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (streak.streakDays > 0) {
+                IronLogLedPip(
+                    color = surfaces.ledGlow,
+                    size = 6.dp,
+                    pulsing = streak.state == StreakCalculator.StreakState.ACTIVE
+                )
+            }
+            OdometerText(
+                text = streak.streakDays.toString(),
+                style = IronLogType.monumentalNumeral(MaterialTheme.typography.displaySmall).copy(
+                    fontWeight = FontWeight.ExtraBold
+                ),
+                color = surfaces.accent
+            )
+            Text(
+                text = if (streak.streakDays == 1) "DAY" else "DAYS",
+                style = IronLogType.technicalEyebrow(),
+                color = colors.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp)
+            )
+        }
+        IronLogGroupedCard(showBorder = true, shape = IronLogRadius.PlateShape) {
             rows.forEachIndexed { index, (label, value) ->
                 if (index > 0) {
                     IronLogDivider()

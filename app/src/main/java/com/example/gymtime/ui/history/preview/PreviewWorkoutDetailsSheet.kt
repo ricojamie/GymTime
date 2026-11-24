@@ -1,14 +1,19 @@
 package com.example.gymtime.ui.history.preview
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -30,6 +35,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,8 +43,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -48,6 +54,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,15 +68,22 @@ import com.example.gymtime.ui.components.IronLogCard
 import com.example.gymtime.ui.components.IronLogDivider
 import com.example.gymtime.ui.components.IronLogEmptyState
 import com.example.gymtime.ui.components.IronLogGroupedCard
+import com.example.gymtime.ui.components.IronLogLedPip
 import com.example.gymtime.ui.components.IronLogMetric
-import com.example.gymtime.ui.components.IronLogMetricRow
 import com.example.gymtime.ui.components.IronLogPrimaryButton
+import com.example.gymtime.ui.components.IronLogRecessedWell
 import com.example.gymtime.ui.components.IronLogSectionHeader
 import com.example.gymtime.ui.components.IronLogStatusChip
 import com.example.gymtime.ui.components.IronLogStatusTone
 import com.example.gymtime.ui.history.DeleteWorkoutDialog
+import com.example.gymtime.ui.theme.IronLogBorder
 import com.example.gymtime.ui.theme.IronLogRadius
 import com.example.gymtime.ui.theme.IronLogSpace
+import com.example.gymtime.ui.theme.IronLogType
+import com.example.gymtime.ui.theme.LocalIronHaptics
+import com.example.gymtime.ui.theme.LocalIronLogSurfaces
+import com.example.gymtime.ui.theme.MachinedPressIndication
+import com.example.gymtime.ui.theme.OdometerText
 import com.example.gymtime.ui.theme.tabular
 import com.example.gymtime.util.TimeUtils
 import java.util.Locale
@@ -90,6 +104,8 @@ fun PreviewWorkoutDetailsSheet(
     onDelete: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
     val locale = Locale.getDefault()
     var showMenu by rememberSaveable(workout.workout.id) { mutableStateOf(false) }
     var showDelete by rememberSaveable(workout.workout.id) { mutableStateOf(false) }
@@ -124,6 +140,9 @@ fun PreviewWorkoutDetailsSheet(
     val formattedDateTime = remember(workout.workout.startTime, locale) {
         historyDate(workout.workout.startTime, "EEE, MMM d · h:mm a", locale)
     }
+    val bottomBarBrush = remember(surfaces) {
+        Brush.verticalGradient(listOf(surfaces.plateTop, surfaces.plateBottom))
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -131,7 +150,7 @@ fun PreviewWorkoutDetailsSheet(
         sheetGesturesEnabled = false,
         dragHandle = null,
         shape = RoundedCornerShape(topStart = IronLogRadius.Sheet, topEnd = IronLogRadius.Sheet),
-        containerColor = scheme.background,
+        containerColor = surfaces.canvas,
         contentColor = scheme.onBackground
     ) {
         Column(
@@ -142,7 +161,7 @@ fun PreviewWorkoutDetailsSheet(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = IronLogSpace.ScreenHorizontal, end = 4.dp, top = 12.dp, bottom = 8.dp),
+                    .padding(start = IronLogSpace.ScreenHorizontal, end = 4.dp, top = 14.dp, bottom = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(
@@ -153,6 +172,9 @@ fun PreviewWorkoutDetailsSheet(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
                     ) {
+                        if (workout.workout.endTime == null) {
+                            IronLogLedPip(color = surfaces.ledGlow, size = 6.dp, pulsing = true)
+                        }
                         Text(
                             text = historyWorkoutTitle(workout),
                             style = MaterialTheme.typography.headlineSmall,
@@ -170,13 +192,16 @@ fun PreviewWorkoutDetailsSheet(
                     }
                     Text(
                         text = formattedDateTime,
-                        style = MaterialTheme.typography.bodySmall.tabular(),
+                        style = IronLogType.telemetryLabel(),
                         color = scheme.onSurfaceVariant
                     )
                 }
                 Box {
                     IconButton(
-                        onClick = { showMenu = true },
+                        onClick = {
+                            haptics.tick()
+                            showMenu = true
+                        },
                         modifier = Modifier.size(IronLogSpace.TouchTargetMin)
                     ) {
                         Icon(Icons.Default.MoreVert, contentDescription = "Workout actions")
@@ -194,33 +219,56 @@ fun PreviewWorkoutDetailsSheet(
                                 }
                             },
                             leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                            onClick = { showMenu = false; onResume() }
+                            onClick = {
+                                haptics.tick()
+                                showMenu = false
+                                onResume()
+                            }
                         )
                         DropdownMenuItem(
                             text = { Text("Copy workout") },
                             leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
-                            onClick = { showMenu = false; onCopy() }
+                            onClick = {
+                                haptics.tick()
+                                showMenu = false
+                                onCopy()
+                            }
                         )
                         DropdownMenuItem(
                             text = { Text("Share workout") },
                             leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                            onClick = { showMenu = false; onShare() }
+                            onClick = {
+                                haptics.tick()
+                                showMenu = false
+                                onShare()
+                            }
                         )
                         DropdownMenuItem(
                             text = { Text("Add to routine") },
                             leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null) },
-                            onClick = { showMenu = false; onAddToRoutine() }
+                            onClick = {
+                                haptics.tick()
+                                showMenu = false
+                                onAddToRoutine()
+                            }
                         )
                         IronLogDivider(insetStart = 0.dp)
                         DropdownMenuItem(
                             text = { Text("Delete workout", color = scheme.error) },
                             leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = scheme.error) },
-                            onClick = { showMenu = false; showDelete = true }
+                            onClick = {
+                                haptics.tick()
+                                showMenu = false
+                                showDelete = true
+                            }
                         )
                     }
                 }
                 IconButton(
-                    onClick = onDismiss,
+                    onClick = {
+                        haptics.tick()
+                        onDismiss()
+                    },
                     modifier = Modifier.size(IronLogSpace.TouchTargetMin)
                 ) {
                     Icon(Icons.Default.Close, contentDescription = "Close workout details")
@@ -244,13 +292,15 @@ fun PreviewWorkoutDetailsSheet(
                 if (metrics.isNotEmpty() || workout.muscleGroups.isNotEmpty()) {
                     item(key = "metrics") {
                         IronLogCard(
+                            spotlight = true,
+                            highlighted = true,
                             showBorder = true,
-                            containerColor = scheme.surfaceContainerLow,
+                            shape = IronLogRadius.PlateShape,
                             contentPadding = PaddingValues(IronLogSpace.CardPadding),
                             verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
                         ) {
                             if (metrics.isNotEmpty()) {
-                                IronLogMetricRow(metrics = metrics)
+                                DetailsOdometerMetricRow(metrics = metrics)
                             }
                             if (workout.muscleGroups.isNotEmpty()) {
                                 if (metrics.isNotEmpty()) {
@@ -270,7 +320,6 @@ fun PreviewWorkoutDetailsSheet(
                     item(key = "notes") {
                         IronLogCard(
                             showBorder = true,
-                            containerColor = scheme.surfaceContainerLow,
                             contentPadding = PaddingValues(IronLogSpace.CardPadding),
                             verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
                         ) {
@@ -327,7 +376,7 @@ fun PreviewWorkoutDetailsSheet(
                                 .padding(40.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            androidx.compose.material3.CircularProgressIndicator()
+                            CircularProgressIndicator(color = surfaces.accent)
                         }
                     }
                     exerciseGroups.isEmpty() -> item(key = "empty") {
@@ -342,8 +391,8 @@ fun PreviewWorkoutDetailsSheet(
                                 title = "The work",
                                 trailingAction = {
                                     Text(
-                                        text = "${exerciseGroups.size} ${if (exerciseGroups.size == 1) "exercise" else "exercises"}",
-                                        style = MaterialTheme.typography.labelMedium.tabular(),
+                                        text = "${exerciseGroups.size} ${if (exerciseGroups.size == 1) "EX" else "EXERCISES"}",
+                                        style = IronLogType.technicalEyebrow(),
                                         color = scheme.onSurfaceVariant
                                     )
                                 }
@@ -356,35 +405,32 @@ fun PreviewWorkoutDetailsSheet(
                 }
             }
 
-            Surface(
-                color = scheme.surfaceContainerLow,
-                contentColor = scheme.onSurface,
-                tonalElevation = 0.dp,
-                shadowElevation = 0.dp
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(bottomBarBrush)
             ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    IronLogDivider(insetStart = 0.dp)
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = IronLogSpace.ScreenHorizontal, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        IronLogPrimaryButton(
-                            text = if (workout.workout.endTime == null) "Resume workout" else "Repeat workout",
-                            onClick = if (workout.workout.endTime == null) onResume else onRepeat,
-                            enabled = sets != null && error == null && (workout.workout.endTime == null || sets.isNotEmpty()),
-                            leadingIcon = if (workout.workout.endTime == null) Icons.Default.PlayArrow else Icons.Default.Replay,
-                            modifier = Modifier.fillMaxWidth()
+                IronLogDivider(insetStart = 0.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = IronLogSpace.ScreenHorizontal, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    IronLogPrimaryButton(
+                        text = if (workout.workout.endTime == null) "Resume workout" else "Repeat workout",
+                        onClick = if (workout.workout.endTime == null) onResume else onRepeat,
+                        enabled = sets != null && error == null && (workout.workout.endTime == null || sets.isNotEmpty()),
+                        leadingIcon = if (workout.workout.endTime == null) Icons.Default.PlayArrow else Icons.Default.Replay,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (workout.workout.endTime != null) {
+                        Text(
+                            text = "Start a fresh session with these exercises.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = scheme.onSurfaceVariant,
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
                         )
-                        if (workout.workout.endTime != null) {
-                            Text(
-                                text = "Start a fresh session with these exercises.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = scheme.onSurfaceVariant,
-                                modifier = Modifier.align(Alignment.CenterHorizontally)
-                            )
-                        }
                     }
                 }
             }
@@ -393,9 +439,69 @@ fun PreviewWorkoutDetailsSheet(
 
     if (showDelete) {
         DeleteWorkoutDialog(
-            onConfirm = { showDelete = false; onDelete() },
-            onDismiss = { showDelete = false }
+            onConfirm = {
+                haptics.confirm()
+                showDelete = false
+                onDelete()
+            },
+            onDismiss = {
+                haptics.tick()
+                showDelete = false
+            }
         )
+    }
+}
+
+@Composable
+private fun DetailsOdometerMetricRow(
+    metrics: List<IronLogMetric>,
+    modifier: Modifier = Modifier
+) {
+    val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val dividerColor = IronLogBorder.dividerColor()
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        metrics.forEachIndexed { index, metric ->
+            val startPad = if (index == 0) 0.dp else IronLogSpace.ItemGap
+            val endPad = if (index == metrics.lastIndex) 0.dp else IronLogSpace.ItemGap
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = startPad, end = endPad),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Text(
+                    text = metric.label.uppercase(),
+                    style = IronLogType.technicalEyebrow(),
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                OdometerText(
+                    text = metric.value,
+                    style = IronLogType.monumentalNumeral(MaterialTheme.typography.titleLarge).copy(
+                        fontWeight = FontWeight.ExtraBold
+                    ),
+                    color = if (metric.emphasized) surfaces.accent else scheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (index < metrics.lastIndex) {
+                VerticalDivider(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .padding(vertical = 4.dp),
+                    thickness = IronLogBorder.Hairline,
+                    color = dividerColor
+                )
+            }
+        }
     }
 }
 
@@ -419,11 +525,10 @@ private fun HistoryExerciseGroup(
             ?.set?.id
     }
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
+    val haptics = LocalIronHaptics.current
 
-    IronLogGroupedCard(
-        showBorder = true,
-        containerColor = scheme.surfaceContainerLow
-    ) {
+    IronLogGroupedCard(showBorder = true) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -431,17 +536,15 @@ private fun HistoryExerciseGroup(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
         ) {
-            Surface(
-                shape = IronLogRadius.ControlShape,
-                color = scheme.primaryContainer,
-                contentColor = scheme.onPrimaryContainer
+            IronLogRecessedWell(
+                shape = IronLogRadius.KeycapShape,
+                contentPadding = PaddingValues(10.dp)
             ) {
                 Icon(
                     imageVector = ExerciseIcons.getIconForMuscle(first.targetMuscle),
                     contentDescription = null,
-                    modifier = Modifier
-                        .padding(10.dp)
-                        .size(20.dp)
+                    tint = surfaces.accent,
+                    modifier = Modifier.size(20.dp)
                 )
             }
             Column(
@@ -472,42 +575,50 @@ private fun HistoryExerciseGroup(
             }
             Text(
                 text = "$completedWorkingCount sets",
-                style = MaterialTheme.typography.labelMedium.tabular(),
+                style = IronLogType.telemetryLabel(),
                 color = scheme.onSurfaceVariant
             )
         }
 
         if (warmups.isNotEmpty()) {
+            val warmupInteraction = remember { MutableInteractionSource() }
+            val warmupIndication = remember {
+                MachinedPressIndication(pressedScale = 0.985f, highlightAlpha = 0.05f, cornerRadius = 0.dp)
+            }
             IronLogDivider(insetStart = 0.dp)
-            Surface(
-                onClick = { showWarmups = !showWarmups },
-                color = scheme.surfaceContainerLow,
-                contentColor = scheme.onSurfaceVariant
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = IronLogSpace.TouchTargetMin)
+                    .clickable(
+                        interactionSource = warmupInteraction,
+                        indication = warmupIndication,
+                        onClick = {
+                            haptics.segmentTick()
+                            showWarmups = !showWarmups
+                        }
+                    )
+                    .padding(horizontal = IronLogSpace.CardPadding),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = IronLogSpace.TouchTargetMin)
-                        .padding(horizontal = IronLogSpace.CardPadding),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
-                ) {
-                    Text(
-                        text = "${warmups.size} ${if (warmups.size == 1) "warmup" else "warmups"}",
-                        style = MaterialTheme.typography.labelLarge.tabular(),
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        text = if (showWarmups) "Hide" else "Show",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = scheme.primary
-                    )
-                    Icon(
-                        imageVector = if (showWarmups) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                Text(
+                    text = "${warmups.size} ${if (warmups.size == 1) "warmup" else "warmups"}",
+                    style = MaterialTheme.typography.labelLarge.tabular(),
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = if (showWarmups) "Hide" else "Show",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = surfaces.accent
+                )
+                Icon(
+                    imageVector = if (showWarmups) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    tint = surfaces.accent,
+                    modifier = Modifier.size(20.dp)
+                )
             }
             if (showWarmups) {
                 warmups.forEachIndexed { index, info ->
@@ -526,7 +637,7 @@ private fun HistoryExerciseGroup(
             IronLogDivider(insetStart = if (index == 0 && warmups.isEmpty()) 0.dp else IronLogSpace.CardPadding)
             HistorySetRow(
                 set = info.set,
-                number = "${index + 1}",
+                number = (index + 1).toString().padStart(2, '0'),
                 topWeight = info.set.id == topWeightId,
                 locale = locale
             )
@@ -543,6 +654,7 @@ private fun HistorySetRow(
     locale: Locale
 ) {
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -555,8 +667,8 @@ private fun HistorySetRow(
         ) {
             Text(
                 text = number,
-                style = MaterialTheme.typography.labelMedium.tabular(),
-                color = scheme.onSurfaceVariant,
+                style = IronLogType.telemetryLabel(),
+                color = if (topWeight) surfaces.accent else scheme.onSurfaceVariant,
                 modifier = Modifier.widthIn(min = 24.dp)
             )
             Text(
@@ -567,10 +679,16 @@ private fun HistorySetRow(
                 modifier = Modifier.weight(1f)
             )
             if (topWeight) {
-                IronLogStatusChip(
-                    label = "Top weight",
-                    tone = IronLogStatusTone.ACCENT
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    IronLogLedPip(color = surfaces.ledGlow, size = 5.dp)
+                    IronLogStatusChip(
+                        label = "Top weight",
+                        tone = IronLogStatusTone.ACCENT
+                    )
+                }
             }
         }
 
@@ -583,7 +701,7 @@ private fun HistorySetRow(
                 set.rpe?.let { rpe ->
                     Text(
                         text = "RPE ${historyNumber(rpe, locale)}",
-                        style = MaterialTheme.typography.labelSmall.tabular(),
+                        style = IronLogType.telemetryLabel(),
                         color = scheme.onSurfaceVariant
                     )
                 }

@@ -1,36 +1,49 @@
 package com.example.gymtime.ui.home.preview
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -45,13 +58,22 @@ import com.example.gymtime.domain.analytics.MuscleMomentum
 import com.example.gymtime.domain.analytics.StrengthMomentumState
 import com.example.gymtime.ui.components.IronLogCard
 import com.example.gymtime.ui.components.IronLogDivider
+import com.example.gymtime.ui.components.IronLogFilterPill
 import com.example.gymtime.ui.components.IronLogGroupedCard
-import com.example.gymtime.ui.components.IronLogSectionHeader
+import com.example.gymtime.ui.components.IronLogLedPip
+import com.example.gymtime.ui.components.IronLogSculptedKeycap
 import com.example.gymtime.ui.components.IronLogSheetHeader
+import com.example.gymtime.ui.components.KeycapHaptic
 import com.example.gymtime.ui.theme.IronLogBorder
 import com.example.gymtime.ui.theme.IronLogRadius
 import com.example.gymtime.ui.theme.IronLogSpace
 import com.example.gymtime.ui.theme.IronLogType
+import com.example.gymtime.ui.theme.IronMotion
+import com.example.gymtime.ui.theme.LocalIronHaptics
+import com.example.gymtime.ui.theme.LocalIronLogSurfaces
+import com.example.gymtime.ui.theme.LocalReducedMotion
+import com.example.gymtime.ui.theme.MachinedPressIndication
+import com.example.gymtime.ui.theme.OdometerText
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -60,6 +82,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /** Rendering only: Home owns loading, selected muscle, and the sheet lifecycle. */
 @Composable
@@ -73,28 +96,62 @@ fun PreviewStrengthTrendsCard(
     modifier: Modifier = Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
     val hasLoadedData = state.muscles.isNotEmpty()
     val muscles = remember(state.muscles) { strengthDisplayMuscles(state) }
-    val dividerColor = IronLogBorder.dividerColor()
+    val hairlineColor = IronLogBorder.dividerColor()
+    val matrixBorder = remember(surfaces) {
+        IronLogBorder.specularRimStroke(
+            surfaces = surfaces,
+            highlighted = false,
+            width = IronLogBorder.Thin
+        )
+    }
 
     IronLogCard(
         modifier = modifier,
         showBorder = true,
-        containerColor = scheme.surfaceContainerLow,
-        borderColor = IronLogBorder.borderColor(scheme),
-        shape = IronLogRadius.CardShape,
+        shape = IronLogRadius.PlateShape,
         verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
     ) {
-        IronLogSectionHeader(
-            title = "Strength trends",
-            actionLabel = "Method",
-            onAction = onInfoClick
-        )
-        Text(
-            text = "Recent vs previous sessions",
-            style = MaterialTheme.typography.bodySmall,
-            color = scheme.onSurfaceVariant
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = "STRENGTH SPECTRUM",
+                    style = IronLogType.technicalEyebrow(),
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "Recent vs previous sessions",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            IronLogSculptedKeycap(
+                onClick = onInfoClick,
+                hapticType = KeycapHaptic.KEY_TAP,
+                shape = IronLogRadius.KeycapShape,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = "METHOD",
+                    style = IronLogType.technicalEyebrow(),
+                    color = scheme.onSurface
+                )
+            }
+        }
+
         if (isLoading) {
             Row(
                 modifier = Modifier
@@ -103,7 +160,7 @@ fun PreviewStrengthTrendsCard(
                 horizontalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                 Text(
                     text = if (hasLoadedData) "Refreshing trends…" else "Loading strength trends…",
                     style = MaterialTheme.typography.bodySmall,
@@ -111,21 +168,27 @@ fun PreviewStrengthTrendsCard(
                 )
             }
         } else if (error != null) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = if (hasLoadedData) "$error\nShowing previously loaded trends." else error,
                     style = MaterialTheme.typography.bodyMedium,
                     color = scheme.onSurfaceVariant
                 )
-                TextButton(
+                IronLogSculptedKeycap(
                     onClick = onRetry,
-                    shape = IronLogRadius.ControlShape,
-                    modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
+                    hapticType = KeycapHaptic.KEY_TAP,
+                    shape = IronLogRadius.KeycapShape,
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                 ) {
-                    Text("Try again")
+                    Text(
+                        text = "Try again",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }
+
         if (hasLoadedData || (!isLoading && error == null)) {
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val scaledWidth = maxWidth.value / LocalDensity.current.fontScale
@@ -135,14 +198,19 @@ fun PreviewStrengthTrendsCard(
                     else -> 1
                 }
                 val rows = remember(muscles, columns) { muscles.chunked(columns) }
-                IronLogGroupedCard(
-                    containerColor = scheme.surface,
-                    showBorder = true,
-                    shape = IronLogRadius.ControlShape
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(IronLogRadius.ControlShape)
+                        .background(surfaces.wellFill)
+                        .border(border = matrixBorder, shape = IronLogRadius.ControlShape)
                 ) {
                     rows.forEachIndexed { rowIndex, row ->
                         if (rowIndex > 0) {
-                            IronLogDivider(insetStart = 0.dp, color = dividerColor)
+                            HorizontalDivider(
+                                thickness = IronLogBorder.Thin,
+                                color = hairlineColor
+                            )
                         }
                         Row(
                             modifier = Modifier
@@ -154,14 +222,14 @@ fun PreviewStrengthTrendsCard(
                                 if (colIndex > 0) {
                                     VerticalDivider(
                                         modifier = Modifier.fillMaxHeight(),
-                                        thickness = IronLogBorder.Hairline,
-                                        color = dividerColor
+                                        thickness = IronLogBorder.Thin,
+                                        color = hairlineColor
                                     )
                                 }
                                 PreviewStrengthTrendCell(
                                     muscle = muscle,
                                     wide = row.size == 1,
-                                    surfaceBackground = scheme.surface,
+                                    surfaceBackground = surfaces.wellFill,
                                     onClick = { onMuscleClick(muscle.muscle) },
                                     modifier = Modifier
                                         .weight(1f)
@@ -172,8 +240,8 @@ fun PreviewStrengthTrendsCard(
                                 repeat(columns - row.size) {
                                     VerticalDivider(
                                         modifier = Modifier.fillMaxHeight(),
-                                        thickness = IronLogBorder.Hairline,
-                                        color = dividerColor
+                                        thickness = IronLogBorder.Thin,
+                                        color = hairlineColor
                                     )
                                     Spacer(modifier = Modifier.weight(1f))
                                 }
@@ -194,66 +262,213 @@ private fun PreviewStrengthTrendCell(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val scheme = MaterialTheme.colorScheme
+    val haptics = LocalIronHaptics.current
     val trendColor = strengthTrendColor(muscle.status, muscle.percentChange, surfaceBackground)
     val trend = strengthTrendText(muscle.status, muscle.percentChange)
     val label = strengthMuscleLabel(muscle.muscle)
-    val trendStyle = if (muscle.percentChange != null) {
-        IronLogType.tabular(MaterialTheme.typography.titleMedium).copy(fontWeight = FontWeight.Bold)
-    } else {
-        MaterialTheme.typography.bodySmall
+    val isReady = muscle.status == MomentumDataStatus.READY && muscle.percentChange != null && muscle.percentChange.isFinite()
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressIndication = remember {
+        MachinedPressIndication(
+            pressedScale = 0.96f,
+            highlightAlpha = 0.08f,
+            cornerRadius = IronLogRadius.Tight
+        )
     }
+
+    val cellModifier = modifier
+        .clickable(
+            interactionSource = interactionSource,
+            indication = pressIndication,
+            role = Role.Button,
+            onClick = {
+                haptics.segmentTick()
+                onClick()
+            }
+        )
+        .clearAndSetSemantics {
+            contentDescription = "$label, $trend. View exercise trends."
+        }
 
     if (wide) {
         Row(
-            modifier = modifier
-                .heightIn(min = 52.dp)
-                .clickable(onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-                .clearAndSetSemantics { contentDescription = "$label, $trend. View exercise trends." },
+            modifier = cellModifier
+                .heightIn(min = 54.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = label,
+            Column(
                 modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Text(
+                    text = label.uppercase(Locale.getDefault()),
+                    style = IronLogType.technicalEyebrow(),
+                    color = scheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                SpectrumTickStrip(
+                    status = muscle.status,
+                    percentChange = muscle.percentChange,
+                    accentColor = trendColor,
+                    inactiveColor = scheme.onSurfaceVariant.copy(alpha = 0.22f),
+                    modifier = Modifier.fillMaxWidth(0.55f)
+                )
+            }
+            TrendDeltaBadge(
                 text = trend,
-                style = trendStyle,
-                color = trendColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                isReady = isReady,
+                trendColor = trendColor,
+                fallbackColor = scheme.onSurfaceVariant
             )
         }
     } else {
         Column(
-            modifier = modifier
-                .heightIn(min = 64.dp)
-                .clickable(onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-                .clearAndSetSemantics { contentDescription = "$label, $trend. View exercise trends." },
-            verticalArrangement = Arrangement.spacedBy(3.dp)
+            modifier = cellModifier
+                .heightIn(min = 72.dp)
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = label.uppercase(Locale.getDefault()),
+                    style = IronLogType.technicalEyebrow(),
+                    color = scheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (isReady) {
+                    IronLogLedPip(
+                        color = trendColor,
+                        size = 4.dp,
+                        pulsing = false
+                    )
+                }
+            }
+
+            TrendDeltaBadge(
                 text = trend,
-                style = trendStyle,
-                color = trendColor,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                isReady = isReady,
+                trendColor = trendColor,
+                fallbackColor = scheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.weight(1f, fill = false))
+
+            SpectrumTickStrip(
+                status = muscle.status,
+                percentChange = muscle.percentChange,
+                accentColor = trendColor,
+                inactiveColor = scheme.onSurfaceVariant.copy(alpha = 0.22f),
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
+}
+
+@Composable
+private fun TrendDeltaBadge(
+    text: String,
+    isReady: Boolean,
+    trendColor: Color,
+    fallbackColor: Color
+) {
+    if (isReady) {
+        OdometerText(
+            text = text,
+            style = IronLogType.tabular(MaterialTheme.typography.titleMedium).copy(
+                fontWeight = FontWeight.ExtraBold
+            ),
+            color = trendColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    } else {
+        Text(
+            text = text,
+            style = IronLogType.telemetryLabel(),
+            color = fallbackColor,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun SpectrumTickStrip(
+    status: MomentumDataStatus,
+    percentChange: Float?,
+    accentColor: Color,
+    inactiveColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val reducedMotion = LocalReducedMotion.current
+    val tickCount = 7
+    val isReady = status == MomentumDataStatus.READY && percentChange != null && percentChange.isFinite()
+    val targetLitCount = remember(isReady, percentChange) {
+        if (!isReady || percentChange == null) {
+            0
+        } else {
+            val magnitude = (abs(percentChange) / 15f).coerceIn(0f, 1f)
+            (1 + (magnitude * (tickCount - 1)).roundToInt()).coerceIn(1, tickCount)
+        }
+    }
+
+    val mountReveal = remember(status, targetLitCount) {
+        Animatable(if (reducedMotion || targetLitCount == 0) 1f else 0f)
+    }
+    LaunchedEffect(status, targetLitCount, reducedMotion) {
+        if (targetLitCount > 0 && !reducedMotion) {
+            mountReveal.snapTo(0f)
+            mountReveal.animateTo(1f, IronMotion.SpatialLayout)
+        } else {
+            mountReveal.snapTo(1f)
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .height(6.dp)
+            .drawBehind {
+                val gap = 2.dp.toPx()
+                val totalGap = gap * (tickCount - 1)
+                val barWidth = ((size.width - totalGap) / tickCount.toFloat()).coerceAtLeast(1f)
+                val radius = CornerRadius(1.dp.toPx(), 1.dp.toPx())
+                val reveal = mountReveal.value.coerceIn(0f, 1f)
+
+                for (i in 0 until tickCount) {
+                    val x = i * (barWidth + gap)
+                    val isLit = i < targetLitCount
+                    val tickThreshold = (i + 1).toFloat() / tickCount.toFloat()
+                    val litAlpha = if (isLit) {
+                        ((reveal - (tickThreshold * 0.55f)) / 0.45f).coerceIn(0f, 1f)
+                    } else {
+                        0f
+                    }
+                    val drawColor = if (litAlpha > 0.01f) {
+                        lerp(inactiveColor, accentColor, litAlpha)
+                    } else {
+                        inactiveColor
+                    }
+                    val tickHeight = if (isLit) size.height else size.height * 0.65f
+                    drawRoundRect(
+                        color = drawColor,
+                        topLeft = Offset(x, size.height - tickHeight),
+                        size = Size(barWidth, tickHeight),
+                        cornerRadius = radius
+                    )
+                }
+            }
+    )
 }
 
 /** Place in a themed ModalBottomSheet. A null selection opens the method and overview. */
@@ -274,6 +489,7 @@ fun PreviewStrengthTrendDetails(
         modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
             .padding(start = 20.dp, end = 20.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
     ) {
@@ -287,22 +503,21 @@ fun PreviewStrengthTrendDetails(
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             muscles.forEach { muscle ->
-                FilterChip(
+                IronLogFilterPill(
+                    label = strengthMuscleLabel(muscle.muscle),
                     selected = selected?.muscle == muscle.muscle,
                     onClick = { onSelectMuscle(muscle.muscle) },
-                    shape = IronLogRadius.ControlShape,
-                    modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin),
-                    label = { Text(strengthMuscleLabel(muscle.muscle)) }
+                    showLedPip = true
                 )
             }
         }
         if (selected == null) {
             PreviewStrengthMethod(state)
-            IronLogDivider(insetStart = 0.dp)
+            HorizontalDivider(thickness = IronLogBorder.Thin, color = IronLogBorder.dividerColor())
         }
         displayedMuscles.forEachIndexed { muscleIndex, muscle ->
             if (muscleIndex > 0) {
-                IronLogDivider(insetStart = 0.dp)
+                HorizontalDivider(thickness = IronLogBorder.Thin, color = IronLogBorder.dividerColor())
             }
             Column(verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)) {
                 Row(
@@ -316,13 +531,25 @@ fun PreviewStrengthTrendDetails(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    Text(
-                        text = strengthTrendText(muscle.status, muscle.percentChange),
-                        style = IronLogType.tabular(MaterialTheme.typography.titleMedium).copy(
-                            fontWeight = FontWeight.Bold
-                        ),
-                        color = strengthTrendColor(muscle.status, muscle.percentChange, scheme.surface)
-                    )
+                    val deltaColor = strengthTrendColor(muscle.status, muscle.percentChange, scheme.surface)
+                    val deltaText = strengthTrendText(muscle.status, muscle.percentChange)
+                    if (muscle.status == MomentumDataStatus.READY && muscle.percentChange != null) {
+                        OdometerText(
+                            text = deltaText,
+                            style = IronLogType.tabular(MaterialTheme.typography.titleMedium).copy(
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = deltaColor
+                        )
+                    } else {
+                        Text(
+                            text = deltaText,
+                            style = IronLogType.tabular(MaterialTheme.typography.titleMedium).copy(
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = deltaColor
+                        )
+                    }
                 }
                 if (muscle.hasMixedContributors) {
                     Text(
@@ -338,7 +565,7 @@ fun PreviewStrengthTrendDetails(
                         color = scheme.onSurfaceVariant
                     )
                 } else {
-                    IronLogGroupedCard(showBorder = true) {
+                    IronLogGroupedCard(showBorder = true, shape = IronLogRadius.PlateShape) {
                         muscle.contributingExercises.forEachIndexed { exerciseIndex, exercise ->
                             if (exerciseIndex > 0) {
                                 IronLogDivider()
@@ -350,7 +577,7 @@ fun PreviewStrengthTrendDetails(
             }
         }
         if (selected != null) {
-            IronLogDivider(insetStart = 0.dp)
+            HorizontalDivider(thickness = IronLogBorder.Thin, color = IronLogBorder.dividerColor())
             PreviewStrengthMethod(state)
         }
     }

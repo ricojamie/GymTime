@@ -1,12 +1,16 @@
 package com.example.gymtime.ui.exercise.preview
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,14 +24,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -37,12 +39,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -56,11 +62,18 @@ import com.example.gymtime.domain.progression.progressLabel
 import com.example.gymtime.ui.components.IronLogCard
 import com.example.gymtime.ui.components.IronLogDivider
 import com.example.gymtime.ui.components.IronLogEmptyState
+import com.example.gymtime.ui.components.IronLogFilterPill
+import com.example.gymtime.ui.components.IronLogLedPip
 import com.example.gymtime.ui.components.IronLogSectionHeader
+import com.example.gymtime.ui.components.IronLogSegmentedControl
 import com.example.gymtime.ui.components.IronLogSheetHeader
 import com.example.gymtime.ui.theme.IronLogRadius
 import com.example.gymtime.ui.theme.IronLogSpace
 import com.example.gymtime.ui.theme.IronLogType
+import com.example.gymtime.ui.theme.LocalIronLogSurfaces
+import com.example.gymtime.ui.theme.LocalReducedMotion
+import com.example.gymtime.ui.theme.OdometerText
+import com.example.gymtime.ui.theme.anodizedMicroGrain
 import com.example.gymtime.util.TimeUtils
 import java.time.Instant
 import java.time.LocalDate
@@ -80,6 +93,7 @@ fun LoggerProgressSheet(
     onDismiss: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    val surfaces = LocalIronLogSurfaces.current
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var rangeMonths by rememberSaveable { mutableIntStateOf(0) }
     val visiblePoints = remember(state.points, rangeMonths) {
@@ -89,35 +103,52 @@ fun LoggerProgressSheet(
             state.points.filter { it.date.time >= cutoff }
         }
     }
+    val sheetBackground = remember(surfaces) {
+        Brush.verticalGradient(listOf(surfaces.plateElevatedTop, surfaces.canvasBottom))
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         shape = RoundedCornerShape(topStart = IronLogRadius.Sheet, topEnd = IronLogRadius.Sheet),
-        containerColor = scheme.surface,
-        contentColor = scheme.onSurface
+        containerColor = surfaces.plateBottom,
+        contentColor = scheme.onSurface,
+        scrimColor = Color.Black.copy(alpha = 0.68f),
+        dragHandle = null
     ) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(0.9f)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.9f)
+                .background(brush = sheetBackground)
+                .anodizedMicroGrain(alpha = if (surfaces.isDark) 0.02f else 0.012f)
+                .drawBehind {
+                    drawLine(
+                        brush = Brush.horizontalGradient(
+                            listOf(Color.Transparent, surfaces.rimTop, Color.Transparent)
+                        ),
+                        start = Offset(0f, 0.5.dp.toPx()),
+                        end = Offset(size.width, 0.5.dp.toPx()),
+                        strokeWidth = 1.dp.toPx()
+                    )
+                }
+                .padding(top = 12.dp)
+        ) {
             IronLogSheetHeader(
                 title = "Your progression",
                 subtitle = exerciseName,
                 onClose = onDismiss,
                 closeContentDescription = "Close progression",
-                modifier = Modifier.padding(start = 24.dp, end = 8.dp)
+                modifier = Modifier.padding(start = 20.dp, end = 8.dp)
             )
             Spacer(Modifier.height(IronLogSpace.ItemGap))
-            TabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = scheme.surface,
-                contentColor = scheme.primary
-            ) {
-                listOf("Progress", "Records", "History").forEachIndexed { index, title ->
-                    Tab(
-                        selected = index == selectedTab,
-                        onClick = { selectedTab = index },
-                        text = { Text(title) }
-                    )
-                }
-            }
+            IronLogSegmentedControl(
+                options = listOf("Progress", "Records", "History"),
+                selectedIndex = selectedTab,
+                onSelect = { selectedTab = it },
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+            Spacer(Modifier.height(4.dp))
             if (state.isLoading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
@@ -127,7 +158,7 @@ fun LoggerProgressSheet(
                 LazyColumn(
                     state = scrollState,
                     modifier = Modifier.fillMaxWidth().weight(1f),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
                     verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
                 ) {
                     when (selectedTab) {
@@ -136,23 +167,28 @@ fun LoggerProgressSheet(
                                 item {
                                     IronLogCard(
                                         highlighted = true,
+                                        spotlight = true,
                                         showBorder = true,
-                                        shape = IronLogRadius.CardShape,
-                                        containerColor = scheme.primaryContainer,
-                                        contentColor = scheme.onPrimaryContainer,
-                                        borderColor = scheme.primary.copy(alpha = 0.45f),
+                                        shape = IronLogRadius.PlateShape,
                                         verticalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Text(
-                                            text = "ALL-TIME BEST · ${state.recordLabel.uppercase()}",
-                                            style = IronLogType.sectionEyebrow(),
-                                            color = scheme.onPrimaryContainer
-                                        )
-                                        Text(
-                                            text = formatLoggerSet(best, logType),
-                                            style = IronLogType.tabular(MaterialTheme.typography.headlineSmall).copy(
-                                                fontWeight = FontWeight.Bold
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            IronLogLedPip(color = surfaces.ledGlow, size = 5.dp)
+                                            Text(
+                                                text = "ALL-TIME BEST · ${state.recordLabel.uppercase()}",
+                                                style = IronLogType.technicalEyebrow(),
+                                                color = surfaces.accent
                                             )
+                                        }
+                                        OdometerText(
+                                            text = formatLoggerSet(best, logType),
+                                            style = IronLogType.monumentalNumeral(
+                                                MaterialTheme.typography.headlineMedium
+                                            ).copy(fontWeight = FontWeight.Bold),
+                                            color = scheme.onSurface
                                         )
                                     }
                                 }
@@ -163,11 +199,11 @@ fun LoggerProgressSheet(
                                     horizontalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
                                 ) {
                                     listOf(1 to "1M", 3 to "3M", 6 to "6M", 0 to "All").forEach { (months, label) ->
-                                        FilterChip(
+                                        IronLogFilterPill(
+                                            label = label,
                                             selected = rangeMonths == months,
                                             onClick = { rangeMonths = months },
-                                            label = { Text(label) },
-                                            shape = IronLogRadius.MicroShape
+                                            showLedPip = true
                                         )
                                     }
                                 }
@@ -240,22 +276,28 @@ fun LoggerProgressSheet(
                             } else {
                                 items(state.records, key = { it.label }) { record ->
                                     IronLogCard(
-                                        shape = IronLogRadius.CardShape,
-                                        containerColor = scheme.surfaceContainerLow,
+                                        shape = IronLogRadius.PlateShape,
                                         showBorder = true,
                                         verticalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Text(
-                                            text = record.label,
-                                            style = IronLogType.sectionEyebrow(MaterialTheme.typography.labelLarge),
-                                            color = scheme.primary
-                                        )
-                                        Text(
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            IronLogLedPip(color = surfaces.ledGlow, size = 5.dp)
+                                            Text(
+                                                text = record.label,
+                                                style = IronLogType.technicalEyebrow(MaterialTheme.typography.labelLarge),
+                                                color = surfaces.accent
+                                            )
+                                        }
+                                        OdometerText(
                                             text = record.estimatedValue?.let { "${formatLoggerNumber(it)} lb" }
                                                 ?: formatLoggerSet(record.set, logType),
-                                            style = IronLogType.tabular(MaterialTheme.typography.titleLarge).copy(
+                                            style = IronLogType.monumentalNumeral(MaterialTheme.typography.titleLarge).copy(
                                                 fontWeight = FontWeight.Bold
-                                            )
+                                            ),
+                                            color = scheme.onSurface
                                         )
                                         Text(
                                             text = if (record.estimatedValue != null) {
@@ -263,7 +305,7 @@ fun LoggerProgressSheet(
                                             } else {
                                                 formatDate(record.set.timestamp)
                                             },
-                                            style = IronLogType.tabular(MaterialTheme.typography.bodySmall),
+                                            style = IronLogType.telemetryLabel(MaterialTheme.typography.bodySmall),
                                             color = scheme.onSurfaceVariant
                                         )
                                     }
@@ -315,7 +357,7 @@ fun LoggerProgressSheet(
                                             if (details.isNotEmpty()) {
                                                 Text(
                                                     text = details.joinToString(" · "),
-                                                    style = IronLogType.tabular(MaterialTheme.typography.labelMedium),
+                                                    style = IronLogType.telemetryLabel(MaterialTheme.typography.labelMedium),
                                                     color = scheme.onSurfaceVariant
                                                 )
                                             }
@@ -351,7 +393,7 @@ private fun DataRow(label: String, value: String) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
+            style = IronLogType.telemetryLabel(MaterialTheme.typography.labelMedium),
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
@@ -379,8 +421,25 @@ private fun ProgressChart(state: LoggerProgressState) {
         ChartStats(minValue, maxValue, yMin, yMax, firstDate, lastDate, dateRange)
     }
     val scheme = MaterialTheme.colorScheme
-    val color = scheme.primary
-    val gridColor = scheme.outlineVariant
+    val surfaces = LocalIronLogSurfaces.current
+    val reducedMotion = LocalReducedMotion.current
+    val color = surfaces.accent
+    val gridColor = scheme.outlineVariant.copy(alpha = 0.45f)
+    val dotGridColor = scheme.onSurfaceVariant.copy(alpha = if (surfaces.isDark) 0.14f else 0.16f)
+
+    val revealProgress = remember { Animatable(if (reducedMotion) 1f else 0f) }
+    LaunchedEffect(points, reducedMotion) {
+        if (reducedMotion) {
+            revealProgress.snapTo(1f)
+        } else {
+            revealProgress.snapTo(0f)
+            revealProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 520, easing = FastOutSlowInEasing)
+            )
+        }
+    }
+
     val chartDescription = remember(state.metricLabel, state.metricUnit, points.size, chartStats) {
         "${state.metricLabel}. ${points.size} workouts. Lowest ${formatLoggerNumber(chartStats.minValue)} ${state.metricUnit}. Highest ${formatLoggerNumber(chartStats.maxValue)} ${state.metricUnit}. Exact values follow the chart."
     }
@@ -388,42 +447,44 @@ private fun ProgressChart(state: LoggerProgressState) {
     val currentStats by rememberUpdatedState(chartStats)
     val currentColor by rememberUpdatedState(color)
     val currentGridColor by rememberUpdatedState(gridColor)
+    val currentDotGridColor by rememberUpdatedState(dotGridColor)
 
     IronLogCard(
-        shape = IronLogRadius.CardShape,
-        containerColor = scheme.surfaceContainerLow,
+        shape = IronLogRadius.PlateShape,
         showBorder = true,
         verticalArrangement = Arrangement.spacedBy(IronLogSpace.CompactGap)
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
                 text = "${formatLoggerNumber(chartStats.yMax)} ${state.metricUnit}",
-                style = IronLogType.tabular(MaterialTheme.typography.labelMedium)
+                style = IronLogType.telemetryLabel(MaterialTheme.typography.labelMedium)
             )
             Text(
                 text = "${points.size} workouts",
-                style = IronLogType.tabular(MaterialTheme.typography.labelMedium),
+                style = IronLogType.telemetryLabel(MaterialTheme.typography.labelMedium),
                 color = scheme.onSurfaceVariant
             )
         }
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(160.dp)
+                .height(164.dp)
                 .semantics { contentDescription = chartDescription }
                 .drawWithCache {
                     val pts = currentPoints
                     val stats = currentStats
                     val lineColor = currentColor
                     val guideColor = currentGridColor
+                    val dotBgColor = currentDotGridColor
                     val inset = 6.dp.toPx()
-                    val gridStrokeWidth = 1.dp.toPx()
+                    val gridStrokeWidth = 0.75.dp.toPx()
                     val lineStroke = Stroke(
-                        width = 3.dp.toPx(),
+                        width = 2.75.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round
                     )
-                    val dotRadius = 4.dp.toPx()
+                    val dotRadius = 3.75.dp.toPx()
+                    val dotHaloRadius = 7.dp.toPx()
                     val plotWidth = (size.width - inset * 2).coerceAtLeast(1f)
                     val plotHeight = (size.height - inset * 2).coerceAtLeast(1f)
                     val yRange = (stats.yMax - stats.yMin).coerceAtLeast(0.000001f)
@@ -442,7 +503,42 @@ private fun ProgressChart(state: LoggerProgressState) {
                             if (index == 0) moveTo(point.x, point.y) else lineTo(point.x, point.y)
                         }
                     }
+                    val fillPath = if (positions.size > 1) {
+                        Path().apply {
+                            moveTo(positions.first().x, inset + plotHeight)
+                            positions.forEach { point -> lineTo(point.x, point.y) }
+                            lineTo(positions.last().x, inset + plotHeight)
+                            close()
+                        }
+                    } else {
+                        null
+                    }
+                    val areaBrush = Brush.verticalGradient(
+                        colors = listOf(lineColor.copy(alpha = 0.22f), Color.Transparent),
+                        startY = inset,
+                        endY = inset + plotHeight
+                    )
+                    val canvasW = size.width
+                    val canvasH = size.height
+                    val dotStepX = 16.dp.toPx()
+                    val dotStepY = 16.dp.toPx()
+                    val bgDots = buildList {
+                        var x = inset
+                        while (x <= canvasW - inset) {
+                            var y = inset
+                            while (y <= canvasH - inset) {
+                                add(Offset(x, y))
+                                y += dotStepY
+                            }
+                            x += dotStepX
+                        }
+                    }
+
                     onDrawBehind {
+                        val bgDotR = 0.9.dp.toPx()
+                        bgDots.forEach { dot ->
+                            drawCircle(color = dotBgColor, radius = bgDotR, center = dot)
+                        }
                         repeat(3) { index ->
                             val y = inset + plotHeight * index / 2f
                             drawLine(
@@ -452,20 +548,50 @@ private fun ProgressChart(state: LoggerProgressState) {
                                 strokeWidth = gridStrokeWidth
                             )
                         }
-                        drawPath(path, color = lineColor, style = lineStroke)
-                        positions.forEach { drawCircle(lineColor, radius = dotRadius, center = it) }
+
+                        val reveal = revealProgress.value.coerceIn(0f, 1f)
+                        if (reveal <= 0.001f) return@onDrawBehind
+
+                        if (positions.size > 1) {
+                            val clipRight = inset + plotWidth * reveal + dotHaloRadius
+                            clipRect(left = 0f, top = 0f, right = clipRight, bottom = size.height) {
+                                if (fillPath != null) {
+                                    drawPath(fillPath, brush = areaBrush)
+                                }
+                                drawPath(path, color = lineColor, style = lineStroke)
+                            }
+                        }
+
+                        positions.forEachIndexed { index, pos ->
+                            val normX = if (positions.size <= 1) 0f else (pos.x - inset) / plotWidth
+                            val dotAlpha = if (positions.size <= 1) reveal else ((reveal - normX * 0.9f) / 0.1f).coerceIn(0f, 1f)
+                            if (dotAlpha > 0.01f) {
+                                if (index == positions.lastIndex) {
+                                    drawCircle(
+                                        color = lineColor.copy(alpha = 0.25f * dotAlpha),
+                                        radius = dotHaloRadius,
+                                        center = pos
+                                    )
+                                }
+                                drawCircle(
+                                    color = lineColor.copy(alpha = dotAlpha),
+                                    radius = dotRadius,
+                                    center = pos
+                                )
+                            }
+                        }
                     }
                 }
         )
         Text(
             text = "${formatLoggerNumber(chartStats.yMin)} ${state.metricUnit}",
-            style = IronLogType.tabular(MaterialTheme.typography.labelMedium)
+            style = IronLogType.telemetryLabel(MaterialTheme.typography.labelMedium)
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
                 text = formatDate(points.first().date),
                 modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.labelSmall,
+                style = IronLogType.telemetryLabel(MaterialTheme.typography.labelSmall),
                 color = scheme.onSurfaceVariant
             )
             Spacer(Modifier.width(8.dp))
@@ -473,7 +599,7 @@ private fun ProgressChart(state: LoggerProgressState) {
                 Text(
                     text = formatDate(points.last().date),
                     modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.labelSmall,
+                    style = IronLogType.telemetryLabel(MaterialTheme.typography.labelSmall),
                     textAlign = TextAlign.End,
                     color = scheme.onSurfaceVariant
                 )
