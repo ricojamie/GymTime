@@ -55,17 +55,35 @@ function Completed({workout,data}:{workout:Workout;data:HistoryData}) {
   const [error,setError] = useState('')
   const navigate = useNavigate()
   const location = useLocation()
-  const [stamping, setStamping] = useState(location.state?.justFinished === workout.id)
+  const [stampPhase, setStampPhase] = useState<'pending' | 'playing' | 'rest'>(() =>
+    location.state?.justFinished === workout.id && document.documentElement.dataset.motion !== 'reduced' &&
+      !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'pending' : 'rest')
   // Consume the finish entry so refreshing or returning to this record opens it at rest.
   useEffect(() => {
     if (location.state?.justFinished !== workout.id) return
     void navigate(location.pathname + location.search + location.hash, {replace:true, state:null, preventScrollReset:true})
   }, [location, navigate, workout.id])
   useEffect(() => {
-    if (!stamping) return
-    const timeout = window.setTimeout(() => setStamping(false), 720)
-    return () => window.clearTimeout(timeout)
-  }, [stamping])
+    if (stampPhase === 'rest') return
+    if (stampPhase === 'playing') {
+      const settle = window.setTimeout(() => setStampPhase('rest'), 640)
+      return () => window.clearTimeout(settle)
+    }
+    // The result gets two paint opportunities before the stamp clock starts.
+    let paints = 0
+    let frame = window.requestAnimationFrame(afterPaint)
+    function afterPaint() {
+      if (paints < 2) {
+        paints++
+        frame = window.requestAnimationFrame(afterPaint)
+      } else {
+        setStampPhase('playing')
+      }
+    }
+    // A suspended or throttled page should settle without a delayed celebration.
+    const deadline = window.setTimeout(() => setStampPhase('rest'), 900)
+    return () => { window.cancelAnimationFrame(frame); window.clearTimeout(deadline) }
+  }, [stampPhase])
   const unit = data.prefs.preferredWeightUnit
   const stats = useMemo(() => describeWorkout(workout, data.sets.filter(s => s.workoutId === workout.id), new Map(data.exercises.map(ex => [ex.id,ex]))), [data,workout])
   const share = useMemo(() => buildWorkoutShare(data,workout.id), [data,workout.id])
@@ -79,7 +97,7 @@ function Completed({workout,data}:{workout:Workout;data:HistoryData}) {
   return <main className="screen his-summary">
     <header className="his-summary-head"><div><span className="eyebrow"><Check size={14}/> Workout complete</span><h1>{stats.title}</h1></div></header>
     <p className="his-summary-date">{dateLabel(workout.startTime)}</p>
-    <section className="surface his-result" data-stamping={stamping || undefined} aria-label="Workout totals">
+    <section className="surface his-result" data-stamp-pending={stampPhase === 'pending' || undefined} data-stamping={stampPhase === 'playing' || undefined} aria-label="Workout totals">
       <div className="finish-record">
         <div className="finish-headline"><span className="eyebrow">{stats.volume > 0 ? 'Total volume' : 'Working sets'}</span>
           <p className="his-result-volume">{stats.volume > 0 ? <>{formatWeight(stats.volume,unit)} <small>{weightLabel(unit)}</small></> : stats.sets}</p>

@@ -94,6 +94,10 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion='reduced']) .his-result[data-stamp-pending] .finish-stamp {
+    opacity: 0;
+  }
+
   :root:not([data-motion='reduced']) .his-result[data-stamping] .finish-stamp-die {
     animation: finish-die-strike 510ms cubic-bezier(.23,.7,.26,1) both;
   }

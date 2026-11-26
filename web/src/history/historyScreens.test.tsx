@@ -55,9 +55,11 @@ it('stamps the saved totals once on finish and accepts feedback and backup durin
   </MemoryRouter>)
   const totals = screen.getByRole('region',{name:'Workout totals'})
   expect(totals).toHaveTextContent('500 lb')
-  expect(totals).toHaveAttribute('data-stamping','true')
+  expect(totals).toHaveAttribute('data-stamp-pending','true')
+  expect(totals).not.toHaveAttribute('data-stamping')
   expect(screen.getByRole('button',{name:'Done'})).toBeEnabled()
   fireEvent.click(screen.getByRole('button',{name:'3 stars'}))
+  await waitFor(() => expect(totals).toHaveAttribute('data-stamping','true'))
   fireEvent.click(screen.getByRole('button',{name:/Save backup to Files/}))
   expect(await screen.findByText('Backup shared.')).toBeVisible()
   await waitFor(() => expect(totals).not.toHaveAttribute('data-stamping'),{timeout:2500})
@@ -66,4 +68,19 @@ it('stamps the saved totals once on finish and accepts feedback and backup durin
   fireEvent.click(screen.getByRole('button',{name:'Toggle summary'}))
   fireEvent.click(screen.getByRole('button',{name:'Toggle summary'}))
   expect(screen.getByRole('region',{name:'Workout totals'})).not.toHaveAttribute('data-stamping')
+})
+
+it('shows the settled record immediately with reduced motion', () => {
+  document.documentElement.dataset.motion = 'reduced'
+  try {
+    render(<MemoryRouter initialEntries={[{pathname:'/summary/3',state:{justFinished:3}}]}>
+      <Routes><Route path="/summary/:workoutId" element={<Summary/>}/></Routes>
+    </MemoryRouter>)
+    const totals = screen.getByRole('region',{name:'Workout totals'})
+    expect(totals).toHaveTextContent('500 lb')
+    expect(totals).not.toHaveAttribute('data-stamp-pending')
+    expect(totals).not.toHaveAttribute('data-stamping')
+  } finally {
+    delete document.documentElement.dataset.motion
+  }
 })
