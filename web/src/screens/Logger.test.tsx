@@ -59,6 +59,15 @@ describe('logger', {timeout: 30000}, () => {
     expect(screen.getByLabelText('Set note')).toHaveValue('')
     expect(await db.sets.where('workoutId').equals(wid).count()).toBe(2)
   })
+  it('distinguishes a numeric digit from both weight adjustments by accessible name', async () => {
+    await updatePreferences({preferredWeightUnit:'lbs'})
+    await launch()
+    const sheet = enter('weight','5',false)
+    fireEvent.click(sheet.getByRole('button',{name:'Increase weight by 5 lb'}))
+    expect(sheet.getByLabelText('Weight value')).toHaveTextContent('10')
+    fireEvent.click(sheet.getByRole('button',{name:'Decrease weight by 5 lb'}))
+    expect(sheet.getByLabelText('Weight value')).toHaveTextContent('5')
+  })
   it('rotates a superset after logging and permits exiting without changing the saved plan', async () => {
     const first = (await db.exercises.where('name').equals('Push-Ups').first())!
     const second = (await db.exercises.where('name').equals('Pull-Ups').first())!

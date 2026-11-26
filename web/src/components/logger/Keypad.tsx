@@ -135,6 +135,8 @@ export default function Keypad({ field, value, unit, weightUnit, pins, onChange,
     onChange(bounded)
   }
   const step = field === 'weight' ? weightUnit === 'kg' ? 2.5 : 5 : 1
+  const stepUnit = field === 'durationSeconds' ? ' second' : field === 'weight' || field === 'distanceValue' ? ' ' + unit : ''
+  const adjustment = fieldLabels[field].toLowerCase() + ' by ' + step + stepUnit
   useEffect(() => {
     function keydown(e: KeyboardEvent) {
       if (e.altKey || e.metaKey || e.ctrlKey || e.defaultPrevented) return
@@ -156,7 +158,9 @@ export default function Keypad({ field, value, unit, weightUnit, pins, onChange,
         ? <VernierDial value={value ?? 0} unit={unit} step={field === 'weight' && weightUnit === 'kg' ? .5 : 1} pins={pins} onChange={setExact} />
         : <div className="log-pad-grid">{['1','2','3','4','5','6','7','8','9',punctuation,'0','back'].map(k =>
           <button key={k} disabled={k === '.' && !allowFraction} aria-label={k === 'back' ? 'Backspace' : k} onClick={() => write(k)}>{k === 'back' ? <Delete size={20} /> : k}</button>)}</div>}
-      <div className="log-pad-nudges"><button onClick={() => setExact((value ?? 0) - step)}><Minus size={15} />{step}</button><button onClick={() => setExact((value ?? 0) + step)}><Plus size={15} />{step}</button>
+      <div className="log-pad-nudges">
+        <button aria-label={'Decrease ' + adjustment} onClick={() => setExact((value ?? 0) - step)}><Minus size={15} />{step}</button>
+        <button aria-label={'Increase ' + adjustment} onClick={() => setExact((value ?? 0) + step)}><Plus size={15} />{step}</button>
         {onNext && <button onClick={onNext}>Next <ArrowRight size={17} /></button>}</div>
       {error && <p role="alert" className="log-error">{error}</p>}
       <button disabled={busy} className="btn primary log-commit" onClick={onCommit}><Check size={19} />{action}</button>

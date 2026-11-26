@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db, defaultPreferences, initializeDatabase } from './database'
 import { addMuscle, closeStaleWorkouts, deleteExercise, deleteMuscle, deleteRoutine, deleteWorkout, ensureWorkoutExercise,
   finishWorkout, getActiveWorkout, groupWorkoutExercises, logSet, renameMuscle, reopenWorkout, repeatWorkout,
@@ -34,6 +34,31 @@ describe('offline database', () => {
     expect(await db.exercises.count()).toBe(24)
     expect(await db.workouts.count()).toBe(0)
   })
+  it('reuses the validated exercise read only within its own unchanged transaction', async () => {
+    const workoutId = await startWorkout({exerciseIds:[1]})
+    const get = vi.spyOn(IDBObjectStore.prototype, 'get')
+    let id: number
+    try {
+      id = await logSet({workoutId,exerciseId:1,reps:8,weight:135})
+      expect(get.mock.contexts.filter(store => store instanceof IDBObjectStore && store.name === 'exercises')).toHaveLength(1)
+    } finally {
+      get.mockRestore()
+    }
+    const logged = (await db.sets.get(id))!
+    await db.transaction('rw', db.exercises, db.sets, async () => {
+      expect((await db.exercises.get(1))?.targetMuscle).toBe('Chest')
+      await db.exercises.update(1, {targetMuscle:'Warmups'})
+      await db.sets.put({...logged,isWarmup:false})
+    })
+    expect((await db.sets.get(id))?.isWarmup).toBe(true)
+    await db.transaction('rw', db.exercises, db.sets, async () => {
+      expect((await db.exercises.get(1))?.targetMuscle).toBe('Warmups')
+      await db.exercises.update(1, {targetMuscle:'Chest'})
+      await db.sets.put({...logged,isWarmup:false})
+    })
+    expect((await db.sets.get(id))?.isWarmup).toBe(false)
+  })
+
   it('serializes racing starts, counted finishes and star toggles', async () => {
     const [one,two] = await Promise.all([startWorkout(),startWorkout()])
     expect(one).toBe(two)

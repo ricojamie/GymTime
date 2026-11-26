@@ -24,5 +24,13 @@ export default defineConfig({
   ],
   build: {
     target: ['es2022', 'safari16.4'],
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          framework: ['react', 'react-dom', 'react-router-dom'],
+          database: ['dexie', 'dexie-react-hooks'],
+        },
+      },
+    },
   },
 })

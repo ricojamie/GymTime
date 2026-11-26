@@ -1,4 +1,4 @@
-import type { DBCore, Middleware } from 'dexie'
+import type { DBCore, DBCoreGetRequest, DBCoreTransaction, Middleware } from 'dexie'
 import { normalizeMuscleName, WARMUP_MUSCLE_GROUP, type Exercise, type WorkoutSet } from './types'
 
 // SQLite's category triggers also apply to bulk restores and direct table updates.
@@ -6,6 +6,11 @@ import { normalizeMuscleName, WARMUP_MUSCLE_GROUP, type Exercise, type WorkoutSe
 export const warmupRules: Middleware<DBCore> = {
   stack: 'dbcore', name: 'warmup-rules', level: 10,
   create(core) {
+    // logSet reads its exercise to validate the metrics in this same IDB transaction.
+    // Reuse that result for the trigger. After any exercise mutation, always read through
+    // to IndexedDB again, including when reads and writes overlap in one transaction.
+    type ReadMuscle = { id: number; warmup: boolean }
+    const recentExerciseRead = new WeakMap<DBCoreTransaction, ReadMuscle | null>()
     return {
       transaction(stores, mode, options) {
         let scope = stores
@@ -19,7 +24,19 @@ export const warmupRules: Middleware<DBCore> = {
         if (!['sets','exercises','muscle_groups'].includes(name)) return table
         return {
           ...table,
+          ...(name === 'exercises' && {
+            async get(request: DBCoreGetRequest) {
+              const exercise: Exercise | undefined = await table.get(request)
+              if (exercise && recentExerciseRead.get(request.trans) !== null) {
+                recentExerciseRead.set(request.trans, {
+                  id: exercise.id, warmup: exercise.targetMuscle === WARMUP_MUSCLE_GROUP,
+                })
+              }
+              return exercise
+            },
+          }),
           async mutate(request) {
+            if (name === 'exercises') recentExerciseRead.set(request.trans, null)
             if (request.type !== 'add' && request.type !== 'put') return table.mutate(request)
             const trans = request.trans
             if (name === 'muscle_groups') {
@@ -29,6 +46,12 @@ export const warmupRules: Middleware<DBCore> = {
               const rows = request.values as readonly WorkoutSet[]
               const ids = [...new Set(rows.filter(s => !s.isWarmup).map(s => s.exerciseId))]
               if (!ids.length) return table.mutate(request)
+              const recent = recentExerciseRead.get(trans)
+              if (recent && ids.length === 1 && ids[0] === recent.id) {
+                return recent.warmup
+                  ? table.mutate({...request, values:rows.map(row => ({...row, isWarmup:true}))})
+                  : table.mutate(request)
+              }
               const exercises: (Exercise | undefined)[] = await core.table('exercises').getMany({trans, keys:ids})
               const warmups = new Set(exercises.flatMap(e => e?.targetMuscle === WARMUP_MUSCLE_GROUP ? [e.id] : []))
               if (!warmups.size) return table.mutate(request)
