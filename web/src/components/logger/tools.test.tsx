@@ -21,8 +21,9 @@ describe('logger tools', () => {
       availablePlates:[plate], usePlateInventory:true, plateInventory:{[String(plate)]:3}})
     const onUse = vi.fn()
     render(<PlateCalculatorSheet initialWeightLb={bar + plate * 2} onUse={onUse} onClose={vi.fn()} />)
-    expect(await screen.findByText('× 1')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button',{name:'Build weight'}))
+    const buildWeight = await screen.findByRole('button',{name:'Build weight'})
+    expect(screen.getByText('× 1')).toBeVisible()
+    fireEvent.click(buildWeight)
     const add = screen.getByRole('button',{name:'Add 25 kg per side'}) as HTMLButtonElement
     expect(add.disabled).toBe(true)
     fireEvent.click(screen.getByRole('button',{name:'Use 70 kg'}))

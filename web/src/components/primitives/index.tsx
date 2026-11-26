@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, type HTMLAttributes, type ReactNode } from 'react'
+import { useId, useLayoutEffect, useRef, type HTMLAttributes, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import './primitives.css'
@@ -11,7 +11,7 @@ export function BottomSheet({ title, onClose, children, footer, className = '' }
   const close = useRef(onClose)
   const label = useId()
   useLayoutEffect(() => { close.current = onClose }, [onClose])
-  useEffect(() => {
+  useLayoutEffect(() => {
     const dialog = ref.current
     if (!dialog) return
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
