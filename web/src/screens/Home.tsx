@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ArrowRight, CalendarDays, ChevronRight, ClipboardList, HardDriveDownload, Play, Settings, X } from 'lucide-react'
+import { ArrowRight, CalendarDays, ChevronRight, ClipboardList, HardDriveDownload, Play, RotateCcw, Settings, X } from 'lucide-react'
 import { db, defaultPreferences } from '../db/database'
 import { useSaveBackup } from '../db/backup'
 import { startWorkout } from '../db/repositories'
@@ -138,15 +138,22 @@ export default function Home() {
     <h1 className="home-greeting" id="home-greeting">Hey, {prefs.userName.trim() || 'Athlete'}</h1>
     <section className={`home-surface home-session ${active ? 'is-active' : ''}`} aria-labelledby="home-session-title">
       <div className="home-session-stage">
-        <div className="home-session-art"><PlateAssembly/></div>
+        <div className="home-session-art" aria-hidden="true">
+          <span className="home-art-scale"/>
+          <PlateAssembly/>
+        </div>
         <div className="home-session-copy">
           <span className="home-session-state"><i className="home-status-dot"/>{active ? 'Session in progress' : 'Free session'}</span>
-          <h2 id="home-session-title">{active ? active.name || active.routineDayNameSnapshot || 'Active workout' : 'Quick start'}</h2>
+          <h2 id="home-session-title">{active ? active.name || active.routineDayNameSnapshot || 'Active workout' : <><span className="home-title-first">Quick</span> start</>}</h2>
           {active && <p className="home-live-meta"><Elapsed start={active.startTime}/> · {active.startedFromRoutine ? 'Routine' : 'Free log'}</p>}
           <Link className="home-primary" to={active ? '/workout/active' : '/exercises/select?workoutMode=true'}>
             <Play size={16} fill="currentColor" strokeWidth={1.75}/>{active ? 'Resume workout' : 'Start workout'}
           </Link>
         </div>
+        <button type="button" className="home-art-replay" aria-label="Replay plate animation" title="Replay plate animation"
+          onClick={() => window.dispatchEvent(new Event('ironlog:replay-plates'))}>
+          <RotateCcw size={15} aria-hidden="true"/><span>Replay</span>
+        </button>
       </div>
       {!active && <Link className="home-plan-row" to="/workout/builder"><ClipboardList size={18}/><span>Plan a workout</span><ArrowRight size={17}/></Link>}
     </section>

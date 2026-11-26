@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown, FileDown, Star } from 'lucide-react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useSaveBackup } from '../db/backup'
 import { updateWorkout } from '../db/repositories'
-import type { Workout } from '../db/types'
+import type { Preferences, Workout } from '../db/types'
 import { formatWeight, weightLabel } from '../domain/units'
 import { calculateWeeklyVolume } from '../domain/weeklyVolume'
 import { buildWorkoutShare } from '../domain/workoutShare'
@@ -12,6 +12,27 @@ import { useHistoryData, type HistoryData } from '../history/sessionData'
 import { ShareActions } from '../history/ShareActions'
 import { iconUrls } from '../theme'
 import './history.css'
+import './summary-motion.css'
+
+function FinishStamp({icon}:{icon:Preferences['appIcon']}) {
+  return <svg className="finish-stamp" viewBox="0 0 128 128" aria-hidden="true" focusable="false">
+    <g className="finish-stamp-register" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M5 56v-4h10m98 24h10v-4M8 64h8m96 0h8"/>
+    </g>
+    <path className="finish-stamp-impact" fill="none" stroke="currentColor" d="m44 16 40 0 28 28v40L84 112H44L16 84V44z"/>
+    <g className="finish-stamp-die">
+      <path className="finish-stamp-rim" d="M45 19h38l26 26v38l-26 26H45L19 83V45Z"/>
+      <path className="finish-stamp-groove" d="M47 25h34l22 22v34l-22 22H47L25 81V47Z"/>
+      <path fill="none" stroke="currentColor" strokeWidth="2.5" d="m37 40 10-10h12m10 68h12l10-10"/>
+      {icon === 'swole_alligator'
+        ? <image href={iconUrls(icon).stamp} x="37" y="37" width="54" height="54"/>
+        : <g transform="translate(15 15) scale(.76)">
+          <path fill="currentColor" d="m27 88 18-48h9L36 88z"/>
+          <path className="finish-stamp-monogram" d="m42 88 18-48h12L54 88zm19 0 18-48h12L77 76h25l-4 12z"/>
+        </g>}
+    </g>
+  </svg>
+}
 
 export default function Summary() {
   const {workoutId} = useParams()
@@ -33,6 +54,18 @@ function Completed({workout,data}:{workout:Workout;data:HistoryData}) {
   const [message,setMessage] = useState('')
   const [error,setError] = useState('')
   const navigate = useNavigate()
+  const location = useLocation()
+  const [stamping, setStamping] = useState(location.state?.justFinished === workout.id)
+  // Consume the finish entry so refreshing or returning to this record opens it at rest.
+  useEffect(() => {
+    if (location.state?.justFinished !== workout.id) return
+    void navigate(location.pathname + location.search + location.hash, {replace:true, state:null, preventScrollReset:true})
+  }, [location, navigate, workout.id])
+  useEffect(() => {
+    if (!stamping) return
+    const timeout = window.setTimeout(() => setStamping(false), 720)
+    return () => window.clearTimeout(timeout)
+  }, [stamping])
   const unit = data.prefs.preferredWeightUnit
   const stats = useMemo(() => describeWorkout(workout, data.sets.filter(s => s.workoutId === workout.id), new Map(data.exercises.map(ex => [ex.id,ex]))), [data,workout])
   const share = useMemo(() => buildWorkoutShare(data,workout.id), [data,workout.id])
@@ -44,11 +77,21 @@ function Completed({workout,data}:{workout:Workout;data:HistoryData}) {
   const mass = (lb:number) => formatWeight(lb,unit) + ' ' + weightLabel(unit)
 
   return <main className="screen his-summary">
-    <header className="his-summary-head"><img alt="" src={iconUrls(data.prefs.appIcon).stamp} width={48} height={48}/><div><span className="eyebrow"><Check size={14}/> Workout complete</span><h1>{stats.title}</h1></div></header>
+    <header className="his-summary-head"><div><span className="eyebrow"><Check size={14}/> Workout complete</span><h1>{stats.title}</h1></div></header>
     <p className="his-summary-date">{dateLabel(workout.startTime)}</p>
-    <section className="surface his-result">
-      <span className="eyebrow">Total volume</span><p className="his-result-volume">{formatWeight(stats.volume,unit)} <small>{weightLabel(unit)}</small></p>
-      <dl className="his-metrics"><div><dt>Duration</dt><dd>{stats.duration}</dd></div><div><dt>Working sets</dt><dd>{stats.sets}</dd></div><div><dt>Exercises</dt><dd>{stats.exercises}</dd></div></dl>
+    <section className="surface his-result" data-stamping={stamping || undefined} aria-label="Workout totals">
+      <div className="finish-record">
+        <div className="finish-headline"><span className="eyebrow">{stats.volume > 0 ? 'Total volume' : 'Working sets'}</span>
+          <p className="his-result-volume">{stats.volume > 0 ? <>{formatWeight(stats.volume,unit)} <small>{weightLabel(unit)}</small></> : stats.sets}</p>
+        </div>
+        <FinishStamp icon={data.prefs.appIcon}/>
+      </div>
+      <dl className="his-metrics"><div><dt>Duration</dt><dd>{stats.duration}</dd></div>
+        {stats.volume > 0
+          ? <div><dt>Working sets</dt><dd>{stats.sets}</dd></div>
+          : <div><dt>Total volume</dt><dd>{mass(stats.volume)}</dd></div>}
+        <div><dt>Exercises</dt><dd>{stats.exercises}</dd></div>
+      </dl>
       {stats.muscles.length > 0 && <div className="his-muscles"><span className="eyebrow">Muscles trained</span><p>{stats.muscles.join(' · ')}</p></div>}
     </section>
     {share?.highlight && <p className="his-recap">{share.highlight}</p>}

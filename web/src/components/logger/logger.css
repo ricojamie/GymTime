@@ -6,7 +6,7 @@
 .log-toolbar > :first-child { margin-left:-8px; }
 .log-timer-indicator { display:inline-flex; gap:6px; align-items:center; min-width:38px; justify-content:center; font-size:12px; color:var(--ink-secondary); font-variant-numeric:tabular-nums; }
 .log-timer-indicator > span { width:6px; height:6px; border-radius:var(--radius-pill,999px); background:var(--border-strong); }
-.log-timer-indicator.is-running > span { background:var(--accent); animation:log-led 1.4s ease-in-out infinite alternate; }
+.log-timer-indicator.is-running > span { background:var(--accent); }
 .log-stepper { display:flex; align-items:center; margin-inline:auto; }
 .log-stepper > span { white-space:nowrap; color:var(--ink-secondary); font-size:13px; }
 .log-finish { min-height:44px; padding:0 8px; font-weight:650; background:transparent; border:0; color:var(--ink-primary); }
@@ -52,17 +52,19 @@
 .log-commit { width:100%; min-height:54px; display:flex; align-items:center; justify-content:center; gap:8px; font-weight:700; }
 .log-cancel { width:100%; min-height:44px; border:0; background:none; color:var(--ink-secondary); }
 .log-error, .log-danger { color:var(--semantic-danger); }
-.log-error { margin-block:4px 10px; animation:log-shake 240ms ease; }
+.log-error { margin-block:4px 10px; }
 .log-pr { display:flex; gap:12px; align-items:center; margin-block:8px; padding:12px 16px; border-left:3px solid var(--accent); background:var(--bg-surface); color:var(--accent-ink); position:relative; }
-.log-pr::before,.log-pr::after { content:''; position:absolute; top:25%; left:28px; width:3px; height:3px; border-radius:100%; background:currentColor; animation:log-burst .65s ease-out both; pointer-events:none; }
-.log-pr::after { top:62%; animation-delay:.05s; }
+.log-pr-medal { position:relative; flex:none; display:grid; place-items:center; width:32px; height:32px; border:1px solid var(--accent-ink); border-radius:50%; }
 .log-pr small { display:block; color:var(--ink-secondary); }
 .log-history { margin-block:24px; }
 .log-history header { display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding-bottom:8px; border-bottom:1px solid var(--border-hairline); }
 .log-history h2 { font:600 17px/1.3 var(--font-sans); margin:0; }
 .log-history header > span, .log-history p { font-size:13px; color:var(--ink-secondary); }
 .log-history ol { margin:0; padding:0; list-style:none; }
-.log-set-row { display:flex; align-items:stretch; border-bottom:1px solid var(--border-hairline); min-height:50px; }
+.log-set-row { position:relative; display:flex; align-items:stretch; border-bottom:1px solid var(--border-hairline); min-height:50px; }
+.log-set-row[data-just-added]::before { content:''; position:absolute; inset:0; pointer-events:none; background:linear-gradient(90deg,var(--accent),transparent 90%); opacity:.10; }
+.log-set-row[data-just-added] .log-set-num { color:var(--accent-ink); }
+.log-save-stamp { position:relative; display:inline-grid; place-items:center; }
 .log-set-row > button:first-child, .log-warm-head { min-width:0; display:flex; gap:12px; align-items:center; flex:1; text-align:left; padding:8px 4px; color:var(--ink-primary); background:transparent; border:0; }
 .log-set-row.is-editing .log-set-num,.log-trophy { color:var(--accent-ink); }
 .log-set-num { font-size:13px; color:var(--ink-secondary); min-width:24px; }
@@ -75,9 +77,11 @@
 .log-pad { display:grid; gap:10px; }
 .log-pad-display { display:flex; align-items:baseline; justify-content:center; gap:8px; padding:4px 0; color:var(--ink-secondary); font-size:15px; }
 .log-pad-display output { font:400 46px/1 var(--font-display); color:var(--ink-primary); }
-.log-mode { display:flex; padding:2px; border-radius:var(--radius-control,10px); background:var(--bg-well); }
-.log-mode button { min-height:44px; border:0; flex:1; border-radius:var(--radius-control,10px); background:transparent; color:var(--ink-secondary); }
-.log-mode button[aria-pressed=true] { color:var(--accent-ink); background:var(--bg-surface-hover); font-weight:650; }
+.log-mode { position:relative; display:flex; padding:2px; border-radius:var(--radius-control,10px); background:var(--bg-well); }
+.log-mode::before { content:''; position:absolute; inset:2px auto 2px 2px; width:calc(50% - 2px); border-radius:inherit; background:var(--bg-surface-hover); pointer-events:none; }
+.log-mode[data-dial]::before { transform:translateX(100%); }
+.log-mode button { position:relative; min-height:44px; border:0; flex:1; border-radius:var(--radius-control,10px); background:transparent; color:var(--ink-secondary); }
+.log-mode button[aria-pressed=true] { color:var(--accent-ink); font-weight:650; }
 .log-pad-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; }
 .log-pad-grid button, .log-pad-nudges button { min-height:52px; border:1px solid var(--border-hairline); border-radius:var(--radius-control,10px); background:var(--bg-well); color:var(--ink-primary); display:flex; align-items:center; justify-content:center; gap:5px; font-size:21px; }
 .log-pad-nudges { display:flex; gap:4px; }
@@ -96,8 +100,49 @@
 .log-menu > button { min-height:48px; display:flex; align-items:center; gap:12px; border:0; border-bottom:1px solid var(--border-hairline); background:none; color:var(--ink-primary); text-align:left; padding:0; }
 .log-menu svg { width:18px; height:18px; }
 .log-confirm > button, .log-notes .btn { min-height:48px; }
-@keyframes log-led { to { opacity:.42; } }
 @keyframes log-shake { 25%,75% { transform:translateX(2px); } 50% { transform:translateX(-2px); } }
-@keyframes log-burst { from { transform:scale(1); box-shadow:0 0 currentColor,0 0 currentColor,0 0 currentColor; } to { transform:scale(.6); opacity:0; box-shadow:-22px -18px currentColor,22px -14px currentColor,12px 20px currentColor; } }
+@keyframes log-stamp {
+  0% { transform:scale(.72) rotate(-12deg); }
+  55% { transform:scale(1.14) rotate(2deg); }
+  100% { transform:none; }
+}
+@keyframes log-ring {
+  from { transform:scale(.64); opacity:.6; }
+  to { transform:scale(1.45); opacity:0; }
+}
+@keyframes log-post-set {
+  0% { transform:scaleX(.16); opacity:.22; }
+  35% { transform:scaleX(1); opacity:.15; }
+  100% { transform:scaleX(1); opacity:0; }
+}
+@keyframes log-reveal {
+  from { transform:translateY(3px); opacity:.55; }
+  to { transform:none; opacity:1; }
+}
+.log-options button[aria-expanded=true] > svg:last-child,
+.log-warm-head[aria-expanded=true] > svg { transform:rotate(180deg); }
+@media (prefers-reduced-motion:no-preference) {
+  :root:not([data-motion='reduced']) {
+    & .log-set-row[data-just-added]::before { transform-origin:left; animation:log-post-set 620ms ease-out forwards; }
+    & .log-save-stamp, & .log-pr-medal > svg { animation:log-stamp 280ms ease-out; }
+    & .log-pr { animation:log-reveal 210ms ease-out; }
+    & :is(.log-save-stamp, .log-pr-medal)::after {
+      content:''; position:absolute; inset:-2px; border:1px solid currentColor; border-radius:50%; pointer-events:none;
+      animation:log-ring 430ms ease-out both;
+    }
+    & .log-pr-medal::after { animation-duration:550ms; }
+    & .log-timer-indicator.is-running > span { animation:log-stamp 250ms ease-out; }
+    & .log-error { animation:log-shake 190ms ease; }
+    & .log-extras { animation:log-reveal 140ms ease-out; }
+    & .log-mode::before { transition:transform 160ms cubic-bezier(.2,.78,.25,1); }
+    & :is(.log-options button[aria-expanded] > svg:last-child, .log-warm-head > svg) { transition:transform 160ms ease-out; }
+    & :is(.log-pad-grid, .log-pad-nudges) button > span,
+    & .log-field > strong { transition:transform 90ms ease-out; }
+    & :is(.log-pad-grid, .log-pad-nudges) button:active > span,
+    & .log-field:active > strong { transform:translateY(1px) scale(.96); }
+    & .log-dial-pointer { transform-origin:center bottom; transition:transform 110ms ease-out; }
+    & .log-dial:active > .log-dial-pointer { transform:scaleY(1.16); }
+    & .log-loading { animation:log-reveal 140ms ease-out; }
+  }
+}
 @media (max-width:370px) { .log-telemetry { flex-wrap:wrap; } .log-telemetry-tools { flex-basis:100%; justify-content:flex-start; } .log-field { padding-inline:10px; } }
-@media (prefers-reduced-motion:reduce) { .log-screen *, .log-pr::before, .log-pr::after { animation:none !important; } }

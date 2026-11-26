@@ -1,0 +1,92 @@
+.home-plate {
+  --iron-travel-factor: 1;
+}
+
+.home-session.is-active .home-plate {
+  --iron-travel-factor: .7;
+}
+
+.iron-clamp-index {
+  stroke: var(--accent);
+}
+
+.iron-slide--inner {
+  --travel: 18px;
+  --seat-delay: 40ms;
+  --seat-time: 400ms;
+}
+
+.iron-slide--middle {
+  --travel: 128px;
+  --seat-delay: 145ms;
+  --seat-time: 545ms;
+}
+
+.iron-slide--outer {
+  --travel: 209px;
+  --seat-delay: 320ms;
+  --seat-time: 620ms;
+}
+
+.iron-slide--collar {
+  --travel: 207px;
+  --seat-delay: 600ms;
+  --seat-time: 475ms;
+}
+
+/* Artwork is fully assembled by default, including when either motion preference is reduced. */
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion="reduced"]) .home-plate .iron-slide {
+    animation: iron-seat var(--seat-time) linear var(--seat-delay) backwards;
+  }
+
+  :root:not([data-motion="reduced"]) .home-plate .iron-load-flex {
+    transform-origin: 52px 120px;
+    animation: iron-take-weight 1370ms ease-out;
+  }
+
+  :root:not([data-motion="reduced"]) .home-plate .iron-clamp-lever {
+    transform-origin: 0 0;
+    animation: iron-lock 310ms ease-in-out 950ms backwards;
+  }
+
+  :root:not([data-motion="reduced"]) .home-plate.iron-rewind :is(.iron-load-flex, .iron-slide, .iron-clamp-lever) {
+    animation-name: none;
+  }
+
+  :root:not([data-motion="reduced"]) .home-plate[data-intro-preparing] :is(.iron-load-flex, .iron-slide, .iron-clamp-lever) {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes iron-seat {
+  0% {
+    transform: translateX(calc(var(--travel) * var(--iron-travel-factor)));
+    animation-timing-function: cubic-bezier(.53, .035, .72, .41);
+  }
+  73% { transform: translateX(0); animation-timing-function: ease-out; }
+  83% { transform: translateX(2.4px); animation-timing-function: ease-in-out; }
+  100% { transform: translateX(0); }
+}
+
+/* A sleeve rolling about the supported section of shaft gives each impact increasing leverage. */
+@keyframes iron-take-weight {
+  0%, 20% { transform: rotate(-1.5deg); }
+  25% { transform: rotate(-.45deg); }
+  33% { transform: rotate(-.95deg); }
+  39% { transform: rotate(.65deg); }
+  48% { transform: rotate(-.65deg); }
+  55% { transform: rotate(-.6deg); }
+  60% { transform: rotate(2.25deg); }
+  69% { transform: rotate(-.65deg); }
+  76% { transform: rotate(.8deg); }
+  87% { transform: rotate(-.22deg); }
+  100% { transform: rotate(0); }
+}
+
+@keyframes iron-lock {
+  0%, 18% { transform: rotate(-52deg); }
+  68% { transform: rotate(4deg); }
+  86% { transform: rotate(-1.5deg); }
+  100% { transform: rotate(0); }
+}

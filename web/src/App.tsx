@@ -46,11 +46,13 @@ function Shell() {
   const active = useLiveQuery(async() => (await getActiveWorkout()) ?? null, [])
   useTheme()
   useRestTimerLifecycle(active === undefined ? undefined : Boolean(active))
-  const showTabs = tabs.some(tab => tab.path === pathname)
+  const activeTab = tabs.findIndex(tab => tab.path === pathname)
+  const showTabs = activeTab >= 0
   useEffect(() => { window.scrollTo(0,0) },[pathname])
   return <><div className={'app-main' + (showTabs ? ' has-tabs' : '') + (showTabs && active ? ' has-session':'')}>
     <Suspense fallback={<div className="screen" role="status">Opening…</div>}><Outlet/></Suspense>
   </div>{showTabs && <div className="app-chrome">{active && <SessionDock workout={active}/>}<nav className="app-tabs" aria-label="Main navigation">
+    <span className="app-tab-track" aria-hidden="true"><span style={{transform: `translateX(${activeTab * 100}%)`}}/></span>
     {tabs.map(({path,name,icon:Icon})=><NavLink key={path} end to={path}><Icon size={19}/><span>{name}</span></NavLink>)}
   </nav></div>}<ConnectionUpdate/></>
 }

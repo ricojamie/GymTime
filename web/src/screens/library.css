@@ -72,3 +72,39 @@
   .lib-exercises li:nth-last-child(2):nth-child(odd) { border-bottom:0; }
   .lib-exercise { min-height:72px; }
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-motion="full"] .lib-segment { position: relative; isolation: isolate; }
+  :root[data-motion="full"] .lib-segment::before {
+    content: ""; position: absolute; z-index: -1; pointer-events: none;
+    inset: 4px auto 4px 4px; width: calc((100% - 12px) / 2);
+    background: var(--bg-surface-hover); border-radius: var(--radius-control);
+    transition: transform 190ms cubic-bezier(.22,.75,.23,1);
+  }
+  :root[data-motion="full"] .lib-segment:has(button:nth-child(2)[aria-pressed="true"])::before { transform: translateX(calc(100% + 4px)); }
+  :root[data-motion="full"] .lib-segment button[aria-pressed="true"] { background: transparent; }
+  :root[data-motion="full"] :is(.lib-rank, .lib-icon[aria-pressed] svg) {
+    transform: scale(.91);
+    transition: transform 165ms cubic-bezier(.2,.85,.25,1.28);
+  }
+  :root[data-motion="full"] .lib-rank.picked { transform: scale(1); }
+  :root[data-motion="full"] .lib-icon[aria-pressed="true"] svg { transform: rotate(-8deg) scale(1.07); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-motion="full"] .lib-page-head[data-session-start] { position: relative; }
+  :root[data-motion="full"] .lib-page-head[data-session-start]::after {
+    content: ""; position: absolute; right: 4px; top: calc(50% - 7px); width: 32px; height: 14px;
+    pointer-events: none; opacity: 0; color: var(--accent-ink);
+    background: linear-gradient(currentColor, currentColor) left center / 100% 2px no-repeat,
+      linear-gradient(currentColor, currentColor) 65% center / 3px 100% no-repeat,
+      linear-gradient(currentColor, currentColor) 83% center / 2px 65% no-repeat;
+    animation: lib-rack-arrive 330ms cubic-bezier(.22,.72,.24,1);
+  }
+  @keyframes lib-rack-arrive {
+    0% { opacity: 0; transform: translateX(-12px); }
+    32% { opacity: .95; }
+    70% { opacity: .95; transform: translateX(0); }
+    100% { opacity: 0; transform: translateX(3px); }
+  }
+}

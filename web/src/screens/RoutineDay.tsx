@@ -6,6 +6,7 @@ import { db } from '../db/database'
 import type { Exercise } from '../db/types'
 import { BottomSheet } from '../components/primitives'
 import { newPlanRow, planBlocks, saveDay, type DayExerciseDraft } from '../routines/mutations'
+import { useAdjacentReorder } from '../components/useAdjacentReorder'
 import './routines.css'
 
 type Draft = DayExerciseDraft & { key: string }
@@ -24,6 +25,7 @@ function Editor({ routineId, dayId, initialName, initialRows, exercises }: {
   const [saving, setSaving] = useState(false)
   const names = new Map(exercises.map(e => [e.id, e]))
   const blocks = planBlocks(rows)
+  const captureReorder = useAdjacentReorder()
   function patch(key: string, changes: Partial<DayExerciseDraft>) {
     setRows(previous => previous.map(row => row.key === key ? {...row,...changes} : row))
   }
@@ -46,10 +48,11 @@ function Editor({ routineId, dayId, initialName, initialRows, exercises }: {
     setRows(previous => previous.map(r => r.key === row.key ? {...r,supersetGroupId:group,supersetOrderIndex:0} :
       r.key === next.key ? {...r,supersetGroupId:group,supersetOrderIndex:1} : r))
   }
-  function move(block: number, direction: -1|1) {
+  function move(block: number, direction: -1|1, button: HTMLButtonElement) {
     const reordered = [...blocks]
     const target = block + direction
     if (target < 0 || target >= blocks.length) return
+    captureReorder(button, direction)
     ;[reordered[block], reordered[target]] = [reordered[target], reordered[block]]
     setRows(reordered.flat())
   }
@@ -73,11 +76,11 @@ function Editor({ routineId, dayId, initialName, initialRows, exercises }: {
     }}>
       <label>Day name<input value={name} required onChange={e => setName(e.target.value)} placeholder="e.g. Upper A" /></label>
       <div className="rt-head"><h2>Exercises</h2><span className="rt-muted">{rows.length}</span></div>
-      {blocks.map((block, blockIndex) => <section key={block[0].key} className="surface rt-plan">
+      {blocks.map((block, blockIndex) => <section key={block[0].key} className="surface rt-plan" data-order-item>
         <header className="rt-head"><span className="eyebrow">{block.length > 1 ? 'Superset' : 'Exercise'} {String(blockIndex + 1).padStart(2,'0')}</span>
           <div className="rt-tools">
-            <button type="button" className="icon-button" disabled={blockIndex === 0} aria-label={'Move ' + (names.get(block[0].exerciseId)?.name ?? 'exercise') + ' up'} onClick={() => move(blockIndex,-1)}><ArrowUp size={16}/></button>
-            <button type="button" className="icon-button" disabled={blockIndex === blocks.length-1} aria-label={'Move ' + (names.get(block[0].exerciseId)?.name ?? 'exercise') + ' down'} onClick={() => move(blockIndex,1)}><ArrowDown size={16}/></button>
+            <button type="button" className="icon-button" disabled={blockIndex === 0} aria-label={'Move ' + (names.get(block[0].exerciseId)?.name ?? 'exercise') + ' up'} onClick={e => move(blockIndex, -1, e.currentTarget)}><ArrowUp size={16}/></button>
+            <button type="button" className="icon-button" disabled={blockIndex === blocks.length-1} aria-label={'Move ' + (names.get(block[0].exerciseId)?.name ?? 'exercise') + ' down'} onClick={e => move(blockIndex, 1, e.currentTarget)}><ArrowDown size={16}/></button>
           </div>
         </header>
         {block.map(row => <div key={row.key} className="rt-plan-row">

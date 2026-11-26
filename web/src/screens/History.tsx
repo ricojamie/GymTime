@@ -46,7 +46,7 @@ export default function History() {
       <h2 className="eyebrow">{month}</h2>
       <div className="surface his-timeline">{list.map(({w,stats}) => {
         const date = new Date(w.startTime)
-        return <button type="button" className="his-session" key={w.id} onClick={() => setParams({workoutId:String(w.id)})}>
+        return <button type="button" className="his-session" aria-haspopup="dialog" key={w.id} onClick={() => setParams({workoutId:String(w.id)})}>
           <span className="his-date" aria-label={dateLabel(w.startTime)}><strong>{String(date.getDate()).padStart(2,'0')}</strong><small>{date.toLocaleDateString(undefined,{weekday:'short'})}</small></span>
           <span className="his-session-text"><strong>{stats.title}</strong>
             {stats.muscles.length > 0 && <span>{stats.muscles.slice(0,3).join(' · ')}{stats.muscles.length > 3 && ' +' + (stats.muscles.length - 3)}</span>}
@@ -134,7 +134,7 @@ function WorkoutDetails({ workout, data, onClose }: {workout:Workout;data:Histor
         {Array.from(groupBy(sets, s => s.exerciseId), ([id, group]) => {
           const warm = group.filter(s => s.isWarmup)
           return <section key={id}><h3>{exercises.get(id)?.name || 'Exercise'}</h3>
-            {warm.length > 0 && <details className="his-warm"><summary>{warm.length} warm-up {warm.length === 1 ? 'set' : 'sets'}</summary><SetRows sets={warm} unit={unit} prIds={prIds}/></details>}
+            {warm.length > 0 && <details className="his-warm"><summary><ChevronRight size={15} aria-hidden="true"/>{warm.length} warm-up {warm.length === 1 ? 'set' : 'sets'}</summary><SetRows sets={warm} unit={unit} prIds={prIds}/></details>}
             <SetRows sets={group.filter(s => !s.isWarmup)} unit={unit} prIds={prIds}/>
           </section>
         })}

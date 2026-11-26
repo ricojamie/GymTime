@@ -205,7 +205,7 @@ export default function ExerciseSelect({ embedded = false }: { embedded?: boolea
   }
   const Container = embedded ? 'section' : 'main'
   return <Container className={embedded ? 'lib-browser' : 'screen lib-page lib-browser'}>
-    {!embedded && <header className="lib-page-head"><button className="icon-button" aria-label="Back" onClick={goBack}><ArrowLeft/></button><h1>{heading}</h1></header>}
+    {!embedded && <header className="lib-page-head" data-session-start={params.get('workoutMode') === 'true' && !explicitWorkout || undefined}><button className="icon-button" aria-label="Back" onClick={goBack}><ArrowLeft/></button><h1>{heading}</h1></header>}
     <div className="lib-toolbar">
       <label className="lib-search"><Search size={18}/><input type="search" aria-label="Search exercises" placeholder="Search exercises" value={query} onChange={e => setQuery(e.target.value)}/></label>
       <button className="lib-new" onClick={create} aria-label="Create exercise"><Plus size={19}/><span>New</span></button>

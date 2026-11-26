@@ -1,16 +1,53 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { db } from '../db/database'
 import { defaultPreferences } from '../db/types'
 import { toLbs } from '../domain/units'
 import EquipmentSettings from './EquipmentSettings'
-import { chooseIcon, iconUrls } from './index'
+import Settings from '../screens/Settings'
+import { chooseIcon, iconUrls, useTheme } from './index'
 
 beforeEach(async () => {
   await db.open()
   await db.preferences.put({ ...defaultPreferences })
 })
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+  delete document.documentElement.dataset.motion
+})
+
+it('respects system changes and persists a local reduction on older installs', async () => {
+  await db.preferences.update('default', {reduceMotion: undefined})
+  const media = Object.assign(new EventTarget(), {matches: false})
+  vi.stubGlobal('matchMedia', () => media)
+  function ScreenWithTheme() {
+    useTheme()
+    return <MemoryRouter><Settings/></MemoryRouter>
+  }
+  const root = document.documentElement
+  const page = render(<ScreenWithTheme/>)
+  expect(root.dataset.motion).toBe('reduced')
+  await waitFor(() => expect(root.dataset.motion).toBe('full'))
+
+  const motion = within(screen.getByRole('group', {name:'Motion'}))
+  expect(motion.getByRole('button', {name:'System'})).toHaveAttribute('aria-pressed','true')
+  act(() => { media.matches = true; media.dispatchEvent(new Event('change')) })
+  expect(root.dataset.motion).toBe('reduced')
+  fireEvent.click(motion.getByRole('button', {name:'Reduced'}))
+  await waitFor(async () => expect((await db.preferences.get('default'))?.reduceMotion).toBe(true))
+  await waitFor(() => expect(motion.getByRole('button',{name:'Reduced'})).toHaveAttribute('aria-pressed','true'))
+  act(() => { media.matches = false; media.dispatchEvent(new Event('change')) })
+  expect(root.dataset.motion).toBe('reduced')
+
+  page.unmount()
+  render(<ScreenWithTheme/>)
+  await waitFor(() => expect(within(screen.getByRole('group', {name:'Motion'})).getByRole('button',{name:'Reduced'})).toHaveAttribute('aria-pressed','true'))
+  expect(root.dataset.motion).toBe('reduced')
+  fireEvent.click(within(screen.getByRole('group', {name:'Motion'})).getByRole('button', {name:'System'}))
+  await waitFor(() => expect(root.dataset.motion).toBe('full'))
+})
 
 it('edits metric bar and plate presets without changing canonical historical values', async () => {
   const prefs = { ...defaultPreferences, preferredWeightUnit: 'kg' as const }

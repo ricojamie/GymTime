@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef, type HTMLAttributes, type ReactNode } from 'react'
+import { useId, useLayoutEffect, useRef, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import './primitives.css'
@@ -6,9 +6,16 @@ import './primitives.css'
 type SheetProps = { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; className?: string }
 let openSheets = 0
 let previousOverflow = ''
+
+function isOutside(dialog: HTMLDialogElement, x: number, y: number) {
+  const bounds = dialog.getBoundingClientRect()
+  return x < bounds.left || x > bounds.right || y < bounds.top || y > bounds.bottom
+}
+
 export function BottomSheet({ title, onClose, children, footer, className = '' }: SheetProps) {
   const ref = useRef<HTMLDialogElement>(null)
   const close = useRef(onClose)
+  const pressedBackdrop = useRef(false)
   const label = useId()
   useLayoutEffect(() => { close.current = onClose }, [onClose])
   useLayoutEffect(() => {
@@ -27,11 +34,15 @@ export function BottomSheet({ title, onClose, children, footer, className = '' }
     }
   }, [])
   return createPortal(<dialog ref={ref} className={'bottom-sheet ' + className} aria-labelledby={label}
-    onCancel={event => { event.preventDefault(); close.current() }}
+    onCancel={event => { event.preventDefault(); event.stopPropagation(); close.current() }}
+    onPointerDown={event => {
+      pressedBackdrop.current = event.target === event.currentTarget && isOutside(event.currentTarget, event.clientX, event.clientY)
+    }}
+    onPointerCancel={() => { pressedBackdrop.current = false }}
     onClick={event => {
-      if (event.target !== ref.current) return
-      const bounds = ref.current.getBoundingClientRect()
-      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) close.current()
+      const dismiss = pressedBackdrop.current && event.target === event.currentTarget && isOutside(event.currentTarget, event.clientX, event.clientY)
+      pressedBackdrop.current = false
+      if (dismiss) close.current()
     }}>
     <div className="sheet-grip" aria-hidden="true" />
     <header className="sheet-heading"><h2 id={label}>{title}</h2><button type="button" className="icon-button" aria-label="Close" onClick={onClose}><X size={20}/></button></header>
@@ -50,8 +61,20 @@ export function HairlineList({ className = '', ...props }: HTMLAttributes<HTMLDi
 export function Toggle({checked,onChange,label,disabled=false}:{checked:boolean;onChange:(v:boolean)=>void;label:string;disabled?:boolean}) {
   return <button type="button" role="switch" aria-checked={checked} disabled={disabled} className="toggle-row" onClick={()=>onChange(!checked)}><span>{label}</span><span className="switch-track" aria-hidden="true"><i/></span></button>
 }
-export function SegmentedControl<T extends string>({ value,options,onChange,label }:{value:T;options:readonly {value:T;label:string}[];onChange:(value:T)=>void;label?:string}) {
-  return <div role="group" aria-label={label} className="segmented">{options.map(item=><button type="button" key={item.value} aria-pressed={value===item.value} onClick={()=>onChange(item.value)}>{item.label}</button>)}</div>
+export function SegmentedControl<T extends string | number>({ value, options, onChange, label, className = '' }: {
+  value: T
+  options: readonly { value: T; label: string }[]
+  onChange: (value: T) => void
+  label?: string
+  className?: string
+}) {
+  const selected = options.findIndex(option => option.value === value)
+  const style = { '--segment-count': options.length || 1, '--segment-index': selected } as CSSProperties
+  return <div role="group" aria-label={label} className={'segmented ' + className} style={style}>
+    {selected >= 0 && <span className="segment-rail" aria-hidden="true"><i /></span>}
+    {options.map(item => <button type="button" key={item.value} aria-pressed={value === item.value}
+      onClick={() => onChange(item.value)}>{item.label}</button>)}
+  </div>
 }
 export function CalibrationBar({value,max=1,ticks=10,label}:{value:number;max?:number;ticks?:number;label?:string}) {
   return <div className="calibration-bar" role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={Math.min(max,Math.max(0,value))}>{Array.from({length:ticks},(_,i)=><i key={i} data-lit={max>0 && i<Math.round(value/max*ticks)}/>)}</div>

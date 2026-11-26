@@ -29,6 +29,8 @@ export default function Settings() {
         onChange={preferredWeightUnit=>void save({preferredWeightUnit})}/></div></Group>
     <Group title="Look & feel"><SettingLink to="/settings/theme">Theme & fonts</SettingLink>
       <ToggleRow label="Dark mode" checked={prefs.darkMode} onChange={()=>void save({darkMode:!prefs.darkMode})}/>
+      <div className="st-row"><span>Motion</span><Segments label="Motion" items={['System','Reduced'] as const}
+        value={prefs.reduceMotion ? 'Reduced' : 'System'} onChange={value=>void save({reduceMotion:value==='Reduced'})}/></div>
       <div className="st-block"><h3>App icon</h3><div className="st-icon-options">{appIcons.map(([key,label])=>
         <button type="button" key={key} aria-pressed={prefs.appIcon===key} onClick={()=>void iconChange(key)}><img width={38} height={38} src={iconUrls(key).touch} alt=""/>
           <span>{label}</span>{prefs.appIcon===key && <Check size={15}/>}</button>)}</div>

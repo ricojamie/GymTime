@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, Check, Delete, Minus, Plus } from 'lucide-react'
 import { BottomSheet } from '../primitives'
 import type { MetricField } from '../../domain/loggingValidation'
@@ -63,7 +63,10 @@ function VernierDial({ value, step, unit, pins, onChange }: {
     el.addEventListener('scroll', snap, {passive:true})
     return () => { el.removeEventListener('scroll', snap); clearTimeout(settle) }
   }, [])
-  const labels = Array.from({ length: Math.floor(count / 10) + 1 }, (_, i) => i * 10)
+  const labels = useMemo(() => Array.from({ length: Math.floor(count / 10) + 1 }, (_, index) => {
+    const tick = index * 10
+    return <text key={tick} x={tick * spacing} y="70" textAnchor="middle">{tick * step}</text>
+  }), [count, step])
   const read = () => {
     if (!interacting.current || !track.current) return
     const n = Math.max(0, Math.min(count, Math.round(track.current.scrollLeft / spacing))) * step
@@ -98,7 +101,7 @@ function VernierDial({ value, step, unit, pins, onChange }: {
             {Array.from({ length: 10 }, (_, i) => <path key={i} d={'M' + (i * spacing + .5) + ' 29v' + (i === 0 ? 25 : i === 5 ? 18 : 9)} />)}
           </pattern></defs>
           <rect width="100%" height="82" fill={'url(#' + patternId + ')'} />
-          {labels.map(i => <text key={i} x={i * spacing} y="70" textAnchor="middle">{i * step}</text>)}
+          {labels}
           {[...pinGroups.entries()].map(([i, names]) => <g key={i} className="log-dial-pin" transform={'translate(' + i * spacing + ',0)'}><path d="M0 24v-6" /><text y="13" textAnchor="middle">{names.join(' / ')}</text></g>)}
         </svg>
       </div>
@@ -151,16 +154,16 @@ export default function Keypad({ field, value, unit, weightUnit, pins, onChange,
   return <BottomSheet title={fieldLabels[field]} onClose={onClose}>
     <div className="log-pad">
       <div className="log-pad-display"><output aria-label={fieldLabels[field] + ' value'}>{raw || '—'}</output><span>{unit}</span></div>
-      {canDial && <div className="log-mode" role="group" aria-label="Entry method">
+      {canDial && <div className="log-mode" data-dial={dial || undefined} role="group" aria-label="Entry method">
         <button aria-pressed={!dial} onClick={() => setDial(false)}>Keypad</button><button aria-pressed={dial} onClick={() => setDial(true)}>Dial</button>
       </div>}
       {dial && canDial
         ? <VernierDial value={value ?? 0} unit={unit} step={field === 'weight' && weightUnit === 'kg' ? .5 : 1} pins={pins} onChange={setExact} />
         : <div className="log-pad-grid">{['1','2','3','4','5','6','7','8','9',punctuation,'0','back'].map(k =>
-          <button key={k} disabled={k === '.' && !allowFraction} aria-label={k === 'back' ? 'Backspace' : k} onClick={() => write(k)}>{k === 'back' ? <Delete size={20} /> : k}</button>)}</div>}
+          <button key={k} disabled={k === '.' && !allowFraction} aria-label={k === 'back' ? 'Backspace' : k} onClick={() => write(k)}><span aria-hidden="true">{k === 'back' ? <Delete size={20} /> : k}</span></button>)}</div>}
       <div className="log-pad-nudges">
-        <button aria-label={'Decrease ' + adjustment} onClick={() => setExact((value ?? 0) - step)}><Minus size={15} />{step}</button>
-        <button aria-label={'Increase ' + adjustment} onClick={() => setExact((value ?? 0) + step)}><Plus size={15} />{step}</button>
+        <button aria-label={'Decrease ' + adjustment} onClick={() => setExact((value ?? 0) - step)}><Minus size={15} /><span>{step}</span></button>
+        <button aria-label={'Increase ' + adjustment} onClick={() => setExact((value ?? 0) + step)}><Plus size={15} /><span>{step}</span></button>
         {onNext && <button onClick={onNext}>Next <ArrowRight size={17} /></button>}</div>
       {error && <p role="alert" className="log-error">{error}</p>}
       <button disabled={busy} className="btn primary log-commit" onClick={onCommit}><Check size={19} />{action}</button>

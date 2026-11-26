@@ -17,13 +17,13 @@
 .st-name { width:min(62%,240px);text-align:right }
 .st-number { width:78px;text-align:right }
 .st-row select { max-width:48%;min-width:64px }
-.st-icon-options,.st-segments,.st-swatch,.st-icon-options button,.st-plate-choices button,.st-actions,.st-add { display:flex;align-items:center }
-.st-segments { gap:2px;background:var(--bg-well);border-radius:var(--radius-control,10px);padding:2px }
+.st-icon-options,.st-swatch,.st-icon-options button,.st-plate-choices button,.st-actions,.st-add { display:flex;align-items:center }
 .st-segments button,.st-icon-options button,.st-plate-choices button,.st-swatch { min-height:44px;min-width:44px;border:0;cursor:pointer;border-radius:var(--radius-control,10px);font:600 14px/1.25 var(--font-sans);color:var(--ink-secondary);background:transparent }
-.st-segments button { flex:1;padding:5px 12px }
-.st-segments button[aria-pressed=true],.st-icon-options button[aria-pressed=true],.st-plate-choices button[aria-pressed=true] { color:var(--accent-ink);background:var(--bg-surface-hover) }
+.st-segments button { padding:5px 12px }
+.st-segments button[aria-pressed=true] { color:var(--accent-ink) }
+.st-icon-options button[aria-pressed=true],.st-plate-choices button[aria-pressed=true] { color:var(--accent-ink);background:var(--bg-surface-hover) }
 .st-switch { width:44px;height:26px;border:1px solid var(--border-strong);border-radius:var(--radius-control,10px);background:var(--bg-well);padding:3px;display:flex;align-items:center }
-.st-switch::before { content:"";width:18px;height:18px;display:block;background:var(--ink-secondary);border-radius:var(--radius-control,10px);transition:transform .16s ease }
+.st-switch::before { content:"";width:18px;height:18px;display:block;background:var(--ink-secondary);border-radius:var(--radius-control,10px) }
 button[aria-checked=true] .st-switch { background:var(--accent);border-color:transparent }
 button[aria-checked=true] .st-switch::before { transform:translateX(17px);background:var(--on-accent) }
 .st-block,.st-color-panel { padding:16px }
@@ -64,4 +64,6 @@ button[aria-checked=true] .st-switch::before { transform:translateX(17px);backgr
 .st-actions { gap:2px }
 .st-add { gap:8px;justify-content:center;width:100% }
 @media(min-width:700px){ .st-screen .st-row { min-height:60px }.st-swatches { grid-template-columns:repeat(4,minmax(0,1fr)) } }
-@media(prefers-reduced-motion: reduce){ .st-switch::before { transition:none } }
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-motion="full"] .st-switch::before { transition:transform 160ms cubic-bezier(.2,.8,.2,1) }
+}

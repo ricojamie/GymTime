@@ -14,8 +14,12 @@ export function iconUrls(icon: Preferences['appIcon']) {
   }
 }
 
+function useStoredSettings() {
+  return useLiveQuery(async () => (await db.preferences.get('default')) ?? defaultPreferences, [])
+}
+
 export function useSettings() {
-  return useLiveQuery(() => db.preferences.get('default'), [], defaultPreferences) ?? defaultPreferences
+  return useStoredSettings() ?? defaultPreferences
 }
 
 export async function chooseIcon(icon: Preferences['appIcon']) {
@@ -27,7 +31,19 @@ export async function chooseIcon(icon: Preferences['appIcon']) {
 }
 
 export function useTheme() {
-  const prefs = useSettings()
+  const stored = useStoredSettings()
+  const prefs = stored ?? defaultPreferences
+  // Keep first paint still until IndexedDB resolves the user's motion preference.
+  const reduceMotion = stored === undefined || stored.reduceMotion === true
+  useLayoutEffect(() => {
+    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    const sync = () => {
+      document.documentElement.dataset.motion = reduceMotion || media?.matches ? 'reduced' : 'full'
+    }
+    sync()
+    media?.addEventListener('change', sync)
+    return () => media?.removeEventListener('change', sync)
+  }, [reduceMotion])
   useEffect(() => {
     const icon = new URL(window.location.href).searchParams.get('icon')
     if (icon === 'swole-alligator') void updatePreferences({appIcon:'swole_alligator'}).catch(() => {})

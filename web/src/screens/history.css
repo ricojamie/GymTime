@@ -77,3 +77,14 @@ textarea.his-input{resize:vertical}
 .his-footer{position:sticky;bottom:0;background:var(--bg-canvas);padding:12px 0 max(12px,env(safe-area-inset-bottom));border-top:1px solid var(--border-hairline);gap:8px;z-index:2}
 .his-footer>button:first-child{flex:1}.his-footer>button:last-child{flex:2}
 @media(max-width:380px){.his-session{gap:8px;padding:12px}.his-sets li{gap:8px}.his-metrics>div+div{padding-left:8px}}
+
+.his-warm summary { display: flex; align-items: center; gap: 6px; list-style: none; }
+.his-warm summary::-webkit-details-marker { display: none; }
+.his-warm[open] > summary svg { transform: rotate(90deg); }
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-motion="full"] :is(.his-warm > summary svg, .his-session > svg:last-child) {
+    transition: transform 160ms cubic-bezier(.2,.8,.25,1);
+  }
+  :root[data-motion="full"] .his-session:is(:active, :focus-visible) > svg:last-child { transform: translateX(3px); }
+}

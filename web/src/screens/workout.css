@@ -81,6 +81,15 @@
   .wk-strip { max-width: 100%; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .wk-go { transition: transform .16s cubic-bezier(.2,.8,.2,1); }
-  .wk-next:active .wk-go { transform: scale(.96); }
+  :root[data-motion="full"] .wk-go { transition: transform .16s cubic-bezier(.2,.8,.2,1); }
+  :root[data-motion="full"] .wk-next:active .wk-go { transform: scale(.96); }
+}
+
+.wk-choice-mark { display: inline-flex; align-items: center; justify-content: flex-end; }
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-motion="full"] :is(.wk-choice-mark, .wk-timeline-row > svg:last-child) {
+    transition: transform 160ms cubic-bezier(.2,.8,.25,1);
+  }
+  :root[data-motion="full"] .wk-ex-option[aria-pressed="false"] .wk-choice-mark { transform: scale(.92); }
+  :root[data-motion="full"] .wk-timeline-row:is(:active, :focus-visible) > svg:last-child { transform: translateX(3px); }
 }

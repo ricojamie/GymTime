@@ -7,6 +7,7 @@
  --bg-surface:color-mix(in srgb,var(--surface-base),var(--accent) 2.5%);
  --radius-control:10px; --radius-surface:16px; --radius-sheet:24px; --radius-pill:999px;
  --font-display:'Bebas Neue','Arial Narrow',sans-serif; --font-sans:-apple-system,BlinkMacSystemFont,'Inter',system-ui,sans-serif;
+ --motion-press:100ms; --ease-settle:cubic-bezier(.22,.75,.18,1);
  --gutter:16px; --ease:cubic-bezier(.2,.8,.2,1); --safe-bottom:env(safe-area-inset-bottom,0px);
 }
 :root[data-theme=light] {

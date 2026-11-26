@@ -8,7 +8,7 @@ import Workout from './Workout'
 
 function Destination() {
   const location = useLocation()
-  return <output aria-label="Destination">{location.pathname}</output>
+  return <output aria-label="Destination" data-just-finished={location.state?.justFinished}>{location.pathname}</output>
 }
 
 beforeEach(async () => {
@@ -67,7 +67,9 @@ describe('One-time workout', () => {
     const confirm = await screen.findByRole('button', { name: 'Finish workout' })
     expect((await db.workouts.get(id))?.endTime).toBeNull()
     fireEvent.click(confirm)
-    expect(await screen.findByLabelText('Destination', {}, { timeout: 5000 })).toHaveTextContent('/summary/' + id)
+    const destination = await screen.findByLabelText('Destination', {}, { timeout: 5000 })
+    expect(destination).toHaveTextContent('/summary/' + id)
+    expect(destination).toHaveAttribute('data-just-finished', String(id))
     expect((await db.workouts.get(id))?.endTime).toBeTypeOf('number')
   }, 15000)
 })

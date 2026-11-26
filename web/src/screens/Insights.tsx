@@ -82,13 +82,13 @@ export default function Insights() {
   return <section className="screen il-page">
     <header className="il-page-head"><h1>Training insights</h1><button className="icon-button" aria-label="How to read this" title="How to read this" onClick={() => setEvidence({kind:'guide'})}><BookOpen size={20}/></button></header>
     <div className="il-period-line">
-      <div className="il-segments" role="group" aria-label="Comparison period">{([28,84] as const).map(n => <button key={n} aria-pressed={days === n} onClick={() => setDays(n)}>{n/7} weeks</button>)}</div>
+      <div className="il-segments" data-period={days} role="group" aria-label="Comparison period">{([28,84] as const).map(n => <button key={n} aria-pressed={days === n} onClick={() => setDays(n)}>{n/7} weeks</button>)}</div>
       <span>{shortDate.format(data.period.currentStartMs)} – {shortDate.format(data.period.currentEndMs)}</span>
     </div>
     <section className="il-telemetry surface" aria-label="Training overview">
       <dl><div><dt>Workouts</dt><dd>{cadence.currentWorkouts}</dd><small>{delta > 0 ? '+' : ''}{delta} vs prior</small></div><div><dt>Working sets</dt><dd>{cadence.currentWorkingSets}</dd><small>{cadence.previousWorkingSets} prior</small></div><div><dt>Active days</dt><dd>{cadence.currentActiveDays}</dd><small>{cadence.previousActiveDays} prior</small></div></dl>
       <div className="il-cadence" role="img" aria-label={cadence.currentActiveDays + ' active days out of ' + days}>
-        <i style={{width: Math.min(100,100 * cadence.currentActiveDays / days) + '%'}}/>
+        <i key={days} style={{width: Math.min(100,100 * cadence.currentActiveDays / days) + '%'}}/>
       </div>
     </section>
     {observations.length > 0 && <section className="il-observations" aria-label="Observations">{observations.slice(0,2).map(o => <button key={o.text} className="il-linkrow" onClick={() => {

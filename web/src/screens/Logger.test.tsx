@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { configure, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { db } from '../db/database'
-import { groupWorkoutExercises, startWorkout, updatePreferences } from '../db/repositories'
+import { groupWorkoutExercises, logSet, startWorkout, updatePreferences } from '../db/repositories'
 import Logger from './Logger'
 
 beforeAll(() => {
@@ -33,6 +33,23 @@ function enter(field: string, keys: string, close = true) {
 }
 
 describe('logger', {timeout: 30000}, () => {
+  it('marks only the locally added set and clears its feedback when editing begins', async () => {
+    const exercise = (await db.exercises.where('name').equals('Push-Ups').first())!
+    const wid = await startWorkout({exerciseIds:[exercise.id]})
+    await logSet({workoutId:wid, exerciseId:exercise.id, reps:8})
+    render(<MemoryRouter initialEntries={['/log/' + exercise.id + '?workoutId=' + wid]}><Routes><Route path="/log/:exerciseId" element={<Logger />} /></Routes></MemoryRouter>)
+    const existing = await screen.findByRole('button', {name:/^Edit set 1,/})
+    expect(existing.closest('li')).not.toHaveAttribute('data-just-added')
+    fireEvent.click(screen.getByRole('button', {name:'Log set'}))
+    await waitFor(() => expect(document.querySelector('li[data-just-added] button')).toHaveAccessibleName(/^Edit set 2,/))
+    const added = screen.getByRole('button', {name:/^Edit set 2,/})
+    expect(existing.closest('li')).not.toHaveAttribute('data-just-added')
+    fireEvent.click(added)
+    expect(added.closest('li')).not.toHaveAttribute('data-just-added')
+    fireEvent.click(screen.getByRole('button',{name:'Save changes'}))
+    await screen.findByText('Set updated.')
+    expect(added.closest('li')).not.toHaveAttribute('data-just-added')
+  })
   it('logs from the keypad, retains core metrics and restores a draft after editing a previous set', async () => {
     const wid = await launch()
     enter('weight','20')

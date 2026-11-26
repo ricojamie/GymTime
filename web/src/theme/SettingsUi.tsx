@@ -1,6 +1,7 @@
 import { useId, useState, type ReactNode } from 'react'
 import { ArrowLeft, ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { SegmentedControl } from '../components/primitives'
 import { updatePreferences } from '../db/repositories'
 import type { Preferences } from '../db/types'
 import '../screens/settings.css'
@@ -19,7 +20,8 @@ export function ToggleRow({label,checked,onChange}:{label:string;checked:boolean
   return <button className="st-row st-action" role="switch" aria-label={label} aria-checked={checked} onClick={onChange}><span>{label}</span><span className="st-switch" aria-hidden="true"/></button>
 }
 export function Segments<T extends string|number>({label,items,value,onChange}:{label:string; items:readonly T[]; value:T; onChange:(next:T)=>void}) {
-  return <div className="st-segments" role="group" aria-label={label}>{items.map(item=><button type="button" key={item} aria-pressed={value===item} onClick={()=>onChange(item)}>{item}</button>)}</div>
+  return <SegmentedControl className="st-segments" label={label} value={value} onChange={onChange}
+    options={items.map(value => ({ value, label: String(value) }))} />
 }
 export function useSettingsWriter() {
   const [error,setError] = useState('')

@@ -20,7 +20,10 @@ it('moves a linked pair as a unit and persists it after editing', async () => {
   const pair = screen.getByText('Superset 01').closest('section')!
   expect(within(pair).getByText('Barbell Bench Press')).toBeInTheDocument()
   expect(within(pair).getByText('Incline Dumbbell Press')).toBeInTheDocument()
-  fireEvent.click(within(pair).getByRole('button',{name:'Move Barbell Bench Press down'}))
+  const moveDown = within(pair).getByRole('button', { name: 'Move Barbell Bench Press down' })
+  moveDown.focus()
+  fireEvent.click(moveDown)
+  expect(within(pair).getByRole('button', { name: 'Move Barbell Bench Press up' })).toHaveFocus()
   fireEvent.click(screen.getByRole('button',{name:'Save day'}))
   await waitFor(() => expect(screen.getByText('Saved routine')).toBeInTheDocument())
   const rows = await db.routine_exercises.where('routineDayId').equals(dayId).sortBy('orderIndex')

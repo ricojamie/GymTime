@@ -16,11 +16,66 @@
 .il-bar-current { color:var(--accent-ink); fill:currentColor; }
 .il-partial,.il-full { stroke:currentColor; stroke-width:1; }
 .il-partial { stroke-dasharray:3 3; }
-.il-spectrum { display:flex; gap:3px; }
-.il-spectrum i { display:inline-block; height:5px; width:14px; background:var(--border-strong); }
-.il-spectrum i.is-lit { background:var(--ink-secondary); }
+.il-spectrum {
+  --il-tick-step: 17px;
+  --il-tick-gap: 3px;
+  display: block;
+  width: calc(6 * var(--il-tick-step) - var(--il-tick-gap));
+  height: 5px;
+  background: var(--border-strong);
+  mask-image: repeating-linear-gradient(90deg, #000 0 calc(var(--il-tick-step) - var(--il-tick-gap)), transparent 0 var(--il-tick-step));
+}
+.il-spectrum i { display:block; height:100%; background:var(--ink-secondary); }
+.il-spectrum i::after { content:''; display:block; height:100%; background:var(--accent-ink); opacity:0; }
+.il-muscles button:is(:focus-visible, :active) .il-spectrum i::after { opacity:1; }
+@media (hover:hover) and (pointer:fine) {
+  .il-muscles button:hover .il-spectrum i::after { opacity:1; }
+}
 .il-sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 
 
 .il-line-plot { display:grid; grid-template-columns:auto minmax(0,1fr); gap:8px; margin-top:12px; }
 .il-chart-scale { display:flex; flex-direction:column; justify-content:space-between; align-items:flex-end; font-size:10px; color:var(--ink-secondary); padding:8px 0; }
+
+.il-chart-reticle, .il-rhythm-crests {
+  opacity: 0;
+  pointer-events: none;
+  fill: none;
+  stroke: var(--accent-ink);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+@keyframes il-register-point {
+  0% { opacity: 0; transform: scale(1.7); }
+  24% { opacity: .8; }
+  68% { opacity: .8; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+@keyframes il-register-crests {
+  0% { opacity: 0; transform: translateY(-5px); }
+  26% { opacity: .85; }
+  66% { opacity: .85; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion='reduced']) .il-spectrum i::after {
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 200ms var(--ease), opacity 120ms ease-out;
+  }
+  :root:not([data-motion='reduced']) .il-muscles button:is(:focus-visible, :active) .il-spectrum i::after { transform: scaleX(1); }
+  :root:not([data-motion='reduced']) .il-chart-reticle {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: il-register-point 520ms cubic-bezier(.22,.75,.2,1);
+  }
+  :root:not([data-motion='reduced']) .il-rhythm-crests {
+    animation: il-register-crests 430ms cubic-bezier(.22,.75,.2,1);
+  }
+}
+@media (prefers-reduced-motion: no-preference) and (hover:hover) and (pointer:fine) {
+  :root:not([data-motion='reduced']) .il-muscles button:hover .il-spectrum i::after { transform:scaleX(1); }
+}

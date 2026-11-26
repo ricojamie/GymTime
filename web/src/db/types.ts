@@ -124,6 +124,7 @@ export interface Preferences extends PortablePreferences {
   workoutsSinceLastBackup: number
   customFontBlob: ArrayBuffer | null
   customFontName: string | null
+  reduceMotion: boolean
   appIcon: 'classic' | 'swole_alligator'
 }
 export const defaultPreferences: Preferences = {
@@ -134,4 +135,5 @@ export const defaultPreferences: Preferences = {
   availablePlates: [45, 35, 25, 15, 10, 5, 2.5], usePlateInventory: false,
   plateInventory: {}, preferredWeightUnit: 'lbs', lastBackupAtEpochMs: null,
   workoutsSinceLastBackup: 0, customFontBlob: null, customFontName: null, appIcon: 'classic',
+  reduceMotion: false,
 }

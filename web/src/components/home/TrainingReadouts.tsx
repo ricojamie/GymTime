@@ -8,7 +8,7 @@ import { calculateWeeklyVolume } from '../../domain/weeklyVolume'
 import { calculateStrengthMomentum, type MuscleMomentum } from '../../domain/strengthMomentum'
 import { fromLbs, weightLabel } from '../../domain/units'
 import { BottomSheet } from '../primitives'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 
 const formatVolume = (value: number, prefs: Preferences) =>
   fromLbs(value, prefs.preferredWeightUnit).toLocaleString(undefined, {maximumFractionDigits: 0})
@@ -20,6 +20,16 @@ function ReadoutRow({label, children}: {label: string; children: ReactNode}) {
   return <div className="home-detail-row"><span>{label}</span><strong>{children}</strong></div>
 }
 
+function tickTiming(order: number): CSSProperties {
+  return {'--tick-delay': `${order * 18}ms`} as CSSProperties
+}
+
+function Calibration({count, lit, rest = false}: {count: number; lit: number; rest?: boolean}) {
+  return <span className={`home-calibration ${rest ? 'home-rest' : ''}`} aria-hidden="true">
+    {Array.from({length: count}, (_, i) => <i key={i}>{i < lit && <b style={tickTiming(i)}/>}</i>)}
+  </span>
+}
+
 function StrengthTicks({ muscle }: { muscle: MuscleMomentum }) {
   const delta = muscle.percentChange
   const count = delta === null ? 0 : Math.min(3, Math.ceil(Math.abs(delta) / 5))
@@ -27,7 +37,7 @@ function StrengthTicks({ muscle }: { muscle: MuscleMomentum }) {
     {Array.from({length: 7}, (_, i) => {
       const offset = i - 3
       const lit = delta !== null && (offset === 0 || Math.sign(delta) === Math.sign(offset) && Math.abs(offset) <= count)
-      return <i key={i} className={`${offset === 0 ? 'center ' : ''}${lit ? 'lit' : ''}`}/>
+      return <i key={i} style={tickTiming(Math.abs(offset))} className={`${offset === 0 ? 'center ' : ''}${lit ? 'lit' : ''}`}/>
     })}
   </span>
 }
@@ -88,14 +98,14 @@ export function TrainingReadouts({prefs, dayKey, routine}: {prefs: Preferences; 
               <span className="home-metric-label"><Flame size={16}/> Iron streak</span>
               <span className="home-big-number">{streak.streakDays} <small>{streak.streakDays === 1 ? 'day' : 'days'}</small></span>
               <span className="home-metric-state">{status}</span>
-              <span className="home-calibration home-rest" aria-hidden="true">{Array.from({length: Math.max(1, streak.allowedSkipsPerWeek)}, (_,i) => <i key={i} className={streak.streakDays > 0 && i < streak.skipsRemaining ? 'lit' : ''}/>)}</span>
+              <Calibration count={Math.max(1, streak.allowedSkipsPerWeek)} lit={streak.streakDays > 0 ? streak.skipsRemaining : 0} rest/>
               <span className="home-metric-meta">Best {data.best} · YTD {data.ytdCount}</span>
             </button>
             <button className="home-metric" onClick={() => setSheet('volume')}>
               <span className="home-metric-label"><Gauge size={16}/> Weekly volume</span>
               <span className="home-big-number">{formatVolume(volume.currentWeek, prefs)} <small>{unit}</small></span>
               <span className="home-metric-state">{weekDelta === null ? 'Baseline' : `${weekDelta > 0 ? '+' : ''}${weekDelta}% vs last week`}</span>
-              <span className="home-calibration" aria-hidden="true">{Array.from({length: 10}, (_,i) => <i key={i} className={i < Math.round(volume.progressPercent * 10) ? 'lit' : ''}/>)}</span>
+              <Calibration count={10} lit={Math.round(volume.progressPercent * 10)}/>
               <span className="home-metric-meta">Last week {formatVolume(volume.lastWeek, prefs)} {unit}</span>
             </button>
           </div>

@@ -1,5 +1,5 @@
 import './charts.css'
-import { useId, useRef, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent } from 'react'
 
 type Point = { timestampMs: number; value: number; workoutId: number }
@@ -12,14 +12,8 @@ const right = 588
 const top = 12
 const bottom = 116
 
-export default function InsightLineChart({ points, formatValue, label }: Props) {
-  const [selected, setSelected] = useState<number | null>(null)
-  const capture = useRef<number | null>(null)
-  const chartId = useId()
-  if (!points.length) return <div className="il-chart-empty">No comparable sessions in this period.</div>
-
-  const index = Math.min(selected ?? points.length - 1, points.length - 1)
-  const current = points[index]
+function plotGeometry(points: Point[]) {
+  if (!points.length) return null
   const first = points[0]
   const last = points[points.length - 1]
   const values = points.map(p => p.value)
@@ -30,12 +24,32 @@ export default function InsightLineChart({ points, formatValue, label }: Props) 
   const max = high + pad
   const x = (time: number) => last.timestampMs === first.timestampMs ? width / 2 : left + (right - left) * (time - first.timestampMs) / (last.timestampMs - first.timestampMs)
   const y = (value: number) => bottom - (bottom - top) * (value - min) / (max - min)
+  const positions = points.map(p => ({ x: x(p.timestampMs), y: y(p.value) }))
+  const line = positions.map(p => p.x + ',' + p.y).join(' ')
+  return { min, max, positions, line }
+}
+
+export default function InsightLineChart({ points, formatValue, label }: Props) {
+  const [selected, setSelected] = useState<number | null>(null)
+  const capture = useRef<{ id: number; left: number; width: number } | null>(null)
+  const chartId = useId()
+  const geometry = useMemo(() => plotGeometry(points), [points])
+  if (!geometry) return <div className="il-chart-empty">No comparable sessions in this period.</div>
+
+  const { min, max, positions, line } = geometry
+  const index = Math.min(selected ?? points.length - 1, points.length - 1)
+  const current = points[index]
+  const position = positions[index]
+  const first = points[0]
+  const last = points[points.length - 1]
+  const lastPosition = positions[positions.length - 1]
   const pick = (event: PointerEvent<SVGSVGElement>) => {
-    const box = event.currentTarget.getBoundingClientRect()
+    const box = capture.current
+    if (!box || box.id !== event.pointerId || !box.width) return
     const at = (event.clientX - box.left) / box.width * width
     let nearest = 0
     for (let i = 1; i < points.length; i++) {
-      if (Math.abs(x(points[i].timestampMs) - at) < Math.abs(x(points[nearest].timestampMs) - at)) nearest = i
+      if (Math.abs(positions[i].x - at) < Math.abs(positions[nearest].x - at)) nearest = i
     }
     setSelected(nearest)
   }
@@ -53,15 +67,22 @@ export default function InsightLineChart({ points, formatValue, label }: Props) 
       role="slider" aria-label={label + ' by session'} aria-orientation="horizontal" aria-valuemin={1} aria-valuemax={points.length}
       aria-valuenow={index + 1} aria-valuetext={date.format(current.timestampMs) + ', ' + formatValue(current.value)}
       aria-describedby={chartId} onKeyDown={key} onPointerDown={event => {
-        capture.current = event.pointerId
+        if (capture.current) return
+        const box = event.currentTarget.getBoundingClientRect()
+        capture.current = { id: event.pointerId, left: box.left, width: box.width }
         event.currentTarget.setPointerCapture(event.pointerId)
         pick(event)
-      }} onPointerMove={event => { if (capture.current === event.pointerId) pick(event) }}
-      onLostPointerCapture={() => { capture.current = null }}>
+      }} onPointerMove={pick}
+      onLostPointerCapture={event => {
+        if (capture.current?.id === event.pointerId) capture.current = null
+      }}>
       {[top, (top + bottom) / 2, bottom].map(h => <line key={h} x1={left} x2={right} y1={h} y2={h} className="il-chart-grid" />)}
-      <polyline className="il-chart-line" points={points.map(p => x(p.timestampMs) + ',' + y(p.value)).join(' ')} />
-      <line className="il-crosshair" x1={x(current.timestampMs)} x2={x(current.timestampMs)} y1={top} y2={bottom} />
-      <svg x={x(current.timestampMs) - 5} y={y(current.value) - 5} width="10" height="10"><circle r="4" cx="5" cy="5" className="il-focus-point" /></svg>
+      <polyline className="il-chart-line" points={line} />
+      <line className="il-crosshair" x1={position.x} x2={position.x} y1={top} y2={bottom} />
+      {selected == null && <g aria-hidden="true" transform={`translate(${lastPosition.x} ${lastPosition.y})`}>
+        <path key={last.workoutId} className="il-chart-reticle" d="M-7 -3v-4h4 M3 -7h4v4 M7 3v4H3 M-3 7h-4V3"/>
+      </g>}
+      <svg x={position.x - 5} y={position.y - 5} width="10" height="10"><circle r="4" cx="5" cy="5" className="il-focus-point" /></svg>
     </svg>
     </div>
     <div className="il-chart-ends"><span>{date.format(first.timestampMs)}</span>{points.length > 1 && <span>{date.format(last.timestampMs)}</span>}</div>

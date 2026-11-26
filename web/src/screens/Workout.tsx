@@ -116,7 +116,7 @@ export default function Workout() {
     try {
       if (isFinish) {
         await finishWorkout(active.id)
-        navigate('/summary/' + active.id, { replace: true })
+        navigate('/summary/' + active.id, { replace: true, state: { justFinished: active.id } })
       } else if (editId !== null) {
         await skipWorkoutExercise(editId)
         setEditId(null)

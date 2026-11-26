@@ -7,9 +7,11 @@
 .il-page-head .icon-button { flex:0 0 44px; display:grid; place-items:center; }
 .il-period-line { flex-wrap:wrap; }
 .il-period-line > span, .il-page small, .il-page .il-note, .il-page .il-empty { font-size:13px; line-height:1.4; color:var(--ink-secondary); }
-.il-segments { padding:2px; background:var(--bg-well); border-radius:var(--radius-control); display:inline-flex; }
+.il-segments { position:relative; isolation:isolate; padding:2px; background:var(--bg-well); border-radius:var(--radius-control); display:inline-grid; grid-template-columns:repeat(2,1fr); }
+.il-segments::before { content:''; position:absolute; inset:2px auto 2px 2px; width:calc(50% - 2px); background:var(--bg-surface-hover); border-radius:var(--radius-control); pointer-events:none; z-index:-1; }
+.il-segments[data-period="84"]::before { transform:translateX(100%); }
 .il-segments button { min-height:44px; padding:0 16px; border:0; background:transparent; color:var(--ink-secondary); border-radius:var(--radius-control); font-weight:600; font-size:14px; }
-.il-segments button[aria-pressed=true] { background:var(--bg-surface-hover); color:var(--accent-ink); }
+.il-segments button[aria-pressed=true] { color:var(--accent-ink); }
 .il-panel,.il-telemetry,.il-month-summary { padding:16px; min-width:0; }
 .il-panel > h2 { margin-bottom:12px; }
 .il-telemetry dl { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); }
@@ -74,6 +76,38 @@
 .il-muscle-rank i { display:block; height:3px; margin-top:6px; background:var(--ink-secondary); }
 .il-muscle-names { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 12px; }
 .il-muscle-names li { padding:10px 0; border-top:1px solid var(--border-hairline); font-size:14px; }
+.il-month-summary .il-telemetry { position:relative; }
+.il-month-summary .il-telemetry::before { content:''; position:absolute; inset:-1px auto auto 0; width:32px; height:1px; background:var(--accent-ink); }
+
+@keyframes il-read-scale {
+  0% { opacity:.8; transform:scaleX(0); }
+  68% { opacity:.8; transform:scaleX(1); }
+  100% { opacity:0; transform:scaleX(1); }
+}
+@keyframes il-rule-register {
+  0% { transform:scaleX(0); }
+  60% { transform:scaleX(1.55); }
+  100% { transform:scaleX(1); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion='reduced']) .il-segments::before { transition:transform 180ms var(--ease); }
+  :root:not([data-motion='reduced']) .il-cadence i::after {
+    content:'';
+    display:block;
+    height:100%;
+    background:var(--accent-ink);
+    opacity:0;
+    transform-origin:left;
+    animation:il-read-scale 400ms var(--ease);
+  }
+  :root:not([data-motion='reduced']) .il-month-summary .il-telemetry::before { transform-origin:left; animation:il-rule-register 380ms var(--ease); }
+  :root:not([data-motion='reduced']) .il-details summary svg { transition:transform 160ms var(--ease); }
+  :root:not([data-motion='reduced']) :is(.il-linkrow,.il-month-link) > svg:last-child { transition:transform 140ms var(--ease); }
+  :root:not([data-motion='reduced']) :is(.il-linkrow,.il-month-link):focus-visible > svg:last-child { transform:translateX(3px); }
+}
+@media (prefers-reduced-motion: no-preference) and (hover:hover) and (pointer:fine) {
+  :root:not([data-motion='reduced']) :is(.il-linkrow,.il-month-link):hover > svg:last-child { transform:translateX(3px); }
+}
 @media(min-width:800px) {
   .il-page .il-dashboard-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }

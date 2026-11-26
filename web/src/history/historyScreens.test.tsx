@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { defaultPreferences, type Exercise, type Workout, type WorkoutSet } from '../db/types'
@@ -31,6 +32,7 @@ it('searches across month, routine and muscle, and keeps warmups out of history 
 
 it('saves the archive from Summary and persists edited feedback on Done', async () => {
   render(<MemoryRouter initialEntries={['/summary/3']}><Routes><Route path="/summary/:workoutId" element={<Summary/>}/><Route path="/" element={<h1>Home</h1>}/></Routes></MemoryRouter>)
+  expect(screen.getByRole('region',{name:'Workout totals'})).not.toHaveAttribute('data-stamping')
   fireEvent.click(screen.getByRole('button',{name:/Save backup to Files/}))
   expect(await screen.findByText('Backup shared.')).toBeVisible()
   fireEvent.click(screen.getByRole('button',{name:'3 stars'}))
@@ -41,4 +43,27 @@ it('saves the archive from Summary and persists edited feedback on Done', async 
   fireEvent.click(screen.getByRole('button',{name:'Done'}))
   await waitFor(() => expect(mocks.updateWorkout).toHaveBeenCalledWith(3,{rating:4,ratingNote:'Felt good'}))
   expect(await screen.findByRole('heading',{name:'Home'})).toBeVisible()
+})
+
+it('stamps the saved totals once on finish and accepts feedback and backup during the strike', async () => {
+  function SummaryVisit() {
+    const [open,setOpen] = useState(true)
+    return <>{open && <Summary/>}<button onClick={() => setOpen(!open)}>Toggle summary</button></>
+  }
+  render(<MemoryRouter initialEntries={[{pathname:'/summary/3',state:{justFinished:3}}]}>
+    <Routes><Route path="/summary/:workoutId" element={<SummaryVisit/>}/></Routes>
+  </MemoryRouter>)
+  const totals = screen.getByRole('region',{name:'Workout totals'})
+  expect(totals).toHaveTextContent('500 lb')
+  expect(totals).toHaveAttribute('data-stamping','true')
+  expect(screen.getByRole('button',{name:'Done'})).toBeEnabled()
+  fireEvent.click(screen.getByRole('button',{name:'3 stars'}))
+  fireEvent.click(screen.getByRole('button',{name:/Save backup to Files/}))
+  expect(await screen.findByText('Backup shared.')).toBeVisible()
+  await waitFor(() => expect(totals).not.toHaveAttribute('data-stamping'),{timeout:2500})
+  fireEvent.change(screen.getByLabelText('Session note'),{target:{value:'Still at rest'}})
+  expect(totals).not.toHaveAttribute('data-stamping')
+  fireEvent.click(screen.getByRole('button',{name:'Toggle summary'}))
+  fireEvent.click(screen.getByRole('button',{name:'Toggle summary'}))
+  expect(screen.getByRole('region',{name:'Workout totals'})).not.toHaveAttribute('data-stamping')
 })

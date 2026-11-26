@@ -109,6 +109,7 @@ describe('Android CSV and ZIP compatibility', () => {
     await restoreBackup(await readBackup(old()), 'replace')
     await db.preferences.update('default', {
       appIcon: 'swole_alligator',
+      reduceMotion: true,
       preferredWeightUnit: 'kg',
       barWeight: 44.0924,
     })
@@ -120,6 +121,7 @@ describe('Android CSV and ZIP compatibility', () => {
     const prefs = JSON.parse(strFromU8(entries['preferences.json']))
     expect(prefs).toMatchObject({ preferredWeightUnit: 'kg', barWeight: 44.0924 })
     expect(prefs).not.toHaveProperty('appIcon')
+    expect(prefs).not.toHaveProperty('reduceMotion')
     expect(JSON.parse(strFromU8(entries['manifest.json']))).toMatchObject({
       formatVersion: 2,
       dbSchemaVersion: 15,
@@ -130,6 +132,7 @@ describe('Android CSV and ZIP compatibility', () => {
     await restoreBackup(await readBackup(bytes), 'replace')
     expect(await db.preferences.get('default')).toMatchObject({
       appIcon: 'swole_alligator',
+      reduceMotion: true,
       barWeight: 44.0924,
       preferredWeightUnit: 'kg',
     })

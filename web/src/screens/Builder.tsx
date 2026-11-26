@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, Plus, Search, 
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { db } from '../db/database'
 import { getActiveWorkout, startWorkout } from '../db/repositories'
+import { useAdjacentReorder } from '../components/useAdjacentReorder'
 import './workout.css'
 
 type Draft = { ids: number[]; query: string; muscle: string }
@@ -29,6 +30,7 @@ export default function Builder() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const starting = useRef(false)
+  const captureReorder = useAdjacentReorder()
   const data = useLiveQuery(() => db.transaction('r', db.exercises, db.workouts, async () => ({
     exercises: await db.exercises.toArray(),
     active: await getActiveWorkout(),
@@ -62,7 +64,8 @@ export default function Builder() {
     setDraft(prev => ({ ...prev, ids: prev.ids.includes(id) ? prev.ids.filter(existing => existing !== id) : [...prev.ids, id] }))
   }
 
-  function move(id: number, delta: number) {
+  function move(id: number, delta: number, button: HTMLButtonElement) {
+    captureReorder(button, delta)
     setDraft(prev => {
       const ids = prev.ids.filter(existing => lookup.has(existing))
       const from = ids.indexOf(id), to = from + delta
@@ -111,12 +114,12 @@ export default function Builder() {
           {selected.length === 0
             ? <p className="wk-empty">No exercises selected</p>
             : <ol className="wk-strip">
-                {selected.map((ex, i) => <li key={ex.id}>
+                {selected.map((ex, i) => <li key={ex.id} data-order-item>
                   <div className="wk-item-head"><span className="wk-index">{String(i + 1).padStart(2, '0')}</span><button className="icon-button" aria-label={'Remove ' + ex.name} onClick={() => toggle(ex.id)}><X size={17} /></button></div>
                   <strong>{ex.name}</strong>
                   <div className="wk-reorder">
-                    <button className="icon-button" aria-label={'Move ' + ex.name + ' earlier'} disabled={i === 0} onClick={() => move(ex.id, -1)}><ChevronLeft size={18} /></button>
-                    <button className="icon-button" aria-label={'Move ' + ex.name + ' later'} disabled={i === selected.length - 1} onClick={() => move(ex.id, 1)}><ChevronRight size={18} /></button>
+                    <button className="icon-button" aria-label={'Move ' + ex.name + ' earlier'} disabled={i === 0} onClick={e => move(ex.id, -1, e.currentTarget)}><ChevronLeft size={18} /></button>
+                    <button className="icon-button" aria-label={'Move ' + ex.name + ' later'} disabled={i === selected.length - 1} onClick={e => move(ex.id, 1, e.currentTarget)}><ChevronRight size={18} /></button>
                   </div>
                 </li>)}
               </ol>}
@@ -135,7 +138,7 @@ export default function Builder() {
               const selectedIndex = selected.findIndex(item => item.id === ex.id)
               return <button key={ex.id} className="wk-ex-option" aria-pressed={selectedIndex >= 0} onClick={() => toggle(ex.id)}>
                 <span className="wk-grow"><strong>{ex.name}</strong><small>{ex.targetMuscle}</small></span>
-                {selectedIndex >= 0 ? <span className="wk-selected"><Check size={16} />{String(selectedIndex + 1).padStart(2, '0')}</span> : <Plus size={18} />}
+                <span className="wk-choice-mark">{selectedIndex >= 0 ? <span className="wk-selected"><Check size={16} />{String(selectedIndex + 1).padStart(2, '0')}</span> : <Plus size={18} />}</span>
               </button>
             })}
             {exercises && !visible.length && <p className="wk-empty">No matching exercises</p>}

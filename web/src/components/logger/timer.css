@@ -28,8 +28,10 @@
 .rest-sheet-time .btn { display: flex; align-items:center; gap:4px; }
 .rest-strip[data-urgent] .rest-readout strong, .rest-sheet[data-urgent] .rest-sheet-time strong { color: var(--semantic-danger); }
 @media (prefers-reduced-motion: no-preference) {
-  .rest-strip[data-urgent] .rest-readout strong, .rest-sheet[data-urgent] .rest-sheet-time strong { animation: rest-last-seconds 1s ease-out infinite; }
-  @keyframes rest-last-seconds { 0%, 100% { opacity: 1; } 75% { opacity: .65; } }
+  :root:not([data-motion='reduced']) :is(.rest-strip[data-urgent] .rest-readout strong, .rest-sheet[data-urgent] .rest-sheet-time strong) { animation:rest-urgent 220ms ease-out; }
+  :root:not([data-motion='reduced']) .rest-sheet-row[aria-checked='true'] .rest-switch svg { animation:rest-check 160ms ease-out; }
+  @keyframes rest-urgent { 50% { transform:scale(1.06); } }
+  @keyframes rest-check { from { transform:scale(.6); opacity:.5; } }
 }
 .rest-sheet-row { width: 100%; display: flex; align-items: center; text-align: start; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border-hairline); font-size: 15px; font-weight: 600; }
 .rest-sheet-row > svg { color: var(--ink-secondary); }
