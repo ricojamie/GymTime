@@ -520,7 +520,9 @@ button[aria-checked="true"] .st-switch-thumb {
   margin-bottom: 24px;
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-surface, 16px);
-  background: var(--bg-surface);
+  background:
+    radial-gradient(circle at 90% 18%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 56%),
+    var(--bg-surface);
   box-shadow: var(--bevel-inset), var(--shadow-surface);
   overflow: hidden;
 }
@@ -565,6 +567,15 @@ button[aria-checked="true"] .st-switch-thumb {
   flex: none;
   display: grid;
   place-items: center;
+}
+
+.st-theme-preview-classic-icon {
+  display: block;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border-strong));
+  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--accent) 42%, rgba(0, 0, 0, 0.45));
 }
 
 .st-wordmark {

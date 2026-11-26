@@ -200,11 +200,20 @@ export default function ThemeSettings() {
               IRON<span>LOG</span>
             </div>
           </div>
-          {gatorMode && (
-            <div className="st-theme-preview-badge">
+          <div className="st-theme-preview-badge">
+            {gatorMode ? (
               <SwoleGator pose="badge" size={48} interactive />
-            </div>
-          )}
+            ) : (
+              <img
+                src="/icons/classic-192.png"
+                alt=""
+                aria-hidden="true"
+                width={48}
+                height={48}
+                className="st-theme-preview-classic-icon"
+              />
+            )}
+          </div>
         </div>
         <span className="st-meta">
           {surfaceLabel} · {fontLabel}

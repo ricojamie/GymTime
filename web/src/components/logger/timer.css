@@ -160,6 +160,11 @@
   100% { transform: none; opacity: 1; }
 }
 @keyframes rest-check { from { transform:scale(.6); opacity:.5; } }
+@keyframes rest-icon-tick {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.12) rotate(-8deg); }
+  55% { transform: scale(1.06) rotate(6deg); }
+}
 
 @media (prefers-reduced-motion: no-preference) {
   :root[data-motion='full'] .rest-strip { animation: rest-strip-enter 340ms var(--ease-spring, cubic-bezier(.18,1.28,.32,1)) both; }
@@ -167,6 +172,7 @@
   :root[data-motion='full'] .rest-strip[data-nudge='up'] { animation: rest-strip-bump-up 260ms var(--ease-spring, cubic-bezier(.18,1.28,.32,1)); }
   :root[data-motion='full'] .rest-strip[data-nudge='down'] { animation: rest-strip-bump-down 260ms var(--ease-spring, cubic-bezier(.18,1.28,.32,1)); }
   :root[data-motion='full'] .rest-strip.is-running .rest-progress::after { animation: rest-shimmer 2.1s ease-in-out infinite; }
+  :root[data-motion='full'] .rest-strip.is-running:not(.is-complete) .rest-icon > svg { animation: rest-icon-tick 1.8s var(--ease-spring, ease-in-out) infinite; }
   :root[data-motion='full'] .rest-time-val[data-nudge-dir='up'] { animation: rest-nudge-up 280ms var(--ease-spring, cubic-bezier(.18,1.28,.32,1)); }
   :root[data-motion='full'] .rest-time-val[data-nudge-dir='down'] { animation: rest-nudge-down 280ms var(--ease-spring, cubic-bezier(.18,1.28,.32,1)); }
   :root[data-motion='full'] .rest-nudge.is-pulsing { animation: rest-btn-pop 280ms var(--ease-spring, cubic-bezier(.18,1.28,.32,1)); }
