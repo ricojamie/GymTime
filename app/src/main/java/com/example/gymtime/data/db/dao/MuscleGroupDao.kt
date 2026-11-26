@@ -43,4 +43,7 @@ interface MuscleGroupDao {
 
     @Query("SELECT COUNT(*) FROM muscle_groups WHERE LOWER(name) = LOWER(:name)")
     suspend fun muscleGroupExists(name: String): Int
+
+    @Query("DELETE FROM muscle_groups")
+    suspend fun deleteAllMuscleGroups()
 }

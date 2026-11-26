@@ -12,10 +12,12 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.gymtime.util.IronLogBackupFormat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.io.IOException
 import javax.inject.Inject
@@ -287,6 +289,79 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun setMonthlyReportEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.MONTHLY_REPORT_ENABLED] = enabled
+        }
+    }
+
+    suspend fun getRestDaysPerWeekSync(): Int =
+        (preferencesFlow.first()[PreferencesKeys.REST_DAYS_PER_WEEK] ?: 2).coerceIn(0, 7)
+
+    suspend fun exportPortablePreferences(): IronLogBackupFormat.BackupPreferences {
+        val prefs = preferencesFlow.first()
+        return IronLogBackupFormat.sanitizePreferences(
+            IronLogBackupFormat.BackupPreferences(
+                userName = prefs[PreferencesKeys.USER_NAME] ?: "Athlete",
+                themeColor = prefs[PreferencesKeys.THEME_COLOR] ?: "lime",
+                customThemeColor = prefs[PreferencesKeys.CUSTOM_THEME_COLOR],
+                themeFont = prefs[PreferencesKeys.THEME_FONT] ?: "bebas_neue",
+                darkMode = prefs[PreferencesKeys.DARK_MODE] ?: true,
+                timerAutoStart = prefs[PreferencesKeys.TIMER_AUTO_START] ?: true,
+                timerAudioEnabled = prefs[PreferencesKeys.TIMER_AUDIO_ENABLED] ?: true,
+                timerVibrateEnabled = prefs[PreferencesKeys.TIMER_VIBRATE_ENABLED] ?: true,
+                keepScreenOn = prefs[PreferencesKeys.KEEP_SCREEN_ON] ?: false,
+                restDaysPerWeek = prefs[PreferencesKeys.REST_DAYS_PER_WEEK] ?: 2,
+                bestStreak = prefs[PreferencesKeys.BEST_STREAK] ?: 0,
+                monthlyReportEnabled = prefs[PreferencesKeys.MONTHLY_REPORT_ENABLED] ?: true,
+                barWeight = prefs[PreferencesKeys.BAR_WEIGHT] ?: 45f,
+                loadingSides = prefs[PreferencesKeys.LOADING_SIDES] ?: 2,
+                availablePlates = parseAvailablePlates(prefs[PreferencesKeys.AVAILABLE_PLATES]),
+                usePlateInventory = prefs[PreferencesKeys.USE_PLATE_INVENTORY] ?: false,
+                plateInventory = PlateInventoryPreferences.decode(prefs[PreferencesKeys.PLATE_INVENTORY]),
+                preferredWeightUnit = IronLogBackupFormat.CANONICAL_WEIGHT_UNIT
+            )
+        )
+    }
+
+    suspend fun restorePortablePreferences(
+        backup: IronLogBackupFormat.BackupPreferences,
+        replaceMode: Boolean
+    ) {
+        val safe = IronLogBackupFormat.sanitizePreferences(backup)
+        context.dataStore.edit { preferences ->
+            if (!replaceMode) {
+                val currentBest = preferences[PreferencesKeys.BEST_STREAK] ?: 0
+                if (safe.bestStreak > currentBest) {
+                    preferences[PreferencesKeys.BEST_STREAK] = safe.bestStreak
+                }
+                return@edit
+            }
+
+            preferences[PreferencesKeys.USER_NAME] = safe.userName
+            preferences[PreferencesKeys.THEME_COLOR] = safe.themeColor
+            if (safe.customThemeColor == null) {
+                preferences.remove(PreferencesKeys.CUSTOM_THEME_COLOR)
+            } else {
+                preferences[PreferencesKeys.CUSTOM_THEME_COLOR] = safe.customThemeColor
+            }
+            preferences[PreferencesKeys.THEME_FONT] = safe.themeFont
+            preferences.remove(PreferencesKeys.CUSTOM_FONT_URI)
+            preferences[PreferencesKeys.DARK_MODE] = safe.darkMode
+            preferences[PreferencesKeys.TIMER_AUTO_START] = safe.timerAutoStart
+            preferences[PreferencesKeys.TIMER_AUDIO_ENABLED] = safe.timerAudioEnabled
+            preferences[PreferencesKeys.TIMER_VIBRATE_ENABLED] = safe.timerVibrateEnabled
+            preferences[PreferencesKeys.KEEP_SCREEN_ON] = safe.keepScreenOn
+            preferences[PreferencesKeys.REST_DAYS_PER_WEEK] = safe.restDaysPerWeek
+            preferences[PreferencesKeys.BEST_STREAK] = safe.bestStreak
+            preferences[PreferencesKeys.MONTHLY_REPORT_ENABLED] = safe.monthlyReportEnabled
+            preferences[PreferencesKeys.BAR_WEIGHT] = safe.barWeight
+            preferences[PreferencesKeys.LOADING_SIDES] = safe.loadingSides
+            preferences[PreferencesKeys.AVAILABLE_PLATES] = safe.availablePlates.joinToString(",", "[", "]")
+            preferences[PreferencesKeys.USE_PLATE_INVENTORY] = safe.usePlateInventory
+            val encodedInventory = PlateInventoryPreferences.encode(safe.plateInventory)
+            if (encodedInventory.isEmpty()) {
+                preferences.remove(PreferencesKeys.PLATE_INVENTORY)
+            } else {
+                preferences[PreferencesKeys.PLATE_INVENTORY] = encodedInventory
+            }
         }
     }
 }

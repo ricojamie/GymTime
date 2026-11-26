@@ -151,6 +151,12 @@ interface ExerciseDao {
     @Query("UPDATE exercises SET targetMuscle = :newMuscle WHERE LOWER(targetMuscle) = LOWER(:oldMuscle)")
     suspend fun updateExercisesTargetMuscle(oldMuscle: String, newMuscle: String)
 
-    @Query("SELECT * FROM exercises")
+    @Query("SELECT * FROM exercises ORDER BY id ASC")
     suspend fun getAllExercisesSync(): List<Exercise>
+
+    @Query("SELECT COUNT(*) FROM sets WHERE exerciseId = :exerciseId")
+    suspend fun getSetCountForExercise(exerciseId: Long): Int
+
+    @Query("DELETE FROM exercises")
+    suspend fun deleteAllExercises()
 }

@@ -24,4 +24,7 @@ interface GeneratedNarrativeDao {
              AND subjectStartEpochMs < :cutoffEpochMs"""
     )
     suspend fun deletePeriodicBefore(kind: String, cutoffEpochMs: Long)
+
+    @Query("DELETE FROM generated_narratives")
+    suspend fun deleteAll()
 }

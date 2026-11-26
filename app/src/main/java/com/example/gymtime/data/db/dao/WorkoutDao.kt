@@ -93,8 +93,11 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts ORDER BY startTime DESC")
     fun getAllWorkouts(): Flow<List<Workout>>
 
-    @Query("SELECT * FROM workouts")
+    @Query("SELECT * FROM workouts ORDER BY id ASC")
     suspend fun getAllWorkoutsSync(): List<Workout>
+
+    @Query("DELETE FROM workouts")
+    suspend fun deleteAllWorkouts()
 
     @Query("""
         SELECT * FROM workouts

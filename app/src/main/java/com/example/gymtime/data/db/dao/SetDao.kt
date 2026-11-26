@@ -499,8 +499,14 @@ interface SetDao {
     """)
     suspend fun getSupersetGroupsInRange(startMs: Long, endMs: Long): List<String>
 
-    @Query("SELECT * FROM sets")
+    @Query("SELECT * FROM sets ORDER BY id ASC")
     suspend fun getAllSets(): List<Set>
+
+    @Query("SELECT * FROM sets WHERE workoutId = :workoutId ORDER BY timestamp ASC, id ASC")
+    suspend fun getSetsForWorkoutSync(workoutId: Long): List<Set>
+
+    @Query("DELETE FROM sets")
+    suspend fun deleteAllSets()
 
     // Check for duplicate sets (for import deduplication)
     @Query("""

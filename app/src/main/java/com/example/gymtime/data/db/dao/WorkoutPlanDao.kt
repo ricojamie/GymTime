@@ -74,8 +74,11 @@ interface WorkoutPlanDao {
     """)
     suspend fun getInstancesForWorkoutSync(workoutId: Long): List<WorkoutExerciseInstance>
 
-    @Query("SELECT * FROM workout_exercise_instances")
+    @Query("SELECT * FROM workout_exercise_instances ORDER BY id ASC")
     suspend fun getAllInstancesSync(): List<WorkoutExerciseInstance>
+
+    @Query("DELETE FROM workout_exercise_instances")
+    suspend fun deleteAllInstances()
 
     @Query("""
         SELECT * FROM workout_exercise_instances

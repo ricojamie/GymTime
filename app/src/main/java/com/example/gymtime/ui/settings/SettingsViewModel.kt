@@ -7,6 +7,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtime.data.UserPreferencesRepository
+import com.example.gymtime.data.VolumeOrbRepository
 import com.example.gymtime.notifications.MonthlyReportScheduler
 import com.example.gymtime.ui.theme.ThemeFontOption
 import com.example.gymtime.ui.theme.ThemePreset
@@ -24,12 +25,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
+import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     @param:ApplicationContext private val appContext: Context,
     private val userPreferencesRepository: UserPreferencesRepository,
+    private val volumeOrbRepository: VolumeOrbRepository,
     private val fitNotesImporter: FitNotesImporter,
     private val ironLogExporter: IronLogExporter,
     private val ironLogImporter: IronLogImporter,
@@ -254,7 +257,16 @@ class SettingsViewModel @Inject constructor(
             val input = appContext.contentResolver.openInputStream(uri)
                 ?: error("The selected CSV file could not be opened.")
             val result = input.use { stream -> fitNotesImporter.importCsv(stream) }
-            ImportState.Success(result)
+            val importedAnything = result.workoutsImported > 0 ||
+                result.setsImported > 0 ||
+                result.exercisesCreated > 0 ||
+                result.duplicatesSkipped > 0
+            if (!importedAnything && result.errors.isNotEmpty()) {
+                ImportState.Error(result.errors.first())
+            } else {
+                volumeOrbRepository.refresh()
+                ImportState.Success(result)
+            }
         }
     }
 
@@ -281,10 +293,24 @@ class SettingsViewModel @Inject constructor(
             errorState = ExportState::Error,
             fallbackError = "Unknown error during export"
         ) {
-            val output = appContext.contentResolver.openOutputStream(uri)
-                ?: error("The backup file could not be opened for writing.")
-            val result = output.use { stream -> ironLogExporter.export(stream) }
-            ExportState.Success(result)
+            // Stage the complete ZIP in cache first so a failed export never corrupts an existing file,
+            // then overwrite with "wt" (write+truncate) so SAF never leaves stale trailing bytes.
+            val stagedFile = File.createTempFile("ironlog_export_", ".zip", appContext.cacheDir)
+            try {
+                val result = ironLogExporter.export(stagedFile.outputStream())
+                val output = appContext.contentResolver.openOutputStream(uri, "wt")
+                    ?: appContext.contentResolver.openOutputStream(uri)
+                    ?: error("The backup file could not be opened for writing.")
+                output.use { dest ->
+                    stagedFile.inputStream().use { src ->
+                        src.copyTo(dest)
+                    }
+                    dest.flush()
+                }
+                ExportState.Success(result)
+            } finally {
+                stagedFile.delete()
+            }
         }
     }
 
@@ -303,7 +329,7 @@ class SettingsViewModel @Inject constructor(
     private val _ironLogImportState = MutableStateFlow<IronLogImportState>(IronLogImportState.Idle)
     val ironLogImportState: StateFlow<IronLogImportState> = _ironLogImportState.asStateFlow()
 
-    fun importIronLog(uri: Uri) {
+    fun importIronLog(uri: Uri, mode: IronLogImporter.ImportMode = IronLogImporter.ImportMode.REPLACE) {
         launchTransfer(
             stateFlow = _ironLogImportState,
             inProgressState = IronLogImportState.InProgress,
@@ -313,8 +339,16 @@ class SettingsViewModel @Inject constructor(
         ) {
             val input = appContext.contentResolver.openInputStream(uri)
                 ?: error("The selected ZIP backup could not be opened.")
-            val result = input.use { stream -> ironLogImporter.import(stream) }
-            IronLogImportState.Success(result)
+            val result = input.use { stream -> ironLogImporter.import(stream, mode) }
+            if (result.totalRecordsWritten == 0 &&
+                result.duplicatesSkipped == 0 &&
+                !result.preferencesRestored &&
+                result.errors.isNotEmpty()
+            ) {
+                IronLogImportState.Error(result.errors.first())
+            } else {
+                IronLogImportState.Success(result)
+            }
         }
     }
 
@@ -322,16 +356,24 @@ class SettingsViewModel @Inject constructor(
         _ironLogImportState.value = IronLogImportState.Idle
     }
 
-    private inline fun <S> launchTransfer(
+    private fun <S> launchTransfer(
         stateFlow: MutableStateFlow<S>,
         inProgressState: S,
         idleState: S,
-        crossinline errorState: (String) -> S,
+        errorState: (String) -> S,
         fallbackError: String,
-        crossinline block: suspend () -> S
+        block: suspend () -> S
     ) {
-        if (!transferMutex.tryLock()) return
+        val lockOwner = Any()
+        if (!transferMutex.tryLock(lockOwner)) return
         stateFlow.value = inProgressState
+        var unlocked = false
+        val releaseLockOnce = {
+            if (!unlocked) {
+                unlocked = true
+                transferMutex.unlock(lockOwner)
+            }
+        }
         val job = viewModelScope.launch {
             try {
                 stateFlow.value = withContext(Dispatchers.IO) { block() }
@@ -341,16 +383,12 @@ class SettingsViewModel @Inject constructor(
             } catch (e: Exception) {
                 stateFlow.value = errorState(e.message?.takeIf { it.isNotBlank() } ?: fallbackError)
             } finally {
-                if (transferMutex.isLocked) {
-                    transferMutex.unlock()
-                }
+                releaseLockOnce()
             }
         }
         if (job.isCancelled) {
             stateFlow.value = idleState
-            if (transferMutex.isLocked) {
-                transferMutex.unlock()
-            }
+            releaseLockOnce()
         }
     }
 }

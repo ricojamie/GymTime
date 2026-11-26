@@ -119,6 +119,71 @@ object StreakCalculator {
         )
     }
 
+    fun calculateBestStreak(
+        workoutDates: List<Date>,
+        allowedSkipsPerWeek: Int = 2,
+        asOf: Date = Date()
+    ): Int = calculateBestStreakForZone(
+        workoutDates = workoutDates,
+        allowedSkipsPerWeek = allowedSkipsPerWeek,
+        asOf = asOf,
+        zoneId = ZoneId.systemDefault()
+    )
+
+    internal fun calculateBestStreakForZone(
+        workoutDates: List<Date>,
+        allowedSkipsPerWeek: Int = 2,
+        asOf: Date = Date(),
+        zoneId: ZoneId = ZoneId.systemDefault()
+    ): Int {
+        if (workoutDates.isEmpty()) return 0
+        val safeAllowedSkips = allowedSkipsPerWeek.coerceIn(0, 7)
+        val today = toLocalDate(asOf, zoneId)
+        val workoutDays = workoutDates
+            .asSequence()
+            .map { toLocalDate(it, zoneId) }
+            .filterNot { it.isAfter(today) }
+            .toSet()
+        val earliestWorkout = workoutDays.minOrNull() ?: return 0
+
+        var bestStreak = 0
+        var runningPriorWeeksStreak = 0
+        var weekStart = getStartOfWeek(earliestWorkout)
+
+        while (!weekStart.isAfter(today)) {
+            val weekEnd = weekStart.plusDays(6)
+            val effectiveWeekStart = if (weekStart.isBefore(earliestWorkout)) earliestWorkout else weekStart
+            val walkEnd = if (weekEnd.isAfter(today)) today else weekEnd
+
+            var missesInWeek = 0
+            var workoutsInWeek = 0
+            var day = effectiveWeekStart
+            while (!day.isAfter(walkEnd)) {
+                if (day in workoutDays) {
+                    workoutsInWeek++
+                } else {
+                    missesInWeek++
+                }
+                if (missesInWeek <= safeAllowedSkips) {
+                    val streakOnDay = runningPriorWeeksStreak + workoutsInWeek
+                    if (streakOnDay > bestStreak) {
+                        bestStreak = streakOnDay
+                    }
+                }
+                day = day.plusDays(1)
+            }
+
+            runningPriorWeeksStreak = if (missesInWeek <= safeAllowedSkips) {
+                runningPriorWeeksStreak + workoutsInWeek
+            } else {
+                0
+            }
+            weekStart = weekStart.plusWeeks(1)
+        }
+
+        return bestStreak
+    }
+
     private fun countUsedSkipsInWeek(
         weekStart: LocalDate,
         today: LocalDate,

@@ -1,12 +1,33 @@
 package com.example.gymtime.ui.settings.preview
 
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.gymtime.BuildConfig
 import com.example.gymtime.ui.settings.SettingsViewModel
+import com.example.gymtime.util.IronLogImporter
+import java.time.LocalDate
+
+private val ZIP_MIME_TYPES = arrayOf(
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/octet-stream"
+)
+
+private val CSV_MIME_TYPES = arrayOf(
+    "text/csv",
+    "text/comma-separated-values",
+    "text/plain",
+    "application/csv",
+    "application/vnd.ms-excel",
+    "application/octet-stream"
+)
 
 /** App wiring owns persistence, navigation and platform document pickers. */
 @Composable
@@ -33,8 +54,9 @@ fun PreviewSettingsScreen(
     val fitNotesState by viewModel.importState.collectAsStateWithLifecycle()
     val exportState by viewModel.exportState.collectAsStateWithLifecycle()
     val ironLogState by viewModel.ironLogImportState.collectAsStateWithLifecycle()
+    var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
 
-    val fitNotesPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    val fitNotesPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             viewModel.importFitNotes(uri)
         }
@@ -44,9 +66,9 @@ fun PreviewSettingsScreen(
             viewModel.exportData(uri)
         }
     }
-    val backupPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    val backupPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            viewModel.importIronLog(uri)
+            pendingImportUri = uri
         }
     }
 
@@ -67,6 +89,7 @@ fun PreviewSettingsScreen(
             usePlateInventory = plateInventorySettings?.enabled ?: false,
             plateInventoryReady = plateInventorySettings != null,
             transfers = listOf(exportState.previewUi(), ironLogState.previewUi(), fitNotesState.previewUi()),
+            showImportModePrompt = pendingImportUri != null,
             versionName = BuildConfig.VERSION_NAME
         ),
         onAction = { action ->
@@ -93,9 +116,23 @@ fun PreviewSettingsScreen(
                 is SettingsPreviewAction.LimitPlates -> viewModel.setUsePlateInventory(action.enabled)
                 is SettingsPreviewAction.PlateCountDelta -> viewModel.adjustPlateInventoryCount(action.weight, action.delta)
                 is SettingsPreviewAction.Transfer -> when (action.operation) {
-                    SettingsTransfer.EXPORT -> backupCreator.launch("ironlog_backup.zip")
-                    SettingsTransfer.IRONLOG_IMPORT -> backupPicker.launch("application/zip")
-                    SettingsTransfer.FITNOTES_IMPORT -> fitNotesPicker.launch("text/*")
+                    SettingsTransfer.EXPORT -> backupCreator.launch("ironlog_backup_${LocalDate.now()}.zip")
+                    SettingsTransfer.IRONLOG_IMPORT -> backupPicker.launch(ZIP_MIME_TYPES)
+                    SettingsTransfer.FITNOTES_IMPORT -> fitNotesPicker.launch(CSV_MIME_TYPES)
+                }
+                is SettingsPreviewAction.ConfirmIronLogImport -> {
+                    val uri = pendingImportUri
+                    pendingImportUri = null
+                    if (uri != null) {
+                        val mode = when (action.mode) {
+                            SettingsImportMode.REPLACE -> IronLogImporter.ImportMode.REPLACE
+                            SettingsImportMode.MERGE -> IronLogImporter.ImportMode.MERGE
+                        }
+                        viewModel.importIronLog(uri, mode)
+                    }
+                }
+                SettingsPreviewAction.DismissImportModePrompt -> {
+                    pendingImportUri = null
                 }
                 is SettingsPreviewAction.DismissTransfer -> when (action.operation) {
                     SettingsTransfer.EXPORT -> viewModel.clearExportState()
@@ -117,7 +154,9 @@ private fun SettingsViewModel.ExportState.previewUi(): SettingsTransferUi = when
             add("${result.exerciseCount} exercises")
             add("${result.workoutCount} workouts")
             add("${result.setCount} sets")
-            if (result.routineCount > 0) add("${result.routineCount} routines")
+            if (result.routineCount > 0) add("${result.routineCount} routines (${result.routineDayCount} days)")
+            if (result.muscleGroupCount > 0) add("${result.muscleGroupCount} body parts")
+            if (result.preferencesIncluded) add("Settings & equipment preferences included")
         }
     )
 }
@@ -130,9 +169,14 @@ private fun SettingsViewModel.IronLogImportState.previewUi(): SettingsTransferUi
         SettingsTransfer.IRONLOG_IMPORT, SettingsTransferStatus.SUCCESS, "Backup imported",
         buildList {
             add("${result.exercisesImported} exercises imported")
+            if (result.exercisesUpdated > 0) add("${result.exercisesUpdated} exercises updated")
             add("${result.workoutsImported} workouts imported")
             add("${result.setsImported} sets imported")
-            if (result.routinesImported > 0) add("${result.routinesImported} routines imported")
+            if (result.routinesImported > 0) add("${result.routinesImported} routines imported (${result.routineDaysImported} days)")
+            if (result.muscleGroupsImported > 0) add("${result.muscleGroupsImported} body parts imported")
+            if (result.workoutExerciseInstancesImported > 0) add("${result.workoutExerciseInstancesImported} workout plan items imported")
+            if (result.duplicatesSkipped > 0) add("${result.duplicatesSkipped} existing duplicates skipped")
+            if (result.preferencesRestored) add("Settings & equipment preferences restored")
         },
         errors = result.errors
     )

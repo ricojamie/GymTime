@@ -102,12 +102,14 @@ data class SettingsPreviewState(
     val usePlateInventory: Boolean = false,
     val plateInventoryReady: Boolean = true,
     val transfers: List<SettingsTransferUi> = emptyList(),
+    val showImportModePrompt: Boolean = false,
     val versionName: String = ""
 )
 
 enum class SettingsToggle { AUTO_START, AUDIO, VIBRATE, MONTHLY_REPORT, KEEP_SCREEN_ON, DARK_MODE }
 enum class SettingsTransfer { EXPORT, IRONLOG_IMPORT, FITNOTES_IMPORT }
 enum class SettingsTransferStatus { IDLE, BUSY, SUCCESS, ERROR }
+enum class SettingsImportMode { REPLACE, MERGE }
 data class SettingsTransferUi(
     val operation: SettingsTransfer,
     val status: SettingsTransferStatus,
@@ -132,6 +134,8 @@ sealed interface SettingsPreviewAction {
     data class LimitPlates(val enabled: Boolean) : SettingsPreviewAction
     data class PlateCountDelta(val weight: Float, val delta: Int) : SettingsPreviewAction
     data class Transfer(val operation: SettingsTransfer) : SettingsPreviewAction
+    data class ConfirmIronLogImport(val mode: SettingsImportMode) : SettingsPreviewAction
+    data object DismissImportModePrompt : SettingsPreviewAction
     data class DismissTransfer(val operation: SettingsTransfer) : SettingsPreviewAction
 }
 
@@ -527,6 +531,55 @@ fun PreviewSettingsContent(
         }
     }
 
+    if (state.showImportModePrompt) {
+        AlertDialog(
+            onDismissRequest = { onAction(SettingsPreviewAction.DismissImportModePrompt) },
+            shape = IronLogRadius.CardShape,
+            containerColor = surfaces.plateBottom,
+            titleContentColor = colors.onSurface,
+            textContentColor = colors.onSurface,
+            title = { Text("How should this backup be imported?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)) {
+                    Text(
+                        text = "Replace wipes existing local workouts, routines, and settings before restoring the backup verbatim. Recommended when restoring onto a new device.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Merge keeps your existing data and adds missing workouts, routines, and exercises while skipping duplicates.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.onSurfaceVariant
+                    )
+                    IronLogPrimaryButton(
+                        text = "Replace all data",
+                        onClick = { onAction(SettingsPreviewAction.ConfirmIronLogImport(SettingsImportMode.REPLACE)) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    IronLogSculptedKeycap(
+                        onClick = { onAction(SettingsPreviewAction.ConfirmIronLogImport(SettingsImportMode.MERGE)) },
+                        hapticType = KeycapHaptic.KEY_TAP,
+                        shape = IronLogRadius.ControlShape,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Merge with existing data",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(
+                    onClick = { onAction(SettingsPreviewAction.DismissImportModePrompt) },
+                    modifier = Modifier.heightIn(min = IronLogSpace.TouchTargetMin)
+                ) { Text("Cancel") }
+            }
+        )
+    }
+
     state.transfers.firstOrNull {
         it.status == SettingsTransferStatus.SUCCESS || it.status == SettingsTransferStatus.ERROR
     }?.let { result ->
@@ -580,14 +633,14 @@ fun PreviewSettingsContent(
                     verticalArrangement = Arrangement.spacedBy(IronLogSpace.ItemGap)
                 ) {
                     Text(
-                        text = "Plan it, load it, lift it",
+                        text = "Complete, bulletproof backups (v2)",
                         style = MaterialTheme.typography.titleSmall,
                         color = colors.onSurface,
                         fontWeight = FontWeight.Bold
                     )
-                    Text("Build a one-off workout. Choose every exercise you plan to do and move forward or back through your plan while logging. No routine required.")
-                    Text("Superset exercise pills open the selected exercise in the logger right away.")
-                    Text("The plate calculator supports a target weight or manual loading, using your saved bar, plates and loading sides. Bigger controls keep your setup intact when you switch modes.")
+                    Text("IronLog backups now include a versioned manifest, your settings, theme, rest timer, streak history, and plate calculator inventory in a single transactional snapshot.")
+                    Text("Choose between Replace (clean full restore on a new device) or Merge (adds missing history and skips duplicates) when importing a ZIP backup.")
+                    Text("Starter exercise customizations, PR stars, rep targets, and superset groups now round-trip cleanly without silent loss or duplication.")
                 }
             },
             confirmButton = {

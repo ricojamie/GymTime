@@ -10,6 +10,7 @@ import java.io.BufferedReader
  * The caller owns [reader] and is responsible for closing it.
  */
 internal object CsvParser {
+    private const val MAX_FIELD_CHARS = 1_000_000
 
     inline fun forEachRecord(
         reader: BufferedReader,
@@ -52,22 +53,25 @@ internal object CsvParser {
                     if (ch == '"'.code) {
                         val next = reader.read()
                         if (next == '"'.code) {
-                            fieldBuffer.append('"')
+                            appendChecked(fieldBuffer, '"')
                         } else {
                             ch = next
                             break
                         }
                     } else {
-                        fieldBuffer.append(Char(ch))
+                        appendChecked(fieldBuffer, Char(ch))
                     }
                 }
                 while (ch != -1 && ch != ','.code && ch != '\n'.code && ch != '\r'.code) {
+                    if (ch != ' '.code && ch != '\t'.code) {
+                        throw IllegalArgumentException("Unexpected character '${Char(ch)}' after closing quote in CSV")
+                    }
                     ch = reader.read()
                 }
                 fields.add(fieldBuffer.toString())
             } else {
                 while (ch != -1 && ch != ','.code && ch != '\n'.code && ch != '\r'.code) {
-                    fieldBuffer.append(Char(ch))
+                    appendChecked(fieldBuffer, Char(ch))
                     ch = reader.read()
                 }
                 fields.add(fieldBuffer.toString())
@@ -87,5 +91,12 @@ internal object CsvParser {
             break
         }
         return fields
+    }
+
+    private fun appendChecked(buffer: StringBuilder, ch: Char) {
+        if (buffer.length >= MAX_FIELD_CHARS) {
+            throw IllegalArgumentException("CSV field exceeds maximum supported length")
+        }
+        buffer.append(ch)
     }
 }

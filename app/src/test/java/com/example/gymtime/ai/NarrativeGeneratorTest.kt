@@ -196,6 +196,10 @@ class NarrativeGeneratorTest {
         override suspend fun deletePeriodicBefore(kind: String, cutoffEpochMs: Long) {
             pruneCount.incrementAndGet()
         }
+
+        override suspend fun deleteAll() {
+            store.clear()
+        }
     }
 
     private class FakeOnDeviceAiClient(

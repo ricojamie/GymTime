@@ -204,6 +204,49 @@ class StreakCalculatorTest {
         )
     }
 
+    @Test
+    fun calculateBestStreakMatchesBruteForceDayByDayMaximumAcrossBreaks() {
+        val zone = java.time.ZoneId.of("America/New_York")
+        // Multi-week schedule with an early 7-day peak, a full break, and a smaller later streak.
+        val workoutLocalDates = listOf(
+            // Week 1 (Sun Mar 1 - Sat Mar 7): 5 workouts (2 misses -> safe)
+            java.time.LocalDate.of(2026, 3, 2),
+            java.time.LocalDate.of(2026, 3, 3),
+            java.time.LocalDate.of(2026, 3, 4),
+            java.time.LocalDate.of(2026, 3, 5),
+            java.time.LocalDate.of(2026, 3, 6),
+            // Week 2 (Sun Mar 8 - Sat Mar 14): Sun + Wed (misses Mon, Tue = 2 -> safe on Wed = 7), then misses Thu..Sat -> breaks!
+            java.time.LocalDate.of(2026, 3, 8),
+            java.time.LocalDate.of(2026, 3, 11),
+            // Week 3: total break
+            // Week 4 (Sun Mar 22 - Sat Mar 28): misses Sun, Mon, Tue -> broken mid-week, trains Wed..Sat (0 streak)
+            java.time.LocalDate.of(2026, 3, 25),
+            java.time.LocalDate.of(2026, 3, 26),
+            java.time.LocalDate.of(2026, 3, 27),
+            java.time.LocalDate.of(2026, 3, 28),
+            // Week 5 (Sun Mar 29 - Apr 1): 3 workouts
+            java.time.LocalDate.of(2026, 3, 29),
+            java.time.LocalDate.of(2026, 3, 30),
+            java.time.LocalDate.of(2026, 4, 1)
+        )
+        val workoutDates = workoutLocalDates.map { Date.from(it.atTime(10, 0).atZone(zone).toInstant()) }
+        val asOfLocal = java.time.LocalDate.of(2026, 4, 2)
+        val asOf = Date.from(asOfLocal.atTime(18, 0).atZone(zone).toInstant())
+
+        for (allowedSkips in 0..4) {
+            var bruteForceMax = 0
+            var cursor = workoutLocalDates.first()
+            while (!cursor.isAfter(asOfLocal)) {
+                val cursorDate = Date.from(cursor.atTime(18, 0).atZone(zone).toInstant())
+                val streak = StreakCalculator.calculateStreakForZone(workoutDates, allowedSkips, cursorDate, zone).streakDays
+                if (streak > bruteForceMax) bruteForceMax = streak
+                cursor = cursor.plusDays(1)
+            }
+            val fastBest = StreakCalculator.calculateBestStreakForZone(workoutDates, allowedSkips, asOf, zone)
+            assertEquals("Mismatch for allowedSkips=$allowedSkips", bruteForceMax, fastBest)
+        }
+    }
+
     private fun date(year: Int, month: Int, day: Int): Date = Calendar.getInstance().apply {
         set(year, month, day, 12, 0, 0)
         set(Calendar.MILLISECOND, 0)
