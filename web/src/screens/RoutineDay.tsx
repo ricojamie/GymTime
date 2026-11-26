@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronDown, Layers3, Link2, Plus, Search, Trash2, Unlink2 } from 'lucide-react'
@@ -39,20 +39,41 @@ function Editor({
   const [query, setQuery] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [supersetPop, setSupersetPop] = useState<Record<string, 'link' | 'unlink'>>({})
+  const popTimer = useRef<number | null>(null)
   const names = new Map(exercises.map(e => [e.id, e]))
   const blocks = planBlocks(rows)
   const captureReorder = useAdjacentReorder()
+
+  useEffect(() => {
+    return () => {
+      if (popTimer.current !== null) window.clearTimeout(popTimer.current)
+    }
+  }, [])
+
+  function triggerSupersetPop(keys: string[], kind: 'link' | 'unlink') {
+    if (popTimer.current !== null) window.clearTimeout(popTimer.current)
+    const next: Record<string, 'link' | 'unlink'> = {}
+    for (const key of keys) next[key] = kind
+    setSupersetPop(next)
+    popTimer.current = window.setTimeout(() => {
+      setSupersetPop({})
+      popTimer.current = null
+    }, 480)
+  }
 
   function patch(key: string, changes: Partial<DayExerciseDraft>) {
     setRows(previous => previous.map(row => (row.key === key ? { ...row, ...changes } : row)))
   }
 
   function unlink(group: string) {
+    const affected = rows.filter(row => row.supersetGroupId === group).map(row => row.key)
     setRows(previous =>
       previous.map(row =>
         row.supersetGroupId === group ? { ...row, supersetGroupId: null, supersetOrderIndex: 0 } : row,
       ),
     )
+    if (affected.length) triggerSupersetPop(affected, 'unlink')
   }
 
   function remove(key: string) {
@@ -81,6 +102,7 @@ function Editor({
             : r,
       ),
     )
+    triggerSupersetPop([row.key], 'link')
   }
 
   function move(block: number, direction: -1 | 1, button: HTMLButtonElement) {
@@ -116,10 +138,12 @@ function Editor({
 
   return (
     <main className="screen rt">
-      <Link className="rt-back" to={base}>
-        <ArrowLeft size={18} aria-hidden="true" /> Workout days
-      </Link>
-      <h1>{dayId === null ? 'New workout day' : 'Edit workout day'}</h1>
+      <header className="rt-sticky-head">
+        <Link className="rt-back" to={base}>
+          <ArrowLeft size={18} aria-hidden="true" /> Workout days
+        </Link>
+        <h1>{dayId === null ? 'New workout day' : 'Edit workout day'}</h1>
+      </header>
       <form
         className="rt-form"
         onSubmit={async event => {
@@ -147,8 +171,10 @@ function Editor({
         {blocks.map((block, blockIndex) => (
           <section
             key={block[0].key}
-            className="surface rt-plan"
+            className="surface rt-plan stagger-in"
+            style={{ '--stagger-i': Math.min(blockIndex, 8) } as CSSProperties}
             data-superset={block.length > 1 ? 'true' : undefined}
+            data-superset-pop={supersetPop[block[0].key]}
             data-order-item
           >
             <header className="rt-head">
@@ -158,7 +184,7 @@ function Editor({
               <div className="rt-tools">
                 <button
                   type="button"
-                  className="icon-button"
+                  className="icon-button rt-move-btn rt-move-up"
                   disabled={blockIndex === 0}
                   aria-label={'Move ' + (names.get(block[0].exerciseId)?.name ?? 'exercise') + ' up'}
                   onClick={e => move(blockIndex, -1, e.currentTarget)}
@@ -167,7 +193,7 @@ function Editor({
                 </button>
                 <button
                   type="button"
-                  className="icon-button"
+                  className="icon-button rt-move-btn rt-move-down"
                   disabled={blockIndex === blocks.length - 1}
                   aria-label={'Move ' + (names.get(block[0].exerciseId)?.name ?? 'exercise') + ' down'}
                   onClick={e => move(blockIndex, 1, e.currentTarget)}
@@ -182,7 +208,7 @@ function Editor({
                   <h3>{names.get(row.exerciseId)?.name ?? 'Deleted exercise'}</h3>
                   <button
                     type="button"
-                    className="icon-button"
+                    className="icon-button rt-remove-btn"
                     aria-label={'Remove ' + (names.get(row.exerciseId)?.name ?? 'exercise')}
                     onClick={() => remove(row.key)}
                   >
@@ -229,7 +255,7 @@ function Editor({
         ))}
         <button
           type="button"
-          className="btn rt-outline"
+          className="btn rt-outline rt-new-btn"
           onClick={() => {
             setSelection([])
             setQuery('')
@@ -243,7 +269,7 @@ function Editor({
             {error}
           </p>
         )}
-        <button className="btn primary" disabled={saving || !name.trim() || !rows.length}>
+        <button className="btn primary rt-cta-start" disabled={saving || !name.trim() || !rows.length}>
           <Check size={17} aria-hidden="true" />
           {saving ? 'Saving…' : 'Save day'}
         </button>

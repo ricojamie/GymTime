@@ -55,7 +55,7 @@ export default function MuscleGroups() {
   const sorted = [...groups].sort((a, b) => a.name.localeCompare(b.name))
 
   return (
-    <main className="screen st-screen">
+    <main className="screen st-screen st-muscles-screen">
       <SettingsHeader title="Body parts" />
       <Group title={groups.length + ' body parts'}>
         {sorted.map((g, index) => {
@@ -63,8 +63,8 @@ export default function MuscleGroups() {
           const locked = g.name === WARMUP_MUSCLE_GROUP
           return (
             <div
-              className="st-row stagger-in"
-              style={{ '--stagger-i': Math.min(index, 10) } as CSSProperties}
+              className="st-row st-muscle-row stagger-in"
+              style={{ '--stagger-i': Math.min(index, 12) } as CSSProperties}
               key={g.name}
             >
               <div className="st-label-stack">
@@ -79,7 +79,7 @@ export default function MuscleGroups() {
                 <div className="st-actions">
                   <button
                     type="button"
-                    className="icon-button"
+                    className="icon-button st-muscle-edit"
                     aria-label={'Rename ' + g.name}
                     onClick={() => open({ kind: 'rename', name: g.name })}
                   >
@@ -87,7 +87,7 @@ export default function MuscleGroups() {
                   </button>
                   <button
                     type="button"
-                    className="icon-button"
+                    className="icon-button st-muscle-delete"
                     aria-label={'Delete ' + g.name}
                     onClick={() => open({ kind: 'delete', name: g.name })}
                   >

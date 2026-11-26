@@ -23,10 +23,12 @@ function RoutineNameForm({ routine }: { routine?: Routine }) {
 
   return (
     <main className="screen rt">
-      <Link className="rt-back" to={back}>
-        <ArrowLeft size={18} aria-hidden="true" /> Routines
-      </Link>
-      <h1>{routine ? 'Rename routine' : 'New routine'}</h1>
+      <header className="rt-sticky-head">
+        <Link className="rt-back" to={back}>
+          <ArrowLeft size={18} aria-hidden="true" /> Routines
+        </Link>
+        <h1>{routine ? 'Rename routine' : 'New routine'}</h1>
+      </header>
       <form
         className="rt-form"
         onSubmit={async event => {
@@ -58,7 +60,7 @@ function RoutineNameForm({ routine }: { routine?: Routine }) {
             {error}
           </p>
         )}
-        <button className="btn primary" disabled={saving || !name.trim()}>
+        <button className="btn primary rt-cta-start" disabled={saving || !name.trim()}>
           {routine ? 'Save name' : 'Create routine'}
           <ArrowUpRight size={18} aria-hidden="true" />
         </button>
@@ -123,33 +125,41 @@ export default function Routines({ embedded = false }: { embedded?: boolean }) {
   const Region = embedded ? 'section' : 'main'
   const atLimit = (data?.routines.length ?? 0) >= 10
 
+  const headerRow = (
+    <div className="rt-head">
+      <div className="rt-title-group">
+        {embedded ? <h2>Routines</h2> : <h1>Routines</h1>}
+        {!embedded && gatorMode && <SwoleGator pose="badge" size={30} interactive />}
+      </div>
+      <Link
+        className="btn rt-outline rt-new-btn"
+        aria-disabled={atLimit}
+        to="/routines/new"
+        onClick={e => {
+          if (atLimit) e.preventDefault()
+        }}
+      >
+        <Plus size={16} aria-hidden="true" /> New routine
+      </Link>
+    </div>
+  )
+
   return (
     <Region className={embedded ? 'rt rt-embedded' : 'screen rt'}>
-      {!embedded && (
-        <Link className="rt-back" to="/library">
-          <ArrowLeft size={18} aria-hidden="true" /> Library
-        </Link>
+      {embedded ? (
+        headerRow
+      ) : (
+        <header className="rt-sticky-head">
+          <Link className="rt-back" to="/library">
+            <ArrowLeft size={18} aria-hidden="true" /> Library
+          </Link>
+          {headerRow}
+        </header>
       )}
-      <div className="rt-head">
-        <div className="rt-title-group">
-          {embedded ? <h2>Routines</h2> : <h1>Routines</h1>}
-          {!embedded && gatorMode && <SwoleGator pose="badge" size={30} interactive />}
-        </div>
-        <Link
-          className="btn rt-outline"
-          aria-disabled={atLimit}
-          to="/routines/new"
-          onClick={e => {
-            if (atLimit) e.preventDefault()
-          }}
-        >
-          <Plus size={16} aria-hidden="true" /> New routine
-        </Link>
-      </div>
       {!data ? (
         <p role="status">Loading routines…</p>
       ) : !data.routines.length ? (
-        <div className="surface rt-empty">
+        <div className="surface rt-empty stagger-in" style={{ '--stagger-i': 0 } as CSSProperties}>
           {gatorMode ? (
             <SwoleGator pose="hero" size={104} interactive />
           ) : (
@@ -157,7 +167,7 @@ export default function Routines({ embedded = false }: { embedded?: boolean }) {
           )}
           <h3>No routines yet</h3>
           <p className="rt-muted">Group workout days into a split so your next session is one tap away.</p>
-          <Link className="btn primary" to="/routines/new">
+          <Link className="btn primary rt-cta-start" to="/routines/new">
             <Plus size={16} aria-hidden="true" /> Create routine
           </Link>
         </div>
@@ -172,7 +182,7 @@ export default function Routines({ embedded = false }: { embedded?: boolean }) {
               <Link
                 key={routine.id}
                 className="rt-list-link stagger-in"
-                style={{ '--stagger-i': Math.min(index, 8) } as CSSProperties}
+                style={{ '--stagger-i': Math.min(index, 10) } as CSSProperties}
                 to={'/routines/' + routine.id}
               >
                 <span>

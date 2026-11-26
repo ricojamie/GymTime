@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check } from 'lucide-react'
 import { SwoleGator } from '../components/mascot'
 import { chooseIcon, iconUrls, useIsGatorMode, useSettings } from '../theme'
@@ -44,12 +44,28 @@ export default function Settings() {
   const gatorMode = useIsGatorMode()
   const { save, run, error } = useSettingsWriter()
   const [name, setName] = useState(prefs.userName)
+  const [poppedIcon, setPoppedIcon] = useState<Preferences['appIcon'] | null>(null)
+  const iconPopTimer = useRef<number | null>(null)
 
   useEffect(() => {
     setName(prefs.userName)
   }, [prefs.userName])
 
-  const iconChange = (next: Preferences['appIcon']) => run(() => chooseIcon(next))
+  useEffect(() => {
+    return () => {
+      if (iconPopTimer.current !== null) window.clearTimeout(iconPopTimer.current)
+    }
+  }, [])
+
+  const iconChange = (next: Preferences['appIcon']) => {
+    if (iconPopTimer.current !== null) window.clearTimeout(iconPopTimer.current)
+    setPoppedIcon(next)
+    iconPopTimer.current = window.setTimeout(() => {
+      setPoppedIcon(null)
+      iconPopTimer.current = null
+    }, 460)
+    return run(() => chooseIcon(next))
+  }
 
   return (
     <main className="screen st-screen">
@@ -121,6 +137,7 @@ export default function Settings() {
                 className="st-icon-card hover-lift"
                 key={key}
                 aria-pressed={prefs.appIcon === key}
+                data-pop={poppedIcon === key ? 'true' : undefined}
                 onClick={() => void iconChange(key)}
               >
                 <span className="st-icon-preview" aria-hidden="true">

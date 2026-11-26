@@ -15,32 +15,44 @@ afterEach(() => {
 })
 
 describe('SwoleGator mascot', () => {
-  it('renders all 5 poses with unique SVG gradient IDs per instance', () => {
+  it('renders all 5 poses with WebP artwork and matching data-pose attributes', () => {
     const poses: GatorPose[] = ['hero', 'pr', 'stamp', 'badge', 'spotter']
     const { container } = render(
       <div>
         {poses.map((pose) => (
           <SwoleGator key={pose} pose={pose} size={64} />
         ))}
-        <SwoleGator pose="hero" size={64} />
       </div>,
     )
 
-    const svgs = container.querySelectorAll('svg')
-    expect(svgs).toHaveLength(6)
+    const imgs = container.querySelectorAll('img.gator-mascot__img')
+    expect(imgs).toHaveLength(5)
 
-    const gradientIds = Array.from(container.querySelectorAll('defs [id]')).map((el) => el.id)
-    expect(gradientIds.length).toBeGreaterThan(20)
-    expect(new Set(gradientIds).size).toBe(gradientIds.length)
+    poses.forEach((pose, idx) => {
+      const mascot = container.querySelector(`[data-pose="${pose}"]`)
+      expect(mascot).not.toBeNull()
+      const img = imgs[idx]
+      expect(mascot?.contains(img)).toBe(true)
+      expect(img).toHaveAttribute('src', `/mascot/gator-${pose}.webp`)
+      expect(img).toHaveAttribute('alt', '')
+      expect(img).toHaveAttribute('aria-hidden', 'true')
+    })
+
+    expect(container.querySelector('[data-pose="pr"] .gator-pr-aura')).not.toBeNull()
+    expect(container.querySelector('[data-pose="hero"] .gator-pr-aura')).toBeNull()
   })
 
-  it('triggers CHOMP & FLEX burst when interactive and clicked or activated via keyboard', () => {
+  it('triggers CHOMP & FLEX burst when interactive and clicked or activated via keyboard', async () => {
     const { container } = render(<SwoleGator pose="hero" interactive />)
-    const button = screen.getByRole('button', { name: /swole gator/i })
+    const button = screen.getByRole('button', { name: 'Swole Gator mascot flexing double biceps' })
 
     expect(container.querySelector('.gator-chomp-tag')).toBeNull()
     fireEvent.click(button)
-    // requestAnimationFrame schedules the chomping class on next frame; also verify keyDown handler
+    await waitFor(() => {
+      expect(container.querySelector('.gator-chomp-tag')).toHaveTextContent('CHOMP!')
+      expect(container.querySelectorAll('.gator-burst-ring')).toHaveLength(2)
+      expect(container.querySelector('.gator-burst-ring--secondary')).not.toBeNull()
+    })
     fireEvent.keyDown(button, { key: 'Enter' })
     expect(button).toHaveAttribute('data-pose', 'hero')
   })

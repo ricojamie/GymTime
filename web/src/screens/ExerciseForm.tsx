@@ -64,6 +64,7 @@ function Editor({ exercise, exercises, muscles, kg, gatorMode, returnTo, initial
   const [draft, setDraft] = useState(initial)
   const [expandedTypes, setExpandedTypes] = useState(LOG_TYPES.indexOf(initial.type) >= 3)
   const [setup, setSetup] = useState(false)
+  const [previewTick, setPreviewTick] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const nameRef = useRef<HTMLInputElement>(null)
@@ -78,7 +79,11 @@ function Editor({ exercise, exercises, muscles, kg, gatorMode, returnTo, initial
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty])
-  function update<K extends keyof Draft>(key: K, value: Draft[K]) { setError(''); setDraft(prev => ({ ...prev, [key]: value })) }
+  function update<K extends keyof Draft>(key: K, value: Draft[K]) {
+    setError('')
+    if (key === 'type' || key === 'unit' || key === 'target') setPreviewTick(n => n + 1)
+    setDraft(prev => ({ ...prev, [key]: value }))
+  }
   const query = draft.name.toLocaleLowerCase().trim()
   const similar = query.length < 3 ? [] : exercises.filter(e => e.id !== exercise?.id && (e.name.toLocaleLowerCase().includes(query) || query.includes(e.name.toLocaleLowerCase()))).slice(0, 3)
   const distance = draft.type.includes('DISTANCE')
@@ -106,14 +111,14 @@ function Editor({ exercise, exercises, muscles, kg, gatorMode, returnTo, initial
     finally { saveLock.current = false; setBusy(false) }
   }
   return <main className="screen lib-page">
-    <header className="lib-page-head">
+    <header className="lib-page-head lib-sticky-head">
       <button type="button" className="icon-button" aria-label={returnTo.startsWith('/workout/builder') ? 'Back to builder' : 'Back to exercises'} onClick={() => navigate(returnTo, { replace: true })}><ArrowLeft/></button>
       <h1>{exercise ? 'Edit exercise' : 'New exercise'}</h1>
       {gatorMode && <SwoleGator pose="badge" size={32} label="" className="ml-auto shrink-0" />}
     </header>
     <form className="lib-form stagger-in" style={{ '--stagger-i': 0 } as CSSProperties} noValidate onSubmit={save}>
       <label className="lib-field"><span>Exercise name</span><input ref={nameRef} required value={draft.name} autoComplete="off" onChange={e => update('name', e.target.value)}/></label>
-      {similar.length > 0 && <div className="lib-similar"><span className="eyebrow">Similar exercises</span>{similar.map(ex =>
+      {similar.length > 0 && <div className="lib-similar lib-reveal-in"><span className="eyebrow">Similar exercises</span>{similar.map(ex =>
         exercise ? <span key={ex.id}>{ex.name}</span> : <button type="button" key={ex.id} onClick={() => returnWith(ex.id)}>Use {ex.name}<ChevronRight size={15}/></button>)}</div>}
       <fieldset ref={muscleRef}><legend>Target muscle</legend><div className="lib-options">
         {muscles.map(m => <button type="button" key={m} className="lib-chip" aria-pressed={draft.muscle === m} onClick={() => update('muscle', m)}>{m}</button>)}
@@ -121,12 +126,19 @@ function Editor({ exercise, exercises, muscles, kg, gatorMode, returnTo, initial
       <fieldset><legend>Log type</legend><div className="lib-options">
         {(expandedTypes ? LOG_TYPES : LOG_TYPES.slice(0, 3)).map(t => <button type="button" key={t} className="lib-chip" aria-pressed={draft.type === t} onClick={() => update('type', t)}>{typeLabels[t]}</button>)}
       </div><button className="lib-more" type="button" aria-expanded={expandedTypes} onClick={() => setExpandedTypes(!expandedTypes)}>{expandedTypes ? 'Fewer types' : 'More log types'}<ChevronDown size={16}/></button></fieldset>
-      {distance && <fieldset><legend>Distance unit</legend><div className="lib-options">
+      {distance && <fieldset className="lib-reveal-in"><legend>Distance unit</legend><div className="lib-options">
         {DISTANCE_UNITS.map(u => <button type="button" className="lib-chip" key={u} aria-pressed={draft.unit === u} onClick={() => update('unit', u)}>{unitLabels[u]}</button>)}
       </div></fieldset>}
-      <div className="lib-example surface"><div><span className="eyebrow">Example set</span><output>{example(draft, kg)}</output></div>{gatorMode ? <SwoleGator pose="spotter" size={44} label="" /> : <PencilRuler aria-hidden="true" size={25}/>}</div>
+      <div className="lib-example surface">
+        {previewTick > 0 && <span key={previewTick} className="lib-example-sheen" aria-hidden="true" />}
+        <div>
+          <span className="eyebrow">Example set</span>
+          <output key={previewTick} className={previewTick > 0 ? 'lib-example-value is-popping' : 'lib-example-value'}>{example(draft, kg)}</output>
+        </div>
+        {gatorMode ? <SwoleGator pose="spotter" size={44} label="" /> : <PencilRuler aria-hidden="true" size={25}/>}
+      </div>
       <section className="lib-extra"><button type="button" aria-expanded={setup} className="lib-sheet-row" onClick={() => setSetup(!setup)}>Rest, targets & notes<ChevronDown size={17}/></button>
-        {setup && <div className="lib-extra-fields"><label className="lib-field"><span>Rest time (seconds)</span><input type="number" inputMode="numeric" min="1" step="1" value={draft.rest} onChange={e => update('rest', e.target.value)}/></label>
+        {setup && <div className="lib-extra-fields lib-reveal-in"><label className="lib-field"><span>Rest time (seconds)</span><input type="number" inputMode="numeric" min="1" step="1" value={draft.rest} onChange={e => update('rest', e.target.value)}/></label>
           {reps && <label className="lib-field"><span>Rep target</span><input type="number" inputMode="numeric" min="1" step="1" value={draft.target} onChange={e => update('target', e.target.value)}/></label>}
           <label className="lib-field"><span>Exercise notes</span><textarea rows={3} value={draft.notes} onChange={e => update('notes', e.target.value)}/></label>
         </div>}

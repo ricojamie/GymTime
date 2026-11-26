@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { ArrowLeft, ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { SegmentedControl } from '../components/primitives'
@@ -18,7 +18,7 @@ export function SettingsHeader({
   return (
     <header className="st-header">
       <Link
-        className="icon-button"
+        className="icon-button st-back-btn"
         aria-label={back === '/' ? 'Back to Home' : 'Back to settings'}
         to={back}
       >
@@ -71,17 +71,42 @@ export function ToggleRow({
   checked: boolean
   onChange: () => void
 }) {
+  const [bounce, setBounce] = useState<'idle' | 'on' | 'off'>('idle')
+  const timerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current)
+    }
+  }, [])
+
+  function handleClick() {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current)
+    setBounce(checked ? 'off' : 'on')
+    timerRef.current = window.setTimeout(() => {
+      setBounce('idle')
+      timerRef.current = null
+    }, 460)
+    onChange()
+  }
+
   return (
     <button
       type="button"
-      className="st-row st-action"
+      className="st-row st-action st-toggle-row"
       role="switch"
       aria-label={label}
       aria-checked={checked}
-      onClick={onChange}
+      onClick={handleClick}
     >
       <span>{label}</span>
-      <span className="st-switch" aria-hidden="true" />
+      <span
+        className="st-switch"
+        data-bounce={bounce !== 'idle' ? bounce : undefined}
+        aria-hidden="true"
+      >
+        <span className="st-switch-thumb" />
+      </span>
     </button>
   )
 }

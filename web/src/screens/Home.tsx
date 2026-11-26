@@ -93,17 +93,41 @@ function BackupReminder({onDismiss}: {onDismiss: () => void}) {
   const {save, ready} = useSaveBackup()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [dismissing, setDismissing] = useState(false)
+  const dismissTimer = useRef<number | undefined>(undefined)
+
+  useEffect(() => () => {
+    if (dismissTimer.current !== undefined) window.clearTimeout(dismissTimer.current)
+  }, [])
+
   async function handleSave() {
-    if (saving || !ready) return
+    if (saving || !ready || dismissing) return
     setSaving(true)
     setError('')
     try { await save() } catch (e) { setError(e instanceof Error ? e.message : 'Could not save this backup.') }
     finally { setSaving(false) }
   }
-  return <div className="home-backup-wrap home-stagger" style={{'--stagger-i': 0} as CSSProperties}><div className="home-backup">
+
+  function handleDismiss() {
+    if (dismissing) return
+    const fullMotion =
+      document.documentElement.dataset.motion === 'full' &&
+      !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (!fullMotion) {
+      onDismiss()
+      return
+    }
+    setDismissing(true)
+    dismissTimer.current = window.setTimeout(() => {
+      dismissTimer.current = undefined
+      onDismiss()
+    }, 280)
+  }
+
+  return <div className={`home-backup-wrap${dismissing ? ' is-dismissing' : ''}`}><div className="home-backup">
     <HardDriveDownload size={17}/><span>Backup due</span>
-    <button onClick={handleSave} disabled={!ready || saving}>{saving ? 'Saving…' : ready ? 'Save backup' : 'Preparing…'}</button>
-    <button className="home-dismiss" onClick={onDismiss} aria-label="Dismiss backup reminder"><X size={17}/></button>
+    <button onClick={handleSave} disabled={!ready || saving || dismissing}>{saving ? 'Saving…' : ready ? 'Save backup' : 'Preparing…'}</button>
+    <button className="home-dismiss" onClick={handleDismiss} disabled={dismissing} aria-label="Dismiss backup reminder"><X size={17}/></button>
   </div>{error && <p role="alert">{error}</p>}</div>
 }
 

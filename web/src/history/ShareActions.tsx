@@ -66,7 +66,14 @@ async function renderShareCardPng(
   if (isGator) {
     label('UF · IRONLOG', 64, 96, 26, '#FA4616', 800)
     label('SWOLE GATOR', 64, 152, 54, '#FFFFFF', 900)
-    renderGatorBadgeToCanvas(ctx, 896, 48, 120)
+    const img = new Image()
+    img.src = '/icons/swole-alligator-192.png'
+    try {
+      await img.decode()
+      ctx.drawImage(img, 896, 48, 120, 120)
+    } catch {
+      renderGatorBadgeToCanvas(ctx, 896, 48, 120)
+    }
   } else {
     label('IRONLOG', 64, 130, 66, resolvedAccent, 800)
     const iconUrl = iconUrls(prefs.appIcon).stamp

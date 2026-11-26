@@ -40,18 +40,26 @@ export default function History() {
   const current = useMemo(() => rows.find(row => row.w.id === selected), [rows, selected])
   const unit = data?.prefs.preferredWeightUnit || 'lbs'
 
+  const filterKey = query.trim().toLocaleLowerCase()
+
   return <main className="screen his-screen">
     <header className="his-heading"><h1>History</h1><span>{data && rows.length + (rows.length === 1 ? ' session' : ' sessions')}</span></header>
-    <label className="his-search"><Search size={19} aria-hidden="true"/><input aria-label="Search history" type="search" placeholder="Search workouts" value={query} onChange={e => setQuery(e.target.value)}/>{query && <button type="button" className="icon-button" aria-label="Clear search" onClick={() => setQuery('')}><X size={17}/></button>}</label>
-    {!data ? <p role="status">Loading history…</p> : !filtered.length ? <section className="his-empty surface">
+    <div className="his-search-sticky">
+      <label className="his-search"><Search size={19} aria-hidden="true"/><input aria-label="Search history" type="search" placeholder="Search workouts" value={query} onChange={e => setQuery(e.target.value)}/>{query && <button type="button" className="icon-button his-search-clear" aria-label="Clear search" onClick={() => setQuery('')}><X size={17}/></button>}</label>
+    </div>
+    {!data ? <p role="status">Loading history…</p> : !filtered.length ? <section key={`empty::${filterKey}`} className="his-empty surface his-card-enter">
       {gatorMode && !rows.length ? <SwoleGator pose="spotter" size={96} interactive /> : (rows.length ? <Search size={28}/> : <Archive size={28}/>)}
       <h2>{rows.length ? 'No matching workouts' : 'No completed workouts yet'}</h2>
       {rows.length ? <button className="btn" onClick={() => setQuery('')}>Clear search</button> : <Link className="btn primary" to={data.workouts.some(w => w.endTime === null) ? '/workout/active' : '/exercises/select?workoutMode=true'}>{data.workouts.some(w => w.endTime === null) ? 'Resume workout' : 'Start workout'}<ArrowRight size={16}/></Link>}
-    </section> : Array.from(months, ([month, list], monthIndex) => <section key={month} className="his-month stagger-in" style={{ '--stagger-i': Math.min(monthIndex, 6) } as CSSProperties}>
-      <h2 className="eyebrow">{month}</h2>
+    </section> : Array.from(months, ([month, list], monthIndex) => <section key={`${filterKey}::${month}`} className="his-month">
+      <div className="his-month-head his-head-enter" style={{ '--stagger-i': Math.min(monthIndex, 6) } as CSSProperties}>
+        <h2 className="eyebrow">{month}</h2>
+        <span className="his-month-count" aria-hidden="true">{list.length} {list.length === 1 ? 'session' : 'sessions'}</span>
+      </div>
       <div className="surface his-timeline">{list.map(({w,stats}, itemIndex) => {
         const date = new Date(w.startTime)
-        return <button type="button" className="his-session stagger-in" style={{ '--stagger-i': Math.min(itemIndex, 10) } as CSSProperties} aria-haspopup="dialog" key={w.id} onClick={() => setParams({workoutId:String(w.id)})}>
+        const staggerIndex = Math.min(monthIndex * 3 + itemIndex, 12)
+        return <button type="button" className="his-session his-card-enter" style={{ '--stagger-i': staggerIndex } as CSSProperties} aria-haspopup="dialog" key={`${filterKey}::${w.id}`} onClick={() => setParams({workoutId:String(w.id)})}>
           <span className="his-date" aria-label={dateLabel(w.startTime)}><strong>{String(date.getDate()).padStart(2,'0')}</strong><small>{date.toLocaleDateString(undefined,{weekday:'short'})}</small></span>
           <span className="his-session-text"><strong>{stats.title}</strong>
             {stats.muscles.length > 0 && <span>{stats.muscles.slice(0,3).join(' · ')}{stats.muscles.length > 3 && ' +' + (stats.muscles.length - 3)}</span>}
@@ -100,7 +108,7 @@ function RoutineTarget({workout, title, onDone}: {workout:Workout;title:string;o
 
 function SetRows({sets,unit,prIds}: {sets:WorkoutSet[];unit:WeightUnit;prIds:Set<number>}) {
   const top = sets.reduce((max, row) => row.weight === null ? max : Math.max(max,row.weight), -Infinity)
-  return <ol className="his-sets">{sets.map((s,index) => <li key={s.id}><span className="his-ordinal">{String(index+1).padStart(2,'0')}</span><div><strong>{setText(s,unit)}</strong>
+  return <ol className="his-sets">{sets.map((s,index) => <li key={s.id} className="his-set-row" style={{ '--stagger-i': Math.min(index, 12) } as CSSProperties}><span className="his-ordinal">{String(index+1).padStart(2,'0')}</span><div><strong>{setText(s,unit)}</strong>
     {s.rpe != null && <small>RPE {s.rpe}</small>}{s.note?.trim() && <p>{s.note}</p>}</div>
     {prIds.has(s.id) ? <span className="his-pr-badge"><Trophy size={14} aria-label="Personal record" className="his-pr"/>PR</span> : s.weight === top && top > 0 && !s.isWarmup ? <small>Top weight</small> : null}
   </li>)}</ol>

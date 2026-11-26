@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import './primitives.css'
@@ -6,18 +6,43 @@ import './primitives.css'
 type SheetProps = { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; className?: string }
 let openSheets = 0
 let previousOverflow = ''
+const SHEET_CLOSE_MS = 180
 
 function isOutside(dialog: HTMLDialogElement, x: number, y: number) {
   const bounds = dialog.getBoundingClientRect()
   return x < bounds.left || x > bounds.right || y < bounds.top || y > bounds.bottom
 }
 
+function isFullMotion() {
+  if (typeof document === 'undefined' || document.documentElement.dataset.motion !== 'full') return false
+  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return false
+  return true
+}
+
 export function BottomSheet({ title, onClose, children, footer, className = '' }: SheetProps) {
   const ref = useRef<HTMLDialogElement>(null)
   const close = useRef(onClose)
   const pressedBackdrop = useRef(false)
+  const closingRef = useRef(false)
+  const closeTimer = useRef<number | null>(null)
+  const [closing, setClosing] = useState(false)
   const label = useId()
   useLayoutEffect(() => { close.current = onClose }, [onClose])
+  const requestClose = useCallback(() => {
+    if (closingRef.current) return
+    if (!isFullMotion()) {
+      close.current()
+      return
+    }
+    closingRef.current = true
+    setClosing(true)
+    closeTimer.current = window.setTimeout(() => {
+      closeTimer.current = null
+      closingRef.current = false
+      setClosing(false)
+      close.current()
+    }, SHEET_CLOSE_MS)
+  }, [])
   useLayoutEffect(() => {
     const dialog = ref.current
     if (!dialog) return
@@ -28,13 +53,19 @@ export function BottomSheet({ title, onClose, children, footer, className = '' }
     }
     if (!dialog.open) dialog.showModal()
     return () => {
+      if (closeTimer.current !== null) {
+        window.clearTimeout(closeTimer.current)
+        closeTimer.current = null
+      }
+      closingRef.current = false
       dialog.close()
       if (--openSheets === 0) document.body.style.overflow = previousOverflow
       if (trigger?.isConnected) trigger.focus({ preventScroll: true })
     }
   }, [])
-  return createPortal(<dialog ref={ref} className={'bottom-sheet ' + className} aria-labelledby={label}
-    onCancel={event => { event.preventDefault(); event.stopPropagation(); close.current() }}
+  const dialogClass = 'bottom-sheet' + (closing ? ' is-closing' : '') + (className ? ' ' + className : '')
+  return createPortal(<dialog ref={ref} className={dialogClass} aria-labelledby={label}
+    onCancel={event => { event.preventDefault(); event.stopPropagation(); requestClose() }}
     onPointerDown={event => {
       pressedBackdrop.current = event.target === event.currentTarget && isOutside(event.currentTarget, event.clientX, event.clientY)
     }}
@@ -42,10 +73,10 @@ export function BottomSheet({ title, onClose, children, footer, className = '' }
     onClick={event => {
       const dismiss = pressedBackdrop.current && event.target === event.currentTarget && isOutside(event.currentTarget, event.clientX, event.clientY)
       pressedBackdrop.current = false
-      if (dismiss) close.current()
+      if (dismiss) requestClose()
     }}>
     <div className="sheet-grip" aria-hidden="true" />
-    <header className="sheet-heading"><h2 id={label}>{title}</h2><button type="button" className="icon-button" aria-label="Close" onClick={onClose}><X size={20}/></button></header>
+    <header className="sheet-heading"><h2 id={label}>{title}</h2><button type="button" className="icon-button" aria-label="Close" onClick={requestClose}><X size={20}/></button></header>
     <div className="sheet-scroller">{children}</div>
     {footer && <footer className="sheet-footer">{footer}</footer>}
   </dialog>, document.body)
@@ -80,16 +111,10 @@ export function CalibrationBar({value,max=1,ticks=10,label}:{value:number;max?:n
   return <div className="calibration-bar" role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={Math.min(max,Math.max(0,value))}>{Array.from({length:ticks},(_,i)=><i key={i} data-lit={max>0 && i<Math.round(value/max*ticks)}/>)}</div>
 }
 
-function prefersReducedMotion() {
-  if (typeof document !== 'undefined' && document.documentElement.dataset.motion === 'reduced') return true
-  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return true
-  return false
-}
-
 export function AnimatedNumber({
   value,
   format = (n: number) => String(Math.round(n)),
-  duration = 520,
+  duration = 380,
   className = '',
 }: {
   value: number
@@ -101,7 +126,7 @@ export function AnimatedNumber({
   const currentRef = useRef(value)
   useEffect(() => {
     const from = currentRef.current
-    if (!Number.isFinite(value) || from === value || duration <= 0 || prefersReducedMotion()) {
+    if (!Number.isFinite(value) || from === value || duration <= 0 || !isFullMotion()) {
       currentRef.current = value
       setDisplay(value)
       return

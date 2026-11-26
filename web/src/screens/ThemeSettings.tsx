@@ -101,10 +101,53 @@ export default function ThemeSettings() {
   const { error, save, run } = useSettingsWriter()
   const file = useRef<HTMLInputElement>(null)
   const [editingCustom, setEditingCustom] = useState(false)
+  const [previewPop, setPreviewPop] = useState<'idle' | 'a' | 'b'>('idle')
+  const [poppedAccent, setPoppedAccent] = useState<string | null>(null)
+  const [poppedFont, setPoppedFont] = useState<string | null>(null)
+  const previewTimer = useRef<number | null>(null)
+  const accentTimer = useRef<number | null>(null)
+  const fontTimer = useRef<number | null>(null)
 
   useEffect(() => {
     if (gatorMode) setEditingCustom(false)
   }, [gatorMode])
+
+  useEffect(() => {
+    return () => {
+      if (previewTimer.current !== null) window.clearTimeout(previewTimer.current)
+      if (accentTimer.current !== null) window.clearTimeout(accentTimer.current)
+      if (fontTimer.current !== null) window.clearTimeout(fontTimer.current)
+    }
+  }, [])
+
+  function triggerPreviewPop() {
+    if (previewTimer.current !== null) window.clearTimeout(previewTimer.current)
+    setPreviewPop((prev) => (prev === 'a' ? 'b' : 'a'))
+    previewTimer.current = window.setTimeout(() => {
+      setPreviewPop('idle')
+      previewTimer.current = null
+    }, 460)
+  }
+
+  function triggerAccentPop(key: string) {
+    if (accentTimer.current !== null) window.clearTimeout(accentTimer.current)
+    setPoppedAccent(key)
+    accentTimer.current = window.setTimeout(() => {
+      setPoppedAccent(null)
+      accentTimer.current = null
+    }, 440)
+    triggerPreviewPop()
+  }
+
+  function triggerFontPop(key: string) {
+    if (fontTimer.current !== null) window.clearTimeout(fontTimer.current)
+    setPoppedFont(key)
+    fontTimer.current = window.setTimeout(() => {
+      setPoppedFont(null)
+      fontTimer.current = null
+    }, 440)
+    triggerPreviewPop()
+  }
 
   const color = deriveColors(prefs).accent
   const customColor =
@@ -126,6 +169,7 @@ export default function ThemeSettings() {
       customFontName: fontFile.name,
       themeFont: 'custom',
     })
+    triggerFontPop('custom')
   }
 
   const surfaceLabel = gatorMode
@@ -145,7 +189,10 @@ export default function ThemeSettings() {
     <main className="screen st-screen">
       <SettingsHeader title="Theme & fonts" />
 
-      <div className="st-theme-preview stagger-in">
+      <div
+        className="st-theme-preview stagger-in"
+        data-pop={previewPop !== 'idle' ? previewPop : undefined}
+      >
         <div className="st-theme-preview-head">
           <div className="st-theme-preview-copy">
             <span className="eyebrow">Live preview</span>
@@ -174,7 +221,10 @@ export default function ThemeSettings() {
         <ToggleRow
           label="Dark mode"
           checked={prefs.darkMode}
-          onChange={() => void save({ darkMode: !prefs.darkMode })}
+          onChange={() => {
+            triggerPreviewPop()
+            void save({ darkMode: !prefs.darkMode })
+          }}
         />
       </Group>
 
@@ -196,8 +246,10 @@ export default function ThemeSettings() {
               key={key}
               disabled={gatorMode}
               aria-pressed={!gatorMode && prefs.themeColor === key}
+              data-pop={poppedAccent === key ? 'true' : undefined}
               onClick={() => {
                 setEditingCustom(false)
+                triggerAccentPop(key)
                 void save({ themeColor: key })
               }}
             >
@@ -225,7 +277,10 @@ export default function ThemeSettings() {
             initial={customColor}
             apply={async (value) => {
               const ok = await save({ themeColor: 'custom', customThemeColor: value })
-              if (ok) setEditingCustom(false)
+              if (ok) {
+                triggerPreviewPop()
+                setEditingCustom(false)
+              }
               return ok
             }}
           />
@@ -237,9 +292,13 @@ export default function ThemeSettings() {
           <button
             type="button"
             key={key}
-            className="st-row st-action"
+            className="st-row st-action st-font-row"
             aria-pressed={prefs.themeFont === key}
-            onClick={() => void save({ themeFont: key })}
+            data-pop={poppedFont === key ? 'true' : undefined}
+            onClick={() => {
+              triggerFontPop(key)
+              void save({ themeFont: key })
+            }}
           >
             <span style={{ fontFamily: `"${label}", sans-serif`, fontSize: 21 }}>{label}</span>
             {prefs.themeFont === key && <Check className="st-selected" size={18} />}
@@ -248,9 +307,13 @@ export default function ThemeSettings() {
         {prefs.customFontBlob && (
           <button
             type="button"
-            className="st-row st-action"
+            className="st-row st-action st-font-row"
             aria-pressed={prefs.themeFont === 'custom'}
-            onClick={() => void save({ themeFont: 'custom' })}
+            data-pop={poppedFont === 'custom' ? 'true' : undefined}
+            onClick={() => {
+              triggerFontPop('custom')
+              void save({ themeFont: 'custom' })
+            }}
           >
             <span>{prefs.customFontName || 'Uploaded font'}</span>
             {prefs.themeFont === 'custom' && <Check className="st-selected" size={18} />}

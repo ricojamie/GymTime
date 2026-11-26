@@ -18,7 +18,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/assets\//, /^\/icons\//, /\.webmanifest$/],
-        globPatterns: ['**/*.{html,js,css,woff2,png,svg,webmanifest}'],
+        globPatterns: ['**/*.{html,js,css,woff2,png,webp,svg,webmanifest}'],
       },
     }),
   ],

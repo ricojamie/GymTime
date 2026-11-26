@@ -39,6 +39,8 @@ function VernierDial({ value, step, unit, pins, onChange }: {
   const interacting = useRef(false)
   const lastFromScroll = useRef<number | null>(null)
   const [start] = useState(value)
+  const [dragging, setDragging] = useState(false)
+  const [tickPulse, setTickPulse] = useState(0)
   const max = Math.max(unit === 'reps' ? 200 : 1000, start + 150 * step, ...pins.map(p => p.value + 20 * step))
   const count = Math.min(20000, Math.ceil(max / step))
   const spacing = 12
@@ -53,11 +55,12 @@ function VernierDial({ value, step, unit, pins, onChange }: {
     const el = track.current
     if (!el) return
     let settle: ReturnType<typeof setTimeout> | undefined
-    const endInteraction = () => { interacting.current = false }
+    const endInteraction = () => { interacting.current = false; setDragging(false) }
     const snap = () => {
       clearTimeout(settle)
       settle = setTimeout(() => {
         interacting.current = false
+        setDragging(false)
         const tick = Math.round(el.scrollLeft / spacing) * spacing
         if (Math.abs(el.scrollLeft - tick) >= .5) el.scrollLeft = tick
       }, 130)
@@ -81,6 +84,7 @@ function VernierDial({ value, step, unit, pins, onChange }: {
     const n = Math.max(0, Math.min(count, Math.round(track.current.scrollLeft / spacing))) * step
     if (n === lastFromScroll.current) return
     lastFromScroll.current = n
+    setTickPulse(t => t + 1)
     onChange(n)
   }
   const pinGroups = new Map<number, string[]>()
@@ -89,14 +93,14 @@ function VernierDial({ value, step, unit, pins, onChange }: {
     const idx = Math.round(p.value / step)
     pinGroups.set(idx, [...(pinGroups.get(idx) ?? []), p.label])
   }
-  return <div className="log-dial">
+  return <div className={'log-dial' + (dragging ? ' is-dragging' : '')}>
     <div role="slider" tabIndex={0} aria-label={unit === 'reps' ? 'Repetition dial' : 'Weight dial'}
       aria-valuemin={0} aria-valuemax={count * step} aria-valuenow={value} aria-valuetext={value + ' ' + unit}
       className="log-dial-track" ref={track} onScroll={read}
-      onPointerDown={() => { interacting.current = true }}
-      onPointerUp={() => { interacting.current = false }}
-      onPointerCancel={() => { interacting.current = false }}
-      onWheel={() => { interacting.current = true }}
+      onPointerDown={() => { interacting.current = true; setDragging(true) }}
+      onPointerUp={() => { interacting.current = false; setDragging(false) }}
+      onPointerCancel={() => { interacting.current = false; setDragging(false) }}
+      onWheel={() => { interacting.current = true; setDragging(true) }}
       onKeyDown={event => {
         let next = value
         if (event.key === 'ArrowRight' || event.key === 'ArrowUp') next += step
@@ -105,12 +109,19 @@ function VernierDial({ value, step, unit, pins, onChange }: {
         else if (event.key === 'End') next = count * step
         else return
         event.preventDefault()
+        setTickPulse(t => t + 1)
         onChange(Math.max(0, Math.min(count * step, next)))
       }}>
       <div className="log-dial-bed" style={{ width: 'calc(100% + ' + (count * spacing) + 'px)' }}>
         <svg aria-hidden="true" className="log-dial-scale" style={{ left: 'calc((100% - ' + (count * spacing) + 'px) / 2)' }} height="82" width={count * spacing + 1}>
           <defs><pattern id={patternId} width={spacing * 10} height={82} patternUnits="userSpaceOnUse">
-            {Array.from({ length: 10 }, (_, i) => <path key={i} d={'M' + (i * spacing + .5) + ' 29v' + (i === 0 ? 25 : i === 5 ? 18 : 9)} />)}
+            {Array.from({ length: 10 }, (_, i) => (
+              <path
+                key={i}
+                className={i === 0 ? 'log-dial-major' : i === 5 ? 'log-dial-mid' : 'log-dial-minor'}
+                d={'M' + (i * spacing + .5) + ' 29v' + (i === 0 ? 25 : i === 5 ? 18 : 9)}
+              />
+            ))}
           </pattern></defs>
           <rect width="100%" height="82" fill={'url(#' + patternId + ')'} />
           {labels}
@@ -118,7 +129,7 @@ function VernierDial({ value, step, unit, pins, onChange }: {
         </svg>
       </div>
     </div>
-    <span aria-hidden="true" className="log-dial-pointer" />
+    <span key={tickPulse} aria-hidden="true" className={'log-dial-pointer' + (tickPulse > 0 ? ' is-tick' : '')} />
   </div>
 }
 
@@ -126,6 +137,18 @@ export default function Keypad({ field, value, unit, weightUnit, pins, onChange,
   const [raw, setRaw] = useState(() => textValue(field, value))
   const [fresh, setFresh] = useState(true)
   const [dial, setDial] = useState(false)
+  const [tapped, setTapped] = useState<{ id: string; tick: number } | null>(null)
+  const tapTick = useRef(0)
+  const [valAnim, setValAnim] = useState<{ dir: 'up' | 'down' | 'edit'; tick: number }>({ dir: 'edit', tick: 0 })
+  useEffect(() => {
+    if (!tapped) return
+    const t = window.setTimeout(() => setTapped(null), 220)
+    return () => window.clearTimeout(t)
+  }, [tapped])
+  function markTap(id: string) {
+    tapTick.current += 1
+    setTapped({ id, tick: tapTick.current })
+  }
   const canDial = field === 'weight' || field === 'reps'
   const punctuation = field === 'durationSeconds' ? ':' : '.'
   const allowFraction = field !== 'reps' && field !== 'durationSeconds'
@@ -139,14 +162,19 @@ export default function Keypad({ field, value, unit, weightUnit, pins, onChange,
       if (!/^\d$/.test(key) || next.length >= 9 || (next.includes(':') && next.split(':')[1].length >= 2)) return
       next = next === '0' ? key : next + key
     }
+    markTap(key)
     setFresh(false)
     setRaw(next)
+    setValAnim(a => ({ dir: key === 'back' ? 'down' : 'edit', tick: a.tick + 1 }))
     onChange(readValue(field, next))
   }
-  function setExact(n: number) {
+  function setExact(n: number, tapId?: string) {
     const bounded = Math.max(0, Math.min(field === 'rpe' ? 10 : 1e9, n))
+    const prev = value ?? 0
+    if (tapId) markTap(tapId)
     setRaw(textValue(field, bounded))
     setFresh(true)
+    setValAnim(a => ({ dir: bounded > prev ? 'up' : bounded < prev ? 'down' : 'edit', tick: a.tick + 1 }))
     onChange(bounded)
   }
   const step = field === 'weight' ? weightUnit === 'kg' ? 2.5 : 5 : 1
@@ -167,18 +195,27 @@ export default function Keypad({ field, value, unit, weightUnit, pins, onChange,
   }, [])
   return <BottomSheet title={fieldLabels[field]} onClose={onClose}>
     <div className="log-pad">
-      <div className="log-pad-display"><output aria-label={fieldLabels[field] + ' value'}><span key={raw || 'empty'} className="log-pad-val">{raw || '—'}</span></output><span>{unit}</span></div>
+      <div className="log-pad-display">
+        <output aria-label={fieldLabels[field] + ' value'}>
+          <span key={valAnim.tick + ':' + (raw || 'empty')} className="log-pad-val" data-dir={valAnim.tick > 0 ? valAnim.dir : undefined}>
+            {raw || '—'}
+          </span>
+        </output>
+        <span>{unit}</span>
+      </div>
       {canDial && <div className="log-mode" data-dial={dial || undefined} role="group" aria-label="Entry method">
         <button aria-pressed={!dial} onClick={() => setDial(false)}>Keypad</button><button aria-pressed={dial} onClick={() => setDial(true)}>Dial</button>
       </div>}
-      {dial && canDial
-        ? <VernierDial value={value ?? 0} unit={unit} step={field === 'weight' && weightUnit === 'kg' ? .5 : 1} pins={pins} onChange={setExact} />
-        : <div className="log-pad-grid">{['1','2','3','4','5','6','7','8','9',punctuation,'0','back'].map(k =>
-          <button key={k} disabled={k === '.' && !allowFraction} aria-label={k === 'back' ? 'Backspace' : k} onClick={() => write(k)}><span aria-hidden="true">{k === 'back' ? <Delete size={20} /> : k}</span></button>)}</div>}
+      <div key={dial && canDial ? 'dial' : 'keys'} className="log-pad-panel">
+        {dial && canDial
+          ? <VernierDial value={value ?? 0} unit={unit} step={field === 'weight' && weightUnit === 'kg' ? .5 : 1} pins={pins} onChange={n => setExact(n)} />
+          : <div className="log-pad-grid">{['1','2','3','4','5','6','7','8','9',punctuation,'0','back'].map(k =>
+            <button key={k} className={tapped?.id === k ? 'is-tapped' : undefined} data-key-action={k === 'back' ? 'back' : undefined} disabled={k === '.' && !allowFraction} aria-label={k === 'back' ? 'Backspace' : k} onClick={() => write(k)}><span aria-hidden="true">{k === 'back' ? <Delete size={20} /> : k}</span></button>)}</div>}
+      </div>
       <div className="log-pad-nudges">
-        <button aria-label={'Decrease ' + adjustment} onClick={() => setExact((value ?? 0) - step)}><Minus size={15} /><span>{step}</span></button>
-        <button aria-label={'Increase ' + adjustment} onClick={() => setExact((value ?? 0) + step)}><Plus size={15} /><span>{step}</span></button>
-        {onNext && <button onClick={onNext}>Next <ArrowRight size={17} /></button>}</div>
+        <button className={'log-pad-step log-pad-step-dec' + (tapped?.id === 'dec' ? ' is-tapped' : '')} aria-label={'Decrease ' + adjustment} onClick={() => setExact((value ?? 0) - step, 'dec')}><Minus size={15} /><span>{step}</span></button>
+        <button className={'log-pad-step log-pad-step-inc' + (tapped?.id === 'inc' ? ' is-tapped' : '')} aria-label={'Increase ' + adjustment} onClick={() => setExact((value ?? 0) + step, 'inc')}><Plus size={15} /><span>{step}</span></button>
+        {onNext && <button className={'log-pad-next' + (tapped?.id === 'next' ? ' is-tapped' : '')} onClick={() => { markTap('next'); onNext() }}><span>Next</span> <ArrowRight size={17} /></button>}</div>
       {error && <p role="alert" className="log-error">{error}</p>}
       <button disabled={busy} className="btn primary log-commit" onClick={onCommit}><Check size={19} />{action}</button>
     </div>

@@ -17,8 +17,11 @@ export default function RestTimerBar({ defaultSeconds }: { defaultSeconds: numbe
   const [error, setError] = useState('')
   const [total, setTotal] = useState(() => Math.max(1, defaultSeconds))
   const [completedFlash, setCompletedFlash] = useState(false)
-  const [nudgePulse, setNudgePulse] = useState(0)
+  const [justStarted, setJustStarted] = useState(false)
+  const [nudge, setNudge] = useState<{ dir: 'up' | 'down'; tick: number } | null>(null)
+  const [lastNudge, setLastNudge] = useState<{ dir: 'up' | 'down'; count: number }>({ dir: 'up', count: 0 })
   const prevRemaining = useRef(remaining)
+  const prevRunning = useRef(remaining > 0)
   const manualSkip = useRef(false)
 
   const preferences = useLiveQuery(() => db.preferences.get('default'), []) ?? defaultPreferences
@@ -31,6 +34,19 @@ export default function RestTimerBar({ defaultSeconds }: { defaultSeconds: numbe
   useEffect(() => {
     if (remaining > total) setTotal(remaining)
   }, [remaining, total])
+
+  useEffect(() => {
+    if (!prevRunning.current && running) {
+      setJustStarted(true)
+    }
+    prevRunning.current = running
+  }, [running])
+
+  useEffect(() => {
+    if (!justStarted) return
+    const t = window.setTimeout(() => setJustStarted(false), 440)
+    return () => window.clearTimeout(t)
+  }, [justStarted])
 
   useEffect(() => {
     if (prevRemaining.current > 0 && remaining === 0) {
@@ -48,8 +64,17 @@ export default function RestTimerBar({ defaultSeconds }: { defaultSeconds: numbe
     return () => window.clearTimeout(t)
   }, [completedFlash])
 
+  useEffect(() => {
+    if (!nudge) return
+    const t = window.setTimeout(() => setNudge(null), 340)
+    return () => window.clearTimeout(t)
+  }, [nudge])
+
   function adjust(by: number) {
-    setNudgePulse(p => p + 1)
+    const dir: 'up' | 'down' = by > 0 ? 'up' : 'down'
+    const nextCount = lastNudge.count + 1
+    setLastNudge({ dir, count: nextCount })
+    setNudge({ dir, tick: nextCount })
     if (running) {
       if (remaining + by > total) setTotal(remaining + by)
       adjustRestTimer(by)
@@ -92,20 +117,34 @@ export default function RestTimerBar({ defaultSeconds }: { defaultSeconds: numbe
 
   return <>
     <div
-      className={'rest-strip' + (running ? ' is-running' : '') + (completedFlash ? ' is-complete' : '')}
+      className={
+        'rest-strip' +
+        (running ? ' is-running' : '') +
+        (justStarted ? ' is-starting' : '') +
+        (completedFlash ? ' is-complete' : '')
+      }
       data-urgent={urgent || undefined}
+      data-nudge={nudge?.dir}
       style={{ '--rest-progress': progress } as CSSProperties}
     >
-      <span className="rest-progress" aria-hidden="true" />
+      <span className="rest-progress-track" aria-hidden="true">
+        <span className="rest-progress" />
+      </span>
       <button type="button" className="rest-readout" aria-label={'Rest timer settings, ' + time} onClick={() => setOpen(true)}>
-        {isGator ? <SwoleGator pose="spotter" size={26} /> : <Timer size={19} aria-hidden="true" />}
+        <span className="rest-icon" aria-hidden="true">
+          {isGator
+            ? <SwoleGator pose="spotter" size={26} celebrate={completedFlash} />
+            : completedFlash
+              ? <Check size={19} />
+              : <Timer size={19} />}
+        </span>
         <span>
           <span className="rest-label">{completedFlash ? 'Rest complete' : 'Rest timer'}</span>
-          <strong key={nudgePulse}>{time}</strong>
+          <strong key={lastNudge.count} className="rest-time-val" data-nudge-dir={lastNudge.count > 0 ? lastNudge.dir : undefined}>{time}</strong>
         </span>
       </button>
-      <button type="button" className="rest-nudge" disabled={shown <= 0} onClick={() => adjust(-15)} aria-label="Subtract 15 seconds">-15s</button>
-      <button type="button" className="rest-nudge" onClick={() => adjust(15)} aria-label="Add 15 seconds">+15s</button>
+      <button type="button" className={'rest-nudge rest-nudge-down' + (nudge?.dir === 'down' ? ' is-pulsing' : '')} disabled={shown <= 0} onClick={() => adjust(-15)} aria-label="Subtract 15 seconds">-15s</button>
+      <button type="button" className={'rest-nudge rest-nudge-up' + (nudge?.dir === 'up' ? ' is-pulsing' : '')} onClick={() => adjust(15)} aria-label="Add 15 seconds">+15s</button>
       <button type="button" className="rest-action" disabled={!running && !idleSeconds} onClick={startOrSkip}>
         {running ? <SkipForward size={15} /> : <Play size={15} />} {running ? 'Skip' : 'Start'}
       </button>
@@ -113,9 +152,9 @@ export default function RestTimerBar({ defaultSeconds }: { defaultSeconds: numbe
     {open && <BottomSheet title="Rest timer" onClose={() => setOpen(false)}>
       <div className="rest-sheet" data-urgent={urgent || undefined}>
         <div className="rest-sheet-time">
-          <button type="button" className="btn" disabled={shown <= 0} onClick={() => adjust(-5)} aria-label="Subtract 5 seconds"><Minus size={15} />5s</button>
-          <strong role="timer">{time}</strong>
-          <button type="button" className="btn" onClick={() => adjust(5)} aria-label="Add 5 seconds"><Plus size={15} />5s</button>
+          <button type="button" className={'btn' + (nudge?.dir === 'down' ? ' is-pulsing' : '')} disabled={shown <= 0} onClick={() => adjust(-5)} aria-label="Subtract 5 seconds"><Minus size={15} />5s</button>
+          <strong key={lastNudge.count} role="timer" className="rest-time-val" data-nudge-dir={lastNudge.count > 0 ? lastNudge.dir : undefined}>{time}</strong>
+          <button type="button" className={'btn' + (nudge?.dir === 'up' ? ' is-pulsing' : '')} onClick={() => adjust(5)} aria-label="Add 5 seconds"><Plus size={15} />5s</button>
         </div>
         <button className="rest-sheet-row" onClick={reset}><RotateCcw size={18} /><span>Reset to {formatRestTime(preset)}</span></button>
         <button className="rest-sheet-row" role="switch" aria-checked={preferences.timerAudioEnabled} onClick={() => void toggle('timerAudioEnabled')}>

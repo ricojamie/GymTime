@@ -86,19 +86,21 @@ export default function RoutineStart() {
 
   return (
     <main className="screen rt">
-      <Link className="rt-back" to={back}>
-        <ArrowLeft size={18} aria-hidden="true" />
-        {routine.name}
-      </Link>
-      <div className="rt-start-hero">
-        <div className="rt-start-title">
-          <span className="eyebrow">
-            Day {days.findIndex(d => d.id === day.id) + 1} of {days.length}
-          </span>
-          <h1>{day.name}</h1>
+      <header className="rt-sticky-head rt-sticky-head--hero">
+        <Link className="rt-back" to={back}>
+          <ArrowLeft size={18} aria-hidden="true" />
+          {routine.name}
+        </Link>
+        <div className="rt-start-hero">
+          <div className="rt-start-title">
+            <span className="eyebrow">
+              Day {days.findIndex(d => d.id === day.id) + 1} of {days.length}
+            </span>
+            <h1>{day.name}</h1>
+          </div>
+          {gatorMode && <SwoleGator pose="spotter" size={76} interactive className="rt-start-gator" />}
         </div>
-        {gatorMode && <SwoleGator pose="spotter" size={76} interactive className="rt-start-gator" />}
-      </div>
+      </header>
       <dl className="surface rt-stat-grid stagger-in" style={{ '--stagger-i': 0 } as CSSProperties}>
         <div>
           <dt>Exercises</dt>
@@ -110,9 +112,14 @@ export default function RoutineStart() {
         </div>
       </dl>
       <h2>Day plan</h2>
-      <div className="surface rt-list stagger-in" style={{ '--stagger-i': 1 } as CSSProperties}>
+      <div className="surface rt-list">
         {planBlocks(rows).map((block, index) => (
-          <div className="rt-block" data-superset={block.length > 1 ? 'true' : undefined} key={block[0].id}>
+          <div
+            className="rt-block stagger-in"
+            style={{ '--stagger-i': Math.min(index + 1, 8) } as CSSProperties}
+            data-superset={block.length > 1 ? 'true' : undefined}
+            key={block[0].id}
+          >
             <span className="eyebrow">
               {block.length > 1 ? 'Superset ' : 'Exercise '}
               {String(index + 1).padStart(2, '0')}
@@ -141,14 +148,14 @@ export default function RoutineStart() {
         </p>
       )}
       {active ? (
-        <Link to="/workout/active" className="btn primary">
+        <Link to="/workout/active" className="btn primary rt-cta-start">
           Resume current workout
           <ArrowRight size={18} aria-hidden="true" />
         </Link>
       ) : (
         <button
           type="button"
-          className="btn primary"
+          className="btn primary rt-cta-start"
           disabled={busy || !rows.length}
           onClick={async () => {
             if (busy) return

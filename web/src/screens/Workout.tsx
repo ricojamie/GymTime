@@ -149,9 +149,12 @@ export default function Workout() {
   }
 
   return <div className="screen wk-screen">
-    <header className="wk-heading">
+    <header className="wk-heading wk-head">
       <button className="icon-button" aria-label="Back to home" onClick={() => navigate('/')}><ArrowLeft /></button>
-      <h1>{name}</h1>
+      <div className="wk-head-title">
+        <span className="wk-led wk-head-led" aria-hidden="true" />
+        <h1>{name}</h1>
+      </div>
       {gatorMode && <SwoleGator pose="badge" size={32} label="" className="wk-head-gator" />}
     </header>
     <div className="wk-overview-grid">
@@ -172,7 +175,7 @@ export default function Workout() {
         {next && <button className="wk-next surface hover-lift stagger-in" style={{ '--stagger-i': 1 } as CSSProperties} onClick={() => openExercise(next.exercise.id)}>
           <span><small>{next.started ? 'Continue' : 'Up next'}</small><strong>{next.exercise.name}</strong>
           <span className="wk-meta">{next.exercise.targetMuscle}{next.target > 0 && ' · ' + next.working + ' / ' + next.target + ' sets'}</span></span>
-          <span className="wk-go"><ArrowRight size={23} /></span>
+          <span className="wk-go"><ArrowRight size={23} className="wk-go-arrow" /></span>
         </button>}
         <section aria-labelledby="wk-plan-title">
           <div className="wk-section-title"><h2 id="wk-plan-title">{active.routineNameSnapshot || 'Session exercises'}</h2><span>{rows.length}</span></div>
@@ -184,16 +187,18 @@ export default function Workout() {
             {rows.map((row, i) => {
               const ex = row.exercise
               const done = row.target > 0 && row.working >= row.target
-              return <li key={row.instance?.id ?? 'exercise-' + ex.id} className="stagger-in" style={{ '--stagger-i': Math.min(i, 12) } as CSSProperties}>
-                <span className={'wk-ticket' + (done ? ' done' : '')}>{done ? <Check size={14} aria-label="Target met" /> : String(i + 1).padStart(2, '0')}</span>
+              return <li key={row.instance?.id ?? 'exercise-' + ex.id} className="wk-row-item stagger-in" style={{ '--stagger-i': Math.min(i, 10) } as CSSProperties}>
+                <span key={done ? 'done' : 'num'} className={'wk-ticket' + (done ? ' done' : '')}>{done ? <Check size={14} aria-label="Target met" /> : String(i + 1).padStart(2, '0')}</span>
                 <button className="wk-timeline-row" onClick={() => openExercise(ex.id)}>
                   <span className="wk-grow"><strong>{ex.name}</strong><small>
-                    {ex.targetMuscle} · {row.target > 0 ? row.working + ' / ' + row.target + ' sets' : row.working + (row.working === 1 ? ' set' : ' sets')}
+                    {ex.targetMuscle} · {row.target > 0
+                      ? <span key={row.working + '/' + row.target} className={'wk-set-badge' + (done ? ' is-done' : row.working > 0 ? ' is-active' : '')}>{row.working} / {row.target} sets</span>
+                      : <span key={row.working} className={'wk-set-badge' + (row.working > 0 ? ' is-active' : '')}>{row.working} {row.working === 1 ? 'set' : 'sets'}</span>}
                     {row.warmups > 0 && ' · ' + row.warmups + (row.warmups === 1 ? ' warm-up' : ' warm-ups')}
                   </small>{row.superset && <span className="wk-link"><Link2 size={14} /> Superset</span>}</span>
-                  <ChevronRight size={17} />
+                  <ChevronRight size={17} className="wk-row-chev" aria-hidden="true" />
                 </button>
-                {row.instance && !row.started && <button className="icon-button" aria-label={'Options for ' + ex.name} onClick={() => { setError(''); setEditId(row.instance!.id) }}><MoreHorizontal size={20} /></button>}
+                {row.instance && !row.started && <button className="icon-button wk-row-more" aria-label={'Options for ' + ex.name} onClick={() => { setError(''); setEditId(row.instance!.id) }}><MoreHorizontal size={20} /></button>}
               </li>
             })}
           </ol>
@@ -202,8 +207,8 @@ export default function Workout() {
     </div>
     <footer className="wk-actions">
       <div className="wk-action-pair">
-        <button className="btn" onClick={() => navigate(addRoute)}><Plus size={18} />Add exercise</button>
-        <button className="btn primary" onClick={() => { setError(''); setFinish(true) }}>Finish<Check size={18} /></button>
+        <button className="btn wk-btn-add" onClick={() => navigate(addRoute)}><Plus size={18} className="wk-btn-plus" />Add exercise</button>
+        <button className="btn primary wk-btn-finish" onClick={() => { setError(''); setFinish(true) }}>Finish<Check size={18} className="wk-btn-check" /></button>
       </div>
     </footer>
     {dialogOpen && <BottomSheet title={finish ? 'Finish workout?' : editing?.exercise.name || 'Exercise'} onClose={closeDialog}>

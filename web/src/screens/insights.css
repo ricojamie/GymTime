@@ -10,7 +10,19 @@
 }
 .il-page-head:has(>a:first-child) { justify-content: flex-start; }
 .il-page-head .icon-button { flex: 0 0 44px; display: grid; place-items: center; }
-.il-period-line { flex-wrap: wrap; }
+.il-period-line {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 6;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-radius: var(--radius-surface, 16px);
+  background: var(--bg-chrome);
+  backdrop-filter: blur(18px) saturate(165%);
+  -webkit-backdrop-filter: blur(18px) saturate(165%);
+  border: 1px solid var(--border-hairline);
+  box-shadow: var(--bevel-inset), 0 10px 26px -14px rgba(0, 0, 0, .48);
+}
 .il-period-line > span, .il-page small, .il-page .il-note, .il-page .il-empty {
   font-size: 13px;
   line-height: 1.4;
@@ -51,6 +63,7 @@
 }
 .il-segments button[aria-pressed=true] { color: var(--accent-ink); }
 .il-panel, .il-telemetry, .il-month-summary { padding: 18px; min-width: 0; }
+.il-panel { overflow-x: clip; }
 .il-panel > h2, .il-panel-head { margin-bottom: 12px; }
 .il-panel-head h2 { margin: 0; }
 .il-telemetry dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -200,47 +213,177 @@
   60% { transform: scaleX(1.55); }
   100% { transform: scaleX(1); }
 }
+@keyframes il-chip-pop {
+  0% { transform: scale(.86); }
+  52% { transform: scale(1.1); }
+  78% { transform: scale(.97); }
+  100% { transform: scale(1); }
+}
+@keyframes il-range-pop {
+  0% { opacity: 0; transform: translate3d(8px, 0, 0) scale(.96); }
+  68% { opacity: 1; transform: translate3d(-1px, 0, 0) scale(1.01); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes il-muscle-fly-in {
+  0% { opacity: 0; transform: translate3d(-12px, 12px, 0) scale(.96); }
+  68% { opacity: 1; transform: translate3d(1px, -2px, 0) scale(1.01); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes il-record-fly-in {
+  0% { opacity: 0; transform: translate3d(16px, 10px, 0) scale(.965); }
+  68% { opacity: 1; transform: translate3d(-2px, -1px, 0) scale(1.008); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes il-trophy-pop {
+  0% { opacity: 0; transform: scale(.55) rotate(-16deg); }
+  52% { opacity: 1; transform: scale(1.26) rotate(8deg); }
+  78% { transform: scale(.94) rotate(-4deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@keyframes il-obs-fly-in {
+  0% { opacity: 0; transform: translate3d(-10px, 8px, 0) scale(.98); }
+  70% { opacity: 1; transform: translate3d(1px, 0, 0) scale(1.003); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  :root:not([data-motion='reduced']) .il-segments::before {
-    transition: transform 240ms var(--ease-spring, cubic-bezier(.18,1.28,.32,1));
+  :root[data-motion="full"] .il-segments::before {
+    transition: transform 300ms var(--ease-spring, cubic-bezier(.18, 1.38, .32, 1));
   }
-  :root:not([data-motion='reduced']) .il-cadence i {
-    transition: width 360ms var(--ease-dramatic, cubic-bezier(.16,1,.3,1));
+  :root[data-motion="full"] .il-segments button {
+    transition: transform 200ms var(--ease-spring, cubic-bezier(.18, 1.38, .32, 1)), color 160ms ease;
   }
-  :root:not([data-motion='reduced']) .il-cadence i::after {
-    content: '';
+  :root[data-motion="full"] .il-segments button:active {
+    transform: scale(.92);
+  }
+  :root[data-motion="full"] .il-segments button[aria-pressed="true"] {
+    animation: il-chip-pop 380ms var(--ease-spring, cubic-bezier(.18, 1.42, .32, 1));
+  }
+  :root[data-motion="full"] .il-period-range {
+    animation: il-range-pop 320ms var(--ease-spring, cubic-bezier(.18, 1.28, .32, 1)) backwards;
+  }
+  :root[data-motion="full"] .il-cadence i {
+    transition: width 380ms var(--ease-dramatic, cubic-bezier(.16, 1, .3, 1));
+  }
+  :root[data-motion="full"] .il-cadence i::after {
+    content: "";
     display: block;
     height: 100%;
     background: var(--accent-ink);
     opacity: 0;
     transform-origin: left;
-    animation: il-read-scale 400ms var(--ease);
+    animation: il-read-scale 420ms var(--ease);
   }
-  :root:not([data-motion='reduced']) .il-month-summary .il-telemetry::before { transform-origin: left; animation: il-rule-register 380ms var(--ease); }
-  :root:not([data-motion='reduced']) .il-details summary svg { transition: transform 160ms var(--ease); }
-  :root:not([data-motion='reduced']) :is(.il-linkrow, .il-month-link) > svg:last-child { transition: transform 160ms var(--ease-spring, ease); }
-  :root:not([data-motion='reduced']) :is(.il-linkrow, .il-month-link):focus-visible > svg:last-child { transform: translateX(3px); }
-  :root:not([data-motion='reduced']) .il-muscles button,
-  :root:not([data-motion='reduced']) .il-record {
-    transition: background-color 140ms ease, transform 140ms var(--ease-spring, ease);
+  :root[data-motion="full"] .il-month-summary .il-telemetry::before {
+    transform-origin: left;
+    animation: il-rule-register 380ms var(--ease);
   }
-  :root:not([data-motion='reduced']) .il-record::after {
-    content: '';
+  :root[data-motion="full"] .il-obs-enter {
+    animation: il-obs-fly-in 360ms var(--ease-spring, cubic-bezier(.18, 1.28, .32, 1)) calc(var(--stagger-i, 0) * 55ms) backwards;
+  }
+  :root[data-motion="full"] .il-muscle-row {
+    animation: il-muscle-fly-in 400ms var(--ease-spring, cubic-bezier(.18, 1.3, .32, 1)) calc(var(--stagger-i, 0) * 38ms) backwards;
+  }
+  :root[data-motion="full"] .il-record-enter {
+    animation: il-record-fly-in 420ms var(--ease-spring, cubic-bezier(.18, 1.3, .32, 1)) calc(var(--stagger-i, 0) * 52ms) backwards;
+  }
+  :root[data-motion="full"] .il-record-enter .il-pr-mark svg {
+    animation: il-trophy-pop 500ms var(--ease-spring, cubic-bezier(.18, 1.42, .32, 1)) calc(90ms + var(--stagger-i, 0) * 52ms) backwards;
+  }
+  :root[data-motion="full"] .il-details summary svg {
+    transition: transform 200ms var(--ease-spring, cubic-bezier(.18, 1.32, .32, 1));
+  }
+  :root[data-motion="full"] :is(.il-linkrow, .il-month-link) {
+    transition: transform 220ms var(--ease-spring, cubic-bezier(.18, 1.35, .32, 1)), background-color 160ms ease, border-color 160ms ease, box-shadow 180ms ease;
+  }
+  :root[data-motion="full"] :is(.il-linkrow, .il-month-link) > svg {
+    transition: transform 240ms var(--ease-spring, cubic-bezier(.18, 1.4, .32, 1)), color 160ms ease;
+  }
+  :root[data-motion="full"] .il-linkrow:active {
+    transform: scale(.985) translateX(2px);
+  }
+  :root[data-motion="full"] .il-month-link:active {
+    transform: scale(.972);
+  }
+  :root[data-motion="full"] :is(.il-linkrow, .il-month-link):is(:focus-visible, :active) > svg:last-child {
+    transform: translateX(6px) scale(1.1);
+    color: var(--accent-ink);
+  }
+  :root[data-motion="full"] .il-muscles button,
+  :root[data-motion="full"] .il-record {
+    transition: background-color 150ms ease, transform 220ms var(--ease-spring, cubic-bezier(.18, 1.36, .32, 1)), box-shadow 180ms ease;
+  }
+  :root[data-motion="full"] .il-record .il-pr-mark svg,
+  :root[data-motion="full"] .il-record > span:first-child svg {
+    transition: transform 240ms var(--ease-spring, cubic-bezier(.18, 1.42, .32, 1));
+  }
+  :root[data-motion="full"] .il-record::after {
+    content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(110deg, transparent 25%, rgba(255,255,255,.09) 50%, transparent 75%);
-    transform: translateX(-120%);
+    background: linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, .13) 50%, transparent 75%);
+    transform: translateX(-125%);
     pointer-events: none;
-    transition: transform 520ms var(--ease-dramatic, cubic-bezier(.16,1,.3,1));
+    transition: transform 520ms var(--ease-dramatic, cubic-bezier(.16, 1, .3, 1));
   }
-  :root:not([data-motion='reduced']) .il-muscles button:active,
-  :root:not([data-motion='reduced']) .il-record:active { transform: scale(.985); }
+  :root[data-motion="full"] .il-muscles button:active {
+    transform: scale(.955);
+    background: color-mix(in srgb, var(--bg-surface-hover) 72%, transparent);
+  }
+  :root[data-motion="full"] .il-record:active {
+    transform: scale(.968);
+    background: var(--bg-surface-hover);
+  }
+  :root[data-motion="full"] .il-record:active .il-pr-mark svg {
+    transform: scale(1.18) rotate(-8deg);
+  }
+  :root[data-motion="full"] .il-page-head .icon-button {
+    transition: transform 200ms var(--ease-spring, cubic-bezier(.18, 1.38, .32, 1)), background-color 150ms ease;
+  }
+  :root[data-motion="full"] .il-page-head .icon-button:active {
+    transform: scale(.9);
+  }
 }
-@media (prefers-reduced-motion: no-preference) and (hover:hover) and (pointer:fine) {
-  :root:not([data-motion='reduced']) :is(.il-linkrow, .il-month-link):hover > svg:last-child { transform: translateX(3px); }
-  :root:not([data-motion='reduced']) .il-record:hover { background: var(--bg-surface-hover); }
-  :root:not([data-motion='reduced']) .il-record:hover::after { transform: translateX(120%); }
-  :root:not([data-motion='reduced']) .il-muscles button:hover { background: color-mix(in srgb, var(--bg-surface-hover) 55%, transparent); }
+
+@media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
+  :root[data-motion="full"] .il-segments button:hover {
+    color: var(--ink-primary);
+    transform: scale(1.03);
+  }
+  :root[data-motion="full"] .il-linkrow:hover > svg:last-child {
+    transform: translateX(5px) scale(1.1);
+    color: var(--accent-ink);
+  }
+  :root[data-motion="full"] .il-month-link:hover {
+    transform: translateY(-3px) scale(1.012);
+  }
+  :root[data-motion="full"] .il-month-link:hover > svg:first-child {
+    transform: scale(1.12) rotate(-6deg);
+    color: var(--accent-ink);
+  }
+  :root[data-motion="full"] .il-month-link:hover > svg:last-child {
+    transform: translateX(6px) scale(1.12);
+    color: var(--accent-ink);
+  }
+  :root[data-motion="full"] .il-record:hover {
+    background: var(--bg-surface-hover);
+    transform: translateY(-2px) scale(1.012);
+  }
+  :root[data-motion="full"] .il-record:hover::after {
+    transform: translateX(125%);
+  }
+  :root[data-motion="full"] .il-record:hover .il-pr-mark svg,
+  :root[data-motion="full"] .il-record:hover > span:first-child svg {
+    transform: scale(1.22) rotate(-10deg);
+  }
+  :root[data-motion="full"] .il-muscles button:hover {
+    background: color-mix(in srgb, var(--bg-surface-hover) 72%, transparent);
+    transform: translateY(-2px) scale(1.015);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-ink) 20%, transparent);
+  }
+  :root[data-motion="full"] .il-page-head .icon-button:hover {
+    transform: translateY(-1.5px) scale(1.06);
+  }
 }
 @media (min-width: 800px) {
   .il-page .il-dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

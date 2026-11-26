@@ -87,6 +87,7 @@ export default function ExerciseSelect({ embedded = false }: { embedded?: boolea
   const handledCreate = useRef(0)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<Sort>(sorts[0])
+  const [filterBurst, setFilterBurst] = useState(0)
   const [sortOpen, setSortOpen] = useState(false)
   const [actions, setActions] = useState<Exercise | null>(null)
   const [detail, setDetail] = useState<Exercise | null>(null)
@@ -116,7 +117,7 @@ export default function ExerciseSelect({ embedded = false }: { embedded?: boolea
     })
   }, [query, muscles, exercises, mode, originInstance, currentMembers, sort, stats])
 
-  function changeMuscles(next: string[]) { setMuscles(next); if (!embedded) saveList(sessionKey, next) }
+  function changeMuscles(next: string[]) { setMuscles(next); setFilterBurst(n => n + 1); if (!embedded) saveList(sessionKey, next) }
   function changePick(ids: number[]) { setPicked(ids); saveList(pickKey, ids) }
   function setMode(next: 'browse' | 'build_superset') {
     const copy = new URLSearchParams(params)
@@ -220,17 +221,19 @@ export default function ExerciseSelect({ embedded = false }: { embedded?: boolea
       <h1>{heading}</h1>
       {gatorMode && <SwoleGator pose="badge" size={32} label="" className="ml-auto shrink-0" />}
     </header>}
-    <div className="lib-toolbar">
-      <label className="lib-search">
-        <Search size={18} aria-hidden="true"/>
-        <input type="search" aria-label="Search exercises" placeholder="Search exercises" value={query} onChange={e => setQuery(e.target.value)}/>
-        {query && <button type="button" className="icon-button" aria-label="Clear search" onClick={() => setQuery('')}><X size={16}/></button>}
-      </label>
-      <button type="button" className="lib-new" onClick={create} aria-label="Create exercise"><Plus size={19}/><span>New</span></button>
-    </div>
-    <div className="lib-filter-scroll" aria-label="Filter by muscle">
-      <button type="button" className="lib-chip" aria-pressed={!muscles.length} onClick={() => changeMuscles([])}>All</button>
-      {muscleGroups?.map(({ name }) => <button type="button" key={name} className="lib-chip" aria-pressed={muscles.includes(name)} onClick={() => changeMuscles(muscles.includes(name) ? muscles.filter(m => m !== name) : [...muscles, name])}>{name}</button>)}
+    <div className="lib-sticky-bar">
+      <div className="lib-toolbar">
+        <label className="lib-search">
+          <Search size={18} aria-hidden="true"/>
+          <input type="search" aria-label="Search exercises" placeholder="Search exercises" value={query} onChange={e => setQuery(e.target.value)}/>
+          {query && <button type="button" className="icon-button" aria-label="Clear search" onClick={() => setQuery('')}><X size={16}/></button>}
+        </label>
+        <button type="button" className="lib-new" onClick={create} aria-label="Create exercise"><Plus size={19}/><span>New</span></button>
+      </div>
+      <div className="lib-filter-scroll" aria-label="Filter by muscle">
+        <button type="button" className="lib-chip" aria-pressed={!muscles.length} onClick={() => changeMuscles([])}>All</button>
+        {muscleGroups?.map(({ name }) => <button type="button" key={name} className="lib-chip" aria-pressed={muscles.includes(name)} onClick={() => changeMuscles(muscles.includes(name) ? muscles.filter(m => m !== name) : [...muscles, name])}>{name}</button>)}
+      </div>
     </div>
     <div className="lib-list-head"><h2>{exercises ? results.length + ' exercises' : 'Exercises'}</h2>
       <button type="button" onClick={() => setSortOpen(true)}><ArrowUpDown size={15}/>{sort}</button>
@@ -242,25 +245,27 @@ export default function ExerciseSelect({ embedded = false }: { embedded?: boolea
       <h3>No matching exercises</h3>
       <button type="button" className="btn" onClick={create}>Create exercise</button>
     </div> :
-      <ul className="lib-exercises stagger-in" style={{ '--stagger-i': 0 } as CSSProperties}>
-        {results.map(ex => {
+      <ul key={filterBurst} className="lib-exercises">
+        {results.map((ex, idx) => {
           const rank = selectedIds.indexOf(ex.id)
-          return <li key={ex.id}>
+          const isPicked = multi && rank >= 0
+          return <li key={ex.id} className={'lib-ex-item stagger-in' + (isPicked ? ' is-picked' : '')} style={{ '--stagger-i': Math.min(idx, 10) } as CSSProperties}>
             <button type="button" className="lib-exercise" aria-pressed={multi ? rank !== -1 : undefined} disabled={busy} onClick={() => choose(ex)}>
-              {multi && <span className={'lib-rank' + (rank >= 0 ? ' picked' : '')}>{rank >= 0 ? rank + 1 : <Plus size={14}/>}</span>}
-              <span><strong>{ex.name}</strong><small>{ex.targetMuscle}<span aria-hidden="true"> · </span>{typeLabels[ex.logType]}</small></span>
+              {multi && <span key={rank >= 0 ? 'picked-' + rank : 'unpicked'} className={'lib-rank' + (rank >= 0 ? ' picked' : '')}>{rank >= 0 ? rank + 1 : <Plus size={14}/>}</span>}
+              <span className="lib-ex-copy"><strong>{ex.name}</strong><small>{ex.targetMuscle}<span aria-hidden="true"> · </span>{typeLabels[ex.logType]}</small></span>
+              {!multi && <ChevronRight size={16} className="lib-ex-chev" aria-hidden="true" />}
             </button>
             <button type="button" className="lib-icon" disabled={busy} aria-label={(ex.isStarred ? 'Unstar ' : 'Star ') + ex.name} aria-pressed={ex.isStarred} onClick={() => toggleFavorite(ex)}><Star size={17} fill={ex.isStarred ? 'currentColor' : 'none'}/></button>
             <button type="button" className="lib-icon" aria-label={'Options for ' + ex.name} onClick={() => setActions(ex)}><Ellipsis size={18}/></button>
           </li>
         })}
       </ul>}
-    {multi && <footer className="lib-pick-dock">
-      {!!selectedIds.length && <div className="lib-filter-scroll">{selectedIds.map((id, i) => <button type="button" key={id} className="lib-chip" onClick={() => changePick(selectedIds.filter(v => v !== id))}>{i + 1} · {exercises?.find(e => e.id === id)?.name}<X size={14}/></button>)}</div>}
-      <div className="lib-actions"><button type="button" className="btn" onClick={() => setMode('browse')}>Cancel</button><button type="button" className="btn primary" disabled={selectedIds.length < 2 || busy} onClick={buildSuperset}>Start superset · {selectedIds.length}</button></div>
+    {multi && <footer key={selectedIds.length > 0 ? 'dock-active' : 'dock-idle'} className={'lib-pick-dock fly-in-up' + (selectedIds.length > 0 ? ' has-picks' : '')}>
+      {!!selectedIds.length && <div className="lib-filter-scroll">{selectedIds.map((id, i) => <button type="button" key={id} className="lib-chip lib-dock-chip" onClick={() => changePick(selectedIds.filter(v => v !== id))}>{i + 1} · {exercises?.find(e => e.id === id)?.name}<X size={14}/></button>)}</div>}
+      <div className="lib-actions"><button type="button" className="btn" onClick={() => setMode('browse')}>Cancel</button><button type="button" className="btn primary" data-ready={selectedIds.length >= 2 ? 'true' : undefined} disabled={selectedIds.length < 2 || busy} onClick={buildSuperset}>Start superset · {selectedIds.length}</button></div>
     </footer>}
     {sortOpen && <BottomSheet title="Sort exercises" onClose={() => setSortOpen(false)}>
-      {sorts.map(s => <button type="button" key={s} className="lib-sheet-row" onClick={() => { setSort(s); setSortOpen(false) }}>{s}{sort === s && <Check size={19}/>}</button>)}
+      {sorts.map(s => <button type="button" key={s} className="lib-sheet-row" onClick={() => { if (sort !== s) setFilterBurst(n => n + 1); setSort(s); setSortOpen(false) }}>{s}{sort === s && <Check size={19}/>}</button>)}
     </BottomSheet>}
     {actions && <BottomSheet title={actions?.name ?? 'Exercise options'} onClose={() => setActions(null)}>
       {actions && <><button type="button" className="lib-sheet-row" onClick={() => edit(actions)}>Edit exercise<Pencil size={17}/></button>

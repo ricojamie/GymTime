@@ -25,9 +25,10 @@ import { startRestTimer, stopRestTimer, useRestTimerRemaining } from '../store/r
 import '../components/logger/logger.css'
 
 type LoggerSheet = 'menu' | 'progress' | 'plates' | 'smart' | 'notes' | 'finish' | 'delete' | null
+type StepDir = 'next' | 'prev' | null
 type Queue = { workoutId: number; entries: SmartLogEntry[]; index: number }
-type Transient = { exitedGroups: string[]; queue: Queue | null; banner: {workoutId: number; exerciseName: string; labels: string[]; id: number; expiresAt: number} | null }
-const useTransient = create<Transient>(() => ({ queue: null, banner: null, exitedGroups: [] }))
+type Transient = { exitedGroups: string[]; queue: Queue | null; banner: {workoutId: number; exerciseName: string; labels: string[]; id: number; expiresAt: number} | null; stepDir: StepDir }
+const useTransient = create<Transient>(() => ({ queue: null, banner: null, exitedGroups: [], stepDir: null }))
 const scratch = new Map<string, SetDraft>()
 let scratchWorkout = ''
 
@@ -147,20 +148,46 @@ function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
   const [editId, setEditId] = useState<number | null>(null)
   const beforeEdit = useRef<SetDraft | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [exitingSetId, setExitingSetId] = useState<number | null>(null)
   const [extras, setExtras] = useState(false)
   const [warmExpanded, setWarmExpanded] = useState(!working.length)
   const [noteText, setNoteText] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const pending = useRef(false)
+  const mounted = useRef(true)
   const heading = useRef<HTMLHeadingElement>(null)
   const firstWorking = useRef(working.length > 0)
   const [announcement, setAnnouncement] = useState('')
   const [addedSetId, setAddedSetId] = useState<number | null>(null)
+  const [justLogged, setJustLogged] = useState(0)
+  const justLoggedTick = useRef(0)
+  const [pulsedField, setPulsedField] = useState<{ field: PadField; tick: number } | null>(null)
+  const fieldPulseTick = useRef(0)
+  const keypadEditedField = useRef<PadField | null>(null)
+  const [enterDir] = useState<StepDir>(() => useTransient.getState().stepDir)
+  useEffect(() => () => { mounted.current = false }, [])
+  useEffect(() => {
+    if (!enterDir) return
+    const timeout = window.setTimeout(() => {
+      if (useTransient.getState().stepDir === enterDir) useTransient.setState({ stepDir: null })
+    }, 60)
+    return () => window.clearTimeout(timeout)
+  }, [enterDir])
+  useEffect(() => {
+    if (!justLogged) return
+    const timeout = window.setTimeout(() => setJustLogged(0), 520)
+    return () => window.clearTimeout(timeout)
+  }, [justLogged])
+  useEffect(() => {
+    if (!pulsedField) return
+    const timeout = window.setTimeout(() => setPulsedField(null), 380)
+    return () => window.clearTimeout(timeout)
+  }, [pulsedField])
   const addedRowReady = addedSetId !== null && current.some(set => set.id === addedSetId)
   useEffect(() => {
     if (!addedRowReady) return
-    const timeout = window.setTimeout(() => setAddedSetId(null), 700)
+    const timeout = window.setTimeout(() => setAddedSetId(null), 780)
     return () => window.clearTimeout(timeout)
   }, [addedSetId, addedRowReady])
   const lastQueueEntry = useRef(entry)
@@ -190,7 +217,18 @@ function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
     return top
   }, [sets, exercise.logType, exercise.defaultDistanceUnit])
 
-  function gotoExercise(id: number, replace = false) { nav('/log/' + id + '?workoutId=' + wid, { replace }) }
+  function triggerLoggedPulse() {
+    justLoggedTick.current += 1
+    setJustLogged(justLoggedTick.current)
+  }
+  function pulseField(field: PadField) {
+    fieldPulseTick.current += 1
+    setPulsedField({ field, tick: fieldPulseTick.current })
+  }
+  function gotoExercise(id: number, replace = false, dir: StepDir = null) {
+    useTransient.setState({ stepDir: dir })
+    nav('/log/' + id + '?workoutId=' + wid, { replace })
+  }
   function patchDraft(patch: Partial<SetDraft>) { setDraft(f => ({...f, ...patch})); setError('') }
   function closeSheet() { setSheet(null); setError('') }
   function restoreEdit() {
@@ -209,8 +247,8 @@ function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
     if (pending.current) return
     pending.current = true; setBusy(true); setError('')
     try { await operation() }
-    catch (e) { setError(e instanceof Error ? e.message : 'Could not save. Try again.') }
-    finally { pending.current = false; setBusy(false) }
+    catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : 'Could not save. Try again.') }
+    finally { pending.current = false; if (mounted.current) setBusy(false) }
   }
   function openQueue(entries: SmartLogEntry[]) {
     if (!entries.length) return
@@ -219,7 +257,7 @@ function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
       await ensureWorkoutExercise(wid, first.exerciseId)
       useTransient.setState({queue: {entries, index: 0, workoutId: wid}})
       if (editId) restoreEdit()
-      if (first.exerciseId !== eid) gotoExercise(first.exerciseId)
+      if (first.exerciseId !== eid) gotoExercise(first.exerciseId, false, 'next')
       else setDraft(pickDraft(first, exercise))
       closeSheet()
     })
@@ -231,13 +269,15 @@ function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
     await guard(async () => {
       const metrics = {...clean, distanceMeters: distanceToMeters(clean.distanceValue, clean.distanceUnit)}
       if (editId !== null) {
-        await updateSet(editId, metrics); restoreEdit(); setAnnouncement('Set updated.'); return
+        await updateSet(editId, metrics); restoreEdit(); triggerLoggedPulse(); setAnnouncement('Set updated.'); return
       }
       const timestamp = Date.now()
       const row = {...metrics, workoutId: wid, exerciseId: eid, timestamp, isComplete: true,
         supersetGroupId: group ?? null, supersetOrderIndex: group ? instance?.supersetOrderIndex ?? 0 : 0}
       const id = await logSet(row)
       setAddedSetId(id)
+      triggerLoggedPulse()
+      keypadEditedField.current = null
       setKeypad(null)
       setAnnouncement((clean.isWarmup ? 'Warm-up ' + (warmups.length + 1) : 'Working set ' + (working.length + 1)) + ' logged.')
       const sticky = pickDraft(afterLog(clean, forceWarmup), exercise)
@@ -250,17 +290,45 @@ function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
         const nextIndex = queue.index + 1
         const next = queue.entries[nextIndex]
         useTransient.setState({queue: next ? {...queue, index: nextIndex} : null})
-        if (next && next.exerciseId !== eid) gotoExercise(next.exerciseId, true)
+        if (next && next.exerciseId !== eid) gotoExercise(next.exerciseId, true, 'next')
       } else if (members.length > 1) {
-        gotoExercise(members[(index + 1) % members.length].exerciseId, true)
+        gotoExercise(members[(index + 1) % members.length].exerciseId, true, 'next')
       }
+    })
+  }
+  function confirmDelete() {
+    const targetId = deleteId
+    void guard(async () => {
+      if (targetId === null) { closeSheet(); return }
+      const animateExit = typeof document !== 'undefined' &&
+        document.documentElement.dataset.motion === 'full' &&
+        !(typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
+      if (animateExit) {
+        if (editId !== null && editId === targetId) restoreEdit()
+        setDeleteId(null)
+        closeSheet()
+        setExitingSetId(targetId)
+        await new Promise<void>(resolve => window.setTimeout(resolve, 210))
+        try {
+          await deleteSet(targetId)
+          if (mounted.current) setAnnouncement('Set deleted.')
+        } finally {
+          if (mounted.current) setExitingSetId(curr => curr === targetId ? null : curr)
+        }
+        return
+      }
+      await deleteSet(targetId)
+      if (editId !== null && editId === targetId) restoreEdit()
+      setDeleteId(null)
+      closeSheet()
+      setAnnouncement('Set deleted.')
     })
   }
   function finish() {
     void guard(async () => {
       await finishWorkout(wid)
       stopRestTimer()
-      useTransient.setState({queue: null, exitedGroups: []})
+      useTransient.setState({queue: null, exitedGroups: [], stepDir: null})
       scratch.clear()
       nav('/summary/' + wid, {replace: true, state: {justFinished: wid}})
     })
@@ -293,28 +361,37 @@ function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
   const action = editId !== null ? 'Save changes' : 'Log set'
   const nextNumber = editId ? 'Editing set' : draft.isWarmup || forceWarmup ? 'Warm-up ' + (warmups.length + 1) : 'Working set ' + (working.length + 1)
   const selectPath = '/exercises/select?workoutId=' + wid
+  const editingSet = editId !== null ? current.find(s => s.id === editId) ?? null : null
+  const editingLabel = useMemo(() => {
+    if (!editingSet) return ''
+    const list = editingSet.isWarmup ? warmups : working
+    const pos = list.findIndex(s => s.id === editingSet.id)
+    return (editingSet.isWarmup ? 'warm-up ' : 'set ') + (pos >= 0 ? pos + 1 : '')
+  }, [editingSet, warmups, working])
   function listRow(s: WorkoutSet, i: number) {
-    return <li key={s.id} className={'log-set-row stagger-in' + (s.id === editId ? ' is-editing' : '')} data-just-added={s.id === addedSetId || undefined} style={{ '--stagger-i': Math.min(i, 12) } as React.CSSProperties}>
-      <button onClick={() => beginEdit(s)} aria-label={'Edit ' + (s.isWarmup ? 'warm-up ' : 'set ') + (i + 1) + ', ' + setText(s, exercise, prefs)}>
+    const isAdded = s.id === addedSetId
+    const isExiting = s.id === exitingSetId
+    return <li key={s.id} className={'log-set-row' + (isAdded ? '' : ' stagger-in') + (s.id === editId ? ' is-editing' : '') + (isExiting ? ' is-exiting' : '')} data-just-added={isAdded || undefined} data-exiting={isExiting || undefined} style={{ '--stagger-i': Math.min(i, 12) } as React.CSSProperties}>
+      <button disabled={isExiting} onClick={() => beginEdit(s)} aria-label={'Edit ' + (s.isWarmup ? 'warm-up ' : 'set ') + (i + 1) + ', ' + setText(s, exercise, prefs)}>
         <span className="log-set-num">{String(i+1).padStart(2,'0')}</span>
         <span className="log-row-value"><strong>{setText(s,exercise,prefs)}</strong>{(s.rpe != null || s.note) && <small>{[s.rpe == null ? '' : 'RPE ' + s.rpe,s.note].filter(Boolean).join(' · ')}</small>}</span>
         {markers.has(s.id) && <Trophy className="log-trophy" size={15} aria-label="Personal record" />}
         <Pencil size={14} className="log-row-edit" />
       </button>
-      <button className="icon-button" aria-label={'Delete ' + (s.isWarmup ? 'warm-up ' : 'set ') + (i + 1)} onClick={() => { setDeleteId(s.id); setSheet('delete') }}><Trash2 size={16} /></button>
+      <button className="icon-button" disabled={isExiting} aria-label={'Delete ' + (s.isWarmup ? 'warm-up ' : 'set ') + (i + 1)} onClick={() => { setDeleteId(s.id); setSheet('delete') }}><Trash2 size={16} /></button>
     </li>
   }
   return <main className="screen log-screen">
     <nav className="log-toolbar" aria-label="Workout controls">
       <button className="icon-button" aria-label="Back to workout" onClick={() => nav('/workout/active')}><ArrowLeft size={20} /></button>
       <TimerIndicator />
-      <div className="log-stepper"><button className="icon-button" disabled={index <= 0} aria-label="Previous exercise" onClick={() => gotoExercise(steppers[index-1].exerciseId)}><ChevronLeft size={18} /></button>
+      <div className="log-stepper"><button className="icon-button" disabled={index <= 0} aria-label="Previous exercise" onClick={() => gotoExercise(steppers[index-1].exerciseId, false, 'prev')}><ChevronLeft size={18} /></button>
         {steppers.length > 0 && index >= 0 && <span>{index+1} / {steppers.length}</span>}
-        <button className="icon-button" disabled={index < 0 || index + 1 >= steppers.length} aria-label="Next exercise" onClick={() => gotoExercise(steppers[index+1].exerciseId)}><ChevronRight size={18} /></button></div>
+        <button className="icon-button" disabled={index < 0 || index + 1 >= steppers.length} aria-label="Next exercise" onClick={() => gotoExercise(steppers[index+1].exerciseId, false, 'next')}><ChevronRight size={18} /></button></div>
       <button className="log-finish" onClick={() => setSheet('finish')}>Finish</button>
       <button className="icon-button" aria-label="Exercise actions" onClick={() => setSheet('menu')}><Ellipsis size={20} /></button>
     </nav>
-    <header className="log-heading">
+    <header className="log-heading" data-enter-dir={enterDir ?? undefined}>
       <p className="eyebrow">{exercise.targetMuscle} <span aria-hidden="true">/</span> {nextNumber}</p>
       <h1 ref={heading} tabIndex={-1}>{exercise.name}</h1>
     </header>
@@ -329,13 +406,20 @@ function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
     </div>
     {queue && entry?.exerciseId === eid && <div className="log-context"><ListOrdered size={16} /><strong>Smart Log · Set {queue.index+1} of {queue.entries.length}</strong><button onClick={() => useTransient.setState({queue:null})}>Cancel</button></div>}
     {instance && (instance.plannedSets || instance.notes) && <div className="log-context"><CircleDot size={16} /><span>{instance.plannedSets ? instance.plannedSets + ' sets' : ''}{instance.repMin != null || instance.repMax != null ? ' × ' + [instance.repMin,instance.repMax !== instance.repMin ? instance.repMax : null].filter(v => v != null).join('–') + ' reps' : ''}{instance.notes ? ' · ' + instance.notes : ''}</span></div>}
-    {members.length > 1 && <div className="log-members" aria-label="Superset exercises">{members.map(p => <button key={p.id} aria-pressed={p.exerciseId === eid} onClick={() => gotoExercise(p.exerciseId)}>{names.get(p.exerciseId)}</button>)}<button aria-label="Exit superset" onClick={() => useTransient.setState(s => ({exitedGroups:[...s.exitedGroups,groupKey]}))}><X size={14} /> Exit</button></div>}
+    {members.length > 1 && <div className="log-members" aria-label="Superset exercises">{members.map((p, memberIdx) => <button key={p.id} aria-pressed={p.exerciseId === eid} onClick={() => { if (p.exerciseId !== eid) gotoExercise(p.exerciseId, false, memberIdx > index ? 'next' : 'prev') }}>{names.get(p.exerciseId)}</button>)}<button aria-label="Exit superset" onClick={() => useTransient.setState(s => ({exitedGroups:[...s.exitedGroups,groupKey]}))}><X size={14} /> Exit</button></div>}
     {planGroup && exitedGroup && <div className="log-members"><button onClick={() => useTransient.setState(s => ({exitedGroups:s.exitedGroups.filter(g => g !== groupKey)}))}><ArrowLeftRight size={15} />Resume superset</button></div>}
-    <section className="log-stage" aria-label="Set entry">
+    <section className={'log-stage' + (enterDir === 'next' ? ' log-slide-next' : enterDir === 'prev' ? ' log-slide-prev' : '') + (editId !== null ? ' is-editing' : '')} aria-label="Set entry">
+      {editingSet && <div key={editingSet.id} className="log-edit-banner">
+        <Pencil size={14} aria-hidden="true" />
+        <span>Editing {editingLabel.trim()}</span>
+        <button type="button" aria-label="Exit edit mode" onClick={restoreEdit}><X size={15} aria-hidden="true" /></button>
+      </div>}
       <div className="log-fields">{fields.map(field => {
         const val = presentation(field)
+        const isPulsed = pulsedField?.field === field
         return <div className="log-field-wrap" key={field}>
-          <button className="log-field" data-active-field={keypad === field || undefined} onClick={() => {setKeypad(field); setError('')}} aria-label={'Enter ' + fieldLabels[field].toLowerCase() + ', ' + val + ' ' + fieldUnit(field)}>
+          <button className={'log-field' + (isPulsed ? ' is-pulsed' : '') + (justLogged > 0 ? ' is-celebrating' : '')} data-active-field={keypad === field || undefined} onClick={() => {setKeypad(field); setError('')}} aria-label={'Enter ' + fieldLabels[field].toLowerCase() + ', ' + val + ' ' + fieldUnit(field)}>
+            {isPulsed && <span key={pulsedField.tick} className="log-field-flash" aria-hidden="true" />}
             <span>{fieldLabels[field]}</span><strong><span key={val} className="log-field-val">{val}</span><small>{fieldUnit(field)}</small></strong>
           </button>
           {field === 'distanceValue' && <label className="log-unit-select">Unit <select aria-label="Distance unit" value={draft.distanceUnit ?? exercise.defaultDistanceUnit} onChange={e => patchDraft({distanceUnit: DISTANCE_UNITS.find(k => k === e.target.value) ?? exercise.defaultDistanceUnit})}>{DISTANCE_UNITS.map(k => <option key={k} value={k}>{distanceLabels[k]}</option>)}</select></label>}
@@ -347,26 +431,44 @@ function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
       </div>
       {extras && <div className="log-extras"><button onClick={() => setKeypad('rpe')}><span>RPE</span><strong>{draft.rpe ?? '—'} / 10</strong></button><label>Set note<textarea rows={2} maxLength={500} value={draft.note ?? ''} onChange={e => patchDraft({note: e.target.value})} /></label></div>}
       {error && !keypad && !sheet && <p className="log-error" role="alert">{error}</p>}
-      <button className="btn primary log-commit" disabled={busy} onClick={() => void commit()}>
-        {addedSetId === null ? <Check size={20} aria-hidden="true" /> : <span key={addedSetId} className="log-save-stamp" aria-hidden="true"><Check size={20} /></span>}
+      <button className={'btn primary log-commit' + (justLogged > 0 ? ' is-logged' : '')} disabled={busy} onClick={() => void commit()}>
+        {justLogged > 0 && <span key={'w' + justLogged} className="log-commit-wave" aria-hidden="true" />}
+        {justLogged > 0 && <span key={'f' + justLogged} className="log-commit-flash" aria-hidden="true" />}
+        {justLogged > 0
+          ? <span key={'s' + justLogged} className="log-save-stamp" aria-hidden="true"><Check size={20} /></span>
+          : <Check size={20} aria-hidden="true" />}
         {action}
       </button>
       {editId !== null && <button className="log-cancel" onClick={restoreEdit}>Cancel editing</button>}
     </section>
     <RecordBanner workoutId={wid} isGator={isGator} audioEnabled={prefs.timerAudioEnabled} />
     <RestTimerBar defaultSeconds={defaultRest} />
-    <section className="log-history"><header><h2>This workout</h2><span>{working.length} working {working.length === 1 ? 'set' : 'sets'}</span></header>
-      {warmups.length > 0 && <><button className="log-warm-head" onClick={() => setWarmExpanded(!warmExpanded)} aria-expanded={warmExpanded}>Warm-ups · {warmups.length}<ChevronDown size={16} /></button>{warmExpanded && <ol>{warmups.map(listRow)}</ol>}</>}
+    <section className="log-history"><header><h2>This workout</h2><span key={working.length} className="log-count-pop">{working.length} working {working.length === 1 ? 'set' : 'sets'}</span></header>
+      {warmups.length > 0 && <><button className="log-warm-head" onClick={() => setWarmExpanded(!warmExpanded)} aria-expanded={warmExpanded}>Warm-ups · {warmups.length}<ChevronDown size={16} /></button>{warmExpanded && <ol className="log-warm-list">{warmups.map(listRow)}</ol>}</>}
       {working.length > 0 ? <ol>{working.map(listRow)}</ol> : !warmups.length && <p>No sets logged yet.</p>}
     </section>
     <footer className="log-actions"><button onClick={() => nav(selectPath)}><Plus size={18} />Exercise</button><button onClick={() => nav('/workout/active')}><ListOrdered size={18} />Overview</button></footer>
     <span role="status" className="log-sr-only">{announcement}</span>
     {keypad && <Keypad key={keypad} field={keypad} unit={fieldUnit(keypad)} weightUnit={prefsUnit}
       value={keypad === 'weight' && draft.weight != null ? fromLbs(draft.weight,prefsUnit) : draft[keypad]}
-      pins={pins} error={error} busy={busy} action={action} onChange={v => patchDraft({[keypad]: keypad === 'weight' && v !== null ? toLbs(v,prefsUnit) : v})}
-      onNext={nextField ? () => {setKeypad(nextField);setError('')} : undefined} onCommit={() => void commit()} onClose={() => {setKeypad(null);setError('')}} />}
+      pins={pins} error={error} busy={busy} action={action} onChange={v => {
+        patchDraft({[keypad]: keypad === 'weight' && v !== null ? toLbs(v,prefsUnit) : v})
+        keypadEditedField.current = keypad
+        pulseField(keypad)
+      }}
+      onNext={nextField ? () => {
+        const edited = keypadEditedField.current
+        keypadEditedField.current = null
+        if (edited) pulseField(edited)
+        setKeypad(nextField); setError('')
+      } : undefined} onCommit={() => void commit()} onClose={() => {
+        const edited = keypadEditedField.current
+        keypadEditedField.current = null
+        setKeypad(null); setError('')
+        if (edited) pulseField(edited)
+      }} />}
     {sheet === 'progress' && <ProgressSheet exerciseId={eid} excludeWorkoutId={wid} onClose={closeSheet} />}
-    {sheet === 'plates' && <PlateCalculatorSheet initialWeightLb={draft.weight ?? prefs.barWeight} onUse={lbs => {patchDraft({weight:lbs});closeSheet()}} onClose={closeSheet} />}
+    {sheet === 'plates' && <PlateCalculatorSheet initialWeightLb={draft.weight ?? prefs.barWeight} onUse={lbs => {patchDraft({weight:lbs}); pulseField('weight'); closeSheet()}} onClose={closeSheet} />}
     {sheet === 'smart' && <SmartLogSheet initialExerciseId={eid} onOpenQueue={openQueue} onClose={closeSheet} />}
     {sheet === 'menu' && <BottomSheet title="Exercise actions" onClose={closeSheet}><div className="log-menu">
       <button onClick={() => nav('/exercises/'+eid+'/edit')}><Pencil /> Edit exercise</button>
@@ -377,6 +479,6 @@ function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
     {sheet === 'notes' && <BottomSheet title="Exercise notes" onClose={closeSheet}><div className="log-notes"><label>{exercise.name}<textarea rows={5} maxLength={1000} value={noteText} onChange={e => setNoteText(e.target.value)} /></label>
       {error && <p role="alert">{error}</p>}<button disabled={busy} className="btn primary" onClick={() => void guard(async () => {await saveExercise({...exercise,notes:noteText.trim() || null}); closeSheet()})}><AlignLeft size={16} />Save notes</button></div></BottomSheet>}
     {sheet === 'finish' && <BottomSheet title="Finish workout?" onClose={closeSheet}><div className="log-confirm">{error && <p role="alert">{error}</p>}<button className="btn primary" disabled={busy} onClick={finish}>Finish workout</button><button className="btn" onClick={closeSheet}>Keep training</button></div></BottomSheet>}
-    {sheet === 'delete' && <BottomSheet title="Delete set?" onClose={closeSheet}><div className="log-confirm"><p>This permanently removes the set.</p>{error && <p role="alert">{error}</p>}<button disabled={busy} className="btn log-danger" onClick={() => void guard(async () => {if (deleteId !== null) await deleteSet(deleteId); if (editId !== null && editId === deleteId) restoreEdit(); setDeleteId(null); closeSheet()})}>Delete set</button><button className="btn" onClick={closeSheet}>Cancel</button></div></BottomSheet>}
+    {sheet === 'delete' && <BottomSheet title="Delete set?" onClose={closeSheet}><div className="log-confirm"><p>This permanently removes the set.</p>{error && <p role="alert">{error}</p>}<button disabled={busy} className="btn log-danger" onClick={confirmDelete}>Delete set</button><button className="btn" onClick={closeSheet}>Cancel</button></div></BottomSheet>}
   </main>
 }

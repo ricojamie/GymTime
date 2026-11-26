@@ -29,6 +29,7 @@ export default function Builder() {
   const gatorMode = useIsGatorMode()
   const [params, setParams] = useSearchParams()
   const [draft, setDraft] = useState(readDraft)
+  const [filterBurst, setFilterBurst] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const starting = useRef(false)
@@ -113,40 +114,54 @@ export default function Builder() {
       </header>
       <div className="wk-builder-grid">
         <section className="wk-order stagger-in" style={{ '--stagger-i': 0 } as CSSProperties} aria-labelledby="wk-order-title">
-          <div className="wk-section-title"><h2 id="wk-order-title">Workout order</h2><span>{selected.length}</span></div>
+          <div className="wk-section-title">
+            <h2 id="wk-order-title">Workout order</h2>
+            <span key={selected.length} className={selected.length > 0 ? 'wk-count-badge has-items' : 'wk-count-badge'}>{selected.length}</span>
+          </div>
           {selected.length === 0
             ? <div className="wk-order-empty">
                 {gatorMode && <SwoleGator pose="spotter" size={44} label="" />}
                 <p className="wk-empty">No exercises selected</p>
               </div>
             : <ol className="wk-strip">
-                {selected.map((ex, i) => <li key={ex.id} className="surface" data-order-item>
-                  <div className="wk-item-head"><span className="wk-index">{String(i + 1).padStart(2, '0')}</span><button className="icon-button" aria-label={'Remove ' + ex.name} onClick={() => toggle(ex.id)}><X size={17} /></button></div>
+                {selected.map((ex, i) => <li key={ex.id} className="surface wk-strip-card" data-order-item>
+                  <div className="wk-item-head">
+                    <span key={i} className="wk-index">{String(i + 1).padStart(2, '0')}</span>
+                    <button className="icon-button wk-strip-btn wk-strip-remove" aria-label={'Remove ' + ex.name} onClick={() => toggle(ex.id)}><X size={17} /></button>
+                  </div>
                   <strong>{ex.name}</strong>
                   <div className="wk-reorder">
-                    <button className="icon-button" aria-label={'Move ' + ex.name + ' earlier'} disabled={i === 0} onClick={e => move(ex.id, -1, e.currentTarget)}><ChevronLeft size={18} /></button>
-                    <button className="icon-button" aria-label={'Move ' + ex.name + ' later'} disabled={i === selected.length - 1} onClick={e => move(ex.id, 1, e.currentTarget)}><ChevronRight size={18} /></button>
+                    <button className="icon-button wk-strip-btn wk-move-prev" aria-label={'Move ' + ex.name + ' earlier'} disabled={i === 0} onClick={e => move(ex.id, -1, e.currentTarget)}><ChevronLeft size={18} /></button>
+                    <button className="icon-button wk-strip-btn wk-move-next" aria-label={'Move ' + ex.name + ' later'} disabled={i === selected.length - 1} onClick={e => move(ex.id, 1, e.currentTarget)}><ChevronRight size={18} /></button>
                   </div>
                 </li>)}
               </ol>}
         </section>
         <section className="wk-catalog stagger-in" style={{ '--stagger-i': 1 } as CSSProperties} aria-labelledby="wk-catalog-title">
-          <div className="wk-section-title"><h2 id="wk-catalog-title">Exercises</h2><span>{visible.length}</span></div>
-          <div className="wk-search">
-            <Search size={18} aria-hidden="true" />
-            <input type="search" value={draft.query} aria-label="Search exercises" placeholder="Search exercises" onChange={event => setDraft({ ...draft, query: event.target.value })} />
-            {draft.query && <button type="button" className="icon-button wk-search-clear" aria-label="Clear search" onClick={() => setDraft(prev => ({ ...prev, query: '' }))}><X size={16} /></button>}
+          <div className="wk-catalog-sticky">
+            <div className="wk-section-title"><h2 id="wk-catalog-title">Exercises</h2><span>{visible.length}</span></div>
+            <div className="wk-search">
+              <Search size={18} aria-hidden="true" />
+              <input type="search" value={draft.query} aria-label="Search exercises" placeholder="Search exercises" onChange={event => setDraft({ ...draft, query: event.target.value })} />
+              {draft.query && <button type="button" className="icon-button wk-search-clear" aria-label="Clear search" onClick={() => setDraft(prev => ({ ...prev, query: '' }))}><X size={16} /></button>}
+            </div>
+            <div className="wk-filters" role="group" aria-label="Filter by muscle">
+              {['', ...muscles].map(muscle => <button key={muscle} aria-pressed={draft.muscle === muscle} onClick={() => { if (draft.muscle !== muscle) setFilterBurst(n => n + 1); setDraft({ ...draft, muscle }) }}>{muscle || 'All muscles'}</button>)}
+            </div>
           </div>
-          <div className="wk-filters" role="group" aria-label="Filter by muscle">
-            {['', ...muscles].map(muscle => <button key={muscle} aria-pressed={draft.muscle === muscle} onClick={() => setDraft({ ...draft, muscle })}>{muscle || 'All muscles'}</button>)}
-          </div>
-          <div className="wk-catalog-list">
-            {visible.map(ex => {
+          <div key={filterBurst} className="wk-catalog-list">
+            {visible.map((ex, idx) => {
               const selectedIndex = selected.findIndex(item => item.id === ex.id)
-              return <button key={ex.id} className="wk-ex-option" aria-pressed={selectedIndex >= 0} onClick={() => toggle(ex.id)}>
-                <span className="wk-grow"><strong>{ex.name}</strong><small>{ex.targetMuscle}</small></span>
-                <span className="wk-choice-mark">{selectedIndex >= 0 ? <span className="wk-selected"><Check size={16} />{String(selectedIndex + 1).padStart(2, '0')}</span> : <Plus size={18} />}</span>
-              </button>
+              return <div key={ex.id} className="wk-ex-slot stagger-in" style={{ '--stagger-i': Math.min(idx, 10) } as CSSProperties}>
+                <button className="wk-ex-option" aria-pressed={selectedIndex >= 0} onClick={() => toggle(ex.id)}>
+                  <span className="wk-grow"><strong>{ex.name}</strong><small>{ex.targetMuscle}</small></span>
+                  <span className="wk-choice-mark">
+                    {selectedIndex >= 0
+                      ? <span key={'sel-' + selectedIndex} className="wk-selected"><Check size={16} />{String(selectedIndex + 1).padStart(2, '0')}</span>
+                      : <Plus size={18} className="wk-choice-plus" />}
+                  </span>
+                </button>
+              </div>
             })}
             {exercises && !visible.length && <div className="wk-order-empty">
               {gatorMode && <SwoleGator pose="spotter" size={50} label="" />}
@@ -156,10 +171,22 @@ export default function Builder() {
           </div>
         </section>
       </div>
-      <footer className="wk-actions">
+      <footer
+        key={selected.length > 0 ? 'wk-actions-ready' : 'wk-actions-empty'}
+        className={'wk-actions wk-builder-actions' + (selected.length > 0 ? ' has-selection fly-in-up' : '')}
+      >
         {error && <p className="wk-error" role="alert">{error}</p>}
-        <button className="btn primary" disabled={busy || (!active && !selected.length)} onClick={begin}>
-          {active ? 'Resume active workout' : 'Start workout · ' + selected.length + (selected.length === 1 ? ' exercise' : ' exercises')}<ArrowRight size={19} />
+        {!active && selected.length > 0 && (
+          <div className="wk-actions-summary" aria-hidden="true">
+            <span className="wk-summary-dot" />
+            <span className="wk-summary-names">
+              {selected.slice(0, 3).map(ex => ex.name).join(' · ')}
+              {selected.length > 3 ? ` +${selected.length - 3} more` : ''}
+            </span>
+          </div>
+        )}
+        <button className="btn primary wk-cta-btn" disabled={busy || (!active && !selected.length)} onClick={begin}>
+          {active ? 'Resume active workout' : 'Start workout · ' + selected.length + (selected.length === 1 ? ' exercise' : ' exercises')}<ArrowRight size={19} className="wk-cta-arrow" />
         </button>
       </footer>
     </div>

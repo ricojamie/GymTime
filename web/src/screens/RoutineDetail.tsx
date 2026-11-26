@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
@@ -70,8 +70,12 @@ function Stats({ id }: { id: number }) {
         <p className="rt-muted">No logged lifts in this routine yet.</p>
       ) : (
         <div className="surface rt-list stagger-in" style={{ '--stagger-i': 1 } as CSSProperties}>
-          {s.exerciseTrends.map(lift => (
-            <div className="rt-line" key={lift.exerciseId}>
+          {s.exerciseTrends.map((lift, index) => (
+            <div
+              className="rt-line stagger-in"
+              style={{ '--stagger-i': Math.min(index, 8) } as CSSProperties}
+              key={lift.exerciseId}
+            >
               <span>
                 <strong>{lift.exerciseName}</strong>
                 <small>
@@ -110,10 +114,46 @@ export default function RoutineDetail() {
   const navigate = useNavigate()
   const gatorMode = useIsGatorMode()
   const [tab, setTab] = useState<'days' | 'stats'>('days')
+  const [tabFly, setTabFly] = useState<'none' | 'from-right' | 'from-left'>('none')
   const [expanded, setExpanded] = useState<number[]>([])
   const [menu, setMenu] = useState<Menu | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [activePop, setActivePop] = useState<'idle' | 'on' | 'off'>('idle')
+  const [nextPopId, setNextPopId] = useState<number | null>(null)
+  const activeTimer = useRef<number | null>(null)
+  const nextTimer = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (activeTimer.current !== null) window.clearTimeout(activeTimer.current)
+      if (nextTimer.current !== null) window.clearTimeout(nextTimer.current)
+    }
+  }, [])
+
+  function triggerActivePop(nextState: 'on' | 'off') {
+    if (activeTimer.current !== null) window.clearTimeout(activeTimer.current)
+    setActivePop(nextState)
+    activeTimer.current = window.setTimeout(() => {
+      setActivePop('idle')
+      activeTimer.current = null
+    }, 480)
+  }
+
+  function triggerNextPop(dayId: number) {
+    if (nextTimer.current !== null) window.clearTimeout(nextTimer.current)
+    setNextPopId(dayId)
+    nextTimer.current = window.setTimeout(() => {
+      setNextPopId(null)
+      nextTimer.current = null
+    }, 480)
+  }
+
+  function switchTab(nextTab: 'days' | 'stats') {
+    if (nextTab === tab) return
+    setTabFly(nextTab === 'stats' ? 'from-right' : 'from-left')
+    setTab(nextTab)
+  }
 
   const data = useLiveQuery(async () => {
     if (validId === null) return null
@@ -198,29 +238,33 @@ export default function RoutineDetail() {
 
   return (
     <main className="screen rt">
-      <Link className="rt-back" to="/routines">
-        <ArrowLeft size={18} aria-hidden="true" /> Routines
-      </Link>
-      <div className="rt-head">
-        <div>
-          {routine.isActive && <span className="rt-status">Active routine</span>}
-          <h1>{routine.name}</h1>
+      <header className="rt-sticky-head">
+        <Link className="rt-back" to="/routines">
+          <ArrowLeft size={18} aria-hidden="true" /> Routines
+        </Link>
+        <div className="rt-head">
+          <div className="rt-head-title" data-active-pop={activePop !== 'idle' ? activePop : undefined}>
+            {routine.isActive && (
+              <span className={'rt-status' + (activePop === 'on' ? ' rt-status-pop' : '')}>Active routine</span>
+            )}
+            <h1>{routine.name}</h1>
+          </div>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Routine options"
+            onClick={() => {
+              setError('')
+              setMenu({ kind: 'routine' })
+            }}
+          >
+            <Ellipsis />
+          </button>
         </div>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Routine options"
-          onClick={() => {
-            setError('')
-            setMenu({ kind: 'routine' })
-          }}
-        >
-          <Ellipsis />
-        </button>
-      </div>
+      </header>
       <div className="rt-tabs" role="group" aria-label="Routine view" data-tab={tab}>
         {(['days', 'stats'] as const).map(t => (
-          <button key={t} type="button" aria-pressed={tab === t} onClick={() => setTab(t)}>
+          <button key={t} type="button" aria-pressed={tab === t} onClick={() => switchTab(t)}>
             {t === 'days' ? 'Workout days' : 'Stats & trends'}
           </button>
         ))}
@@ -230,105 +274,120 @@ export default function RoutineDetail() {
           {error}
         </p>
       )}
-      {tab === 'stats' ? (
-        <Stats id={validId} />
-      ) : (
-        <>
-          <div className="rt-head rt-section">
-            <h2>Workout days</h2>
-            <span className="rt-muted">{days.length} / 10</span>
-          </div>
-          {!days.length ? (
-            <div className="surface rt-empty">
-              {gatorMode ? (
-                <SwoleGator pose="spotter" size={88} interactive />
-              ) : (
-                <Layers3 size={28} aria-hidden="true" />
-              )}
-              <p className="rt-muted">No workout days yet.</p>
+      <div key={tab} className="rt-tab-panel" data-fly={tabFly}>
+        {tab === 'stats' ? (
+          <Stats id={validId} />
+        ) : (
+          <div className="rt-tab-body">
+            <div className="rt-head rt-section">
+              <h2>Workout days</h2>
+              <span className="rt-muted">{days.length} / 10</span>
             </div>
-          ) : (
-            <div className="rt-days">
-              {days.map((day, index) => {
-                const items = rows.filter(row => row.routineDayId === day.id)
-                const sessions = workouts
-                  .filter(w => w.routineDayId === day.id && w.endTime !== null)
-                  .sort((a, b) => b.startTime - a.startTime)
-                const open = expanded.includes(day.id)
-                const isNext = next?.id === day.id
-                return (
-                  <section
-                    className="surface rt-day stagger-in"
-                    style={{ '--stagger-i': Math.min(index, 8) } as CSSProperties}
-                    data-next={isNext ? 'true' : undefined}
-                    key={day.id}
-                  >
-                    <div className="rt-head">
-                      <span className="eyebrow">Day {String(index + 1).padStart(2, '0')}</span>
-                      {isNext && <span className="rt-status">Up next</span>}
+            {!days.length ? (
+              <div className="surface rt-empty stagger-in" style={{ '--stagger-i': 0 } as CSSProperties}>
+                {gatorMode ? (
+                  <SwoleGator pose="spotter" size={88} interactive />
+                ) : (
+                  <Layers3 size={28} aria-hidden="true" />
+                )}
+                <p className="rt-muted">No workout days yet.</p>
+              </div>
+            ) : (
+              <div className="rt-days">
+                {days.map((day, index) => {
+                  const items = rows.filter(row => row.routineDayId === day.id)
+                  const sessions = workouts
+                    .filter(w => w.routineDayId === day.id && w.endTime !== null)
+                    .sort((a, b) => b.startTime - a.startTime)
+                  const open = expanded.includes(day.id)
+                  const isNext = next?.id === day.id
+                  const isPoppingNext = nextPopId === day.id
+                  return (
+                    <section
+                      className="surface rt-day stagger-in"
+                      style={{ '--stagger-i': Math.min(index, 8) } as CSSProperties}
+                      data-next={isNext ? 'true' : undefined}
+                      data-next-pop={isPoppingNext ? 'true' : undefined}
+                      key={day.id}
+                    >
+                      <div className="rt-head">
+                        <span className="eyebrow">Day {String(index + 1).padStart(2, '0')}</span>
+                        {isNext && (
+                          <span className={'rt-status' + (isPoppingNext ? ' rt-status-pop' : '')}>Up next</span>
+                        )}
+                        <button
+                          type="button"
+                          className="icon-button"
+                          onClick={() => {
+                            setError('')
+                            setMenu({ kind: 'day', dayId: day.id })
+                          }}
+                          aria-label={day.name + ' options'}
+                        >
+                          <Ellipsis size={20} />
+                        </button>
+                      </div>
+                      <h3>{day.name}</h3>
+                      <small>
+                        {sessions.length} completed
+                        {sessions[0] ? ' · Last ' + dateLabel(sessions[0].startTime) : ''}
+                      </small>
                       <button
                         type="button"
-                        className="icon-button"
-                        onClick={() => {
-                          setError('')
-                          setMenu({ kind: 'day', dayId: day.id })
-                        }}
-                        aria-label={day.name + ' options'}
+                        className="rt-expand"
+                        aria-expanded={open}
+                        onClick={() => setExpanded(open ? expanded.filter(i => i !== day.id) : [...expanded, day.id])}
                       >
-                        <Ellipsis size={20} />
+                        {items.length} {items.length === 1 ? 'exercise' : 'exercises'}
+                        <ChevronDown size={16} className={open ? 'rt-up' : ''} aria-hidden="true" />
                       </button>
-                    </div>
-                    <h3>{day.name}</h3>
-                    <small>
-                      {sessions.length} completed
-                      {sessions[0] ? ' · Last ' + dateLabel(sessions[0].startTime) : ''}
-                    </small>
-                    <button
-                      type="button"
-                      className="rt-expand"
-                      aria-expanded={open}
-                      onClick={() => setExpanded(open ? expanded.filter(i => i !== day.id) : [...expanded, day.id])}
-                    >
-                      {items.length} {items.length === 1 ? 'exercise' : 'exercises'}
-                      <ChevronDown size={16} className={open ? 'rt-up' : ''} aria-hidden="true" />
-                    </button>
-                    {open && (
-                      <ol className="rt-prescription">
-                        {items.map(item => (
-                          <li key={item.id}>
-                            <span>
-                              {item.supersetGroupId && <Link2 size={14} aria-label="Superset" />}{' '}
-                              {names.get(item.exerciseId) ?? 'Deleted exercise'}
-                            </span>
-                            <b>{planLabel(item)}</b>
-                          </li>
-                        ))}
-                      </ol>
-                    )}
-                    <button
-                      type="button"
-                      className={isNext ? 'btn primary rt-day-start' : 'btn rt-day-start'}
-                      disabled={!!active || !items.length}
-                      onClick={() => navigate(base + '/start?dayId=' + day.id)}
-                    >
-                      <Play size={15} aria-hidden="true" />
-                      Start day
-                    </button>
-                  </section>
-                )
-              })}
-            </div>
-          )}
-          <button
-            type="button"
-            className="btn rt-outline"
-            disabled={days.length >= 10}
-            onClick={() => navigate(base + '/days/new')}
-          >
-            <Plus size={16} aria-hidden="true" /> Add day
-          </button>
-        </>
-      )}
+                      {items.length > 0 && (
+                        <div
+                          className="rt-day-collapse"
+                          data-open={open ? 'true' : 'false'}
+                          aria-hidden={!open}
+                          inert={!open}
+                        >
+                          <div className="rt-day-collapse-inner">
+                            <ol className="rt-prescription">
+                              {items.map(item => (
+                                <li key={item.id}>
+                                  <span>
+                                    {item.supersetGroupId && <Link2 size={14} aria-label="Superset" />}{' '}
+                                    {names.get(item.exerciseId) ?? 'Deleted exercise'}
+                                  </span>
+                                  <b>{planLabel(item)}</b>
+                                </li>
+                              ))}
+                            </ol>
+                          </div>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className={isNext ? 'btn primary rt-day-start' : 'btn rt-day-start'}
+                        disabled={!!active || !items.length}
+                        onClick={() => navigate(base + '/start?dayId=' + day.id)}
+                      >
+                        <Play size={15} aria-hidden="true" />
+                        Start day
+                      </button>
+                    </section>
+                  )
+                })}
+              </div>
+            )}
+            <button
+              type="button"
+              className="btn rt-outline rt-new-btn"
+              disabled={days.length >= 10}
+              onClick={() => navigate(base + '/days/new')}
+            >
+              <Plus size={16} aria-hidden="true" /> Add day
+            </button>
+          </div>
+        )}
+      </div>
       {menu && (
         <BottomSheet
           title={
@@ -345,9 +404,13 @@ export default function RoutineDetail() {
           <div className="rt rt-menu">
             {menu.kind === 'routine' && (
               <>
-                {action(routine.isActive ? 'Clear active routine' : 'Set active routine', <Flag />, () =>
-                  void perform(() => setActiveRoutine(routine.isActive ? null : validId)),
-                )}
+                {action(routine.isActive ? 'Clear active routine' : 'Set active routine', <Flag />, () => {
+                  const willBeActive = !routine.isActive
+                  void perform(async () => {
+                    await setActiveRoutine(willBeActive ? validId : null)
+                    triggerActivePop(willBeActive ? 'on' : 'off')
+                  })
+                })}
                 {action('Rename', <Pencil />, () => navigate(base + '/edit'))}
                 {action(
                   'Duplicate routine',
@@ -364,7 +427,11 @@ export default function RoutineDetail() {
                 {action(
                   'Set as next',
                   <Check />,
-                  () => void perform(() => setNextDay(validId, selected.id)),
+                  () =>
+                    void perform(async () => {
+                      await setNextDay(validId, selected.id)
+                      triggerNextPop(selected.id)
+                    }),
                   next?.id === selected.id,
                 )}
                 {action(

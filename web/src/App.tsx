@@ -51,7 +51,7 @@ function SessionDock({workout}:{workout:Workout}) {
   },[])
   const elapsed = Math.max(0,Math.floor((now-workout.startTime)/1000))
   const clock = [Math.floor(elapsed/3600),Math.floor(elapsed%3600/60),elapsed%60].map(n=>String(n).padStart(2,'0')).join(':')
-  return <Link className="session-dock" to="/workout/active"><span className="session-led" aria-hidden="true"/><strong>{workout.name || workout.routineDayNameSnapshot || 'Active workout'}</strong><time>{clock}</time><span>Resume</span><ArrowRight size={16}/></Link>
+  return <Link className="session-dock hover-lift" to="/workout/active"><span className="session-led" aria-hidden="true"/><strong>{workout.name || workout.routineDayNameSnapshot || 'Active workout'}</strong><time>{clock}</time><span>Resume</span><ArrowRight size={16}/></Link>
 }
 function ConnectionUpdate() {
   const {needRefresh:[refresh,setRefresh],updateServiceWorker} = useRegisterSW()

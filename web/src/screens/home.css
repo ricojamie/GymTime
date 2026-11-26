@@ -260,6 +260,8 @@
   font-size: clamp(46px, 11vw, 78px);
 }
 .home-primary {
+  position: relative;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -414,7 +416,7 @@
 }
 .home-start-day:disabled { opacity: .5; cursor: not-allowed; }
 
-.home-backup-wrap { margin-top: 12px; }
+.home-backup-wrap { margin-top: 12px; overflow-x: clip; }
 .home-backup {
   display: flex;
   align-items: center;
@@ -556,24 +558,66 @@
   100% { transform: translate3d(0, 0, 0); }
 }
 @keyframes home-stagger-enter {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
+  0% { opacity: 0; transform: translate3d(0, 18px, 0) scale(.98); }
+  68% { opacity: 1; transform: translate3d(0, -2px, 0) scale(1.004); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes home-gator-fly-in {
+  0% { opacity: 0; transform: translate3d(0, 32px, 0) scale(.84) rotate(-4deg); }
+  62% { opacity: 1; transform: translate3d(0, -6px, 0) scale(1.05) rotate(1.5deg); }
+  82% { transform: translate3d(0, 2px, 0) scale(.99) rotate(-.6deg); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1) rotate(0deg); }
+}
+@keyframes home-plate-fly-in {
+  0% { opacity: 0; transform: translate(calc(-50% + 44px), -50%) scale(.93); }
+  68% { opacity: 1; transform: translate(calc(-50% - 4px), -50%) scale(1.015); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes home-copy-rise {
+  0% { opacity: 0; transform: translate3d(0, 22px, 0) scale(.975); }
+  68% { opacity: 1; transform: translate3d(0, -3px, 0) scale(1.005); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes home-backup-fly-in {
+  0% { opacity: 0; transform: translate3d(-24px, -6px, 0) scale(.97); }
+  68% { opacity: 1; transform: translate3d(3px, 0, 0) scale(1.005); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes home-backup-fly-out {
+  0% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  22% { opacity: 1; transform: translate3d(-6px, 0, 0) scale(1.01); }
+  100% { opacity: 0; transform: translate3d(106%, 0, 0) scale(.95); }
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  :root[data-motion='full'] .home-stagger {
-    animation: home-stagger-enter 440ms var(--ease-spring, cubic-bezier(.22, 1, .36, 1)) calc(var(--stagger-i, 0) * 55ms) backwards;
+  :root[data-motion="full"] .home-stagger {
+    animation: home-stagger-enter 460ms var(--ease-spring, cubic-bezier(.18, 1.28, .32, 1)) calc(var(--stagger-i, 0) * 52ms) backwards;
   }
-  :root[data-motion='full'] .home-calibration b {
+  :root[data-motion="full"] .home-session-copy {
+    animation: home-copy-rise 480ms var(--ease-spring, cubic-bezier(.18, 1.28, .32, 1)) 65ms backwards;
+  }
+  :root[data-motion="full"] .home-plate {
+    animation: home-plate-fly-in 540ms var(--ease-spring, cubic-bezier(.18, 1.22, .32, 1)) 85ms backwards;
+  }
+  :root[data-motion="full"] .home-gator-hero-wrap {
+    animation: home-gator-fly-in 600ms var(--ease-spring, cubic-bezier(.18, 1.32, .32, 1)) 120ms backwards;
+  }
+  :root[data-motion="full"] .home-backup-wrap:not(.is-dismissing) .home-backup {
+    animation: home-backup-fly-in 420ms var(--ease-spring, cubic-bezier(.18, 1.28, .32, 1)) backwards;
+  }
+  :root[data-motion="full"] .home-backup-wrap.is-dismissing .home-backup {
+    animation: home-backup-fly-out 275ms var(--ease-dramatic, cubic-bezier(.16, 1, .3, 1)) forwards;
+  }
+  :root[data-motion="full"] .home-calibration b {
     animation: home-fill-tick 280ms var(--ease) var(--tick-delay) backwards;
   }
-  :root[data-motion='full'] .home-session.is-active::before {
+  :root[data-motion="full"] .home-session.is-active::before {
     animation: home-live-bar 2.8s linear infinite;
   }
-  :root[data-motion='full'] .home-session.is-active .home-status-dot {
+  :root[data-motion="full"] .home-session.is-active .home-status-dot {
     position: relative;
   }
-  :root[data-motion='full'] .home-session.is-active .home-status-dot::after {
+  :root[data-motion="full"] .home-session.is-active .home-status-dot::after {
     content: "";
     position: absolute;
     inset: 0;
@@ -582,40 +626,164 @@
     color: var(--accent-ink);
     animation: home-live-ring 1.7s ease-out infinite;
   }
-  :root[data-motion='full'] .home-session.is-rack-impact {
+  :root[data-motion="full"] .home-session.is-rack-impact {
     animation: home-rack-shake 280ms cubic-bezier(.36, .07, .19, .97);
   }
-  :root[data-motion='full'] .home-session-art {
+  :root[data-motion="full"] .home-session-art {
     transition: transform 220ms cubic-bezier(.2, .8, .2, 1);
   }
-  :root[data-motion='full'] :is(.home-primary, .home-primary svg, .home-plan-row svg:last-child, .home-start-day, .home-start-day svg,
-        .home-routine-link svg:last-child, .home-art-replay svg, .home-settings svg, .home-plain-arrow svg,
-        .home-spectrum-cell, .home-metric) {
-    transition: transform 180ms var(--ease), background-color 180ms var(--ease), box-shadow 180ms var(--ease);
+  :root[data-motion="full"] .home-primary::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, transparent 28%, rgba(255, 255, 255, .26) 50%, transparent 72%);
+    transform: translateX(-125%);
+    pointer-events: none;
+    transition: transform 520ms var(--ease-dramatic, cubic-bezier(.16, 1, .3, 1));
   }
-  :root[data-motion='full'] .home-strength-ticks i {
-    transition: transform 175ms var(--ease) var(--tick-delay);
+  :root[data-motion="full"] :is(.home-primary, .home-start-day, .home-plan-row, .home-routine-link, .home-metric, .home-spectrum-cell, .home-settings, .home-plain-arrow, .home-art-replay, .home-dismiss) {
+    transition: transform 230ms var(--ease-spring, cubic-bezier(.18, 1.35, .32, 1)), background-color 160ms var(--ease), box-shadow 200ms var(--ease), border-color 160ms var(--ease), color 160ms var(--ease);
   }
-  :root[data-motion='full'] .home-primary:active,
-  :root[data-motion='full'] .home-start-day:active:not(:disabled) {
-    transform: translateY(1px) scale(.98);
+  :root[data-motion="full"] :is(.home-primary svg, .home-plan-row svg, .home-start-day svg, .home-routine-link svg, .home-art-replay svg, .home-settings svg, .home-plain-arrow svg, .home-metric-label svg, .home-big-number, .home-muscle-name i, .home-muscle-readout > span) {
+    transition: transform 240ms var(--ease-spring, cubic-bezier(.18, 1.4, .32, 1)), color 160ms var(--ease);
   }
-  :root[data-motion='full'] .home-art-replay:active svg {
-    transform: rotate(-42deg);
+  :root[data-motion="full"] .home-strength-ticks i {
+    transition: transform 195ms var(--ease-spring, cubic-bezier(.18, 1.35, .32, 1)) var(--tick-delay);
   }
-  :root[data-motion='full'] .home-spectrum-cell:is(:focus-visible, :active) .home-strength-ticks i {
-    transform: scaleY(1.55);
+  :root[data-motion="full"] .home-primary:active,
+  :root[data-motion="full"] .home-start-day:active:not(:disabled) {
+    transform: translateY(1px) scale(.955);
+  }
+  :root[data-motion="full"] .home-primary:active svg,
+  :root[data-motion="full"] .home-start-day:active:not(:disabled) svg {
+    transform: translateX(5px) scale(.96);
+  }
+  :root[data-motion="full"] .home-plan-row:active,
+  :root[data-motion="full"] .home-routine-link:active {
+    transform: scale(.985);
+    background: var(--bg-surface-hover);
+  }
+  :root[data-motion="full"] :is(.home-plan-row, .home-routine-link):active svg:last-child {
+    transform: translateX(7px) scale(1.1);
+    color: var(--accent-ink);
+  }
+  :root[data-motion="full"] .home-metric:active {
+    transform: translateY(1px) scale(.968);
+    background: var(--bg-surface-hover);
+  }
+  :root[data-motion="full"] .home-metric:active .home-metric-label svg {
+    transform: scale(1.16) rotate(-8deg);
+  }
+  :root[data-motion="full"] .home-spectrum-cell:active {
+    transform: scale(.958);
+    background: var(--bg-surface-hover);
+  }
+  :root[data-motion="full"] .home-spectrum-cell:is(:focus-visible, :active) .home-strength-ticks i {
+    transform: scaleY(1.65);
+  }
+  :root[data-motion="full"] .home-spectrum-cell:is(:focus-visible, :active) .home-muscle-name i {
+    transform: scale(1.4);
+  }
+  :root[data-motion="full"] .home-plain-arrow:active {
+    transform: scale(.92);
+  }
+  :root[data-motion="full"] .home-plain-arrow:active svg {
+    transform: translate(3px, -3px) scale(1.12);
+    color: var(--accent-ink);
+  }
+  :root[data-motion="full"] .home-settings:active {
+    transform: scale(.92);
+  }
+  :root[data-motion="full"] .home-settings:active svg {
+    transform: rotate(38deg);
+  }
+  :root[data-motion="full"] .home-art-replay:active {
+    transform: scale(.94);
+  }
+  :root[data-motion="full"] .home-art-replay:active svg {
+    transform: rotate(-52deg);
+  }
+  :root[data-motion="full"] .home-dismiss:active {
+    transform: scale(.86) rotate(90deg);
   }
 }
 
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
-  :root[data-motion='full'] .home-primary:hover { transform: translateY(-1px); }
-  :root[data-motion='full'] .home-primary:hover svg { transform: translateX(3px); }
-  :root[data-motion='full'] :is(.home-plan-row, .home-routine-link, .home-start-day):hover svg:last-child { transform: translateX(3px); }
-  :root[data-motion='full'] .home-plain-arrow:hover svg { transform: translate(2px, -2px); }
-  :root[data-motion='full'] .home-settings:hover svg { transform: rotate(22deg); }
-  :root[data-motion='full'] .home-art-replay:hover svg { transform: rotate(-18deg); }
-  :root[data-motion='full'] .home-spectrum-cell:hover .home-strength-ticks i { transform: scaleY(1.55); }
+  :root[data-motion="full"] .home-primary:hover {
+    transform: translateY(-2.5px) scale(1.025);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .36),
+      0 14px 28px -8px color-mix(in srgb, var(--accent) 68%, transparent);
+  }
+  :root[data-motion="full"] .home-primary:hover::after {
+    transform: translateX(125%);
+  }
+  :root[data-motion="full"] .home-primary:hover svg {
+    transform: translateX(4px) scale(1.12);
+  }
+  :root[data-motion="full"] .home-start-day:hover:not(:disabled) {
+    transform: translateY(-2px) scale(1.02);
+  }
+  :root[data-motion="full"] .home-start-day:hover:not(:disabled) svg:last-child {
+    transform: translateX(6px) scale(1.1);
+  }
+  :root[data-motion="full"] :is(.home-plan-row, .home-routine-link):hover svg:last-child {
+    transform: translateX(6px) scale(1.1);
+    color: var(--accent-ink);
+  }
+  :root[data-motion="full"] :is(.home-plan-row, .home-routine-link):hover svg:first-child {
+    transform: scale(1.1) rotate(-4deg);
+    color: var(--accent-ink);
+  }
+  :root[data-motion="full"] .home-metric:hover {
+    transform: translateY(-2px) scale(1.012);
+    z-index: 1;
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--accent-ink) 28%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--accent-ink) 16%, transparent);
+  }
+  :root[data-motion="full"] .home-metric:hover .home-metric-label svg {
+    transform: scale(1.2) rotate(-10deg);
+  }
+  :root[data-motion="full"] .home-metric:hover .home-big-number {
+    transform: translateY(-1px) scale(1.02);
+  }
+  :root[data-motion="full"] .home-spectrum-cell:hover {
+    transform: translateY(-2px) scale(1.018);
+    z-index: 1;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-ink) 20%, transparent);
+  }
+  :root[data-motion="full"] .home-spectrum-cell:hover .home-strength-ticks i {
+    transform: scaleY(1.65);
+  }
+  :root[data-motion="full"] .home-spectrum-cell:hover .home-muscle-name i {
+    transform: scale(1.38);
+  }
+  :root[data-motion="full"] .home-spectrum-cell:hover .home-muscle-readout > span {
+    transform: translateX(2px);
+    color: var(--ink-primary);
+  }
+  :root[data-motion="full"] .home-plain-arrow:hover {
+    transform: translateY(-2px) scale(1.06);
+  }
+  :root[data-motion="full"] .home-plain-arrow:hover svg {
+    transform: translate(3px, -3px) scale(1.12);
+    color: var(--accent-ink);
+  }
+  :root[data-motion="full"] .home-settings:hover {
+    transform: translateY(-1.5px) scale(1.05);
+  }
+  :root[data-motion="full"] .home-settings:hover svg {
+    transform: rotate(32deg);
+  }
+  :root[data-motion="full"] .home-art-replay:hover {
+    transform: translateY(-1.5px) scale(1.04);
+  }
+  :root[data-motion="full"] .home-art-replay:hover svg {
+    transform: rotate(-28deg);
+  }
+  :root[data-motion="full"] .home-dismiss:hover {
+    transform: scale(1.12) rotate(90deg);
+    color: var(--ink-primary);
+  }
 }
 
 html[data-motion="reduced"] .home-art-replay { display: none; }

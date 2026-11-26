@@ -85,7 +85,7 @@ export default function Insights() {
     <header className="il-page-head"><h1>Training insights</h1><button className="icon-button" aria-label="How to read this" title="How to read this" onClick={() => setEvidence({kind:'guide'})}><BookOpen size={20}/></button></header>
     <div className="il-period-line">
       <div className="il-segments" data-period={days} role="group" aria-label="Comparison period">{([28,84] as const).map(n => <button key={n} aria-pressed={days === n} onClick={() => setDays(n)}>{n/7} weeks</button>)}</div>
-      <span>{shortDate.format(data.period.currentStartMs)} – {shortDate.format(data.period.currentEndMs)}</span>
+      <span key={days} className="il-period-range">{shortDate.format(data.period.currentStartMs)} – {shortDate.format(data.period.currentEndMs)}</span>
     </div>
     <section className="il-telemetry surface stagger-in" style={{ '--stagger-i': 0 } as CSSProperties} aria-label="Training overview">
       <dl>
@@ -97,7 +97,7 @@ export default function Insights() {
         <i key={days} style={{width: Math.min(100,100 * cadence.currentActiveDays / days) + '%'}}/>
       </div>
     </section>
-    {observations.length > 0 && <section className="il-observations stagger-in" style={{ '--stagger-i': 1 } as CSSProperties} aria-label="Observations">{observations.slice(0,2).map(o => <button key={o.text} className="il-linkrow" onClick={() => {
+    {observations.length > 0 && <section className="il-observations stagger-in" style={{ '--stagger-i': 1 } as CSSProperties} aria-label="Observations">{observations.slice(0,2).map((o, idx) => <button key={`${days}-${o.text}`} className="il-linkrow il-obs-enter" style={{ '--stagger-i': idx } as CSSProperties} onClick={() => {
       if (o.exerciseId != null) showExercise(o.exerciseId, true)
       else if (o.muscle) setEvidence({kind:'muscle',name:o.muscle})
     }}>{o.text}<ChevronRight size={16}/></button>)}</section>}
@@ -121,7 +121,7 @@ export default function Insights() {
         <Link to="/history" className="il-linkrow">Open history <ArrowRight size={17}/></Link>
       </section>
       <section className="il-panel surface stagger-in" style={{ '--stagger-i': 4 } as CSSProperties}><h2>Body parts</h2><div className="il-muscles">
-        {muscles.map(m => <button key={m.name} onClick={() => setEvidence({kind:'muscle',name:m.name})}>
+        {muscles.map((m, idx) => <button key={`${days}-${m.name}`} className="il-muscle-row" style={{ '--stagger-i': Math.min(idx, 12) } as CSSProperties} onClick={() => setEvidence({kind:'muscle',name:m.name})}>
           <strong>{m.name}</strong><span>{m.currentWorkingSets} {m.currentWorkingSets === 1 ? 'set' : 'sets'} · {m.previousWorkingSets} prior</span>
           <SpectrumTicks value={m.currentWorkingSets} max={high}/>
           <small>{m.daysSinceLastLogged == null ? 'Never trained' : m.daysSinceLastLogged === 0 ? 'Trained today' : m.daysSinceLastLogged + 'd since trained'}</small>
@@ -133,7 +133,7 @@ export default function Insights() {
             <h2>Recent records</h2>
             {gatorMode && <SwoleGator pose="pr" size={34} label="" />}
           </div>
-          {recentRecords.length ? recentRecords.slice(0,6).map(r => <button key={r.exerciseId+'-'+r.set.id+'-'+r.metric.label} className="il-record" onClick={() => showExercise(r.exerciseId,true)}>
+          {recentRecords.length ? recentRecords.slice(0,6).map((r, idx) => <button key={`${days}-${r.exerciseId}-${r.set.id}-${r.metric.label}`} className="il-record il-record-enter" style={{ '--stagger-i': Math.min(idx, 10) } as CSSProperties} onClick={() => showExercise(r.exerciseId,true)}>
             <span className={r.kind === 'PERSONAL_RECORD' ? 'il-pr-mark' : ''}><Trophy size={18}/></span>
             <span><strong>{r.exerciseName}</strong><small>{r.metric.label} · {r.kind === 'BENCHMARK' ? 'Benchmark' : 'PR'} · {shortDate.format(r.set.timestamp)}</small></span>
             <b>{metricValue(r.value, r.metric.unit, source.unit)}</b>

@@ -1,4 +1,4 @@
-/* University of Florida Swole Gator Mascot — Motion & Interactive Polish */
+/* University of Florida Swole Gator Mascot — Artwork Framing, Motion & Interactive Polish */
 
 .gator-mascot {
   position: relative;
@@ -6,22 +6,13 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  isolation: isolate;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 
 .gator-mascot--interactive {
   cursor: pointer;
-  transition: transform 220ms cubic-bezier(0.22, 1.4, 0.36, 1),
-    filter 220ms ease;
-}
-
-.gator-mascot--interactive:hover {
-  transform: translateY(-2px) scale(1.03);
-}
-
-.gator-mascot--interactive:active {
-  transform: scale(0.95);
 }
 
 .gator-mascot--interactive:focus-visible {
@@ -30,346 +21,489 @@
   border-radius: 14px;
 }
 
-.gator-mascot__svg {
-  display: block;
+.gator-mascot__art {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   height: 100%;
-  overflow: visible;
-}
-
-/* ── Idle & Pose Animations (GPU-composited transform/opacity only) ── */
-
-.gator-breathe {
-  transform-box: fill-box;
   transform-origin: center bottom;
-  animation: gator-breathe 3.2s ease-in-out infinite;
 }
 
-.gator-flex-left {
-  transform-box: fill-box;
-  transform-origin: right center;
-  animation: gator-flex-pulse 3.2s ease-in-out infinite;
+.gator-mascot__img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
-.gator-flex-right {
-  transform-box: fill-box;
-  transform-origin: left center;
-  animation: gator-flex-pulse 3.2s ease-in-out infinite 0.12s;
+/* ── Pose-Aware Depth & Stadium Rim Drop-Shadows ── */
+
+.gator-mascot--hero .gator-mascot__img {
+  filter: drop-shadow(0 8px 14px rgba(2, 6, 23, 0.56))
+    drop-shadow(0 0 12px rgba(0, 33, 165, 0.34));
 }
 
-.gator-barbell-lift {
-  transform-box: fill-box;
+.gator-mascot--pr .gator-mascot__img {
+  filter: drop-shadow(0 10px 18px rgba(2, 6, 23, 0.6))
+    drop-shadow(0 0 16px rgba(250, 70, 22, 0.44));
+}
+
+.gator-mascot--spotter .gator-mascot__img {
+  filter: drop-shadow(0 6px 12px rgba(2, 6, 23, 0.48))
+    drop-shadow(0 0 8px rgba(37, 99, 235, 0.24));
+}
+
+.gator-mascot--badge .gator-mascot__art {
+  border-radius: 50%;
+  overflow: hidden;
   transform-origin: center center;
-  animation: gator-barbell-bob 3.2s ease-in-out infinite;
+  filter: drop-shadow(0 3px 8px rgba(2, 6, 23, 0.52))
+    drop-shadow(0 0 6px rgba(250, 70, 22, 0.24));
 }
 
-.gator-pr-hoist {
-  transform-box: fill-box;
-  transform-origin: center bottom;
-  animation: gator-pr-surge 1.8s cubic-bezier(0.22, 1.3, 0.36, 1) infinite;
+.gator-mascot--badge .gator-mascot__art::after {
+  content: '';
+  position: absolute;
+  inset: -25%;
+  background: linear-gradient(
+    112deg,
+    transparent 34%,
+    rgba(255, 255, 255, 0.1) 44%,
+    rgba(255, 255, 255, 0.58) 50%,
+    rgba(250, 70, 22, 0.24) 55%,
+    transparent 64%
+  );
+  transform: translateX(-145%) skewX(-16deg);
+  opacity: 0;
+  pointer-events: none;
 }
 
-.gator-pr-rays {
-  transform-box: fill-box;
+.gator-mascot--stamp .gator-mascot__art {
   transform-origin: center center;
-  animation: gator-rays-spin 16s linear infinite;
 }
 
-.gator-jaw-chomp {
-  transform-box: fill-box;
-  transform-origin: 25% 20%;
-  animation: gator-jaw-roar 2.4s ease-in-out infinite;
+.gator-mascot--stamp .gator-mascot__img {
+  filter: drop-shadow(0 8px 16px rgba(2, 6, 23, 0.62))
+    drop-shadow(0 0 10px rgba(250, 70, 22, 0.28));
 }
 
-.gator-glint {
-  transform-box: fill-box;
-  transform-origin: center center;
-  animation: gator-glint-sweep 4.2s ease-in-out infinite;
+:root[data-theme="light"] .gator-mascot--hero .gator-mascot__img {
+  filter: drop-shadow(0 6px 12px rgba(6, 20, 66, 0.28))
+    drop-shadow(0 0 10px rgba(0, 33, 165, 0.18));
 }
 
-.gator-eye-spark {
-  transform-box: fill-box;
-  transform-origin: center center;
-  animation: gator-eye-flash 3.6s ease-in-out infinite;
+:root[data-theme="light"] .gator-mascot--pr .gator-mascot__img {
+  filter: drop-shadow(0 8px 14px rgba(6, 20, 66, 0.3))
+    drop-shadow(0 0 14px rgba(250, 70, 22, 0.3));
 }
 
-.gator-chalk-1 {
-  transform-box: fill-box;
-  transform-origin: center center;
-  animation: gator-chalk-float 2.8s ease-out infinite;
+:root[data-theme="light"] .gator-mascot--spotter .gator-mascot__img {
+  filter: drop-shadow(0 5px 10px rgba(6, 20, 66, 0.24))
+    drop-shadow(0 0 6px rgba(37, 99, 235, 0.14));
 }
 
-.gator-chalk-2 {
-  transform-box: fill-box;
-  transform-origin: center center;
-  animation: gator-chalk-float 3.3s ease-out infinite 0.9s;
+:root[data-theme="light"] .gator-mascot--badge .gator-mascot__art {
+  filter: drop-shadow(0 3px 6px rgba(6, 20, 66, 0.26))
+    drop-shadow(0 0 5px rgba(250, 70, 22, 0.18));
 }
 
-.gator-chalk-3 {
-  transform-box: fill-box;
-  transform-origin: center center;
-  animation: gator-chalk-float 2.5s ease-out infinite 1.7s;
+:root[data-theme="light"] .gator-mascot--stamp .gator-mascot__img {
+  filter: drop-shadow(0 6px 12px rgba(6, 20, 66, 0.32))
+    drop-shadow(0 0 8px rgba(250, 70, 22, 0.2));
 }
 
-.gator-spotter-wave {
-  transform-box: fill-box;
-  transform-origin: bottom center;
-  animation: gator-spotter-bob 2.2s ease-in-out infinite;
+/* ── PR Stadium Energy Aura ── */
+
+.gator-pr-aura {
+  position: absolute;
+  inset: -14%;
+  z-index: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle,
+      rgba(250, 70, 22, 0.36) 0%,
+      rgba(0, 33, 165, 0.24) 48%,
+      transparent 72%
+    ),
+    repeating-conic-gradient(
+      from 0deg,
+      rgba(250, 70, 22, 0.28) 0deg 14deg,
+      transparent 14deg 30deg,
+      rgba(37, 99, 235, 0.28) 30deg 44deg,
+      transparent 44deg 60deg
+    );
+  -webkit-mask-image: radial-gradient(
+    circle,
+    rgba(0, 0, 0, 0.96) 24%,
+    rgba(0, 0, 0, 0.45) 56%,
+    transparent 74%
+  );
+  mask-image: radial-gradient(
+    circle,
+    rgba(0, 0, 0, 0.96) 24%,
+    rgba(0, 0, 0, 0.45) 56%,
+    transparent 74%
+  );
+  opacity: 0.78;
 }
 
-/* ── Celebration Mode (PR burst) ── */
-.gator-mascot--celebrate .gator-pr-hoist {
-  animation: gator-pr-slam 0.65s cubic-bezier(0.18, 1.45, 0.32, 1) both,
-    gator-pr-surge 1.6s ease-in-out 0.65s infinite;
-}
-
-/* ── Interactive CHOMP & FLEX Burst ── */
-.gator-mascot--chomping {
-  animation: gator-chomp-pop 0.72s cubic-bezier(0.2, 1.5, 0.35, 1) both;
-}
-
-.gator-mascot--chomping .gator-jaw-chomp,
-.gator-mascot--chomping .gator-jaw-interactive {
-  transform-box: fill-box;
-  transform-origin: 25% 20%;
-  animation: gator-snap-chomp 0.36s cubic-bezier(0.25, 1.4, 0.4, 1) 2;
-}
-
-.gator-mascot--chomping .gator-flex-left,
-.gator-mascot--chomping .gator-flex-right {
-  animation: gator-bicep-burst 0.55s cubic-bezier(0.2, 1.5, 0.35, 1);
-}
+/* ── Interactive CHOMP Burst Layers ── */
 
 .gator-burst-ring {
   position: absolute;
   inset: -6px;
+  z-index: 2;
   border-radius: 50%;
   border: 3px solid #FA4616;
-  box-shadow: 0 0 0 2px rgba(0, 33, 165, 0.65);
+  box-shadow: 0 0 12px rgba(250, 70, 22, 0.58), inset 0 0 8px rgba(250, 70, 22, 0.26);
   pointer-events: none;
   opacity: 0;
 }
 
-.gator-mascot--chomping .gator-burst-ring {
-  animation: gator-ring-expand 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+.gator-burst-ring--secondary {
+  inset: -2px;
+  border-width: 2.5px;
+  border-color: #2563EB;
+  box-shadow: 0 0 14px rgba(37, 99, 235, 0.62), 0 0 0 1.5px rgba(250, 70, 22, 0.35);
 }
 
 .gator-chomp-tag {
   position: absolute;
-  top: -10px;
-  right: -8px;
-  padding: 2px 7px;
+  top: -12px;
+  right: -10px;
+  z-index: 3;
+  padding: 3px 8px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #FA4616 0%, #D9380D 100%);
+  background: linear-gradient(135deg, #FF6A3D 0%, #FA4616 55%, #C8320A 100%);
   color: #FFFFFF;
   font-family: var(--font-display, 'Bebas Neue', sans-serif);
-  font-size: 0.72rem;
-  letter-spacing: 0.06em;
-  line-height: 1.2;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.15;
+  white-space: nowrap;
   border: 1.5px solid #0021A5;
-  box-shadow: 0 4px 12px rgba(250, 70, 22, 0.45);
+  box-shadow: 0 4px 14px rgba(250, 70, 22, 0.52), 0 0 0 1px rgba(255, 255, 255, 0.24) inset;
   pointer-events: none;
-  animation: gator-tag-pop 0.78s cubic-bezier(0.2, 1.4, 0.3, 1) forwards;
 }
 
-@keyframes gator-breathe {
-  0%, 100% {
-    transform: translateY(0) scaleY(1);
-  }
-  50% {
-    transform: translateY(-2px) scaleY(1.018);
-  }
-}
+/* ── Keyframes (GPU-composited transform & opacity) ── */
 
-@keyframes gator-flex-pulse {
+@keyframes gator-hero-breathe {
   0%, 100% {
-    transform: scale(1) rotate(0deg);
+    transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-2.5px) scaleX(1.028) scaleY(1.035) rotate(-1.1deg);
   }
   50% {
-    transform: scale(1.035) rotate(-1.5deg);
+    transform: translateY(-0.5px) scaleX(1.008) scaleY(1.006) rotate(0deg);
   }
-}
-
-@keyframes gator-barbell-bob {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-2.5px);
-  }
-}
-
-@keyframes gator-pr-surge {
-  0%, 100% {
-    transform: translateY(0) scale(1);
-  }
-  50% {
-    transform: translateY(-4px) scale(1.025);
+  75% {
+    transform: translateY(-2.5px) scaleX(1.028) scaleY(1.035) rotate(1.1deg);
   }
 }
 
 @keyframes gator-pr-slam {
   0% {
     opacity: 0;
-    transform: translateY(18px) scale(0.72);
+    transform: translateY(24px) scale(0.68, 0.78) rotate(-4deg);
   }
-  65% {
+  52% {
     opacity: 1;
-    transform: translateY(-4px) scale(1.07);
+    transform: translateY(-8px) scale(1.09, 1.12) rotate(2deg);
+  }
+  74% {
+    opacity: 1;
+    transform: translateY(3px) scale(1.04, 0.94) rotate(-1deg);
+  }
+  88% {
+    opacity: 1;
+    transform: translateY(-2px) scale(0.99, 1.02) rotate(0.4deg);
   }
   100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0) scale(1, 1) rotate(0deg);
   }
 }
 
-@keyframes gator-rays-spin {
+@keyframes gator-pr-surge {
+  0%, 100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  38% {
+    transform: translateY(-5.5px) scale(1.035, 1.045);
+  }
+  68% {
+    transform: translateY(1.5px) scale(1.02, 0.98);
+  }
+}
+
+@keyframes gator-pr-aura-spin {
   from {
-    transform: rotate(0deg);
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.06);
   }
   to {
-    transform: rotate(360deg);
+    transform: rotate(360deg) scale(1);
   }
 }
 
-@keyframes gator-jaw-roar {
-  0%, 100% {
-    transform: rotate(0deg);
-  }
-  40%, 60% {
-    transform: rotate(8deg);
-  }
-}
-
-@keyframes gator-snap-chomp {
-  0%, 100% {
-    transform: rotate(0deg);
-  }
-  45% {
-    transform: rotate(12deg);
-  }
-}
-
-@keyframes gator-glint-sweep {
-  0%, 72%, 100% {
-    opacity: 0;
-    transform: translateX(-18px) scale(0.85);
-  }
-  82% {
-    opacity: 0.78;
-    transform: translateX(0px) scale(1.08);
-  }
-  92% {
-    opacity: 0;
-    transform: translateX(18px) scale(0.9);
-  }
-}
-
-@keyframes gator-eye-flash {
-  0%, 84%, 100% {
-    opacity: 0.9;
-    transform: scale(1);
-  }
-  90% {
-    opacity: 1;
-    transform: scale(1.35);
-  }
-}
-
-@keyframes gator-chalk-float {
+@keyframes gator-pr-aura-burst {
   0% {
     opacity: 0;
-    transform: translateY(4px) scale(0.6);
+    transform: scale(0.45) rotate(-45deg);
   }
-  25% {
-    opacity: 0.85;
+  55% {
+    opacity: 1;
+    transform: scale(1.16) rotate(12deg);
   }
   100% {
-    opacity: 0;
-    transform: translateY(-16px) scale(1.25);
+    opacity: 0.85;
+    transform: scale(1) rotate(0deg);
   }
 }
 
 @keyframes gator-spotter-bob {
   0%, 100% {
-    transform: translateY(0) rotate(0deg);
+    transform: translateY(0) rotate(0deg) scale(1);
   }
-  50% {
-    transform: translateY(-2px) rotate(3deg);
+  28% {
+    transform: translateY(-3.5px) rotate(2.4deg) scale(1.018);
+  }
+  55% {
+    transform: translateY(0.5px) rotate(-0.6deg) scale(0.995);
+  }
+  78% {
+    transform: translateY(-2px) rotate(-1.6deg) scale(1.012);
+  }
+}
+
+@keyframes gator-badge-sheen {
+  0% {
+    opacity: 0;
+    transform: translateX(-145%) skewX(-16deg);
+  }
+  18% {
+    opacity: 1;
+  }
+  82% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(155%) skewX(-16deg);
+  }
+}
+
+@keyframes gator-stamp-slam {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px) scale(1.52) rotate(-11deg);
+  }
+  44% {
+    opacity: 1;
+    transform: translateY(2px) scale(0.87) rotate(2.8deg);
+  }
+  68% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.06) rotate(-1.4deg);
+  }
+  84% {
+    opacity: 1;
+    transform: translateY(0.5px) scale(0.985) rotate(0.5deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0deg);
   }
 }
 
 @keyframes gator-chomp-pop {
   0% {
-    transform: scale(1);
+    transform: translateY(0) scale(1, 1) rotate(0deg);
   }
-  30% {
-    transform: scale(1.11) rotate(-2deg);
+  16% {
+    transform: translateY(3px) scale(1.1, 0.88) rotate(-2.5deg);
   }
-  65% {
-    transform: scale(0.97) rotate(1.5deg);
+  38% {
+    transform: translateY(-7px) scale(0.93, 1.15) rotate(3deg);
+  }
+  60% {
+    transform: translateY(1.5px) scale(1.06, 0.94) rotate(-1.6deg);
+  }
+  80% {
+    transform: translateY(-1.5px) scale(0.985, 1.025) rotate(0.6deg);
   }
   100% {
-    transform: scale(1) rotate(0deg);
-  }
-}
-
-@keyframes gator-bicep-burst {
-  0%, 100% {
-    transform: scale(1);
-  }
-  45% {
-    transform: scale(1.14);
+    transform: translateY(0) scale(1, 1) rotate(0deg);
   }
 }
 
 @keyframes gator-ring-expand {
   0% {
     opacity: 0.95;
-    transform: scale(0.75);
+    transform: scale(0.72);
   }
   100% {
     opacity: 0;
-    transform: scale(1.32);
+    transform: scale(1.42);
+  }
+}
+
+@keyframes gator-ring-expand-secondary {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.68);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.56);
   }
 }
 
 @keyframes gator-tag-pop {
   0% {
     opacity: 0;
-    transform: translateY(8px) scale(0.7);
+    transform: translateY(10px) scale(0.58) rotate(-10deg);
   }
-  25% {
+  22% {
     opacity: 1;
-    transform: translateY(-4px) scale(1.08);
+    transform: translateY(-8px) scale(1.14) rotate(4deg);
   }
-  80% {
+  42% {
     opacity: 1;
-    transform: translateY(-6px) scale(1);
+    transform: translateY(-4px) scale(0.98) rotate(-2deg);
+  }
+  76% {
+    opacity: 1;
+    transform: translateY(-6px) scale(1.02) rotate(1deg);
   }
   100% {
     opacity: 0;
-    transform: translateY(-14px) scale(0.92);
+    transform: translateY(-18px) scale(0.88) rotate(3deg);
   }
 }
 
-/* ── Reduced Motion Support ── */
+/* ── Motion-Gated Pose & Interactive Animations ── */
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-motion="full"] .gator-mascot--interactive {
+    transition: transform 240ms var(--ease-spring, cubic-bezier(0.18, 1.35, 0.32, 1)),
+      filter 220ms ease;
+  }
+
+  :root[data-motion="full"] .gator-mascot--interactive:hover {
+    transform: translateY(-3px) scale(1.05);
+  }
+
+  :root[data-motion="full"] .gator-mascot--interactive:active {
+    transform: translateY(1px) scale(0.92, 0.95);
+  }
+
+  /* Hero: power-breathing chest heave + subtle heroic flex sway */
+  :root[data-motion="full"] .gator-mascot--hero .gator-mascot__art {
+    animation: gator-hero-breathe 3.4s cubic-bezier(0.37, 0, 0.63, 1) infinite;
+    will-change: transform;
+  }
+
+  /* PR: victorious bounce surge + rotating stadium aura + celebration slam-in */
+  :root[data-motion="full"] .gator-mascot--pr .gator-mascot__art {
+    animation: gator-pr-surge 1.9s cubic-bezier(0.22, 1.25, 0.36, 1) infinite;
+    will-change: transform;
+  }
+
+  :root[data-motion="full"] .gator-mascot--pr.gator-mascot--celebrate .gator-mascot__art {
+    animation: gator-pr-slam 0.68s cubic-bezier(0.18, 1.4, 0.32, 1) both,
+      gator-pr-surge 1.75s cubic-bezier(0.22, 1.25, 0.36, 1) 0.68s infinite;
+  }
+
+  :root[data-motion="full"] .gator-mascot--pr .gator-pr-aura {
+    animation: gator-pr-aura-spin 16s linear infinite;
+    will-change: transform;
+  }
+
+  :root[data-motion="full"] .gator-mascot--pr.gator-mascot--celebrate .gator-pr-aura {
+    animation: gator-pr-aura-burst 0.68s cubic-bezier(0.16, 1, 0.3, 1) both,
+      gator-pr-aura-spin 10s linear 0.68s infinite;
+  }
+
+  /* Spotter: energetic coach bob & slight lean */
+  :root[data-motion="full"] .gator-mascot--spotter .gator-mascot__art {
+    animation: gator-spotter-bob 2.4s cubic-bezier(0.37, 0, 0.63, 1) infinite;
+    will-change: transform;
+  }
+
+  /* Badge: crisp spring hover lift + glossy light sheen sweep on hover */
+  :root[data-motion="full"] .gator-mascot--badge .gator-mascot__art {
+    transition: transform 240ms var(--ease-spring, cubic-bezier(0.18, 1.35, 0.32, 1)),
+      filter 240ms ease;
+  }
+
+  :root[data-motion="full"] .gator-mascot--badge:hover .gator-mascot__art {
+    transform: translateY(-2.5px) scale(1.06) rotate(-2deg);
+    filter: drop-shadow(0 6px 14px rgba(2, 6, 23, 0.56))
+      drop-shadow(0 0 12px rgba(250, 70, 22, 0.46));
+  }
+
+  :root[data-motion="full"] .gator-mascot--badge.gator-mascot--interactive:hover .gator-mascot__art {
+    transform: rotate(-2deg) scale(1.02);
+  }
+
+  :root[data-motion="full"] .gator-mascot--badge:hover .gator-mascot__art::after {
+    animation: gator-badge-sheen 680ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  /* Stamp: heavy weighted impact slam with elastic settle */
+  :root[data-motion="full"] .gator-mascot--stamp.gator-mascot--celebrate .gator-mascot__art {
+    animation: gator-stamp-slam 0.62s cubic-bezier(0.2, 1.35, 0.35, 1) both;
+    will-change: transform;
+  }
+
+  /* Interactive CHOMP squash-and-stretch pop, dual shockwave rings & tag */
+  :root[data-motion="full"] .gator-mascot--chomping {
+    animation: gator-chomp-pop 0.72s cubic-bezier(0.22, 1.35, 0.36, 1) both;
+  }
+
+  :root[data-motion="full"] .gator-mascot--chomping .gator-burst-ring {
+    animation: gator-ring-expand 0.64s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  :root[data-motion="full"] .gator-mascot--chomping .gator-burst-ring--secondary {
+    animation: gator-ring-expand-secondary 0.72s cubic-bezier(0.16, 1, 0.3, 1) 0.09s forwards;
+  }
+
+  :root[data-motion="full"] .gator-mascot--chomping .gator-chomp-tag {
+    animation: gator-tag-pop 0.82s cubic-bezier(0.2, 1.45, 0.32, 1) forwards;
+  }
+}
+
+/* ── Reduced Motion Safeguards ── */
+
 @media (prefers-reduced-motion: reduce) {
+  .gator-mascot,
   .gator-mascot *,
-  .gator-mascot--interactive,
-  .gator-mascot--chomping,
-  .gator-burst-ring,
-  .gator-chomp-tag {
+  .gator-mascot *::before,
+  .gator-mascot *::after {
     animation: none !important;
     transition: none !important;
   }
 }
 
+:root[data-motion="reduced"] .gator-mascot,
 :root[data-motion="reduced"] .gator-mascot *,
-:root[data-motion="reduced"] .gator-mascot--interactive,
-:root[data-motion="reduced"] .gator-mascot--chomping,
-:root[data-motion="reduced"] .gator-burst-ring,
-:root[data-motion="reduced"] .gator-chomp-tag {
+:root[data-motion="reduced"] .gator-mascot *::before,
+:root[data-motion="reduced"] .gator-mascot *::after {
   animation: none !important;
   transition: none !important;
 }

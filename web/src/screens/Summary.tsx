@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { Check, ChevronDown, FileDown, Star } from 'lucide-react'
+import { Check, ChevronDown, FileDown, Star, Trophy } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useSaveBackup } from '../db/backup'
 import { updateWorkout } from '../db/repositories'
@@ -73,6 +73,7 @@ export default function Summary() {
 function Completed({workout,data}:{workout:Workout;data:HistoryData}) {
   const {ready,save} = useSaveBackup()
   const [rating,setRating] = useState(workout.rating)
+  const [starBurst,setStarBurst] = useState<{star:number;seq:number}|null>(null)
   const [note,setNote] = useState(workout.ratingNote || '')
   const [details,setDetails] = useState(false)
   const [saving,setSaving] = useState(false)
@@ -126,7 +127,7 @@ function Completed({workout,data}:{workout:Workout;data:HistoryData}) {
     <p className="his-summary-date summary-stagger" style={{'--stagger-i': 0} as CSSProperties}>{dateLabel(workout.startTime)}</p>
     <section className="surface his-result summary-stagger" style={{'--stagger-i': 1} as CSSProperties} data-stamp-pending={stampPhase === 'pending' || undefined} data-stamping={stampPhase === 'playing' || undefined} aria-label="Workout totals">
       <div className="finish-record">
-        <div className="finish-headline"><span className="eyebrow">{stats.volume > 0 ? 'Total volume' : 'Working sets'}</span>
+        <div className="finish-headline summary-headline-in"><span className="eyebrow">{stats.volume > 0 ? 'Total volume' : 'Working sets'}</span>
           <p className="his-result-volume">
             {stats.volume > 0
               ? <><AnimatedNumber value={convertedVolume} format={n => String(Number(n.toFixed(2)))} /> <small>{weightLabel(unit)}</small></>
@@ -135,27 +136,72 @@ function Completed({workout,data}:{workout:Workout;data:HistoryData}) {
         </div>
         <FinishStamp icon={data.prefs.appIcon} celebrate={stampPhase === 'playing'}/>
       </div>
-      <dl className="his-metrics"><div><dt>Duration</dt><dd>{stats.duration}</dd></div>
+      <dl className="his-metrics">
+        <div className="summary-kpi-item" style={{'--kpi-i': 0} as CSSProperties}><dt>Duration</dt><dd>{stats.duration}</dd></div>
         {stats.volume > 0
-          ? <div><dt>Working sets</dt><dd>{stats.sets}</dd></div>
-          : <div><dt>Total volume</dt><dd>{mass(stats.volume)}</dd></div>}
-        <div><dt>Exercises</dt><dd>{stats.exercises}</dd></div>
+          ? <div className="summary-kpi-item" style={{'--kpi-i': 1} as CSSProperties}><dt>Working sets</dt><dd>{stats.sets}</dd></div>
+          : <div className="summary-kpi-item" style={{'--kpi-i': 1} as CSSProperties}><dt>Total volume</dt><dd>{mass(stats.volume)}</dd></div>}
+        <div className="summary-kpi-item" style={{'--kpi-i': 2} as CSSProperties}><dt>Exercises</dt><dd>{stats.exercises}</dd></div>
       </dl>
-      {stats.muscles.length > 0 && <div className="his-muscles"><span className="eyebrow">Muscles trained</span><p>{stats.muscles.join(' · ')}</p></div>}
+      {stats.muscles.length > 0 && <div className="his-muscles summary-kpi-item" style={{'--kpi-i': 3} as CSSProperties}><span className="eyebrow">Muscles trained</span><p>{stats.muscles.join(' · ')}</p></div>}
     </section>
-    {share?.highlight && <p className="his-recap summary-stagger" style={{'--stagger-i': 2} as CSSProperties}>{share.highlight}</p>}
-    <button className="surface his-save-backup hover-lift summary-stagger" style={{'--stagger-i': 2} as CSSProperties} disabled={!ready || savingBackup} onClick={async () => {
-      setSavingBackup(true);setMessage('')
-      try { const result = await save(); if (result !== 'cancelled') setMessage(result === 'shared' ? 'Backup shared.' : 'Backup downloaded.') }
-      catch(err) { setMessage(err instanceof Error ? err.message : 'Couldn’t save your backup. Try again.') }
-      finally { setSavingBackup(false) }
-    }}><FileDown size={21}/><strong>Save backup to Files</strong><span aria-hidden="true">↗</span></button>
-    {message && <p className="his-message" role="status">{message}</p>}
-    <section className="his-feedback summary-stagger" style={{'--stagger-i': 3} as CSSProperties}><h2>How did it feel?</h2><div className="his-stars" role="group" aria-label="Workout rating">{[1,2,3,4,5].map(n => <button type="button" aria-label={n + (n === 1 ? ' star' : ' stars')} aria-pressed={rating === n} data-filled={rating !== null && n <= rating} key={n} onClick={() => setRating(rating === n ? null : n)}><Star size={25}/></button>)}</div>
+    {share && (share.highlight || share.exercises.length > 0) && (
+      <section className="surface his-recap-card summary-stagger" style={{'--stagger-i': 2} as CSSProperties} aria-label="Exercises recap">
+        {share.highlight && <p className="his-recap">{share.highlight}</p>}
+        {share.exercises.length > 0 && (
+          <ul className="his-recap-list">
+            {share.exercises.map((ex, idx) => {
+              const workingCount = ex.sets.filter(s => !s.isWarmup).length
+              const hasPr = ex.sets.some(s => s.isPersonalRecord)
+              return (
+                <li key={ex.id} className="summary-recap-row" style={{'--row-i': Math.min(idx, 10)} as CSSProperties}>
+                  <span className="his-recap-name">
+                    <strong>{ex.name}</strong>
+                    <small>{ex.targetMuscle}</small>
+                  </span>
+                  <span className="his-recap-meta">
+                    {hasPr && <span className="his-pr-badge"><Trophy size={13} aria-label="Personal record" className="his-pr"/>PR</span>}
+                    <small>{workingCount} {workingCount === 1 ? 'set' : 'sets'}</small>
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
+    )}
+    <div className="his-action-strip">
+      <button className="surface his-save-backup hover-lift summary-action-item" style={{'--action-i': 0} as CSSProperties} disabled={!ready || savingBackup} onClick={async () => {
+        setSavingBackup(true);setMessage('')
+        try { const result = await save(); if (result !== 'cancelled') setMessage(result === 'shared' ? 'Backup shared.' : 'Backup downloaded.') }
+        catch(err) { setMessage(err instanceof Error ? err.message : 'Couldn’t save your backup. Try again.') }
+        finally { setSavingBackup(false) }
+      }}><FileDown size={21}/><strong>Save backup to Files</strong><span aria-hidden="true">↗</span></button>
+      {message && <p className="his-message" role="status">{message}</p>}
+    </div>
+    <section className="his-feedback summary-stagger" style={{'--stagger-i': 3} as CSSProperties}><h2>How did it feel?</h2><div className="his-stars" role="group" aria-label="Workout rating">{[1,2,3,4,5].map(n => {
+      const filled = rating !== null && n <= rating
+      const isPeak = rating === n
+      const burstKey = starBurst && filled && n <= starBurst.star ? `pop-${starBurst.seq}-${n}` : 'idle'
+      return <button
+        type="button"
+        key={n}
+        className={`his-star-btn${filled ? ' is-selected' : ''}${isPeak ? ' is-peak' : ''}`}
+        style={{'--star-i': n - 1} as CSSProperties}
+        aria-label={n + (n === 1 ? ' star' : ' stars')}
+        aria-pressed={isPeak}
+        data-filled={filled}
+        onClick={() => {
+          const next = rating === n ? null : n
+          setRating(next)
+          if (next !== null) setStarBurst(prev => ({star: n, seq: (prev?.seq ?? 0) + 1}))
+        }}
+      ><span key={burstKey} className="his-star-glyph"><Star size={25}/></span></button>
+    })}</div>
       <label className="his-note-field">Session note<textarea className="his-input" placeholder="Optional" rows={3} value={note} maxLength={2000} onChange={e => setNote(e.target.value)}/></label>
       {note.length >= 1800 && <small>{note.length} / 2,000</small>}
     </section>
-    <section className="his-more summary-stagger" style={{'--stagger-i': 4} as CSSProperties}><button type="button" aria-expanded={details} className="his-action" onClick={() => setDetails(!details)}>Sharing &amp; details<ChevronDown size={19} style={{transform:details ? 'rotate(180deg)' : undefined}}/></button>
+    <section className="his-more summary-action-item" style={{'--action-i': 1} as CSSProperties}><button type="button" aria-expanded={details} className="his-action" onClick={() => setDetails(!details)}>Sharing &amp; details<ChevronDown size={19} style={{transform:details ? 'rotate(180deg)' : undefined}}/></button>
       {details && <div className="his-more-panel"><dl className="his-compare"><div><dt>This week</dt><dd>{mass(week.currentWeek)}</dd></div><div><dt>Previous week</dt><dd>{mass(week.lastWeek)}</dd></div></dl>
         {share && <ShareActions share={share} prefs={data.prefs}/>}</div >}
     </section>

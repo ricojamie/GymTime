@@ -83,6 +83,11 @@ img {max-width:100%}
 .app-tab-track > span {width:25%;border-radius:var(--radius-control);background:var(--bg-surface-hover);box-shadow:var(--bevel-inset),inset 0 0 0 1px var(--border-hairline)}
 .hover-lift {will-change:transform}
 .stagger-in {--stagger-i:0}
+.sticky-bar {
+  position:sticky;top:0;z-index:8;
+  backdrop-filter:blur(18px) saturate(160%);
+  -webkit-backdrop-filter:blur(18px) saturate(160%);
+}
 
 @media (prefers-reduced-motion:no-preference) {
   :root[data-motion=full][data-brand-morph=true] body,
@@ -91,20 +96,30 @@ img {max-width:100%}
   :root[data-motion=full][data-brand-morph=true] .session-dock {
     transition:background-color 340ms var(--ease-dramatic),color 260ms var(--ease-dramatic),border-color 300ms var(--ease-dramatic);
   }
-  :root[data-motion=full] .app-route-stage {animation:route-enter var(--motion-med) var(--ease-dramatic) both}
-  :root[data-motion=full] .stagger-in {animation:stagger-rise var(--motion-med) var(--ease-dramatic) both;animation-delay:calc(var(--stagger-i,0) * 42ms)}
-  :root[data-motion=full] .app-tab-track > span {transition:transform 260ms var(--ease-spring)}
+  :root[data-motion=full] .app-route-stage {animation:route-enter 270ms var(--ease-dramatic) backwards}
+  :root[data-motion=full] .stagger-in {animation:stagger-rise 280ms var(--ease-dramatic) backwards;animation-delay:calc(var(--stagger-i,0) * 42ms)}
+  :root[data-motion=full] .sticky-bar {animation:sticky-bar-enter 260ms var(--ease-dramatic) backwards}
+  :root[data-motion=full] .fly-in-up {animation:fly-in-up 300ms var(--ease-dramatic) backwards;animation-delay:calc(var(--stagger-i,0) * 42ms)}
+  :root[data-motion=full] .fly-in-down {animation:fly-in-down 280ms var(--ease-dramatic) backwards;animation-delay:calc(var(--stagger-i,0) * 42ms)}
+  :root[data-motion=full] .fly-in-left {animation:fly-in-left 280ms var(--ease-dramatic) backwards;animation-delay:calc(var(--stagger-i,0) * 42ms)}
+  :root[data-motion=full] .fly-in-right {animation:fly-in-right 280ms var(--ease-dramatic) backwards;animation-delay:calc(var(--stagger-i,0) * 42ms)}
+  :root[data-motion=full] .fly-out-right {animation:fly-out-right 180ms cubic-bezier(.4,0,1,1) forwards}
+  :root[data-motion=full] .fly-out-down {animation:fly-out-down 180ms cubic-bezier(.4,0,1,1) forwards}
+  :root[data-motion=full] .pop-bounce {animation:pop-bounce 340ms var(--ease-spring) backwards}
+  :root[data-motion=full] .press-spring {animation:press-spring 260ms var(--ease-spring)}
+  :root[data-motion=full] .app-tab-track > span {transition:transform 340ms cubic-bezier(.22,1.32,.36,1);will-change:transform}
   :root[data-motion=full] :is(.btn,.icon-button,.primary),
-  :root[data-motion=full] a.btn {transition:transform var(--motion-fast) var(--ease-spring),background-color var(--motion-fast) var(--ease),border-color var(--motion-fast) var(--ease),box-shadow var(--motion-fast) var(--ease)}
-  :root[data-motion=full] :is(.btn,.icon-button,.primary):enabled:active,
-  :root[data-motion=full] a.btn:active {transform:scale(.968)}
-  :root[data-motion=full] .btn:not(.primary):enabled:hover {background:var(--bg-surface-raised);border-color:var(--border-strong)}
+  :root[data-motion=full] a.btn {transition:transform 220ms var(--ease-spring),background-color var(--motion-fast) var(--ease),border-color var(--motion-fast) var(--ease),box-shadow var(--motion-fast) var(--ease)}
+  :root[data-motion=full] .btn:not(.primary):enabled:hover,
+  :root[data-motion=full] a.btn:not(.primary):hover {background:var(--bg-surface-raised);border-color:var(--border-strong);transform:translateY(-1px)}
+  :root[data-motion=full] .icon-button:enabled:hover {transform:scale(1.05)}
   :root[data-motion=full] .primary:enabled:hover,
-  :root[data-motion=full] .btn.primary:enabled:hover {
+  :root[data-motion=full] .btn.primary:enabled:hover,
+  :root[data-motion=full] a.btn.primary:hover {
     background:color-mix(in srgb,var(--accent) 92%,white);
     border-color:color-mix(in srgb,var(--on-accent) 18%,transparent);
     box-shadow:inset 0 1px 0 rgba(255,255,255,.34),0 10px 24px -6px color-mix(in srgb,var(--accent) 62%,transparent);
-    transform:translateY(-1px);
+    transform:translateY(-1.5px) scale(1.008);
   }
   :root[data-motion=full] .primary::after,
   :root[data-motion=full] .btn.primary::after {
@@ -112,22 +127,108 @@ img {max-width:100%}
     transform:translateX(-120%);pointer-events:none;transition:transform 480ms var(--ease-dramatic);
   }
   :root[data-motion=full] .primary:enabled:hover::after,
-  :root[data-motion=full] .btn.primary:enabled:hover::after {transform:translateX(120%)}
-  :root[data-motion=full] .hover-lift {transition:transform var(--motion-fast) var(--ease-spring),border-color var(--motion-fast) var(--ease),box-shadow var(--motion-fast) var(--ease)}
+  :root[data-motion=full] .btn.primary:enabled:hover::after,
+  :root[data-motion=full] a.btn.primary:hover::after {transform:translateX(120%)}
+  :root[data-motion=full] :is(.btn,.icon-button,.primary):enabled:active,
+  :root[data-motion=full] a.btn:active {transform:translateY(1px) scale(.945);transition-duration:75ms;transition-timing-function:var(--ease-snappy)}
+  :root[data-motion=full] .primary:enabled:active,
+  :root[data-motion=full] .btn.primary:enabled:active,
+  :root[data-motion=full] a.btn.primary:active {box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 3px 10px -4px color-mix(in srgb,var(--accent) 55%,transparent)}
+  :root[data-motion=full] .hover-lift {transition:transform 220ms var(--ease-spring),border-color var(--motion-fast) var(--ease),box-shadow var(--motion-fast) var(--ease)}
   :root[data-motion=full] .hover-lift:hover {transform:translateY(-2px);border-color:var(--border-strong);box-shadow:var(--bevel-inset),var(--shadow-elevated)}
-  :root[data-motion=full] .app-tabs a {transition:color var(--motion-fast) var(--ease)}
-  :root[data-motion=full] .app-tabs a svg {transition:transform var(--motion-fast) var(--ease-spring)}
-  :root[data-motion=full] .app-tabs a[aria-current=page] svg {animation:tab-pop 320ms var(--ease-spring)}
-  :root[data-motion=full] .app-tabs a:active svg {transform:translateY(1px) scale(.88)}
-  :root[data-motion=full] .session-dock {animation:dock-arrive var(--motion-med) var(--ease-spring)}
-  :root[data-motion=full] .session-dock:active {transform:scale(.985)}
+  :root[data-motion=full] .hover-lift:active {transform:translateY(0) scale(.985);transition-duration:75ms}
+  :root[data-motion=full] .app-tabs a {transition:color var(--motion-fast) var(--ease),transform 200ms var(--ease-spring)}
+  :root[data-motion=full] .app-tabs a:not([aria-current=page]):hover {color:var(--ink-primary)}
+  :root[data-motion=full] .app-tabs a svg {transition:transform 220ms var(--ease-spring)}
+  :root[data-motion=full] .app-tabs a:hover svg {transform:translateY(-1.5px) scale(1.06)}
+  :root[data-motion=full] .app-tabs a[aria-current=page] svg {animation:tab-pop 400ms var(--ease-spring)}
+  :root[data-motion=full] .app-tabs a:active {transform:scale(.93);transition-duration:70ms}
+  :root[data-motion=full] .app-tabs a:active svg {transform:translateY(1.5px) scale(.84)}
+  :root[data-motion=full] .session-dock {
+    animation:dock-arrive 360ms var(--ease-dramatic) backwards;
+    transition:transform 220ms var(--ease-spring),border-color var(--motion-fast) var(--ease),box-shadow var(--motion-fast) var(--ease),background-color var(--motion-fast) var(--ease);
+  }
+  :root[data-motion=full] .session-dock:hover {transform:translateY(-2px) scale(1.008);border-color:var(--border-strong);box-shadow:var(--bevel-inset),var(--shadow-elevated)}
+  :root[data-motion=full] .session-dock svg {transition:transform 200ms var(--ease-spring)}
+  :root[data-motion=full] .session-dock:hover svg {transform:translateX(3px)}
+  :root[data-motion=full] .session-dock:active {transform:translateY(1px) scale(.965);transition-duration:75ms}
   :root[data-motion=full] .session-led {animation:session-ready 1.8s var(--ease-settle) infinite}
   :root[data-motion=full] .session-led::after {animation:led-ping 1.8s var(--ease-dramatic) infinite}
+  :root[data-motion=full] .app-update {animation:update-drop-in 380ms var(--ease-dramatic) backwards}
 }
-@keyframes route-enter {from{opacity:.01;transform:translateY(7px)} to{opacity:1;transform:translateY(0)}}
-@keyframes stagger-rise {from{opacity:0;transform:translateY(10px) scale(.985)} to{opacity:1;transform:translateY(0) scale(1)}}
-@keyframes tab-pop {0%{transform:scale(.82)} 55%{transform:translateY(-2px) scale(1.12)} 100%{transform:translateY(0) scale(1)}}
-@keyframes dock-arrive {from{opacity:.5;transform:translateY(8px) scale(.97)} to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes fly-in-up {
+  0% {opacity:0;transform:translate3d(0,22px,0) scale(.975)}
+  70% {opacity:1;transform:translate3d(0,-2px,0) scale(1.005)}
+  100% {opacity:1;transform:translate3d(0,0,0) scale(1)}
+}
+@keyframes fly-in-down {
+  0% {opacity:0;transform:translate3d(0,-22px,0) scale(.975)}
+  70% {opacity:1;transform:translate3d(0,2px,0) scale(1.005)}
+  100% {opacity:1;transform:translate3d(0,0,0) scale(1)}
+}
+@keyframes fly-in-left {
+  0% {opacity:0;transform:translate3d(-24px,0,0) scale(.98)}
+  70% {opacity:1;transform:translate3d(3px,0,0) scale(1.004)}
+  100% {opacity:1;transform:translate3d(0,0,0) scale(1)}
+}
+@keyframes fly-in-right {
+  0% {opacity:0;transform:translate3d(24px,0,0) scale(.98)}
+  70% {opacity:1;transform:translate3d(-3px,0,0) scale(1.004)}
+  100% {opacity:1;transform:translate3d(0,0,0) scale(1)}
+}
+@keyframes fly-out-right {
+  0% {opacity:1;transform:translate3d(0,0,0) scale(1)}
+  100% {opacity:0;transform:translate3d(28px,0,0) scale(.96)}
+}
+@keyframes fly-out-down {
+  0% {opacity:1;transform:translate3d(0,0,0) scale(1)}
+  100% {opacity:0;transform:translate3d(0,24px,0) scale(.965)}
+}
+@keyframes pop-bounce {
+  0% {opacity:0;transform:scale(.72)}
+  52% {opacity:1;transform:scale(1.12)}
+  78% {transform:scale(.96)}
+  100% {opacity:1;transform:scale(1)}
+}
+@keyframes press-spring {
+  0% {transform:scale(1)}
+  35% {transform:scale(.92)}
+  72% {transform:scale(1.035)}
+  100% {transform:scale(1)}
+}
+@keyframes sticky-bar-enter {
+  0% {opacity:0;transform:translate3d(0,-14px,0) scale(.988)}
+  72% {opacity:1;transform:translate3d(0,1.5px,0) scale(1.002)}
+  100% {opacity:1;transform:translate3d(0,0,0) scale(1)}
+}
+@keyframes route-enter {
+  0% {opacity:.01;transform:translate3d(0,14px,0) scale(.992)}
+  72% {opacity:1;transform:translate3d(0,-1.5px,0) scale(1.001)}
+  100% {opacity:1;transform:translate3d(0,0,0) scale(1)}
+}
+@keyframes stagger-rise {
+  0% {opacity:0;transform:translate3d(0,14px,0) scale(.98)}
+  72% {opacity:1;transform:translate3d(0,-1.5px,0) scale(1.003)}
+  100% {opacity:1;transform:translate3d(0,0,0) scale(1)}
+}
+@keyframes tab-pop {
+  0% {transform:translateY(2px) scale(.76)}
+  45% {transform:translateY(-4px) scale(1.18)}
+  74% {transform:translateY(1px) scale(.95)}
+  100% {transform:translateY(0) scale(1)}
+}
+@keyframes dock-arrive {
+  0% {opacity:0;transform:translate3d(0,22px,0) scale(.94)}
+  64% {opacity:1;transform:translate3d(0,-3px,0) scale(1.015)}
+  84% {transform:translate3d(0,1px,0) scale(.996)}
+  100% {opacity:1;transform:translate3d(0,0,0) scale(1)}
+}
+@keyframes update-drop-in {
+  0% {opacity:0;transform:translate3d(-50%,-26px,0) scale(.94)}
+  65% {opacity:1;transform:translate3d(-50%,3px,0) scale(1.015)}
+  85% {transform:translate3d(-50%,-1px,0) scale(.998)}
+  100% {opacity:1;transform:translate3d(-50%,0,0) scale(1)}
+}
 @keyframes session-ready {0%,100%{transform:scale(1)} 45%{transform:scale(1.18)}}
 @keyframes led-ping {0%{transform:scale(.8);opacity:.65} 75%,100%{transform:scale(2.3);opacity:0}}
 @media(min-width:700px){ :root{--gutter:28px}.screen{padding-top:32px}.app-tabs a{flex-direction:row;gap:8px;font-size:13px}.app-chrome{bottom:16px}}
