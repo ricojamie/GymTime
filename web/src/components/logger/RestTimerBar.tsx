@@ -1,17 +1,26 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Bell, Check, Minus, Play, Plus, RotateCcw, SkipForward, Timer, Vibrate } from 'lucide-react'
 import { db, defaultPreferences } from '../../db/database'
 import { updatePreferences } from '../../db/repositories'
 import { adjustRestTimer, formatRestTime, startRestTimer, stopRestTimer, useRestTimerRemaining } from '../../store/restTimer'
+import { useIsGatorMode } from '../../theme'
+import { SwoleGator } from '../mascot'
 import { BottomSheet } from '../primitives'
 import './timer.css'
 
 export default function RestTimerBar({ defaultSeconds }: { defaultSeconds: number }) {
   const remaining = useRestTimerRemaining()
+  const isGator = useIsGatorMode()
   const [open, setOpen] = useState(false)
   const [override, setOverride] = useState<{ base: number; value: number } | null>(null)
   const [error, setError] = useState('')
+  const [total, setTotal] = useState(() => Math.max(1, defaultSeconds))
+  const [completedFlash, setCompletedFlash] = useState(false)
+  const [nudgePulse, setNudgePulse] = useState(0)
+  const prevRemaining = useRef(remaining)
+  const manualSkip = useRef(false)
+
   const preferences = useLiveQuery(() => db.preferences.get('default'), []) ?? defaultPreferences
   const preset = Math.max(0, defaultSeconds)
   const idleSeconds = override?.base === preset ? override.value : preset
@@ -19,14 +28,42 @@ export default function RestTimerBar({ defaultSeconds }: { defaultSeconds: numbe
   const shown = running ? remaining : idleSeconds
   const time = formatRestTime(shown)
 
+  useEffect(() => {
+    if (remaining > total) setTotal(remaining)
+  }, [remaining, total])
+
+  useEffect(() => {
+    if (prevRemaining.current > 0 && remaining === 0) {
+      if (!manualSkip.current) {
+        setCompletedFlash(true)
+      }
+      manualSkip.current = false
+    }
+    prevRemaining.current = remaining
+  }, [remaining])
+
+  useEffect(() => {
+    if (!completedFlash) return
+    const t = window.setTimeout(() => setCompletedFlash(false), 1400)
+    return () => window.clearTimeout(t)
+  }, [completedFlash])
+
   function adjust(by: number) {
-    if (running) adjustRestTimer(by)
-    else setOverride({ base: preset, value: Math.max(0, idleSeconds + by) })
+    setNudgePulse(p => p + 1)
+    if (running) {
+      if (remaining + by > total) setTotal(remaining + by)
+      adjustRestTimer(by)
+    } else {
+      setOverride({ base: preset, value: Math.max(0, idleSeconds + by) })
+    }
   }
 
   function reset() {
     setOverride(null)
-    if (running) startRestTimer(preset)
+    if (running) {
+      setTotal(Math.max(1, preset))
+      startRestTimer(preset)
+    }
   }
 
   async function toggle(key: 'timerAudioEnabled' | 'timerVibrateEnabled') {
@@ -39,23 +76,42 @@ export default function RestTimerBar({ defaultSeconds }: { defaultSeconds: numbe
   }
 
   function startOrSkip() {
-    if (running) stopRestTimer()
-    else startRestTimer(idleSeconds)
+    if (running) {
+      manualSkip.current = true
+      stopRestTimer()
+    } else {
+      manualSkip.current = false
+      setCompletedFlash(false)
+      setTotal(Math.max(1, idleSeconds))
+      startRestTimer(idleSeconds)
+    }
   }
 
+  const progress = running ? Math.min(1, Math.max(0, remaining / Math.max(1, total))) : 0
+  const urgent = running && remaining <= 10
+
   return <>
-    <div className="rest-strip" data-urgent={running && remaining <= 3 || undefined}>
+    <div
+      className={'rest-strip' + (running ? ' is-running' : '') + (completedFlash ? ' is-complete' : '')}
+      data-urgent={urgent || undefined}
+      style={{ '--rest-progress': progress } as CSSProperties}
+    >
+      <span className="rest-progress" aria-hidden="true" />
       <button type="button" className="rest-readout" aria-label={'Rest timer settings, ' + time} onClick={() => setOpen(true)}>
-        <Timer size={19} aria-hidden="true" />
-        <span><span className="rest-label">Rest timer</span><strong>{time}</strong></span>
+        {isGator ? <SwoleGator pose="spotter" size={26} /> : <Timer size={19} aria-hidden="true" />}
+        <span>
+          <span className="rest-label">{completedFlash ? 'Rest complete' : 'Rest timer'}</span>
+          <strong key={nudgePulse}>{time}</strong>
+        </span>
       </button>
-      <button type="button" className="rest-nudge" onClick={() => adjust(30)} aria-label="Add 30 seconds">+30s</button>
+      <button type="button" className="rest-nudge" disabled={shown <= 0} onClick={() => adjust(-15)} aria-label="Subtract 15 seconds">-15s</button>
+      <button type="button" className="rest-nudge" onClick={() => adjust(15)} aria-label="Add 15 seconds">+15s</button>
       <button type="button" className="rest-action" disabled={!running && !idleSeconds} onClick={startOrSkip}>
         {running ? <SkipForward size={15} /> : <Play size={15} />} {running ? 'Skip' : 'Start'}
       </button>
     </div>
     {open && <BottomSheet title="Rest timer" onClose={() => setOpen(false)}>
-      <div className="rest-sheet" data-urgent={running && remaining <= 3 || undefined}>
+      <div className="rest-sheet" data-urgent={urgent || undefined}>
         <div className="rest-sheet-time">
           <button type="button" className="btn" disabled={shown <= 0} onClick={() => adjust(-5)} aria-label="Subtract 5 seconds"><Minus size={15} />5s</button>
           <strong role="timer">{time}</strong>

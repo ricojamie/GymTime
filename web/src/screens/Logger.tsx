@@ -14,8 +14,10 @@ import { afterLog, emptyDraft, metricFields, normalizeDraft, validateSet, type S
 import { recordMetric, replayRecords } from '../domain/records'
 import { distanceLabels, distanceToMeters, formatWeight, fromLbs, toLbs, weightLabel } from '../domain/units'
 import { BottomSheet } from '../components/primitives'
+import { useIsGatorMode } from '../theme'
 import Keypad, { clockValue, fieldLabels, type DialPin, type PadField } from '../components/logger/Keypad'
 import PlateCalculatorSheet from '../components/logger/PlateCalculatorSheet'
+import PrCelebration from '../components/logger/PrCelebration'
 import ProgressSheet from '../components/logger/ProgressSheet'
 import SmartLogSheet, { type SmartLogEntry } from '../components/logger/SmartLogSheet'
 import RestTimerBar from '../components/logger/RestTimerBar'
@@ -24,7 +26,7 @@ import '../components/logger/logger.css'
 
 type LoggerSheet = 'menu' | 'progress' | 'plates' | 'smart' | 'notes' | 'finish' | 'delete' | null
 type Queue = { workoutId: number; entries: SmartLogEntry[]; index: number }
-type Transient = { exitedGroups: string[]; queue: Queue | null; banner: {workoutId: number; labels: string[]; id: number; expiresAt: number} | null }
+type Transient = { exitedGroups: string[]; queue: Queue | null; banner: {workoutId: number; exerciseName: string; labels: string[]; id: number; expiresAt: number} | null }
 const useTransient = create<Transient>(() => ({ queue: null, banner: null, exitedGroups: [] }))
 const scratch = new Map<string, SetDraft>()
 let scratchWorkout = ''
@@ -62,7 +64,7 @@ function TimerIndicator() {
     <span aria-hidden="true" />{seconds ? clockValue(seconds) : <Timer size={14} aria-hidden="true" />}</span>
 }
 
-function RecordBanner({ workoutId }: {workoutId: number}) {
+function RecordBanner({ workoutId, isGator, audioEnabled }: { workoutId: number; isGator: boolean; audioEnabled: boolean }) {
   const banner = useTransient(s => s.banner)
   useEffect(() => {
     if (!banner) return
@@ -70,7 +72,14 @@ function RecordBanner({ workoutId }: {workoutId: number}) {
     return () => clearTimeout(t)
   }, [banner])
   if (!banner || banner.workoutId !== workoutId || banner.expiresAt <= Date.now()) return null
-  return <div className="log-pr" role="status" key={banner.id}><span aria-hidden="true" className="log-pr-medal"><Trophy size={20} /></span><div><strong>New personal record</strong><small>{banner.labels.join(' · ')}</small></div></div>
+  return <PrCelebration
+    id={banner.id}
+    labels={banner.labels}
+    exerciseName={banner.exerciseName}
+    isGator={isGator}
+    audioEnabled={audioEnabled}
+    onDismiss={() => useTransient.setState({ banner: null })}
+  />
 }
 
 export default function Logger() {
@@ -103,6 +112,8 @@ export default function Logger() {
 
 function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
   const nav = useNavigate()
+  const isGatorHook = useIsGatorMode()
+  const isGator = isGatorHook || prefs.appIcon === 'swole_alligator'
   const wid = workout.id
   const eid = exercise.id
   const prefsUnit = prefs.preferredWeightUnit
@@ -233,11 +244,8 @@ function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
       scratch.set(cacheKey, sticky)
       setDraft(sticky)
       if (prefs.timerAutoStart && defaultRest > 0) startRestTimer(defaultRest)
-      // Allow the next set to open before replaying a long exercise history.
-      window.setTimeout(() => {
-        const record = replayRecords([...sets, {...row,id}], exercise.logType, exercise.defaultDistanceUnit).find(r => r.setId === id)
-        if (record && !record.benchmark) useTransient.setState({banner: {workoutId: wid, labels: record.labels, id, expiresAt: Date.now() + 4000}})
-      }, 0)
+      const record = replayRecords([...sets, {...row,id}], exercise.logType, exercise.defaultDistanceUnit).find(r => r.setId === id)
+      if (record && !record.benchmark) useTransient.setState({banner: {workoutId: wid, exerciseName: exercise.name, labels: record.labels, id, expiresAt: Date.now() + 4500}})
       if (queue && entry?.exerciseId === eid) {
         const nextIndex = queue.index + 1
         const next = queue.entries[nextIndex]
@@ -286,7 +294,7 @@ function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
   const nextNumber = editId ? 'Editing set' : draft.isWarmup || forceWarmup ? 'Warm-up ' + (warmups.length + 1) : 'Working set ' + (working.length + 1)
   const selectPath = '/exercises/select?workoutId=' + wid
   function listRow(s: WorkoutSet, i: number) {
-    return <li key={s.id} className={'log-set-row' + (s.id === editId ? ' is-editing' : '')} data-just-added={s.id === addedSetId || undefined}>
+    return <li key={s.id} className={'log-set-row stagger-in' + (s.id === editId ? ' is-editing' : '')} data-just-added={s.id === addedSetId || undefined} style={{ '--stagger-i': Math.min(i, 12) } as React.CSSProperties}>
       <button onClick={() => beginEdit(s)} aria-label={'Edit ' + (s.isWarmup ? 'warm-up ' : 'set ') + (i + 1) + ', ' + setText(s, exercise, prefs)}>
         <span className="log-set-num">{String(i+1).padStart(2,'0')}</span>
         <span className="log-row-value"><strong>{setText(s,exercise,prefs)}</strong>{(s.rpe != null || s.note) && <small>{[s.rpe == null ? '' : 'RPE ' + s.rpe,s.note].filter(Boolean).join(' · ')}</small>}</span>
@@ -324,17 +332,20 @@ function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
     {members.length > 1 && <div className="log-members" aria-label="Superset exercises">{members.map(p => <button key={p.id} aria-pressed={p.exerciseId === eid} onClick={() => gotoExercise(p.exerciseId)}>{names.get(p.exerciseId)}</button>)}<button aria-label="Exit superset" onClick={() => useTransient.setState(s => ({exitedGroups:[...s.exitedGroups,groupKey]}))}><X size={14} /> Exit</button></div>}
     {planGroup && exitedGroup && <div className="log-members"><button onClick={() => useTransient.setState(s => ({exitedGroups:s.exitedGroups.filter(g => g !== groupKey)}))}><ArrowLeftRight size={15} />Resume superset</button></div>}
     <section className="log-stage" aria-label="Set entry">
-      <div className="log-fields">{fields.map(field => <div className="log-field-wrap" key={field}>
-        <button className="log-field" onClick={() => {setKeypad(field); setError('')}} aria-label={'Enter ' + fieldLabels[field].toLowerCase() + ', ' + presentation(field) + ' ' + fieldUnit(field)}>
-          <span>{fieldLabels[field]}</span><strong>{presentation(field)}<small>{fieldUnit(field)}</small></strong>
-        </button>
-        {field === 'distanceValue' && <label className="log-unit-select">Unit <select aria-label="Distance unit" value={draft.distanceUnit ?? exercise.defaultDistanceUnit} onChange={e => patchDraft({distanceUnit: DISTANCE_UNITS.find(k => k === e.target.value) ?? exercise.defaultDistanceUnit})}>{DISTANCE_UNITS.map(k => <option key={k} value={k}>{distanceLabels[k]}</option>)}</select></label>}
-      </div>)}</div>
+      <div className="log-fields">{fields.map(field => {
+        const val = presentation(field)
+        return <div className="log-field-wrap" key={field}>
+          <button className="log-field" data-active-field={keypad === field || undefined} onClick={() => {setKeypad(field); setError('')}} aria-label={'Enter ' + fieldLabels[field].toLowerCase() + ', ' + val + ' ' + fieldUnit(field)}>
+            <span>{fieldLabels[field]}</span><strong><span key={val} className="log-field-val">{val}</span><small>{fieldUnit(field)}</small></strong>
+          </button>
+          {field === 'distanceValue' && <label className="log-unit-select">Unit <select aria-label="Distance unit" value={draft.distanceUnit ?? exercise.defaultDistanceUnit} onChange={e => patchDraft({distanceUnit: DISTANCE_UNITS.find(k => k === e.target.value) ?? exercise.defaultDistanceUnit})}>{DISTANCE_UNITS.map(k => <option key={k} value={k}>{distanceLabels[k]}</option>)}</select></label>}
+        </div>
+      })}</div>
       <div className="log-options">
         <button className="log-warm-toggle" disabled={forceWarmup} aria-pressed={forceWarmup || draft.isWarmup} onClick={() => patchDraft({isWarmup: !draft.isWarmup})}><span aria-hidden="true" />Warm-up</button>
         <button aria-expanded={extras} onClick={() => setExtras(!extras)}><SlidersHorizontal size={15} />RPE / Note <ChevronDown size={14} /></button>
       </div>
-      {extras && <div className="log-extras"><button onClick={() => setKeypad('rpe')}><span>RPE</span><strong>{draft.rpe ?? '—'} / 10</strong></button><label>Set note<textarea rows={2} value={draft.note ?? ''} onChange={e => patchDraft({note: e.target.value})} /></label></div>}
+      {extras && <div className="log-extras"><button onClick={() => setKeypad('rpe')}><span>RPE</span><strong>{draft.rpe ?? '—'} / 10</strong></button><label>Set note<textarea rows={2} maxLength={500} value={draft.note ?? ''} onChange={e => patchDraft({note: e.target.value})} /></label></div>}
       {error && !keypad && !sheet && <p className="log-error" role="alert">{error}</p>}
       <button className="btn primary log-commit" disabled={busy} onClick={() => void commit()}>
         {addedSetId === null ? <Check size={20} aria-hidden="true" /> : <span key={addedSetId} className="log-save-stamp" aria-hidden="true"><Check size={20} /></span>}
@@ -342,7 +353,7 @@ function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
       </button>
       {editId !== null && <button className="log-cancel" onClick={restoreEdit}>Cancel editing</button>}
     </section>
-    <RecordBanner workoutId={wid} />
+    <RecordBanner workoutId={wid} isGator={isGator} audioEnabled={prefs.timerAudioEnabled} />
     <RestTimerBar defaultSeconds={defaultRest} />
     <section className="log-history"><header><h2>This workout</h2><span>{working.length} working {working.length === 1 ? 'set' : 'sets'}</span></header>
       {warmups.length > 0 && <><button className="log-warm-head" onClick={() => setWarmExpanded(!warmExpanded)} aria-expanded={warmExpanded}>Warm-ups · {warmups.length}<ChevronDown size={16} /></button>{warmExpanded && <ol>{warmups.map(listRow)}</ol>}</>}
@@ -363,7 +374,7 @@ function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
       <button onClick={() => setSheet('smart')}><Sparkles />Smart Log</button>
       <button onClick={() => nav('/settings/theme')}><SlidersHorizontal />Theme</button>
     </div></BottomSheet>}
-    {sheet === 'notes' && <BottomSheet title="Exercise notes" onClose={closeSheet}><div className="log-notes"><label>{exercise.name}<textarea rows={5} value={noteText} onChange={e => setNoteText(e.target.value)} /></label>
+    {sheet === 'notes' && <BottomSheet title="Exercise notes" onClose={closeSheet}><div className="log-notes"><label>{exercise.name}<textarea rows={5} maxLength={1000} value={noteText} onChange={e => setNoteText(e.target.value)} /></label>
       {error && <p role="alert">{error}</p>}<button disabled={busy} className="btn primary" onClick={() => void guard(async () => {await saveExercise({...exercise,notes:noteText.trim() || null}); closeSheet()})}><AlignLeft size={16} />Save notes</button></div></BottomSheet>}
     {sheet === 'finish' && <BottomSheet title="Finish workout?" onClose={closeSheet}><div className="log-confirm">{error && <p role="alert">{error}</p>}<button className="btn primary" disabled={busy} onClick={finish}>Finish workout</button><button className="btn" onClick={closeSheet}>Keep training</button></div></BottomSheet>}
     {sheet === 'delete' && <BottomSheet title="Delete set?" onClose={closeSheet}><div className="log-confirm"><p>This permanently removes the set.</p>{error && <p role="alert">{error}</p>}<button disabled={busy} className="btn log-danger" onClick={() => void guard(async () => {if (deleteId !== null) await deleteSet(deleteId); if (editId !== null && editId === deleteId) restoreEdit(); setDeleteId(null); closeSheet()})}>Delete set</button><button className="btn" onClick={closeSheet}>Cancel</button></div></BottomSheet>}

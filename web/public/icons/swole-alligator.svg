@@ -1,13 +1,56 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <rect width="128" height="128" fill="#090A0D"/>
-  <polygon fill="#2C3930" points="18,92 27,72 24,60 32,59 31,48 39,49 42,34 49,40 54,28 63,39 73,34 80,44 83,48 92,51 94,54 108,56 111,62 105,72 89,75 80,84 72,89 54,95 35,90"/>
-  <polygon fill="#A3E635" points="22,85 31,72 30,61 37,60 37,50 43,52 46,40 51,45 55,34 62,44 71,40 78,48 80,53 91,55 94,58 105,59 107,62 102,67 81,70 69,70 59,76 71,73 77,76 98,71 92,76 77,82 70,86 50,91 38,85"/>
-  <polygon fill="#739E2D" points="22,85 40,73 48,62 47,73 39,82 52,78 48,84 37,87"/>
-  <polygon fill="#090A0D" points="63,52 72,53 77,59 68,58"/>
-  <polygon fill="#E8EFE4" points="69,54 72,55 73,57 70,56"/>
-  <polygon fill="#090A0D" points="100,60 103,61 101,63 98,62"/>
-  <polygon fill="#090A0D" points="57,68 61,61 65,62 62,64"/>
-  <polygon fill="#E8EFE4" points="80,71 86,70 83,75"/>
-  <polygon fill="#E8EFE4" points="92,70 96,69 93,72"/>
-  <polygon fill="#E8EFE4" points="71,73 75,72 74,75"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="scale" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2EE66B"/>
+      <stop offset="42%" stop-color="#1E8A44"/>
+      <stop offset="82%" stop-color="#105A2B"/>
+      <stop offset="100%" stop-color="#083619"/>
+    </linearGradient>
+    <linearGradient id="scaleDark" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#177337"/>
+      <stop offset="100%" stop-color="#073117"/>
+    </linearGradient>
+    <linearGradient id="belly" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F9ECAF"/>
+      <stop offset="55%" stop-color="#E8D284"/>
+      <stop offset="100%" stop-color="#BA9B42"/>
+    </linearGradient>
+    <linearGradient id="ufBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1D4ED8"/>
+      <stop offset="55%" stop-color="#0021A5"/>
+      <stop offset="100%" stop-color="#00125E"/>
+    </linearGradient>
+    <linearGradient id="ufOrange" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF7244"/>
+      <stop offset="52%" stop-color="#FA4616"/>
+      <stop offset="100%" stop-color="#BE2D06"/>
+    </linearGradient>
+    <linearGradient id="eye" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FEF08A"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="#040A1C"/>
+  <circle cx="64" cy="64" r="57" stroke="url(#ufBlue)" stroke-width="5"/>
+  <circle cx="64" cy="64" r="53.5" stroke="url(#ufOrange)" stroke-width="2.5"/>
+  <path d="M22 108 C24 88 38 78 64 78 C90 78 104 88 106 108 Z" fill="url(#ufBlue)" stroke="#040A1C" stroke-width="2.5"/>
+  <path d="M36 86 Q64 98 92 86 L88 94 Q64 106 40 94 Z" fill="url(#ufOrange)"/>
+  <path d="M32 45 L24 35 L38 38 L37 25 L48 33 L55 19 L64 30 L74 21 L78 34 Z" fill="url(#scaleDark)" stroke="#062812" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M33 43 Q62 34 86 43 L84 52 Q60 44 31 52 Z" fill="url(#ufBlue)" stroke="#040A1C" stroke-width="2"/>
+  <path d="M32 48 Q60 40 85 48" stroke="#FA4616" stroke-width="2.5" fill="none"/>
+  <path d="M28 74 C27 54 40 42 58 42 C72 42 82 47 88 53 L107 56 C113 57 115 64 109 68 L84 72 L68 74 L99 75 C103 77 101 85 93 88 C78 93 52 94 34 86 Z" fill="url(#scale)" stroke="#041E0E" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M52 78 C66 78 82 77 97 76 C99 81 94 86 85 88 C71 91 55 90 43 85 Z" fill="url(#belly)"/>
+  <path d="M42 64 C48 60 56 64 56 72" stroke="#0B4620" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <g fill="#FFFFFF" stroke="#040A1C" stroke-width="1">
+    <polygon points="64,72 68,79 72,72"/>
+    <polygon points="75,71 79,78 83,71"/>
+    <polygon points="86,70 90,77 94,70"/>
+    <polygon points="97,69 100,75 103,69"/>
+  </g>
+  <path d="M60 52 L77 50 L79 58 L64 60 Z" fill="#040A1C"/>
+  <ellipse cx="70.5" cy="54.5" rx="4.5" ry="3.2" fill="url(#eye)"/>
+  <rect x="69.6" y="51.6" width="1.8" height="5.8" rx="0.9" fill="#040A1C"/>
+  <circle cx="72.5" cy="53.2" r="1.4" fill="#FFFFFF"/>
+  <ellipse cx="104" cy="59" rx="2.6" ry="1.6" fill="#041E0E"/>
+  <text x="64" y="113" text-anchor="middle" fill="#FFFFFF" font-family="Impact, 'Arial Black', sans-serif" font-weight="900" font-size="16" letter-spacing="1.5">UF</text>
 </svg>

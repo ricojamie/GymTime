@@ -28,6 +28,14 @@ describe('routine plans', () => {
     expect(await db.routine_exercises.where('routineDayId').equals(b).count()).toBe(0)
     expect(await db.routine_days.get(c)).toBeDefined()
   })
+  it('swaps days cleanly even when orderIndex values collide', async () => {
+    const r = await createRoutine('Collided')
+    const a = await db.routine_days.add({ routineId: r, name: 'A', orderIndex: 0 })
+    const b = await db.routine_days.add({ routineId: r, name: 'B', orderIndex: 0 })
+    await moveDay(r, b, -1)
+    const days = await db.routine_days.where('routineId').equals(r).sortBy('orderIndex')
+    expect(days.map(d => d.id)).toEqual([b, a])
+  })
   it('copies prescriptions with independent superset IDs and ordered blocks',async () => {
     const r = await createRoutine('PPL')
     const pair = [1,2].map((id,index) => ({...newPlanRow(id),supersetGroupId:'pair',supersetOrderIndex:index,targetRestSeconds:45}))

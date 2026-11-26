@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Archive, ArrowLeft, ArrowRight, CalendarDays, ChevronRight, FolderPlus, MoreHorizontal, Play, Repeat2, Search, Star, Trash2, Trophy, X } from 'lucide-react'
 import { BottomSheet } from '../components/primitives'
+import { SwoleGator, useIsGatorMode } from '../components/mascot'
 import { db } from '../db/database'
 import { deleteWorkout, reopenWorkout, repeatWorkout } from '../db/repositories'
 import type { WeightUnit, Workout, WorkoutSet } from '../db/types'
@@ -15,6 +16,7 @@ import './history.css'
 
 export default function History() {
   const data = useHistoryData()
+  const gatorMode = useIsGatorMode()
   const [query, setQuery] = useState('')
   const [params, setParams] = useSearchParams()
   const selected = Number(params.get('workoutId') || params.get('workout'))
@@ -29,24 +31,27 @@ export default function History() {
       return {w, stats, search}
     })
   }, [data])
-  const tokens = query.trim().toLocaleLowerCase().split(/\s+/)
-  const filtered = rows.filter(row => tokens.every(t => row.search.includes(t)))
-  const months = groupBy(filtered, row => monthLabel(row.w.startTime))
-  const current = rows.find(row => row.w.id === selected)
+  const filtered = useMemo(() => {
+    const tokens = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
+    if (!tokens.length) return rows
+    return rows.filter(row => tokens.every(t => row.search.includes(t)))
+  }, [rows, query])
+  const months = useMemo(() => groupBy(filtered, row => monthLabel(row.w.startTime)), [filtered])
+  const current = useMemo(() => rows.find(row => row.w.id === selected), [rows, selected])
   const unit = data?.prefs.preferredWeightUnit || 'lbs'
 
   return <main className="screen his-screen">
     <header className="his-heading"><h1>History</h1><span>{data && rows.length + (rows.length === 1 ? ' session' : ' sessions')}</span></header>
     <label className="his-search"><Search size={19} aria-hidden="true"/><input aria-label="Search history" type="search" placeholder="Search workouts" value={query} onChange={e => setQuery(e.target.value)}/>{query && <button type="button" className="icon-button" aria-label="Clear search" onClick={() => setQuery('')}><X size={17}/></button>}</label>
-    {!data ? <p role="status">Loading history…</p> : !filtered.length ? <section className="his-empty">
-      {rows.length ? <Search size={28}/> : <Archive size={28}/>}
+    {!data ? <p role="status">Loading history…</p> : !filtered.length ? <section className="his-empty surface">
+      {gatorMode && !rows.length ? <SwoleGator pose="spotter" size={96} interactive /> : (rows.length ? <Search size={28}/> : <Archive size={28}/>)}
       <h2>{rows.length ? 'No matching workouts' : 'No completed workouts yet'}</h2>
-      {rows.length ? <button className="btn" onClick={() => setQuery('')}>Clear search</button> : <Link className="btn" to={data.workouts.some(w => w.endTime === null) ? '/workout/active' : '/exercises/select?workoutMode=true'}>{data.workouts.some(w => w.endTime === null) ? 'Resume workout' : 'Start workout'}<ArrowRight size={16}/></Link>}
-    </section> : Array.from(months, ([month, list]) => <section key={month} className="his-month">
+      {rows.length ? <button className="btn" onClick={() => setQuery('')}>Clear search</button> : <Link className="btn primary" to={data.workouts.some(w => w.endTime === null) ? '/workout/active' : '/exercises/select?workoutMode=true'}>{data.workouts.some(w => w.endTime === null) ? 'Resume workout' : 'Start workout'}<ArrowRight size={16}/></Link>}
+    </section> : Array.from(months, ([month, list], monthIndex) => <section key={month} className="his-month stagger-in" style={{ '--stagger-i': Math.min(monthIndex, 6) } as CSSProperties}>
       <h2 className="eyebrow">{month}</h2>
-      <div className="surface his-timeline">{list.map(({w,stats}) => {
+      <div className="surface his-timeline">{list.map(({w,stats}, itemIndex) => {
         const date = new Date(w.startTime)
-        return <button type="button" className="his-session" aria-haspopup="dialog" key={w.id} onClick={() => setParams({workoutId:String(w.id)})}>
+        return <button type="button" className="his-session stagger-in" style={{ '--stagger-i': Math.min(itemIndex, 10) } as CSSProperties} aria-haspopup="dialog" key={w.id} onClick={() => setParams({workoutId:String(w.id)})}>
           <span className="his-date" aria-label={dateLabel(w.startTime)}><strong>{String(date.getDate()).padStart(2,'0')}</strong><small>{date.toLocaleDateString(undefined,{weekday:'short'})}</small></span>
           <span className="his-session-text"><strong>{stats.title}</strong>
             {stats.muscles.length > 0 && <span>{stats.muscles.slice(0,3).join(' · ')}{stats.muscles.length > 3 && ' +' + (stats.muscles.length - 3)}</span>}
@@ -65,20 +70,26 @@ function RoutineTarget({workout, title, onDone}: {workout:Workout;title:string;o
   const [routineId, setRoutine] = useState('')
   const [dayId, setDay] = useState('')
   const [name,setName] = useState(workout.routineDayNameSnapshot?.trim() || title)
-  const days = useLiveQuery(() => db.routine_days.where('routineId').equals(Number(routineId)).sortBy('orderIndex'), [routineId], [])
+  const parsedRoutineId = Number(routineId)
+  const hasValidRoutine = Number.isSafeInteger(parsedRoutineId) && parsedRoutineId > 0
+  const days = useLiveQuery(
+    async () => hasValidRoutine ? db.routine_days.where('routineId').equals(parsedRoutineId).sortBy('orderIndex') : [],
+    [hasValidRoutine, parsedRoutineId],
+    [],
+  )
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
   return <form className="his-form" onSubmit={async e => {
     e.preventDefault()
-    if (pending) return
+    if (pending || !hasValidRoutine) return
     setPending(true)
-    try { await addWorkoutToRoutine(workout.id,Number(routineId),dayId ? Number(dayId) : null,name); onDone() }
+    try { await addWorkoutToRoutine(workout.id, parsedRoutineId, dayId ? Number(dayId) : null, name); onDone() }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Couldn’t save the workout to this routine.') }
     finally { setPending(false) }
   }}>
     {routines.length === 0 ? <><p>No routines yet.</p><Link className="btn" to="/routines/new">Create routine</Link></> : <>
       <label>Routine<select className="his-input" value={routineId} required onChange={e => {setRoutine(e.target.value); setDay('');setError('')}}><option value="">Choose a routine</option>{routines.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
-      {routineId && <><label>Workout day<select className="his-input" value={dayId} onChange={e => setDay(e.target.value)}><option value="">Create a new day</option>{days.map(d => <option key={d.id} value={d.id}>Replace {d.name}</option>)}</select></label>
+      {hasValidRoutine && <><label>Workout day<select className="his-input" value={dayId} onChange={e => setDay(e.target.value)}><option value="">Create a new day</option>{days.map(d => <option key={d.id} value={d.id}>Replace {d.name}</option>)}</select></label>
       {!dayId && <label>Day name<input required className="his-input" value={name} maxLength={140} onChange={e => setName(e.target.value)}/></label>}
       {dayId && <p>Saving replaces the planned exercises in {days.find(d => String(d.id) === dayId)?.name}.</p>}
       <button type="submit" className="btn primary" disabled={pending || (!dayId && !name.trim())}>{dayId ? 'Replace day' : 'Add workout day'}</button></>}
@@ -91,7 +102,7 @@ function SetRows({sets,unit,prIds}: {sets:WorkoutSet[];unit:WeightUnit;prIds:Set
   const top = sets.reduce((max, row) => row.weight === null ? max : Math.max(max,row.weight), -Infinity)
   return <ol className="his-sets">{sets.map((s,index) => <li key={s.id}><span className="his-ordinal">{String(index+1).padStart(2,'0')}</span><div><strong>{setText(s,unit)}</strong>
     {s.rpe != null && <small>RPE {s.rpe}</small>}{s.note?.trim() && <p>{s.note}</p>}</div>
-    {prIds.has(s.id) ? <Trophy size={16} aria-label="Personal record" className="his-pr"/> : s.weight === top && top > 0 && !s.isWarmup ? <small>Top weight</small> : null}
+    {prIds.has(s.id) ? <span className="his-pr-badge"><Trophy size={14} aria-label="Personal record" className="his-pr"/>PR</span> : s.weight === top && top > 0 && !s.isWarmup ? <small>Top weight</small> : null}
   </li>)}</ol>
 }
 
@@ -102,10 +113,10 @@ function WorkoutDetails({ workout, data, onClose }: {workout:Workout;data:Histor
   const navigate = useNavigate()
   const exercises = useMemo(() => new Map(data.exercises.map(ex => [ex.id, ex])), [data.exercises])
   const sets = useMemo(() => data.sets.filter(s => s.workoutId === workout.id && s.isComplete).sort((a,b) => a.timestamp - b.timestamp || a.id-b.id), [data.sets, workout.id])
-  const stats = describeWorkout(workout, sets, exercises)
+  const stats = useMemo(() => describeWorkout(workout, sets, exercises), [workout, sets, exercises])
   const share = useMemo(() => buildWorkoutShare(data,workout.id), [data, workout.id])
-  const prIds = new Set(share?.exercises.flatMap(ex => ex.sets.filter(s => s.isPersonalRecord).map(s => s.id)))
-  const active = data.workouts.find(w => w.endTime === null)
+  const prIds = useMemo(() => new Set(share?.exercises.flatMap(ex => ex.sets.filter(s => s.isPersonalRecord).map(s => s.id))), [share])
+  const active = useMemo(() => data.workouts.find(w => w.endTime === null), [data.workouts])
   const unit = data.prefs.preferredWeightUnit
   async function run(action:()=>Promise<void>) {
     if(busy) return

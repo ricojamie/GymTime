@@ -1,15 +1,18 @@
-import { useEffect, useLayoutEffect } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/database'
 import { defaultPreferences, type Preferences } from '../db/types'
 import { updatePreferences } from '../db/repositories'
-import { deriveColors, fontNames } from './colors'
+import { deriveColors, fontNames, UF_COLORS } from './colors'
 
 export function iconUrls(icon: Preferences['appIcon']) {
   const gator = icon === 'swole_alligator'
   const stamp = gator ? '/icons/swole-alligator-180.png' : '/icons/apple-touch-icon-180.png'
   return {
-    stamp, touch: stamp, icon: gator ? '/icons/swole-alligator-192.png' : '/icons/classic-192.png',
+    stamp,
+    touch: stamp,
+    svg: gator ? '/icons/swole-alligator.svg' : '/icons/classic.svg',
+    icon: gator ? '/icons/swole-alligator-192.png' : '/icons/classic-192.png',
     manifest: gator ? '/manifest-alligator.webmanifest' : '/manifest.webmanifest',
   }
 }
@@ -20,6 +23,10 @@ function useStoredSettings() {
 
 export function useSettings() {
   return useStoredSettings() ?? defaultPreferences
+}
+
+export function useIsGatorMode() {
+  return useSettings().appIcon === 'swole_alligator'
 }
 
 export async function chooseIcon(icon: Preferences['appIcon']) {
@@ -33,6 +40,7 @@ export async function chooseIcon(icon: Preferences['appIcon']) {
 export function useTheme() {
   const stored = useStoredSettings()
   const prefs = stored ?? defaultPreferences
+  const prevBrand = useRef<Preferences['appIcon'] | null>(null)
   // Keep first paint still until IndexedDB resolves the user's motion preference.
   const reduceMotion = stored === undefined || stored.reduceMotion === true
   useLayoutEffect(() => {
@@ -50,20 +58,38 @@ export function useTheme() {
   }, [])
   useLayoutEffect(() => {
     const root = document.documentElement
+    const gator = prefs.appIcon === 'swole_alligator'
     const colors = deriveColors(prefs)
     root.dataset.theme = prefs.darkMode ? 'dark' : 'light'
+    root.dataset.brand = gator ? 'gator' : 'classic'
     root.style.colorScheme = root.dataset.theme
     root.style.setProperty('--accent', colors.accent)
     root.style.setProperty('--accent-ink', colors.accentInk)
     root.style.setProperty('--on-accent', colors.onAccent)
-    const bg = prefs.darkMode ? '#090A0D' : '#F2F3F5'
+    const bg = gator
+      ? (prefs.darkMode ? UF_COLORS.swampDarkCanvas : UF_COLORS.stadiumLightCanvas)
+      : (prefs.darkMode ? '#090A0D' : '#F2F3F5')
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content',bg)
-  }, [prefs.themeColor, prefs.darkMode, prefs.customThemeColor])
+
+    if (prevBrand.current !== null && prevBrand.current !== prefs.appIcon && root.dataset.motion === 'full') {
+      root.dataset.brandMorph = 'true'
+      const timer = window.setTimeout(() => { delete root.dataset.brandMorph }, 380)
+      prevBrand.current = prefs.appIcon
+      return () => window.clearTimeout(timer)
+    }
+    prevBrand.current = prefs.appIcon
+  }, [prefs.themeColor, prefs.darkMode, prefs.customThemeColor, prefs.appIcon])
   useLayoutEffect(() => {
     const urls = iconUrls(prefs.appIcon)
-    for (const [rel, val] of [['icon',urls.icon],['apple-touch-icon',urls.touch],['manifest',urls.manifest]]) {
-      document.querySelector('link[rel="'+rel+'"]')?.setAttribute('href',val)
-    }
+    document
+      .querySelector('link[rel="icon"][type="image/svg+xml"]')
+      ?.setAttribute('href', urls.svg)
+    const pngIcon =
+      document.querySelector('link[rel="icon"][type="image/png"]') ??
+      document.querySelector('link[rel="icon"]:not([type="image/svg+xml"])')
+    pngIcon?.setAttribute('href', urls.icon)
+    document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href', urls.touch)
+    document.querySelector('link[rel="manifest"]')?.setAttribute('href', urls.manifest)
   }, [prefs.appIcon])
   useEffect(() => {
     const root = document.documentElement

@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, Plus, Search, X } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { db } from '../db/database'
 import { getActiveWorkout, startWorkout } from '../db/repositories'
 import { useAdjacentReorder } from '../components/useAdjacentReorder'
+import { SwoleGator, useIsGatorMode } from '../components/mascot'
 import './workout.css'
 
 type Draft = { ids: number[]; query: string; muscle: string }
@@ -16,7 +17,7 @@ function readDraft(): Draft {
     const saved = JSON.parse(sessionStorage.getItem(draftKey) || 'null')
     if (!saved || !Array.isArray(saved.ids)) return freshDraft
     return {
-      ids: [...new Set<number>(saved.ids.filter((id: unknown) => typeof id === 'number' && Number.isInteger(id) && id > 0))],
+      ids: [...new Set<number>(saved.ids.filter((id: unknown) => typeof id === 'number' && Number.isSafeInteger(id) && id > 0))],
       query: typeof saved.query === 'string' ? saved.query : '',
       muscle: typeof saved.muscle === 'string' ? saved.muscle : '',
     }
@@ -25,6 +26,7 @@ function readDraft(): Draft {
 
 export default function Builder() {
   const navigate = useNavigate()
+  const gatorMode = useIsGatorMode()
   const [params, setParams] = useSearchParams()
   const [draft, setDraft] = useState(readDraft)
   const [busy, setBusy] = useState(false)
@@ -107,14 +109,18 @@ export default function Builder() {
       <header className="wk-heading">
         <button className="icon-button" aria-label="Back to home" onClick={() => navigate('/')}><ArrowLeft /></button>
         <h1>Plan a workout</h1>
+        {gatorMode && <SwoleGator pose="badge" size={32} label="" className="wk-head-gator" />}
       </header>
       <div className="wk-builder-grid">
-        <section className="wk-order" aria-labelledby="wk-order-title">
+        <section className="wk-order stagger-in" style={{ '--stagger-i': 0 } as CSSProperties} aria-labelledby="wk-order-title">
           <div className="wk-section-title"><h2 id="wk-order-title">Workout order</h2><span>{selected.length}</span></div>
           {selected.length === 0
-            ? <p className="wk-empty">No exercises selected</p>
+            ? <div className="wk-order-empty">
+                {gatorMode && <SwoleGator pose="spotter" size={44} label="" />}
+                <p className="wk-empty">No exercises selected</p>
+              </div>
             : <ol className="wk-strip">
-                {selected.map((ex, i) => <li key={ex.id} data-order-item>
+                {selected.map((ex, i) => <li key={ex.id} className="surface" data-order-item>
                   <div className="wk-item-head"><span className="wk-index">{String(i + 1).padStart(2, '0')}</span><button className="icon-button" aria-label={'Remove ' + ex.name} onClick={() => toggle(ex.id)}><X size={17} /></button></div>
                   <strong>{ex.name}</strong>
                   <div className="wk-reorder">
@@ -124,11 +130,12 @@ export default function Builder() {
                 </li>)}
               </ol>}
         </section>
-        <section className="wk-catalog" aria-labelledby="wk-catalog-title">
+        <section className="wk-catalog stagger-in" style={{ '--stagger-i': 1 } as CSSProperties} aria-labelledby="wk-catalog-title">
           <div className="wk-section-title"><h2 id="wk-catalog-title">Exercises</h2><span>{visible.length}</span></div>
           <div className="wk-search">
             <Search size={18} aria-hidden="true" />
             <input type="search" value={draft.query} aria-label="Search exercises" placeholder="Search exercises" onChange={event => setDraft({ ...draft, query: event.target.value })} />
+            {draft.query && <button type="button" className="icon-button wk-search-clear" aria-label="Clear search" onClick={() => setDraft(prev => ({ ...prev, query: '' }))}><X size={16} /></button>}
           </div>
           <div className="wk-filters" role="group" aria-label="Filter by muscle">
             {['', ...muscles].map(muscle => <button key={muscle} aria-pressed={draft.muscle === muscle} onClick={() => setDraft({ ...draft, muscle })}>{muscle || 'All muscles'}</button>)}
@@ -141,7 +148,10 @@ export default function Builder() {
                 <span className="wk-choice-mark">{selectedIndex >= 0 ? <span className="wk-selected"><Check size={16} />{String(selectedIndex + 1).padStart(2, '0')}</span> : <Plus size={18} />}</span>
               </button>
             })}
-            {exercises && !visible.length && <p className="wk-empty">No matching exercises</p>}
+            {exercises && !visible.length && <div className="wk-order-empty">
+              {gatorMode && <SwoleGator pose="spotter" size={50} label="" />}
+              <p className="wk-empty">No matching exercises</p>
+            </div>}
             <button className="wk-create" onClick={createExercise}><Plus size={18} /> Create exercise</button>
           </div>
         </section>

@@ -46,7 +46,10 @@ export function replayRecords(sets: readonly WorkoutSet[], type: LogType, unit: 
   for (const set of ordered) {
     const labels: string[] = []
     const value = recordMetric(set, type, unit)
-    const tie = type === 'WEIGHT_REPS' ? set.reps ?? 0 : type === 'WEIGHT_TIME' ? set.durationSeconds ?? 0 : 0
+    const tie = type === 'WEIGHT_REPS' ? set.reps ?? 0
+      : type === 'WEIGHT_TIME' ? set.durationSeconds ?? 0
+      : type === 'WEIGHT_DISTANCE' ? (distanceToMeters(set.distanceValue, set.distanceUnit) ?? set.distanceMeters ?? set.distanceValue ?? 0)
+      : 0
     if (value !== null && (value > highest || (value === highest && tie > secondary))) {
       labels.push(metricLabels[type])
       highest = value

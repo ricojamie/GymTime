@@ -53,7 +53,7 @@ export function repeatWorkout(id: number) {
     if (!plan.length) throw new Error('This workout has no exercises to repeat.')
     const workoutId = await db.workouts.add({...blankWorkout(old.name ?? undefined),
       routineNameSnapshot: old.routineNameSnapshot, routineDayNameSnapshot: old.routineDayNameSnapshot,
-      startedFromRoutine: true })
+      startedFromRoutine: old.startedFromRoutine })
     const groups = new Map<string, string>()
     const rows = plan.map(slot => {
       let group = null
@@ -89,7 +89,7 @@ export function finishWorkout(id: number, at = Date.now()) {
     const endTime = Math.max(at, workout.startTime)
     await db.workouts.update(id, {endTime})
     const prefs = await db.preferences.get('default') ?? defaultPreferences
-    const best = calculateBestStreak(await db.sets.toArray(), prefs.restDaysPerWeek, at)
+    const best = calculateBestStreak(await db.sets.toArray(), prefs.restDaysPerWeek, endTime)
     await db.preferences.put({...prefs, bestStreak: Math.max(prefs.bestStreak, best),
       workoutsSinceLastBackup: prefs.workoutsSinceLastBackup + Number(endTime > (prefs.lastBackupAtEpochMs ?? 0))})
     if (!workout.startedFromRoutine || !workout.routineId || !workout.routineDayId) return
@@ -102,6 +102,7 @@ export function finishWorkout(id: number, at = Date.now()) {
     const started = new Set(sets.map(s => s.exerciseId))
     if (!await db.workout_exercise_instances.where('workoutId').equals(id).filter(i => started.has(i.exerciseId)).first()) return
     const days = await db.routine_days.where('routineId').equals(routine.id).sortBy('orderIndex')
+    if (!days.length) return
     const index = days.findIndex(d => d.id === workout.routineDayId)
     if (index >= 0) await db.routines.update(routine.id, {nextDayOrderIndex: days[(index + 1) % days.length].orderIndex})
   })

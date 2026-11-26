@@ -46,4 +46,43 @@ describe('Home dashboard', { timeout: 30_000 }, () => {
     expect(screen.queryByText('Backup due')).not.toBeInTheDocument()
     expect((await db.preferences.get('default'))?.workoutsSinceLastBackup).toBe(3)
   })
+
+  it('renders the interactive UF Swole Gator hero in Gator mode', async () => {
+    await updatePreferences({ appIcon: 'swole_alligator' })
+    const { container } = showHome()
+    expect(await screen.findByRole('button', { name: /swole gator/i }, { timeout: 12_000 })).toBeInTheDocument()
+    expect(container.querySelector('.home-gator-hero-wrap [data-pose="hero"]')).toBeInTheDocument()
+  })
+
+  it('clamps Feb 29 leap-day prior-year volume to Feb 28 of the prior year', async () => {
+    const leapNow = new Date(2024, 1, 29, 12, 0, 0).getTime()
+    const origNow = Date.now
+    Date.now = () => leapNow
+    try {
+      const exercise = await db.exercises.toCollection().first()
+      const seedCompleted = async (name: string, ts: number, reps: number) => {
+        const id = await startWorkout({ name })
+        const setId = await logSet({ workoutId: id, exerciseId: exercise!.id, weight: 100, reps, isComplete: true })
+        await finishWorkout(id)
+        await db.workouts.update(id, { startTime: ts - 1800_000, endTime: ts })
+        await db.sets.update(setId, { timestamp: ts - 600_000 })
+      }
+      // 2024 YTD workout on Feb 29: 100 * 10 = 1,000 lb
+      await seedCompleted('Leap Day', leapNow - 1800_000, 10)
+      // 2023 workout on Feb 28 (included in prior YTD): 100 * 5 = 500 lb
+      await seedCompleted('Prior Feb 28', new Date(2023, 1, 28, 10, 0, 0).getTime(), 5)
+      // 2023 workout on Mar 1 (MUST be excluded from Feb 29 clamped prior YTD): 100 * 50 = 5,000 lb
+      await seedCompleted('Prior Mar 1', new Date(2023, 2, 1, 10, 0, 0).getTime(), 50)
+
+      showHome()
+      const streakBtn = await screen.findByRole('button', { name: /iron streak/i }, { timeout: 12_000 })
+      fireEvent.click(streakBtn)
+      const dialog = await screen.findByRole('dialog', { name: /iron streak/i })
+      // 1,000 lb vs 500 lb (Feb 28, 2023) — NOT 5,500 lb (which would happen if Mar 1 leaked in)
+      expect(within(dialog).getByText('Same period last year').parentElement).toHaveTextContent(/500 lb/)
+    } finally {
+      Date.now = origNow
+    }
+  })
 })
+

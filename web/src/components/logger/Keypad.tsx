@@ -53,15 +53,24 @@ function VernierDial({ value, step, unit, pins, onChange }: {
     const el = track.current
     if (!el) return
     let settle: ReturnType<typeof setTimeout> | undefined
+    const endInteraction = () => { interacting.current = false }
     const snap = () => {
       clearTimeout(settle)
       settle = setTimeout(() => {
+        interacting.current = false
         const tick = Math.round(el.scrollLeft / spacing) * spacing
         if (Math.abs(el.scrollLeft - tick) >= .5) el.scrollLeft = tick
       }, 130)
     }
     el.addEventListener('scroll', snap, {passive:true})
-    return () => { el.removeEventListener('scroll', snap); clearTimeout(settle) }
+    window.addEventListener('pointerup', endInteraction)
+    window.addEventListener('pointercancel', endInteraction)
+    return () => {
+      el.removeEventListener('scroll', snap)
+      window.removeEventListener('pointerup', endInteraction)
+      window.removeEventListener('pointercancel', endInteraction)
+      clearTimeout(settle)
+    }
   }, [])
   const labels = useMemo(() => Array.from({ length: Math.floor(count / 10) + 1 }, (_, index) => {
     const tick = index * 10
@@ -84,7 +93,10 @@ function VernierDial({ value, step, unit, pins, onChange }: {
     <div role="slider" tabIndex={0} aria-label={unit === 'reps' ? 'Repetition dial' : 'Weight dial'}
       aria-valuemin={0} aria-valuemax={count * step} aria-valuenow={value} aria-valuetext={value + ' ' + unit}
       className="log-dial-track" ref={track} onScroll={read}
-      onPointerDown={() => { interacting.current = true }} onWheel={() => { interacting.current = true }}
+      onPointerDown={() => { interacting.current = true }}
+      onPointerUp={() => { interacting.current = false }}
+      onPointerCancel={() => { interacting.current = false }}
+      onWheel={() => { interacting.current = true }}
       onKeyDown={event => {
         let next = value
         if (event.key === 'ArrowRight' || event.key === 'ArrowUp') next += step
@@ -140,20 +152,22 @@ export default function Keypad({ field, value, unit, weightUnit, pins, onChange,
   const step = field === 'weight' ? weightUnit === 'kg' ? 2.5 : 5 : 1
   const stepUnit = field === 'durationSeconds' ? ' second' : field === 'weight' || field === 'distanceValue' ? ' ' + unit : ''
   const adjustment = fieldLabels[field].toLowerCase() + ' by ' + step + stepUnit
+  const writeRef = useRef(write)
+  writeRef.current = write
   useEffect(() => {
     function keydown(e: KeyboardEvent) {
       if (e.altKey || e.metaKey || e.ctrlKey || e.defaultPrevented) return
       if (/^[0-9.:]$/.test(e.key) || e.key === 'Backspace') {
         e.preventDefault()
-        write(e.key === 'Backspace' ? 'back' : e.key)
+        writeRef.current(e.key === 'Backspace' ? 'back' : e.key)
       }
     }
     window.addEventListener('keydown', keydown)
     return () => window.removeEventListener('keydown', keydown)
-  })
+  }, [])
   return <BottomSheet title={fieldLabels[field]} onClose={onClose}>
     <div className="log-pad">
-      <div className="log-pad-display"><output aria-label={fieldLabels[field] + ' value'}>{raw || '—'}</output><span>{unit}</span></div>
+      <div className="log-pad-display"><output aria-label={fieldLabels[field] + ' value'}><span key={raw || 'empty'} className="log-pad-val">{raw || '—'}</span></output><span>{unit}</span></div>
       {canDial && <div className="log-mode" data-dial={dial || undefined} role="group" aria-label="Entry method">
         <button aria-pressed={!dial} onClick={() => setDial(false)}>Keypad</button><button aria-pressed={dial} onClick={() => setDial(true)}>Dial</button>
       </div>}

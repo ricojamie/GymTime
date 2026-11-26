@@ -14,10 +14,31 @@ export function useInsightsSource() {
 export function useReportClock() {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
-    const refresh = () => { if (document.visibilityState === 'visible') setNow(Date.now()) }
-    document.addEventListener('visibilitychange', refresh)
-    const interval = window.setInterval(refresh, 60000)
-    return () => { document.removeEventListener('visibilitychange', refresh); window.clearInterval(interval) }
+    let interval: number | null = null
+    const start = () => {
+      if (interval === null && document.visibilityState !== 'hidden') {
+        interval = window.setInterval(() => setNow(Date.now()), 60000)
+      }
+    }
+    const stop = () => {
+      if (interval !== null) {
+        window.clearInterval(interval)
+        interval = null
+      }
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') stop()
+      else {
+        setNow(Date.now())
+        start()
+      }
+    }
+    start()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [])
   return now
 }

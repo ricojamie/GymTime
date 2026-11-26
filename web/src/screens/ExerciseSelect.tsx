@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowUpDown, Check, ChevronRight, Ellipsis, Link2, Pencil, Plus, Search, Star, Trash2, X } from 'lucide-react'
@@ -6,6 +6,7 @@ import { db } from '../db/database'
 import { deleteExercise, ensureWorkoutExercise, getActiveWorkout, groupWorkoutExercises, startWorkout, swapWorkoutExercise, toggleStar } from '../db/repositories'
 import type { Exercise, LogType } from '../db/types'
 import { BottomSheet } from '../components/primitives'
+import { SwoleGator, useIsGatorMode } from '../components/mascot'
 import './library.css'
 
 export const typeLabels: Record<LogType, string> = {
@@ -17,7 +18,8 @@ const sorts = ['Recently used', 'A–Z', 'All-time sets', '90-day sets'] as cons
 type Sort = typeof sorts[number]
 type Mode = 'browse' | 'swap' | 'build_superset' | 'add_to_superset'
 const normalize = (value: string) => value.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
-const positiveId = (value: string | null) => { const n = Number(value); return Number.isSafeInteger(n) && n > 0 ? n : 0 }
+const isPositiveSafeId = (n: number) => Number.isSafeInteger(n) && n > 0
+const positiveId = (value: string | null) => { const n = Number(value); return isPositiveSafeId(n) ? n : 0 }
 const toMessage = (err: unknown) => err instanceof Error ? err.message : 'Could not save this change. Try again.'
 
 function readList(key: string): unknown[] {
@@ -31,6 +33,7 @@ function saveList(key: string, list: unknown[]) {
 export default function ExerciseSelect({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate()
   const location = useLocation()
+  const gatorMode = useIsGatorMode()
   const [params, setParams] = useSearchParams()
   const rawMode = params.get('mode')?.toLowerCase()
   const mode: Mode = rawMode === 'swap' || rawMode === 'build_superset' || rawMode === 'add_to_superset' ? rawMode : 'browse'
@@ -41,7 +44,13 @@ export default function ExerciseSelect({ embedded = false }: { embedded?: boolea
   const workoutId = explicitWorkout || active?.id || 0
   const exercises = useLiveQuery(() => db.exercises.toArray(), [])
   const muscleGroups = useLiveQuery(() => db.muscle_groups.orderBy('name').toArray(), [])
-  const instances = useLiveQuery(() => db.workout_exercise_instances.where('workoutId').equals(workoutId).toArray(), [workoutId], [])
+  const instances = useLiveQuery(
+    async () => (isPositiveSafeId(workoutId)
+      ? db.workout_exercise_instances.where('workoutId').equals(workoutId).toArray()
+      : []),
+    [workoutId],
+    [],
+  )
   const stats = useLiveQuery(async () => {
     const byId = new Map<number, { all: number; recent: number; last: number }>()
     const cutoff = Date.now() - 90 * 86400000
@@ -72,7 +81,7 @@ export default function ExerciseSelect({ embedded = false }: { embedded?: boolea
   const pickKey = 'ironlog:superset:' + workoutId + ':' + originExercise
   const [picked, setPicked] = useState<number[]>(() => {
     if (mode !== 'build_superset') return []
-    const stored = readList(pickKey).filter((x): x is number => typeof x === 'number').slice(0, 10)
+    const stored = readList(pickKey).filter((x): x is number => typeof x === 'number' && isPositiveSafeId(x)).slice(0, 10)
     return stored.length ? stored : originExercise ? [originExercise] : []
   })
   const handledCreate = useRef(0)
@@ -122,7 +131,7 @@ export default function ExerciseSelect({ embedded = false }: { embedded?: boolea
     finally { lock.current = false; setBusy(false) }
   }
   async function getWorkout() {
-    if (!explicitWorkout) {
+    if (!isPositiveSafeId(explicitWorkout)) {
       const id = await startWorkout()
       if (!workoutId && !embedded) {
         saveList('ironlog:exercise-filters:' + id, muscles)
@@ -170,8 +179,9 @@ export default function ExerciseSelect({ embedded = false }: { embedded?: boolea
   // Creating or reusing an exercise returns to the exact picker task that opened the form.
   useEffect(() => {
     const id = positiveId(params.get('createdExerciseId'))
+    if (!id || handledCreate.current === id) return
     const ex = exercises?.find(item => item.id === id)
-    if (!ex || handledCreate.current === id) return
+    if (!ex) return
     if ((mode === 'swap' || mode === 'add_to_superset') && !instances.length) return
     handledCreate.current = id
     const clean = new URLSearchParams(params)
@@ -205,54 +215,66 @@ export default function ExerciseSelect({ embedded = false }: { embedded?: boolea
   }
   const Container = embedded ? 'section' : 'main'
   return <Container className={embedded ? 'lib-browser' : 'screen lib-page lib-browser'}>
-    {!embedded && <header className="lib-page-head" data-session-start={params.get('workoutMode') === 'true' && !explicitWorkout || undefined}><button className="icon-button" aria-label="Back" onClick={goBack}><ArrowLeft/></button><h1>{heading}</h1></header>}
+    {!embedded && <header className="lib-page-head" data-session-start={params.get('workoutMode') === 'true' && !explicitWorkout || undefined}>
+      <button type="button" className="icon-button" aria-label="Back" onClick={goBack}><ArrowLeft/></button>
+      <h1>{heading}</h1>
+      {gatorMode && <SwoleGator pose="badge" size={32} label="" className="ml-auto shrink-0" />}
+    </header>}
     <div className="lib-toolbar">
-      <label className="lib-search"><Search size={18}/><input type="search" aria-label="Search exercises" placeholder="Search exercises" value={query} onChange={e => setQuery(e.target.value)}/></label>
-      <button className="lib-new" onClick={create} aria-label="Create exercise"><Plus size={19}/><span>New</span></button>
+      <label className="lib-search">
+        <Search size={18} aria-hidden="true"/>
+        <input type="search" aria-label="Search exercises" placeholder="Search exercises" value={query} onChange={e => setQuery(e.target.value)}/>
+        {query && <button type="button" className="icon-button" aria-label="Clear search" onClick={() => setQuery('')}><X size={16}/></button>}
+      </label>
+      <button type="button" className="lib-new" onClick={create} aria-label="Create exercise"><Plus size={19}/><span>New</span></button>
     </div>
     <div className="lib-filter-scroll" aria-label="Filter by muscle">
-      <button className="lib-chip" aria-pressed={!muscles.length} onClick={() => changeMuscles([])}>All</button>
-      {muscleGroups?.map(({ name }) => <button key={name} className="lib-chip" aria-pressed={muscles.includes(name)} onClick={() => changeMuscles(muscles.includes(name) ? muscles.filter(m => m !== name) : [...muscles, name])}>{name}</button>)}
+      <button type="button" className="lib-chip" aria-pressed={!muscles.length} onClick={() => changeMuscles([])}>All</button>
+      {muscleGroups?.map(({ name }) => <button type="button" key={name} className="lib-chip" aria-pressed={muscles.includes(name)} onClick={() => changeMuscles(muscles.includes(name) ? muscles.filter(m => m !== name) : [...muscles, name])}>{name}</button>)}
     </div>
     <div className="lib-list-head"><h2>{exercises ? results.length + ' exercises' : 'Exercises'}</h2>
-      <button onClick={() => setSortOpen(true)}><ArrowUpDown size={15}/>{sort}</button>
+      <button type="button" onClick={() => setSortOpen(true)}><ArrowUpDown size={15}/>{sort}</button>
     </div>
-    {!embedded && mode === 'browse' && <button className="lib-superset-link" onClick={() => setMode('build_superset')}><Link2 size={16}/>Build superset<ChevronRight size={15}/></button>}
-    {error && <div className="lib-error" role="alert">{error}<button aria-label="Dismiss message" onClick={() => setError('')}><X size={16}/></button></div>}
-    {exercises && !results.length ? <div className="lib-empty"><Search size={20}/><h3>No matching exercises</h3><button className="btn" onClick={create}>Create exercise</button></div> :
-      <ul className="lib-exercises">
+    {!embedded && mode === 'browse' && <button type="button" className="lib-superset-link" onClick={() => setMode('build_superset')}><Link2 size={16}/>Build superset<ChevronRight size={15}/></button>}
+    {error && <div className="lib-error" role="alert">{error}<button type="button" aria-label="Dismiss message" onClick={() => setError('')}><X size={16}/></button></div>}
+    {exercises && !results.length ? <div className="lib-empty surface p-6 stagger-in" style={{ '--stagger-i': 0 } as CSSProperties}>
+      {gatorMode ? <SwoleGator pose="spotter" size={72} interactive /> : <Search size={20} aria-hidden="true"/>}
+      <h3>No matching exercises</h3>
+      <button type="button" className="btn" onClick={create}>Create exercise</button>
+    </div> :
+      <ul className="lib-exercises stagger-in" style={{ '--stagger-i': 0 } as CSSProperties}>
         {results.map(ex => {
           const rank = selectedIds.indexOf(ex.id)
           return <li key={ex.id}>
-            <button className="lib-exercise" aria-pressed={multi ? rank !== -1 : undefined} disabled={busy} onClick={() => choose(ex)}>
+            <button type="button" className="lib-exercise" aria-pressed={multi ? rank !== -1 : undefined} disabled={busy} onClick={() => choose(ex)}>
               {multi && <span className={'lib-rank' + (rank >= 0 ? ' picked' : '')}>{rank >= 0 ? rank + 1 : <Plus size={14}/>}</span>}
               <span><strong>{ex.name}</strong><small>{ex.targetMuscle}<span aria-hidden="true"> · </span>{typeLabels[ex.logType]}</small></span>
             </button>
-            <button className="lib-icon" disabled={busy} aria-label={(ex.isStarred ? 'Unstar ' : 'Star ') + ex.name} aria-pressed={ex.isStarred} onClick={() => toggleFavorite(ex)}><Star size={17} fill={ex.isStarred ? 'currentColor' : 'none'}/></button>
-            <button className="lib-icon" aria-label={'Options for ' + ex.name} onClick={() => setActions(ex)}><Ellipsis size={18}/></button>
+            <button type="button" className="lib-icon" disabled={busy} aria-label={(ex.isStarred ? 'Unstar ' : 'Star ') + ex.name} aria-pressed={ex.isStarred} onClick={() => toggleFavorite(ex)}><Star size={17} fill={ex.isStarred ? 'currentColor' : 'none'}/></button>
+            <button type="button" className="lib-icon" aria-label={'Options for ' + ex.name} onClick={() => setActions(ex)}><Ellipsis size={18}/></button>
           </li>
         })}
       </ul>}
     {multi && <footer className="lib-pick-dock">
-      {!!selectedIds.length && <div className="lib-filter-scroll">{selectedIds.map((id, i) => <button key={id} className="lib-chip" onClick={() => changePick(selectedIds.filter(v => v !== id))}>{i + 1} · {exercises?.find(e => e.id === id)?.name}<X size={14}/></button>)}</div>}
-      <div className="lib-actions"><button className="btn" onClick={() => setMode('browse')}>Cancel</button><button className="btn primary" disabled={selectedIds.length < 2 || busy} onClick={buildSuperset}>Start superset · {selectedIds.length}</button></div>
+      {!!selectedIds.length && <div className="lib-filter-scroll">{selectedIds.map((id, i) => <button type="button" key={id} className="lib-chip" onClick={() => changePick(selectedIds.filter(v => v !== id))}>{i + 1} · {exercises?.find(e => e.id === id)?.name}<X size={14}/></button>)}</div>}
+      <div className="lib-actions"><button type="button" className="btn" onClick={() => setMode('browse')}>Cancel</button><button type="button" className="btn primary" disabled={selectedIds.length < 2 || busy} onClick={buildSuperset}>Start superset · {selectedIds.length}</button></div>
     </footer>}
     {sortOpen && <BottomSheet title="Sort exercises" onClose={() => setSortOpen(false)}>
-      {sorts.map(s => <button key={s} className="lib-sheet-row" onClick={() => { setSort(s); setSortOpen(false) }}>{s}{sort === s && <Check size={19}/>}</button>)}
+      {sorts.map(s => <button type="button" key={s} className="lib-sheet-row" onClick={() => { setSort(s); setSortOpen(false) }}>{s}{sort === s && <Check size={19}/>}</button>)}
     </BottomSheet>}
     {actions && <BottomSheet title={actions?.name ?? 'Exercise options'} onClose={() => setActions(null)}>
-      {actions && <><button className="lib-sheet-row" onClick={() => edit(actions)}>Edit exercise<Pencil size={17}/></button>
-        <button className="lib-sheet-row lib-danger" onClick={() => { setDeleting(actions); setActions(null) }}>Delete exercise<Trash2 size={17}/></button></>}
+      {actions && <><button type="button" className="lib-sheet-row" onClick={() => edit(actions)}>Edit exercise<Pencil size={17}/></button>
+        <button type="button" className="lib-sheet-row lib-danger" onClick={() => { setDeleting(actions); setActions(null) }}>Delete exercise<Trash2 size={17}/></button></>}
     </BottomSheet>}
     {deleting && <BottomSheet title="Delete exercise?" onClose={() => setDeleting(null)}>
       {deleting && <><p>Deleting {deleting.name} removes its logged sets and routine entries.</p>
         {error && <p role="alert" className="lib-error">{error}</p>}
-        <div className="lib-actions"><button className="btn" onClick={() => setDeleting(null)}>Keep exercise</button><button className="btn lib-danger" disabled={busy} onClick={() => void run(async () => { await deleteExercise(deleting.id); setDeleting(null) })}>Delete exercise</button></div></>}
+        <div className="lib-actions"><button type="button" className="btn" onClick={() => setDeleting(null)}>Keep exercise</button><button type="button" className="btn lib-danger" disabled={busy} onClick={() => void run(async () => { await deleteExercise(deleting.id); setDeleting(null) })}>Delete exercise</button></div></>}
     </BottomSheet>}
     {detail && <BottomSheet title={detail?.name ?? 'Exercise'} onClose={() => setDetail(null)}>
       {detail && <><div className="lib-details"><span>{detail.targetMuscle} · {typeLabels[detail.logType]}</span><span>{detail.defaultRestSeconds}s rest{detail.repTarget ? ' · ' + detail.repTarget + ' rep target' : ''}</span>{detail.notes && <p>{detail.notes}</p>}</div>
         {error && <p role="alert" className="lib-error">{error}</p>}
-        <div className="lib-actions"><button className="btn" onClick={() => edit(detail)}>Edit exercise</button><button className="btn primary" disabled={busy} onClick={() => startExercise(detail)}>Log exercise</button></div></>}
+        <div className="lib-actions"><button type="button" className="btn" onClick={() => edit(detail)}>Edit exercise</button><button type="button" className="btn primary" disabled={busy} onClick={() => startExercise(detail)}>Log exercise</button></div></>}
     </BottomSheet>}
   </Container>
 }

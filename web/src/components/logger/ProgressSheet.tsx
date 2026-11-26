@@ -84,19 +84,20 @@ export function ProgressSheet({ exerciseId, excludeWorkoutId, initialTab = 'prog
     const valid = (s: WorkoutSet) => exercise.targetMuscle !== 'Warmups' && s.isComplete && !s.isWarmup
     const working = sessions.flatMap(session => session.sets.filter(valid))
     const e1rm = (s: WorkoutSet) => calculateE1RM(s.weight ?? 0, s.reps ?? 0)
-    const estimates = exercise.logType === 'WEIGHT_REPS' ? working.flatMap(set => {const value=e1rm(set); return value === null ? [] : [{value,set}]}) : []
+    const useE1rm = exercise.logType === 'WEIGHT_REPS'
+    const estimates = useE1rm ? working.flatMap(set => {const value=e1rm(set); return value === null ? [] : [{value,set}]}) : []
     const estimate = estimates.reduce<(typeof estimates)[number] | null>((best, next) => !best || next.value > best.value ? next : best, null)
     const cutoff = periodStart(period)
     const points = sessions.filter(s => s.workout.startTime >= cutoff).flatMap(({workout,sets}) => {
       let top: number | null = null
       for (const set of sets.filter(valid)) {
-        const value = estimate ? e1rm(set) : recordMetric(set, exercise.logType, exercise.defaultDistanceUnit)
+        const value = useE1rm ? e1rm(set) : recordMetric(set, exercise.logType, exercise.defaultDistanceUnit)
         if (value !== null && (top === null || value > top)) top = value
       }
       return top === null ? [] : [{timestampMs:workout.startTime, workoutId:workout.id, value:top}]
     })
     const sampled = points.length <= 80 ? points : Array.from({length:80}, (_, i) => points[Math.round(i * (points.length - 1) / 79)])
-    return {points, sampled, estimate, best:bestWorkingSet(working,exercise), frontier:exercise.logType === 'WEIGHT_REPS' ? paretoBest(working) : []}
+    return {useE1rm, points, sampled, estimate, best:bestWorkingSet(working,exercise), frontier:useE1rm ? paretoBest(working) : []}
   }, [snapshot, period])
   const exercise = snapshot?.exercise
   const unit = snapshot?.unit ?? 'lbs'
@@ -106,9 +107,9 @@ export function ProgressSheet({ exerciseId, excludeWorkoutId, initialTab = 'prog
         {(['progress','records','history'] as Tab[]).map(value => <button key={value} aria-pressed={tab === value} onClick={() => {setTab(value);setLimit(12)}}>{value[0].toUpperCase() + value.slice(1)}</button>)}
       </div>
       {tab === 'progress' && <>
-        <div className="tool-section-heading"><h3 className="eyebrow">{model.estimate ? 'Estimated 1RM' : metricNames[exercise.logType]}</h3></div>
+        <div className="tool-section-heading"><h3 className="eyebrow">{model.useE1rm ? 'Estimated 1RM' : metricNames[exercise.logType]}</h3></div>
         <div className="progress-range" role="group" aria-label="Chart period">{periods.map(value => <button key={value} aria-pressed={period === value} onClick={() => {setPeriod(value);setLimit(12)}}>{value}</button>)}</div>
-        <InsightLineChart key={period} label={model.estimate ? 'Estimated one-rep max' : metricNames[exercise.logType]}
+        <InsightLineChart key={period} label={model.useE1rm ? 'Estimated one-rep max' : metricNames[exercise.logType]}
           points={model.sampled} formatValue={value => chartText(value,exercise,unit)} />
         <section><div className="tool-section-heading"><h3 className="eyebrow">Sessions</h3><span>{model.points.length}</span></div>
           {model.points.slice(-limit).reverse().map(point => <div className="progress-result" key={point.workoutId}><span>{dayLabel.format(point.timestampMs)}</span><strong>{chartText(point.value, exercise,unit)}</strong></div>)}

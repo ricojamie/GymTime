@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ArrowLeft, ArrowRight, ArrowRightLeft, Check, ChevronRight, Link2, Minus, MoreHorizontal, Plus } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -6,7 +6,9 @@ import { db } from '../db/database'
 import { finishWorkout, getActiveWorkout, skipWorkoutExercise } from '../db/repositories'
 import { normalizeMuscleName } from '../db/types'
 import type { WorkoutExerciseInstance, WorkoutSet } from '../db/types'
-import { BottomSheet, CalibrationBar } from '../components/primitives'
+import { AnimatedNumber, BottomSheet, CalibrationBar } from '../components/primitives'
+import { SwoleGator, useIsGatorMode } from '../components/mascot'
+import { stopRestTimer } from '../store/restTimer'
 import './workout.css'
 
 async function readSession() {
@@ -49,9 +51,20 @@ function SessionClock({ start }: { start: number }) {
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
     const tick = () => setNow(Date.now())
-    const timer = window.setInterval(tick, 1000)
-    document.addEventListener('visibilitychange', tick)
-    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', tick) }
+    let timer: number | undefined
+    const sync = () => {
+      if (timer !== undefined) { window.clearInterval(timer); timer = undefined }
+      if (document.visibilityState !== 'hidden') {
+        tick()
+        timer = window.setInterval(tick, 1000)
+      }
+    }
+    sync()
+    document.addEventListener('visibilitychange', sync)
+    return () => {
+      if (timer !== undefined) window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', sync)
+    }
   }, [])
   const seconds = Math.max(0, Math.floor((now - start) / 1000))
   const minutes = Math.floor(seconds / 60) % 60
@@ -62,6 +75,7 @@ function SessionClock({ start }: { start: number }) {
 
 export default function Workout() {
   const session = useLiveQuery(readSession, [])
+  const gatorMode = useIsGatorMode()
   const navigate = useNavigate()
   const [search, setSearch] = useSearchParams()
   const [finish, setFinish] = useState(false)
@@ -78,11 +92,18 @@ export default function Workout() {
     }
   }, [search, session, setSearch])
 
-
   if (session === undefined) return <div className="screen wk-screen" aria-busy="true" aria-label="Loading workout" />
   if (!session) return <div className="screen wk-screen">
-    <header className="wk-heading"><button className="icon-button" aria-label="Back to home" onClick={() => navigate('/')}><ArrowLeft /></button><h1>Workout</h1></header>
-    <p className="wk-empty">No active workout</p><button className="btn primary" onClick={() => navigate('/exercises/select?workoutMode=true')}>Start workout<ArrowRight size={18} /></button>
+    <header className="wk-heading">
+      <button className="icon-button" aria-label="Back to home" onClick={() => navigate('/')}><ArrowLeft /></button>
+      <h1>Workout</h1>
+      {gatorMode && <SwoleGator pose="badge" size={32} label="" className="wk-head-gator" />}
+    </header>
+    <section className="wk-empty-card surface stagger-in">
+      {gatorMode && <SwoleGator pose="spotter" size={88} interactive />}
+      <p className="wk-empty">No active workout</p>
+      <button className="btn primary" onClick={() => navigate('/exercises/select?workoutMode=true')}>Start workout<ArrowRight size={18} /></button>
+    </section>
   </div>
 
   const { active, rows } = session
@@ -116,6 +137,7 @@ export default function Workout() {
     try {
       if (isFinish) {
         await finishWorkout(active.id)
+        stopRestTimer()
         navigate('/summary/' + active.id, { replace: true, state: { justFinished: active.id } })
       } else if (editId !== null) {
         await skipWorkoutExercise(editId)
@@ -130,15 +152,16 @@ export default function Workout() {
     <header className="wk-heading">
       <button className="icon-button" aria-label="Back to home" onClick={() => navigate('/')}><ArrowLeft /></button>
       <h1>{name}</h1>
+      {gatorMode && <SwoleGator pose="badge" size={32} label="" className="wk-head-gator" />}
     </header>
     <div className="wk-overview-grid">
-      <section className="wk-readout" aria-label="Session metrics">
-        <div className="wk-timer-label"><span className="wk-led" />Session elapsed</div>
+      <section className="wk-readout surface stagger-in" style={{ '--stagger-i': 0 } as CSSProperties} aria-label="Session metrics">
+        <div className="wk-timer-label"><span className="wk-led" aria-hidden="true" />Session elapsed</div>
         <SessionClock start={active.startTime} />
         <dl className="wk-metrics">
-          <div><dt>Working sets</dt><dd>{totals.working}</dd></div>
-          <div><dt>Exercises</dt><dd>{totals.exercised}</dd></div>
-          <div><dt>{targets.length ? 'Targets met' : 'Warm-ups'}</dt><dd>{targets.length ? (targets.length - unresolved.length) + ' / ' + targets.length : totals.warmups}</dd></div>
+          <div><dt>Working sets</dt><dd><AnimatedNumber value={totals.working} /></dd></div>
+          <div><dt>Exercises</dt><dd><AnimatedNumber value={totals.exercised} /></dd></div>
+          <div><dt>{targets.length ? 'Targets met' : 'Warm-ups'}</dt><dd>{targets.length ? (targets.length - unresolved.length) + ' / ' + targets.length : <AnimatedNumber value={totals.warmups} />}</dd></div>
         </dl>
         {totals.planned > 0 && <div className="wk-calibration">
           <div className="wk-cal-label"><span>Plan progress</span><strong>{totals.done} / {totals.planned} sets</strong></div>
@@ -146,19 +169,22 @@ export default function Workout() {
         </div>}
       </section>
       <div className="wk-flow">
-        {next && <button className="wk-next" onClick={() => openExercise(next.exercise.id)}>
+        {next && <button className="wk-next surface hover-lift stagger-in" style={{ '--stagger-i': 1 } as CSSProperties} onClick={() => openExercise(next.exercise.id)}>
           <span><small>{next.started ? 'Continue' : 'Up next'}</small><strong>{next.exercise.name}</strong>
           <span className="wk-meta">{next.exercise.targetMuscle}{next.target > 0 && ' · ' + next.working + ' / ' + next.target + ' sets'}</span></span>
           <span className="wk-go"><ArrowRight size={23} /></span>
         </button>}
         <section aria-labelledby="wk-plan-title">
           <div className="wk-section-title"><h2 id="wk-plan-title">{active.routineNameSnapshot || 'Session exercises'}</h2><span>{rows.length}</span></div>
-          {rows.length === 0 && <p className="wk-empty">No exercises added</p>}
+          {rows.length === 0 && <div className="wk-order-empty">
+            {gatorMode && <SwoleGator pose="spotter" size={44} label="" />}
+            <p className="wk-empty">No exercises added</p>
+          </div>}
           <ol className="wk-timeline">
             {rows.map((row, i) => {
               const ex = row.exercise
               const done = row.target > 0 && row.working >= row.target
-              return <li key={row.instance?.id ?? 'exercise-' + ex.id}>
+              return <li key={row.instance?.id ?? 'exercise-' + ex.id} className="stagger-in" style={{ '--stagger-i': Math.min(i, 12) } as CSSProperties}>
                 <span className={'wk-ticket' + (done ? ' done' : '')}>{done ? <Check size={14} aria-label="Target met" /> : String(i + 1).padStart(2, '0')}</span>
                 <button className="wk-timeline-row" onClick={() => openExercise(ex.id)}>
                   <span className="wk-grow"><strong>{ex.name}</strong><small>
@@ -183,6 +209,7 @@ export default function Workout() {
     {dialogOpen && <BottomSheet title={finish ? 'Finish workout?' : editing?.exercise.name || 'Exercise'} onClose={closeDialog}>
       <div className="wk-dialog-body">
         {finish ? <>
+          {gatorMode && <div className="wk-finish-gator"><SwoleGator pose="stamp" size={64} label="" /></div>}
           <p>{totals.working} working {totals.working === 1 ? 'set' : 'sets'} · {totals.exercised} {totals.exercised === 1 ? 'exercise' : 'exercises'}</p>
           <button className="btn primary" disabled={busy} onClick={() => commit(true)}>Finish workout</button>
         </> : editing?.instance && <>

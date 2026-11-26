@@ -10,8 +10,10 @@ export function setActiveRoutine(id: number | null) {
 export function deleteRoutine(id: number) {
   return db.transaction('rw', db.routines, db.routine_days, db.routine_exercises, async () => {
     const days = await db.routine_days.where('routineId').equals(id).primaryKeys()
-    await db.routine_exercises.where('routineDayId').anyOf(days).delete()
-    await db.routine_days.bulkDelete(days)
+    if (days.length > 0) {
+      await db.routine_exercises.where('routineDayId').anyOf(days).delete()
+      await db.routine_days.bulkDelete(days)
+    }
     await db.routines.delete(id)
   })
 }

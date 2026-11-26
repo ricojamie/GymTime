@@ -26,17 +26,21 @@ function plotGeometry(points: Point[]) {
   const y = (value: number) => bottom - (bottom - top) * (value - min) / (max - min)
   const positions = points.map(p => ({ x: x(p.timestampMs), y: y(p.value) }))
   const line = positions.map(p => p.x + ',' + p.y).join(' ')
-  return { min, max, positions, line }
+  const area = positions.length > 1
+    ? `${positions[0].x},${bottom} ${line} ${positions[positions.length - 1].x},${bottom}`
+    : ''
+  return { min, max, positions, line, area }
 }
 
 export default function InsightLineChart({ points, formatValue, label }: Props) {
   const [selected, setSelected] = useState<number | null>(null)
   const capture = useRef<{ id: number; left: number; width: number } | null>(null)
   const chartId = useId()
+  const gradId = chartId.replace(/[^a-zA-Z0-9_-]/g, '') + '-area'
   const geometry = useMemo(() => plotGeometry(points), [points])
   if (!geometry) return <div className="il-chart-empty">No comparable sessions in this period.</div>
 
-  const { min, max, positions, line } = geometry
+  const { min, max, positions, line, area } = geometry
   const index = Math.min(selected ?? points.length - 1, points.length - 1)
   const current = points[index]
   const position = positions[index]
@@ -61,7 +65,12 @@ export default function InsightLineChart({ points, formatValue, label }: Props) 
   }
 
   return <figure className="il-line-chart">
-    <figcaption><strong>{formatValue(current.value)}</strong><time dateTime={new Date(current.timestampMs).toISOString()}>{date.format(current.timestampMs)}</time></figcaption>
+    <figcaption>
+      <strong>{formatValue(current.value)}</strong>
+      <time className="il-chart-callout" data-active={selected !== null} dateTime={new Date(current.timestampMs).toISOString()}>
+        {date.format(current.timestampMs)}
+      </time>
+    </figcaption>
     <div className="il-line-plot"><div className="il-chart-scale" aria-hidden="true"><span>{formatValue(max)}</span><span>{formatValue(min)}</span></div>
     <svg viewBox={`0 0 ${width} 130`} preserveAspectRatio="none" tabIndex={0}
       role="slider" aria-label={label + ' by session'} aria-orientation="horizontal" aria-valuemin={1} aria-valuemax={points.length}
@@ -76,13 +85,23 @@ export default function InsightLineChart({ points, formatValue, label }: Props) 
       onLostPointerCapture={event => {
         if (capture.current?.id === event.pointerId) capture.current = null
       }}>
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--accent-ink)" stopOpacity="0.24" />
+          <stop offset="100%" stopColor="var(--accent-ink)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
       {[top, (top + bottom) / 2, bottom].map(h => <line key={h} x1={left} x2={right} y1={h} y2={h} className="il-chart-grid" />)}
-      <polyline className="il-chart-line" points={line} />
+      {area && <polygon className="il-chart-area" points={area} fill={`url(#${gradId})`} />}
+      <polyline className="il-chart-line" pathLength={1} points={line} />
       <line className="il-crosshair" x1={position.x} x2={position.x} y1={top} y2={bottom} />
       {selected == null && <g aria-hidden="true" transform={`translate(${lastPosition.x} ${lastPosition.y})`}>
         <path key={last.workoutId} className="il-chart-reticle" d="M-7 -3v-4h4 M3 -7h4v4 M7 3v4H3 M-3 7h-4V3"/>
       </g>}
-      <svg x={position.x - 5} y={position.y - 5} width="10" height="10"><circle r="4" cx="5" cy="5" className="il-focus-point" /></svg>
+      <svg x={position.x - 10} y={position.y - 10} width="20" height="20">
+        <circle r="7" cx="10" cy="10" className="il-focus-halo" />
+        <circle r="4" cx="10" cy="10" className="il-focus-point" />
+      </svg>
     </svg>
     </div>
     <div className="il-chart-ends"><span>{date.format(first.timestampMs)}</span>{points.length > 1 && <span>{date.format(last.timestampMs)}</span>}</div>

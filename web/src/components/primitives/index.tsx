@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import './primitives.css'
@@ -78,4 +78,50 @@ export function SegmentedControl<T extends string | number>({ value, options, on
 }
 export function CalibrationBar({value,max=1,ticks=10,label}:{value:number;max?:number;ticks?:number;label?:string}) {
   return <div className="calibration-bar" role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={Math.min(max,Math.max(0,value))}>{Array.from({length:ticks},(_,i)=><i key={i} data-lit={max>0 && i<Math.round(value/max*ticks)}/>)}</div>
+}
+
+function prefersReducedMotion() {
+  if (typeof document !== 'undefined' && document.documentElement.dataset.motion === 'reduced') return true
+  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return true
+  return false
+}
+
+export function AnimatedNumber({
+  value,
+  format = (n: number) => String(Math.round(n)),
+  duration = 520,
+  className = '',
+}: {
+  value: number
+  format?: (value: number) => string
+  duration?: number
+  className?: string
+}) {
+  const [display, setDisplay] = useState(value)
+  const currentRef = useRef(value)
+  useEffect(() => {
+    const from = currentRef.current
+    if (!Number.isFinite(value) || from === value || duration <= 0 || prefersReducedMotion()) {
+      currentRef.current = value
+      setDisplay(value)
+      return
+    }
+    let raf = 0
+    const start = performance.now()
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      const next = from + (value - from) * eased
+      currentRef.current = next
+      setDisplay(next)
+      if (progress < 1) raf = requestAnimationFrame(tick)
+      else {
+        currentRef.current = value
+        setDisplay(value)
+      }
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [value, duration])
+  return <span className={'animated-number ' + className}>{format(display)}</span>
 }
