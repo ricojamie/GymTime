@@ -1,0 +1,8 @@
+# Pages serves index.html for other unmatched paths. Leave assets and sw.js directly addressable.
+/workout/* /index.html 200
+/log/* /index.html 200
+/summary/* /index.html 200
+/exercises/* /index.html 200
+/routines/* /index.html 200
+/report/* /index.html 200
+/settings/* /index.html 200

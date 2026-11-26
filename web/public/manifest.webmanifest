@@ -1,0 +1,29 @@
+{
+  "id": "/",
+  "name": "IronLog",
+  "short_name": "IronLog",
+  "description": "Offline strength training log",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#090A0D",
+  "theme_color": "#090A0D",
+  "categories": [
+    "fitness",
+    "health"
+  ],
+  "icons": [
+    {
+      "src": "/icons/classic-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/classic-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+.his-screen,.his-summary{min-width:0}
+.his-heading,.his-detail-head,.his-summary-head,.his-save-backup,.his-heading>span,.his-detail-head>span,.his-rating,.his-summary-head .eyebrow,.his-action,.his-share,.his-footer,.his-back{display:flex;align-items:center}
+.his-heading,.his-detail-head,.his-more>.his-action{justify-content:space-between}
+.his-heading h1,.his-summary-head h1{margin:0}
+.his-heading>span,.his-summary-date,.his-session-text>span,.his-session-text>small,.his-rating,.his-message,.his-detail-head>span,.his-sets small,.his-note-field,.his-note,.his-recap,.his-metrics dt,.his-compare dt{color:var(--ink-secondary)}
+.his-search{display:flex;align-items:center;gap:12px;padding-inline:16px;background:var(--bg-well);border:1px solid var(--border-strong);border-radius:var(--radius-control,10px);color:var(--ink-secondary);margin:16px 0 24px}
+.his-search input{min-height:48px;min-width:0;flex:1;color:var(--ink-primary);background:transparent;border:0;font:inherit}
+.his-search input::-webkit-search-cancel-button{display:none}
+.his-search:focus-within{outline:2px solid var(--accent-ink);outline-offset:2px}
+.his-search input:focus{outline:0}
+.his-month{margin-bottom:24px}
+.his-month .eyebrow{margin:0 0 8px}
+.his-timeline{padding:0;overflow:hidden}
+.his-session{display:flex;align-items:center;gap:16px;padding:16px;width:100%;color:var(--ink-primary);background:transparent;text-align:left;border:0;border-bottom:1px solid var(--border-hairline);cursor:pointer}
+.his-session:last-child,.his-sets li:last-child{border-bottom:0}
+.his-session:active{background:var(--bg-surface-hover)}
+.his-session:focus-visible{outline-offset:-3px}
+.his-date{min-width:44px;display:grid;justify-items:center;padding-right:12px;border-right:1px solid var(--border-strong)}
+.his-date strong{font:32px/1 var(--font-display);font-variant-numeric:tabular-nums}
+.his-date small,.his-session-text small,.his-heading>span,.his-detail-head>span,.his-message,.his-sets small{font-size:13px}
+.his-date small{color:var(--ink-secondary);text-transform:uppercase;letter-spacing:.05em;font-size:10px}
+.his-session-text{flex:1;min-width:0;display:grid;gap:4px;overflow-wrap:anywhere}
+.his-session-text strong{font-size:15px}
+.his-session-text>span,.his-recap,.his-note{font-size:14px}
+.his-rating,.his-detail-head>span,.his-summary-head .eyebrow{gap:6px}
+.his-rating svg{fill:currentColor}
+.his-empty{display:grid;justify-items:center;gap:16px;padding:48px 16px;text-align:center;color:var(--ink-secondary)}
+.his-empty h2{color:var(--ink-primary);margin:0;font-size:18px}
+.his-detail{display:grid;gap:16px;min-width:0}
+.his-detail section h3{margin:8px 0;font-size:16px}
+.his-detail p{margin:0}
+.his-detail .his-back{justify-self:start;gap:8px}
+.his-metrics,.his-compare{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:14px 0;border-block:1px solid var(--border-hairline)}
+.his-metrics>div+div{border-left:1px solid var(--border-hairline);padding-left:12px}
+.his-metrics dt,.his-compare dt{font-size:12px}
+.his-metrics dd,.his-compare dd{font-weight:600;font-size:17px;overflow-wrap:anywhere;margin:4px 0 0}
+.his-metrics dd small{font-size:12px;font-weight:400}
+.his-sets{list-style:none;padding:0;margin:0}
+.his-sets li{display:flex;align-items:center;gap:12px;padding:10px 0;min-height:44px;border-bottom:1px solid var(--border-hairline)}
+.his-sets li>div{flex:1;min-width:0}
+.his-sets li>div>*{display:block;overflow-wrap:anywhere}
+.his-sets strong{font-size:14px;font-weight:600}
+.his-sets p,.his-note{white-space:pre-wrap;overflow-wrap:anywhere}
+.his-ordinal{color:var(--ink-secondary);font-size:12px;font-variant-numeric:tabular-nums}
+.his-warm summary{color:var(--ink-secondary);cursor:pointer;min-height:44px;align-content:center}
+.his-pr{color:var(--accent-ink)}
+.his-share{gap:8px;flex-wrap:wrap}
+.his-share>button{flex:1;white-space:nowrap}
+.his-share>button,.his-action,.his-footer>button,.his-empty>.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px}
+.his-action{width:100%;background:transparent;color:var(--ink-primary);text-align:left;text-decoration:none;border:0;border-bottom:1px solid var(--border-hairline);justify-content:flex-start;font:inherit;padding:8px 0;cursor:pointer}
+.his-form,.his-form label,.his-note-field{display:grid;gap:8px}
+.his-form{gap:16px}
+.his-input{width:100%;min-width:0;box-sizing:border-box;min-height:44px;border-radius:var(--radius-control,10px);background:var(--bg-well);color:var(--ink-primary);border:1px solid var(--border-strong);padding:12px;font:inherit;font-size:16px}
+textarea.his-input{resize:vertical}
+.his-danger{background:var(--semantic-danger);color:#090a0d}
+.his-danger-text{color:var(--semantic-danger)}
+.his-summary{display:grid;gap:16px}
+.his-summary-head{gap:12px;min-width:0}
+.his-summary-head h1{overflow-wrap:anywhere}
+.his-summary-head img{border-radius:var(--radius-control,10px)}
+.his-summary-date{margin:0}
+.his-result{padding:20px 16px 16px}
+.his-result-volume{margin:6px 0 20px;font:42px/1 var(--font-display);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.his-result-volume small{font:600 15px/1 var(--font-sans);color:var(--ink-secondary)}
+.his-result .his-metrics{border-bottom:0;padding-bottom:0}
+.his-muscles{border-top:1px solid var(--border-hairline);padding-top:12px;margin-top:14px}
+.his-muscles p{margin:4px 0 0}
+.his-recap,.his-summary .his-message{margin:0}
+.his-save-backup{gap:12px;padding:16px;color:var(--ink-primary);cursor:pointer;text-align:left}
+.his-save-backup>span{margin-left:auto;font-size:18px}
+.his-feedback h2{font-size:17px;margin:8px 0}
+.his-stars{display:flex;gap:4px;margin-bottom:12px}
+.his-stars button{cursor:pointer;color:var(--ink-secondary);border:none;width:44px;height:44px;background:transparent;display:grid;place-items:center}
+.his-stars button[data-filled="true"] svg{fill:var(--ink-primary);color:var(--ink-primary)}
+.his-compare{grid-template-columns:1fr 1fr;border-top:0}
+.his-more .his-share{margin-top:12px}
+.his-footer{position:sticky;bottom:0;background:var(--bg-canvas);padding:12px 0 max(12px,env(safe-area-inset-bottom));border-top:1px solid var(--border-hairline);gap:8px;z-index:2}
+.his-footer>button:first-child{flex:1}.his-footer>button:last-child{flex:2}
+@media(max-width:380px){.his-session{gap:8px;padding:12px}.his-sets li{gap:8px}.his-metrics>div+div{padding-left:8px}}

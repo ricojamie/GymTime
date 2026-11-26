@@ -1,0 +1,132 @@
+import { useState, type ReactNode } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronDown, Copy, Ellipsis, Flag, Link2, Pencil, Play, Plus, Trash2 } from 'lucide-react'
+import { db } from '../db/database'
+import { deleteRoutine, setActiveRoutine } from '../db/repositories'
+import { BottomSheet } from '../components/primitives'
+import { duplicateDay, duplicateRoutine, moveDay, planLabel, removeDay, setNextDay } from '../routines/mutations'
+import { calculateRoutineStats } from '../domain/routineStats'
+import { formatWeight, weightLabel } from '../domain/units'
+import './routines.css'
+
+const dateLabel = (epoch: number) => new Date(epoch).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+
+function Stats({ id }: { id: number }) {
+  const data = useLiveQuery(async () => {
+    const workouts = await db.workouts.where('routineId').equals(id).toArray()
+    const [sets, exercises, prefs] = await Promise.all([
+      db.sets.where('workoutId').anyOf(workouts.map(w => w.id)).toArray(),
+      db.exercises.toArray(), db.preferences.get('default'),
+    ])
+    return { summary: calculateRoutineStats({ workouts, sets, exercises }, id), unit: prefs?.preferredWeightUnit ?? 'lbs' }
+  }, [id])
+  if (!data) return <p role="status">Loading stats…</p>
+  const { summary: s, unit } = data
+  return <section className="rt-stats">
+    <dl className="surface rt-stat-grid">{[
+      ['Workouts', s.timesCompleted], ['Avg. duration', s.avgDurationMinutes !== null ? Math.round(s.avgDurationMinutes) + ' min' : '—'],
+      ['Total volume', formatWeight(s.totalVolume, unit) + ' ' + weightLabel(unit)],
+      ['Workouts / wk · 28d', s.workoutsPerWeekRecent?.toFixed(1) ?? '—'],
+    ].map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}</dl>
+    <h2>Exercise trends</h2>
+    {!s.exerciseTrends.length ? <p className="rt-muted">No logged lifts in this routine yet.</p> :
+      <div className="surface rt-list">{s.exerciseTrends.map(lift => <div className="rt-line" key={lift.exerciseId}>
+        <span><strong>{lift.exerciseName}</strong><small>{lift.lastWeight != null && lift.lastReps != null ? formatWeight(lift.lastWeight, unit) + ' ' + weightLabel(unit) + ' × ' + lift.lastReps : lift.lastBestLabel}</small></span>
+        <span className="rt-stat-value">{lift.e1rmDelta == null ? '—' : (lift.e1rmDelta >= 0 ? '+' : '−') + formatWeight(Math.abs(lift.e1rmDelta), unit) + ' ' + weightLabel(unit)}<small>Est. 1RM change</small></span>
+      </div>)}</div>}
+  </section>
+}
+
+type Menu = { kind:'routine'|'delete-routine' } | { kind:'day'|'delete-day'; dayId:number }
+export default function RoutineDetail() {
+  const id = Number(useParams().id)
+  const navigate = useNavigate()
+  const [tab, setTab] = useState<'days'|'stats'>('days')
+  const [expanded, setExpanded] = useState<number[]>([])
+  const [menu, setMenu] = useState<Menu | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const data = useLiveQuery(async () => {
+    const [routine, days, exercises, workouts, active, count] = await Promise.all([
+      db.routines.get(id), db.routine_days.where('routineId').equals(id).sortBy('orderIndex'),
+      db.exercises.toArray(), db.workouts.where('routineId').equals(id).toArray(),
+      db.workouts.filter(w => w.endTime === null).first(), db.routines.count(),
+    ])
+    const rows = await db.routine_exercises.where('routineDayId').anyOf(days.map(d => d.id)).sortBy('orderIndex')
+    return { routine, days, count, active, rows, workouts, names: new Map(exercises.map(e => [e.id, e.name])) }
+  }, [id])
+  async function perform(action: () => Promise<unknown>) {
+    if (busy) return
+    setBusy(true); setError('')
+    try { await action(); setMenu(null) }
+    catch (failure) { setError((failure as Error).message) }
+    finally { setBusy(false) }
+  }
+  if (!data) return <main className="screen rt" role="status">Loading routine…</main>
+  const { routine, days, names, workouts, rows, active } = data
+  if (!routine) return <main className="screen rt"><h1>Routine unavailable</h1><Link to="/routines">View routines</Link></main>
+  const next = days.find(d => d.orderIndex === routine.nextDayOrderIndex) ?? days[0]
+  const selected = menu && 'dayId' in menu ? days.find(d => d.id === menu.dayId) : undefined
+  const base = '/routines/' + id
+  function action(label:string, icon:ReactNode, fn:()=>void, disabled=false, danger=false) {
+    return <button type="button" className={'rt-action' + (danger ? ' rt-danger' : '')} onClick={fn} disabled={busy || disabled}>{icon}{label}</button>
+  }
+  return <main className="screen rt">
+    <Link className="rt-back" to="/routines"><ArrowLeft size={18}/> Routines</Link>
+    <div className="rt-head"><div>{routine.isActive && <span className="rt-status">Active routine</span>}<h1>{routine.name}</h1></div>
+      <button className="icon-button" aria-label="Routine options" onClick={() => {setError(''); setMenu({kind:'routine'})}}><Ellipsis/></button></div>
+    <div className="rt-tabs" aria-label="Routine view">{(['days','stats'] as const).map(t =>
+      <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}>{t === 'days' ? 'Workout days' : 'Stats & trends'}</button>)}</div>
+    {error && !menu && <p role="alert" className="rt-error">{error}</p>}
+    {tab === 'stats' ? <Stats id={id}/> : <>
+      <div className="rt-head rt-section"><h2>Workout days</h2><span className="rt-muted">{days.length} / 10</span></div>
+      {!days.length && <p className="rt-muted">No workout days yet.</p>}
+      <div className="rt-days">{days.map((day, index) => {
+        const items = rows.filter(row => row.routineDayId === day.id)
+        const sessions = workouts.filter(w => w.routineDayId === day.id && w.endTime !== null).sort((a,b) => b.startTime - a.startTime)
+        const open = expanded.includes(day.id)
+        return <section className="surface rt-day" key={day.id}>
+          <div className="rt-head"><span className="eyebrow">Day {String(index + 1).padStart(2, '0')}</span>
+            {next?.id === day.id && <span className="rt-status">Up next</span>}
+            <button className="icon-button" onClick={() => {setError('');setMenu({kind:'day',dayId:day.id})}} aria-label={day.name + ' options'}><Ellipsis size={20}/></button></div>
+          <h3>{day.name}</h3><small>{sessions.length} completed{sessions[0] ? ' · Last ' + dateLabel(sessions[0].startTime) : ''}</small>
+          <button className="rt-expand" aria-expanded={open} onClick={() => setExpanded(open ? expanded.filter(i => i !== day.id) : [...expanded, day.id])}>
+            {items.length} {items.length === 1 ? 'exercise' : 'exercises'}<ChevronDown size={16} className={open ? 'rt-up' : ''}/></button>
+          {open && <ol className="rt-prescription">{items.map(item => <li key={item.id}>
+            <span>{item.supersetGroupId && <Link2 size={14} aria-label="Superset"/>} {names.get(item.exerciseId) ?? 'Deleted exercise'}</span><b>{planLabel(item)}</b>
+          </li>)}</ol>}
+          <button className="btn rt-day-start" disabled={!!active || !items.length} onClick={() => navigate(base + '/start?dayId=' + day.id)}><Play size={15}/>Start day</button>
+        </section>
+      })}</div>
+      <button className="btn rt-outline" disabled={days.length >= 10} onClick={() => navigate(base + '/days/new')}><Plus size={16}/> Add day</button>
+    </>}
+    {menu && <BottomSheet title={menu.kind === 'delete-routine' ? 'Delete routine?' : menu.kind === 'delete-day' ? 'Delete workout day?' : selected?.name ?? routine.name} onClose={() => {if (!busy) setMenu(null)}}>
+      <div className="rt rt-menu">
+        {menu.kind === 'routine' && <>
+          {action(routine.isActive ? 'Clear active routine' : 'Set active routine', <Flag/>, () => void perform(() => setActiveRoutine(routine.isActive ? null : id)))}
+          {action('Rename', <Pencil/>, () => navigate(base + '/edit'))}
+          {action('Duplicate routine', <Copy/>, () => void perform(async () => navigate('/routines/' + await duplicateRoutine(id))), data.count >= 10)}
+          {action('Delete routine', <Trash2/>, () => setMenu({kind:'delete-routine'}), false, true)}
+        </>}
+        {menu.kind === 'day' && selected && <>
+          {action('Edit day', <Pencil/>, () => navigate(base + '/days/' + selected.id + '/edit'))}
+          {action('Set as next', <Check/>, () => void perform(() => setNextDay(id,selected.id)), next?.id === selected.id)}
+          {action('Duplicate day', <Copy/>, () => void perform(() => duplicateDay(id,selected.id)), days.length >= 10)}
+          {action('Move up', <ArrowUp/>, () => void perform(() => moveDay(id,selected.id,-1)), selected.id === days[0]?.id)}
+          {action('Move down', <ArrowDown/>, () => void perform(() => moveDay(id,selected.id,1)), selected.id === days.at(-1)?.id)}
+          {action('Delete day', <Trash2/>, () => setMenu({kind:'delete-day',dayId:selected.id}), false,true)}
+        </>}
+        {(menu.kind === 'delete-routine' || menu.kind === 'delete-day') && <>
+          <p>Remove {selected?.name ?? routine.name}{menu.kind === 'delete-routine' ? ' and its workout days' : ' from this routine'}? Logged workouts stay in History.</p>
+          {action('Cancel', <ArrowLeft/>, () => setMenu(null))}
+          {action(menu.kind === 'delete-routine' ? 'Delete routine' : 'Delete day', <Trash2/>, () => void perform(async () => {
+            if (menu.kind === 'delete-routine') { await deleteRoutine(id); navigate('/routines', {replace:true}) }
+            else if (selected) await removeDay(id,selected.id)
+          }),false,true)}
+        </>}
+        {error && <p role="alert" className="rt-error">{error}</p>}
+      </div>
+    </BottomSheet>}
+  </main>
+}

@@ -1,0 +1,26 @@
+.il-line-chart, .il-rhythm-figure { margin: 12px 0 16px; min-width: 0; }
+.il-line-chart figcaption { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+.il-line-chart figcaption strong { font: 400 38px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.il-line-chart figcaption time, .il-chart-ends { color: var(--ink-secondary); font-size: 12px; }
+.il-line-plot > svg, .il-rhythm-figure > svg { display: block; width: 100%; overflow:visible; }
+.il-line-plot > svg { height:128px; touch-action: pan-y; cursor: crosshair; min-width:0; outline-offset:4px; }
+.il-rhythm-figure > svg { height:88px; }
+.il-chart-grid,.il-crosshair,.il-chart-line,.il-bar-past line,.il-bar-current line { vector-effect:non-scaling-stroke; }
+.il-chart-grid { stroke:var(--border-hairline); stroke-width:1; }
+.il-chart-line { fill:none; stroke:var(--accent-ink); stroke-linejoin:round; stroke-linecap:round; stroke-width:2; }
+.il-crosshair { stroke:var(--ink-secondary); stroke-dasharray:2 4; }
+.il-focus-point { stroke:var(--bg-surface); stroke-width:1.5px; fill:var(--accent-ink); }
+.il-chart-ends { display:flex; justify-content:space-between; margin-top:4px; }
+.il-chart-empty { min-height:104px; display:grid; place-items:center start; border-bottom:1px solid var(--border-hairline); color:var(--ink-secondary); font-size:14px; }
+.il-bar-past { color:var(--ink-secondary); fill:currentColor; }
+.il-bar-current { color:var(--accent-ink); fill:currentColor; }
+.il-partial,.il-full { stroke:currentColor; stroke-width:1; }
+.il-partial { stroke-dasharray:3 3; }
+.il-spectrum { display:flex; gap:3px; }
+.il-spectrum i { display:inline-block; height:5px; width:14px; background:var(--border-strong); }
+.il-spectrum i.is-lit { background:var(--ink-secondary); }
+.il-sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+
+
+.il-line-plot { display:grid; grid-template-columns:auto minmax(0,1fr); gap:8px; margin-top:12px; }
+.il-chart-scale { display:flex; flex-direction:column; justify-content:space-between; align-items:flex-end; font-size:10px; color:var(--ink-secondary); padding:8px 0; }

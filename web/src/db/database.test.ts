@@ -1,0 +1,168 @@
+// @vitest-environment node
+import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { db, defaultPreferences, initializeDatabase } from './database'
+import { addMuscle, closeStaleWorkouts, deleteExercise, deleteMuscle, deleteRoutine, deleteWorkout, ensureWorkoutExercise,
+  finishWorkout, getActiveWorkout, groupWorkoutExercises, logSet, renameMuscle, reopenWorkout, repeatWorkout,
+  saveExercise, setActiveRoutine, skipWorkoutExercise, startWorkout, swapWorkoutExercise, toggleStar, updateSet,
+} from './repositories'
+import type { RoutineExercise } from './types'
+
+beforeEach(async () => { await db.delete(); await db.open() })
+afterAll(async () => { await db.delete() })
+
+async function routineFixture() {
+  const routineId = await db.routines.add({name:'Strength', isActive:true, nextDayOrderIndex:0})
+  const dayId = await db.routine_days.add({routineId, name:'Upper', orderIndex:0})
+  await db.routine_days.add({routineId, name:'Lower', orderIndex:1})
+  const rows: Omit<RoutineExercise,'id'>[] = [1,2].map((exerciseId,i) => ({
+    exerciseId, orderIndex:i, routineDayId:dayId, targetSets:3, targetRepsMin:6, targetRepsMax:8,
+    targetRestSeconds:null, notes:'Controlled tempo', supersetGroupId:'A', supersetOrderIndex:i,
+  }))
+  await db.routine_exercises.bulkAdd(rows)
+  return {routineId,dayId}
+}
+
+describe('offline database', () => {
+  it('seeds only on first creation, including exact blank user history and preferences', async () => {
+    expect(await db.muscle_groups.count()).toBe(9)
+    expect(await db.exercises.count()).toBe(25)
+    expect(await db.exercises.get(1)).toMatchObject({name:'Barbell Bench Press',defaultRestSeconds:180,isCustom:false})
+    expect(await db.preferences.get('default')).toEqual(defaultPreferences)
+    await deleteExercise(1)
+    db.close()
+    await initializeDatabase()
+    expect(await db.exercises.count()).toBe(24)
+    expect(await db.workouts.count()).toBe(0)
+  })
+  it('serializes racing starts, counted finishes and star toggles', async () => {
+    const [one,two] = await Promise.all([startWorkout(),startWorkout()])
+    expect(one).toBe(two)
+    await Promise.all([finishWorkout(one),finishWorkout(one)])
+    expect((await db.preferences.get('default'))?.workoutsSinceLastBackup).toBe(1)
+    const stars = await Promise.allSettled([1,2,3,4].map(toggleStar))
+    expect(stars.filter(s => s.status === 'rejected')).toHaveLength(1)
+    expect(await db.exercises.filter(e => e.isStarred).count()).toBe(3)
+  })
+  it('forces every warmup set on category change, insert, update and bulk write', async () => {
+    const workoutId = await startWorkout()
+    const id = await logSet({workoutId,exerciseId:1,weight:95,reps:8})
+    await db.exercises.update(1,{targetMuscle:'Warm-up'})
+    expect((await db.exercises.get(1))?.targetMuscle).toBe('Warmups')
+    expect((await db.sets.get(id))?.isWarmup).toBe(true)
+    await db.sets.update(id,{isWarmup:false})
+    const original = (await db.sets.get(id))!
+    expect(original.isWarmup).toBe(true)
+    const {id: _id, ...set} = original
+    const [other] = await db.sets.bulkAdd([{...set,isWarmup:false}],{allKeys:true})
+    expect((await db.sets.get(other))?.isWarmup).toBe(true)
+    await saveExercise({name:'Bench',logType:'WEIGHT_REPS',targetMuscle:'Chest',id:1})
+    expect((await db.sets.get(other))?.isWarmup).toBe(true)
+    await updateSet(id,{isWarmup:false})
+    expect((await db.sets.get(id))?.isWarmup).toBe(false)
+  })
+  it('validates metrics, stores normalized distance and protects a finished workout', async () => {
+    const exerciseId = await saveExercise({name:'Run',targetMuscle:'Cardio',logType:'DISTANCE_TIME'})
+    const workoutId = await startWorkout()
+    await expect(logSet({workoutId,exerciseId,distanceValue:3.1,distanceUnit:'MILES',durationSeconds:0})).rejects.toThrow()
+    const id = await logSet({workoutId,exerciseId,distanceValue:3.1,distanceUnit:'MILES',durationSeconds:1400})
+    expect((await db.sets.get(id))?.distanceMeters).toBeCloseTo(3.1*1609.344)
+    expect(await db.workout_exercise_instances.where('[workoutId+exerciseId]').equals([workoutId,exerciseId]).count()).toBe(1)
+    await finishWorkout(workoutId)
+    await expect(logSet({workoutId,exerciseId,distanceValue:1,distanceUnit:'STEPS',durationSeconds:60})).rejects.toThrow()
+  })
+  it('snapshots a routine and advances it only once after logging a planned exercise', async () => {
+    const {routineId,dayId} = await routineFixture()
+    const workoutId = await startWorkout({routineDayId:dayId})
+    await db.routine_days.update(dayId,{name:'Renamed'})
+    const slots = await db.workout_exercise_instances.where('workoutId').equals(workoutId).sortBy('orderIndex')
+    expect(slots[0]).toMatchObject({plannedSets:3,repMin:6,repMax:8,restSeconds:null,notes:'Controlled tempo'})
+    await logSet({workoutId,exerciseId:1,reps:6,weight:100})
+    await finishWorkout(workoutId)
+    expect((await db.routines.get(routineId))?.nextDayOrderIndex).toBe(1)
+    await deleteRoutine(routineId)
+    expect(await db.routine_days.count()).toBe(0)
+    expect(await db.routine_exercises.count()).toBe(0)
+    expect(await db.workouts.get(workoutId)).toMatchObject({routineNameSnapshot:'Strength',routineDayNameSnapshot:'Upper'})
+    expect(await db.sets.count()).toBe(1)
+  })
+  it('clears other active routines atomically including a null selection', async () => {
+    const {routineId} = await routineFixture()
+    const target = await db.routines.add({name:'Second',isActive:false,nextDayOrderIndex:0})
+    await setActiveRoutine(target)
+    expect((await db.routines.get(routineId))?.isActive).toBe(false)
+    expect((await db.routines.get(target))?.isActive).toBe(true)
+    await setActiveRoutine(null)
+    expect(await db.routines.filter(r => r.isActive).count()).toBe(0)
+  })
+  it('cascades an exercise and dissolves orphaned routine and workout supersets', async () => {
+    const {dayId} = await routineFixture()
+    const workoutId = await startWorkout({routineDayId:dayId})
+    await logSet({workoutId,exerciseId:1,weight:10,reps:10})
+    await deleteExercise(1)
+    expect(await db.sets.count()).toBe(0)
+    expect(await db.workout_exercise_instances.count()).toBe(1)
+    expect(await db.routine_exercises.count()).toBe(1)
+    expect(await db.workout_exercise_instances.toCollection().first()).toMatchObject({exerciseId:2,supersetGroupId:null,supersetOrderIndex:0})
+    expect(await db.routine_exercises.toCollection().first()).toMatchObject({exerciseId:2,supersetGroupId:null})
+  })
+  it('rejects invalid group sizes and protects started and duplicate plan slots', async () => {
+    const id = await startWorkout({exerciseIds:[1,2]})
+    await expect(groupWorkoutExercises(id,[1])).rejects.toThrow()
+    await expect(groupWorkoutExercises(id,Array.from({length:11},(_,i)=>i+1))).rejects.toThrow()
+    const group = await groupWorkoutExercises(id,[1,2,3])
+    const slot = await ensureWorkoutExercise(id,1)
+    await expect(swapWorkoutExercise(slot,2)).rejects.toThrow()
+    await swapWorkoutExercise(slot,4)
+    await logSet({workoutId:id,exerciseId:4,reps:8})
+    await expect(skipWorkoutExercise(slot)).rejects.toThrow()
+    await skipWorkoutExercise(await ensureWorkoutExercise(id,2))
+    expect((await db.workout_exercise_instances.get(slot))?.supersetGroupId).toBe(group)
+    await skipWorkoutExercise(await ensureWorkoutExercise(id,3))
+    expect((await db.workout_exercise_instances.get(slot))?.supersetGroupId).toBeNull()
+    expect(await db.sets.toCollection().first()).toMatchObject({supersetGroupId:group})
+  })
+  it('repeats the blueprint without duplicating sets and cascades deleted workout history', async () => {
+    const id = await startWorkout({exerciseIds:[1,2]})
+    await groupWorkoutExercises(id,[1,2])
+    await logSet({workoutId:id,exerciseId:1,reps:6,weight:135})
+    await finishWorkout(id)
+    const copy = await repeatWorkout(id)
+    const slots = await db.workout_exercise_instances.where('workoutId').equals(copy).toArray()
+    expect(slots).toHaveLength(2)
+    expect(slots[0]).toMatchObject({plannedSets:1,repMin:6})
+    expect(slots[0].supersetGroupId).not.toBe((await db.sets.toCollection().first())?.supersetGroupId)
+    await expect(reopenWorkout(id)).rejects.toThrow()
+    await deleteWorkout(id)
+    expect(await db.sets.count()).toBe(0)
+    expect(await db.workout_exercise_instances.count()).toBe(2)
+    expect((await getActiveWorkout())?.id).toBe(copy)
+  })
+  it('auto-closes at the last set; expires an empty session at exactly four hours', async () => {
+    const id = await startWorkout()
+    const now = Date.now(), stale = now - 4*3_600_000
+    await db.workouts.update(id,{startTime:stale-1000})
+    await logSet({workoutId:id,exerciseId:1,reps:5,weight:100,timestamp:stale})
+    await closeStaleWorkouts(now-1)
+    expect((await getActiveWorkout())?.id).toBe(id)
+    await closeStaleWorkouts(now)
+    expect((await db.workouts.get(id))?.endTime).toBe(stale)
+    const empty = await startWorkout()
+    await db.workouts.update(empty,{startTime:stale})
+    await closeStaleWorkouts(now)
+    expect(await db.workouts.get(empty)).toBeUndefined()
+  })
+  it('protects body-part references and reassigns unused exercises', async () => {
+    await expect(addMuscle('warm-ups')).rejects.toThrow()
+    await expect(addMuscle('chest')).rejects.toThrow()
+    await addMuscle('Hamstrings')
+    const ex = await saveExercise({name:'Nordic curl',targetMuscle:'Hamstrings',logType:'REPS_ONLY'})
+    await expect(deleteMuscle('Hamstrings')).rejects.toThrow()
+    await renameMuscle('Hamstrings','Posterior')
+    expect((await db.exercises.get(ex))?.targetMuscle).toBe('Posterior')
+    await deleteMuscle('Posterior','Uncategorized')
+    expect((await db.exercises.get(ex))?.targetMuscle).toBe('Uncategorized')
+    const workoutId = await startWorkout()
+    await logSet({workoutId,exerciseId:ex,reps:5})
+    await expect(deleteMuscle('Uncategorized','Legs')).rejects.toThrow('logged sets')
+  })
+})

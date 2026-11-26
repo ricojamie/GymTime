@@ -1,0 +1,16 @@
+:root {
+ color-scheme:dark;
+ --accent:#a3e635; --accent-ink:#a3e635; --on-accent:#090a0d;
+ --bg-canvas:#090a0d; --surface-base:#12141a; --bg-surface-hover:#191c24; --bg-well:#0c0e12; --bg-sheet:#151820; --bg-chrome:rgba(14,16,22,.86);
+ --ink-primary:#f4f6fa; --ink-secondary:#8e95a5; --ink-tertiary:#586070; --border-hairline:rgba(255,255,255,.08); --border-strong:rgba(255,255,255,.16);
+ --semantic-positive:#22c55e; --semantic-warning:#f59e0b; --semantic-danger:#ef4444;
+ --bg-surface:color-mix(in srgb,var(--surface-base),var(--accent) 2.5%);
+ --radius-control:10px; --radius-surface:16px; --radius-sheet:24px; --radius-pill:999px;
+ --font-display:'Bebas Neue','Arial Narrow',sans-serif; --font-sans:-apple-system,BlinkMacSystemFont,'Inter',system-ui,sans-serif;
+ --gutter:16px; --ease:cubic-bezier(.2,.8,.2,1); --safe-bottom:env(safe-area-inset-bottom,0px);
+}
+:root[data-theme=light] {
+ color-scheme:light; --bg-canvas:#f2f3f5; --surface-base:#fff; --bg-surface-hover:#f7f8fa; --bg-well:#e8eaef; --bg-sheet:#fff; --bg-chrome:rgba(248,249,251,.88);
+ --ink-primary:#111318; --ink-secondary:#5b6270; --ink-tertiary:#727a88; --border-hairline:rgba(17,19,24,.08); --border-strong:rgba(17,19,24,.16);
+ --semantic-positive:#15803d; --semantic-warning:#b45309; --semantic-danger:#dc2626;
+}
