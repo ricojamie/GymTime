@@ -15,17 +15,38 @@ const DAY = 86_400_000
 function useCalendarDate() {
   const [date, setDate] = useState(() => new Date())
   useEffect(() => {
+    let timer: number | undefined
     const refresh = () => setDate(previous => {
       const current = new Date()
       return current.toDateString() === previous.toDateString() ? previous : current
     })
-    const timer = window.setInterval(refresh, 60_000)
+    const stop = () => {
+      if (timer !== undefined) {
+        window.clearInterval(timer)
+        timer = undefined
+      }
+    }
+    const startTimer = () => {
+      stop()
+      if (document.visibilityState !== 'hidden') {
+        timer = window.setInterval(refresh, 60_000)
+      }
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        stop()
+      } else {
+        refresh()
+        startTimer()
+      }
+    }
+    startTimer()
     window.addEventListener('focus', refresh)
-    document.addEventListener('visibilitychange', refresh)
+    document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
-      window.clearInterval(timer)
+      stop()
       window.removeEventListener('focus', refresh)
-      document.removeEventListener('visibilitychange', refresh)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [])
   return date
@@ -34,12 +55,34 @@ function useCalendarDate() {
 function Elapsed({start}: { start: number }) {
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
-    const refresh = () => {
-      if (document.visibilityState !== 'hidden') setNow(Date.now())
+    let id: number | undefined
+    const tick = () => setNow(Date.now())
+    const stop = () => {
+      if (id !== undefined) {
+        window.clearInterval(id)
+        id = undefined
+      }
     }
-    const id = window.setInterval(refresh, 1000)
-    document.addEventListener('visibilitychange', refresh)
-    return () => { window.clearInterval(id); document.removeEventListener('visibilitychange', refresh) }
+    const startTimer = () => {
+      stop()
+      if (document.visibilityState !== 'hidden') {
+        id = window.setInterval(tick, 1000)
+      }
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        stop()
+      } else {
+        tick()
+        startTimer()
+      }
+    }
+    startTimer()
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
   }, [])
   const t = Math.max(0, Math.floor((now - start) / 1000))
   const hh = Math.floor(t / 3600), mm = Math.floor(t / 60) % 60, ss = t % 60

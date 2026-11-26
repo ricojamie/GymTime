@@ -60,7 +60,7 @@ export function TrainingReadouts({prefs, dayKey, routine}: {prefs: Preferences; 
     const yearStart = +new Date(year, 0, 1)
     const priorStart = +new Date(year - 1, 0, 1)
     const priorEnd = new Date(year - 1, current.getMonth(), 1)
-    priorEnd.setDate(Math.min(current.getDate(), new Date(year, current.getMonth(), 0).getDate()))
+    priorEnd.setDate(Math.min(current.getDate(), new Date(year - 1, current.getMonth() + 1, 0).getDate()))
     priorEnd.setHours(current.getHours(), current.getMinutes(), current.getSeconds(), current.getMilliseconds())
     const sets = source.sets.filter(s => s.isComplete && !s.isWarmup && s.timestamp <= now)
     const yearVolume = (start: number, end: number) => sets.reduce((sum, s) => s.timestamp >= start && s.timestamp <= end && s.weight && s.weight > 0 && s.reps && s.reps > 0 ? sum + s.weight * s.reps : sum, 0)

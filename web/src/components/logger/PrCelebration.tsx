@@ -1,5 +1,8 @@
 import { useEffect, useMemo } from 'react'
-import { Flame, Sparkles, Trophy, X } from 'lucide-react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { Sparkles, Trophy, X } from 'lucide-react'
+import { db } from '../../db/database'
+import { defaultPreferences } from '../../db/types'
 import { SwoleGator } from '../mascot'
 import './pr-celebration.css'
 
@@ -23,7 +26,7 @@ type Particle = {
 }
 
 function buildParticles(seed: number): Particle[] {
-  const count = 32
+  const count = 40
   const out: Particle[] = []
   for (let i = 0; i < count; i++) {
     // Deterministic pseudo-random spread so each PR id feels fresh without impure render math
@@ -78,17 +81,31 @@ function playVictoryChime() {
 }
 
 export default function PrCelebration({ id, labels, exerciseName, isGator = false, audioEnabled = false, onDismiss }: PrCelebrationProps) {
+  const storedPrefs = useLiveQuery(async () => (await db.preferences.get('default')) ?? defaultPreferences, [])
+  const vibrateEnabled = storedPrefs?.timerVibrateEnabled === true
   const particles = useMemo(() => buildParticles(id), [id])
 
   useEffect(() => {
     if (audioEnabled) playVictoryChime()
   }, [id, audioEnabled])
 
+  useEffect(() => {
+    if (vibrateEnabled && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      try {
+        navigator.vibrate([45, 55, 110])
+      } catch {
+        // Vibration may be restricted by browser policy.
+      }
+    }
+  }, [id, vibrateEnabled])
+
   return (
     <div className={'pr-overlay' + (isGator ? ' is-gator' : '')} data-pr-celebration={id}>
-      <div className="pr-burst-stage" aria-hidden="true">
+      <div className="pr-edge-flash" aria-hidden="true" />
+      <div className="pr-stage" aria-hidden="true">
         <span className="pr-shockwave pr-shockwave-1" />
         <span className="pr-shockwave pr-shockwave-2" />
+        <span className="pr-shockwave pr-shockwave-3" />
         <div className="pr-particles">
           {particles.map((p, i) => (
             <i
@@ -118,7 +135,7 @@ export default function PrCelebration({ id, labels, exerciseName, isGator = fals
           <span className="pr-halo" />
           {isGator ? (
             <div className="pr-gator-mascot">
-              <SwoleGator pose="pr" celebrate size={68} />
+              <SwoleGator pose="pr" celebrate size={76} />
             </div>
           ) : (
             <span className="pr-medallion">

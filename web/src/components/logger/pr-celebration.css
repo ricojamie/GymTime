@@ -11,7 +11,23 @@
   overflow: hidden;
 }
 
-.pr-burst-stage {
+.pr-edge-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow:
+    inset 0 0 0 3px color-mix(in srgb, var(--accent) 65%, transparent),
+    inset 0 0 56px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.pr-overlay.is-gator .pr-edge-flash {
+  box-shadow:
+    inset 0 0 0 3px rgba(250, 70, 22, 0.72),
+    inset 0 0 64px rgba(0, 33, 165, 0.44);
+}
+
+.pr-stage {
   position: fixed;
   top: 72px;
   left: 50%;
@@ -35,6 +51,7 @@
 
 .pr-overlay.is-gator .pr-shockwave-1 { border-color: #FA4616; }
 .pr-overlay.is-gator .pr-shockwave-2 { border-color: #0021A5; }
+.pr-overlay.is-gator .pr-shockwave-3 { border-color: #3B82F6; }
 
 .pr-particles {
   position: absolute;
@@ -102,6 +119,17 @@
     0 0 32px -4px rgba(250, 70, 22, 0.45);
 }
 
+:root[data-theme='light'] .pr-overlay.is-gator .pr-card {
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(250, 70, 22, 0.14), transparent 60%),
+    radial-gradient(100% 120% at 100% 100%, rgba(0, 33, 165, 0.12), transparent 65%),
+    var(--bg-sheet, #FFFFFF);
+  border-color: #FA4616;
+  box-shadow:
+    0 16px 36px -10px rgba(0, 33, 165, 0.22),
+    0 0 0 1px rgba(0, 33, 165, 0.14) inset;
+}
+
 .pr-glare {
   position: absolute;
   inset: -40% auto -40% -35%;
@@ -114,8 +142,8 @@
 .pr-medallion-wrap {
   position: relative;
   flex: none;
-  width: 68px;
-  height: 68px;
+  width: 76px;
+  height: 76px;
   display: grid;
   place-items: center;
 }
@@ -180,6 +208,10 @@
   color: #FA4616;
 }
 
+:root[data-theme='light'] .pr-overlay.is-gator .pr-kicker {
+  color: #C23109;
+}
+
 .pr-title {
   font-family: var(--font-display);
   font-size: clamp(22px, 5vw, 27px);
@@ -222,6 +254,12 @@
   border-color: rgba(250, 70, 22, 0.55);
 }
 
+:root[data-theme='light'] .pr-overlay.is-gator .pr-chip {
+  background: #0021A5;
+  color: #FFFFFF;
+  border-color: #0021A5;
+}
+
 .pr-dismiss {
   flex: none;
   align-self: flex-start;
@@ -234,6 +272,12 @@
   background: rgba(255, 255, 255, 0.05);
   color: var(--ink-secondary);
   cursor: pointer;
+}
+
+@keyframes pr-edge-flash {
+  0% { opacity: 0; }
+  18% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 @keyframes pr-card-slam {
@@ -277,30 +321,34 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  :root:not([data-motion='reduced']) {
-    & .pr-card {
-      animation: pr-card-slam 440ms cubic-bezier(0.22, 1.28, 0.36, 1) both;
-    }
-    & .pr-medallion {
-      animation: pr-medallion-slam 520ms cubic-bezier(0.22, 1.32, 0.36, 1) 60ms both;
-    }
-    & .pr-halo {
-      animation: pr-halo-spin 6s linear infinite;
-    }
-    & .pr-shockwave-1 {
-      animation: pr-shockwave-expand 760ms cubic-bezier(0.16, 1, 0.3, 1) 40ms both;
-    }
-    & .pr-shockwave-2 {
-      animation: pr-shockwave-expand 920ms cubic-bezier(0.16, 1, 0.3, 1) 140ms both;
-    }
-    & .pr-particle {
-      animation: pr-particle-burst 960ms cubic-bezier(0.12, 0.85, 0.28, 1) var(--delay, 0ms) both;
-    }
-    & .pr-glare {
-      animation: pr-glare-sweep 900ms ease-out 220ms both;
-    }
-    & .pr-chip {
-      animation: pr-chip-pop 320ms cubic-bezier(0.22, 1.28, 0.36, 1) calc(150ms + var(--chip-i, 0) * 70ms) both;
-    }
+  :root[data-motion='full'] .pr-edge-flash {
+    animation: pr-edge-flash 640ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  :root[data-motion='full'] .pr-card {
+    animation: pr-card-slam 440ms cubic-bezier(0.22, 1.28, 0.36, 1) both;
+  }
+  :root[data-motion='full'] .pr-medallion {
+    animation: pr-medallion-slam 520ms cubic-bezier(0.22, 1.32, 0.36, 1) 60ms both;
+  }
+  :root[data-motion='full'] .pr-halo {
+    animation: pr-halo-spin 6s linear infinite;
+  }
+  :root[data-motion='full'] .pr-shockwave-1 {
+    animation: pr-shockwave-expand 760ms cubic-bezier(0.16, 1, 0.3, 1) 40ms both;
+  }
+  :root[data-motion='full'] .pr-shockwave-2 {
+    animation: pr-shockwave-expand 920ms cubic-bezier(0.16, 1, 0.3, 1) 140ms both;
+  }
+  :root[data-motion='full'] .pr-shockwave-3 {
+    animation: pr-shockwave-expand 1080ms cubic-bezier(0.16, 1, 0.3, 1) 240ms both;
+  }
+  :root[data-motion='full'] .pr-particle {
+    animation: pr-particle-burst 960ms cubic-bezier(0.12, 0.85, 0.28, 1) var(--delay, 0ms) both;
+  }
+  :root[data-motion='full'] .pr-glare {
+    animation: pr-glare-sweep 900ms ease-out 220ms both;
+  }
+  :root[data-motion='full'] .pr-chip {
+    animation: pr-chip-pop 320ms cubic-bezier(0.22, 1.28, 0.36, 1) calc(150ms + var(--chip-i, 0) * 70ms) both;
   }
 }

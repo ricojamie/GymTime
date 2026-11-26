@@ -26,7 +26,7 @@ import '../components/logger/logger.css'
 
 type LoggerSheet = 'menu' | 'progress' | 'plates' | 'smart' | 'notes' | 'finish' | 'delete' | null
 type Queue = { workoutId: number; entries: SmartLogEntry[]; index: number }
-type Transient = { exitedGroups: string[]; queue: Queue | null; banner: {workoutId: number; labels: string[]; id: number; expiresAt: number} | null }
+type Transient = { exitedGroups: string[]; queue: Queue | null; banner: {workoutId: number; exerciseName: string; labels: string[]; id: number; expiresAt: number} | null }
 const useTransient = create<Transient>(() => ({ queue: null, banner: null, exitedGroups: [] }))
 const scratch = new Map<string, SetDraft>()
 let scratchWorkout = ''
@@ -64,7 +64,7 @@ function TimerIndicator() {
     <span aria-hidden="true" />{seconds ? clockValue(seconds) : <Timer size={14} aria-hidden="true" />}</span>
 }
 
-function RecordBanner({ workoutId, exerciseName, isGator, audioEnabled }: { workoutId: number; exerciseName: string; isGator: boolean; audioEnabled: boolean }) {
+function RecordBanner({ workoutId, isGator, audioEnabled }: { workoutId: number; isGator: boolean; audioEnabled: boolean }) {
   const banner = useTransient(s => s.banner)
   useEffect(() => {
     if (!banner) return
@@ -75,7 +75,7 @@ function RecordBanner({ workoutId, exerciseName, isGator, audioEnabled }: { work
   return <PrCelebration
     id={banner.id}
     labels={banner.labels}
-    exerciseName={exerciseName}
+    exerciseName={banner.exerciseName}
     isGator={isGator}
     audioEnabled={audioEnabled}
     onDismiss={() => useTransient.setState({ banner: null })}
@@ -245,7 +245,7 @@ function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
       setDraft(sticky)
       if (prefs.timerAutoStart && defaultRest > 0) startRestTimer(defaultRest)
       const record = replayRecords([...sets, {...row,id}], exercise.logType, exercise.defaultDistanceUnit).find(r => r.setId === id)
-      if (record && !record.benchmark) useTransient.setState({banner: {workoutId: wid, labels: record.labels, id, expiresAt: Date.now() + 4500}})
+      if (record && !record.benchmark) useTransient.setState({banner: {workoutId: wid, exerciseName: exercise.name, labels: record.labels, id, expiresAt: Date.now() + 4500}})
       if (queue && entry?.exerciseId === eid) {
         const nextIndex = queue.index + 1
         const next = queue.entries[nextIndex]
@@ -353,7 +353,7 @@ function LoggerSession({exercise, workout, prefs, plan, names, sets}: Context) {
       </button>
       {editId !== null && <button className="log-cancel" onClick={restoreEdit}>Cancel editing</button>}
     </section>
-    <RecordBanner workoutId={wid} exerciseName={exercise.name} isGator={isGator} audioEnabled={prefs.timerAudioEnabled} />
+    <RecordBanner workoutId={wid} isGator={isGator} audioEnabled={prefs.timerAudioEnabled} />
     <RestTimerBar defaultSeconds={defaultRest} />
     <section className="log-history"><header><h2>This workout</h2><span>{working.length} working {working.length === 1 ? 'set' : 'sets'}</span></header>
       {warmups.length > 0 && <><button className="log-warm-head" onClick={() => setWarmExpanded(!warmExpanded)} aria-expanded={warmExpanded}>Warm-ups · {warmups.length}<ChevronDown size={16} /></button>{warmExpanded && <ol>{warmups.map(listRow)}</ol>}</>}

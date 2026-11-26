@@ -171,30 +171,30 @@
 .log-options button[aria-expanded=true] > svg:last-child,
 .log-warm-head[aria-expanded=true] > svg { transform:rotate(180deg); }
 @media (prefers-reduced-motion:no-preference) {
-  :root:not([data-motion='reduced']) {
-    & .log-set-row[data-just-added] { animation:log-row-slide 280ms var(--ease-spring, cubic-bezier(.22,1.2,.36,1)); }
-    & .log-set-row[data-just-added]::before { transform-origin:left; animation:log-post-set 680ms ease-out forwards; }
-    & .log-set-row[data-just-added] .log-trophy { animation:log-trophy-glint 650ms ease-out 120ms; }
-    & .log-field-val, & .log-pad-val { animation:log-val-pop 190ms var(--ease-spring, cubic-bezier(.22,1.25,.36,1)); }
-    & .log-save-stamp, & .log-pr-medal > svg { animation:log-stamp 280ms ease-out; }
-    & .log-pr { animation:log-reveal 210ms ease-out; }
-    & :is(.log-save-stamp, .log-pr-medal)::after {
-      content:''; position:absolute; inset:-2px; border:1px solid currentColor; border-radius:50%; pointer-events:none;
-      animation:log-ring 430ms ease-out both;
-    }
-    & .log-pr-medal::after { animation-duration:550ms; }
-    & .log-timer-indicator.is-running > span { animation:log-stamp 250ms ease-out; }
-    & .log-error { animation:log-shake 190ms ease; }
-    & .log-extras { animation:log-reveal 180ms var(--ease-snappy, ease-out); }
-    & .log-mode::before { transition:transform 160ms cubic-bezier(.2,.78,.25,1); }
-    & :is(.log-options button[aria-expanded] > svg:last-child, .log-warm-head > svg) { transition:transform 160ms ease-out; }
-    & :is(.log-pad-grid, .log-pad-nudges) button > span,
-    & .log-field > strong { transition:transform 90ms ease-out; }
-    & :is(.log-pad-grid, .log-pad-nudges) button:active > span,
-    & .log-field:active > strong { transform:translateY(1px) scale(.96); }
-    & .log-dial-pointer { transform-origin:center bottom; transition:transform 110ms ease-out, box-shadow 110ms ease-out; }
-    & .log-dial:active > .log-dial-pointer { transform:scaleY(1.22); box-shadow:0 0 14px var(--accent); }
-    & .log-loading { animation:log-reveal 140ms ease-out; }
+  :root[data-motion='full'] .log-set-row[data-just-added] { animation:log-row-slide 280ms var(--ease-spring, cubic-bezier(.22,1.2,.36,1)); }
+  :root[data-motion='full'] .log-set-row[data-just-added]::before { transform-origin:left; animation:log-post-set 680ms ease-out forwards; }
+  :root[data-motion='full'] .log-set-row[data-just-added] .log-trophy { animation:log-trophy-glint 650ms ease-out 120ms; }
+  :root[data-motion='full'] .log-field-val,
+  :root[data-motion='full'] .log-pad-val { animation:log-val-pop 190ms var(--ease-spring, cubic-bezier(.22,1.25,.36,1)); }
+  :root[data-motion='full'] .log-save-stamp,
+  :root[data-motion='full'] .log-pr-medal > svg { animation:log-stamp 280ms ease-out; }
+  :root[data-motion='full'] .log-pr { animation:log-reveal 210ms ease-out; }
+  :root[data-motion='full'] :is(.log-save-stamp, .log-pr-medal)::after {
+    content:''; position:absolute; inset:-2px; border:1px solid currentColor; border-radius:50%; pointer-events:none;
+    animation:log-ring 430ms ease-out both;
   }
+  :root[data-motion='full'] .log-pr-medal::after { animation-duration:550ms; }
+  :root[data-motion='full'] .log-timer-indicator.is-running > span { animation:log-stamp 250ms ease-out; }
+  :root[data-motion='full'] .log-error { animation:log-shake 190ms ease; }
+  :root[data-motion='full'] .log-extras { animation:log-reveal 180ms var(--ease-snappy, ease-out); }
+  :root[data-motion='full'] .log-mode::before { transition:transform 160ms cubic-bezier(.2,.78,.25,1); }
+  :root[data-motion='full'] :is(.log-options button[aria-expanded] > svg:last-child, .log-warm-head > svg) { transition:transform 160ms ease-out; }
+  :root[data-motion='full'] :is(.log-pad-grid, .log-pad-nudges) button > span,
+  :root[data-motion='full'] .log-field > strong { transition:transform 90ms ease-out; }
+  :root[data-motion='full'] :is(.log-pad-grid, .log-pad-nudges) button:active > span,
+  :root[data-motion='full'] .log-field:active > strong { transform:translateY(1px) scale(.96); }
+  :root[data-motion='full'] .log-dial-pointer { transform-origin:center bottom; transition:transform 110ms ease-out, box-shadow 110ms ease-out; }
+  :root[data-motion='full'] .log-dial:active > .log-dial-pointer { transform:scaleY(1.22); box-shadow:0 0 14px var(--accent); }
+  :root[data-motion='full'] .log-loading { animation:log-reveal 140ms ease-out; }
 }
 @media (max-width:370px) { .log-telemetry { flex-wrap:wrap; } .log-telemetry-tools { flex-basis:100%; justify-content:flex-start; } .log-field { padding-inline:10px; } }

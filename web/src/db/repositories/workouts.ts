@@ -102,6 +102,7 @@ export function finishWorkout(id: number, at = Date.now()) {
     const started = new Set(sets.map(s => s.exerciseId))
     if (!await db.workout_exercise_instances.where('workoutId').equals(id).filter(i => started.has(i.exerciseId)).first()) return
     const days = await db.routine_days.where('routineId').equals(routine.id).sortBy('orderIndex')
+    if (!days.length) return
     const index = days.findIndex(d => d.id === workout.routineDayId)
     if (index >= 0) await db.routines.update(routine.id, {nextDayOrderIndex: days[(index + 1) % days.length].orderIndex})
   })

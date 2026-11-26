@@ -100,3 +100,52 @@ it('morphs the entire theme to UF Swole Gator and cleanly restores Classic', asy
   expect(meta.getAttribute('content')).toBe('#090A0D')
   meta.remove()
 })
+
+it('dynamically swaps both SVG and PNG favicons when switching between Classic and Swole Gator', async () => {
+  const svgLink = document.createElement('link')
+  svgLink.rel = 'icon'
+  svgLink.type = 'image/svg+xml'
+  svgLink.href = '/icons/classic.svg'
+  const pngLink = document.createElement('link')
+  pngLink.rel = 'icon'
+  pngLink.type = 'image/png'
+  pngLink.href = '/icons/classic-192.png'
+  document.head.append(svgLink, pngLink)
+
+  function Probe() {
+    useTheme()
+    return null
+  }
+
+  render(<Probe />)
+  await waitFor(() => {
+    expect(svgLink.getAttribute('href')).toBe('/icons/classic.svg')
+    expect(pngLink.getAttribute('href')).toBe('/icons/classic-192.png')
+  })
+
+  await db.preferences.update('default', { appIcon: 'swole_alligator' })
+  await waitFor(() => {
+    expect(svgLink.getAttribute('href')).toBe('/icons/swole-alligator.svg')
+    expect(pngLink.getAttribute('href')).toBe('/icons/swole-alligator-192.png')
+  })
+
+  svgLink.remove()
+  pngLink.remove()
+})
+
+it('shows Swole Gator badge in ThemeSettings preview and locks classic accents with a link to /settings', async () => {
+  const { default: ThemeSettings } = await import('../screens/ThemeSettings')
+  await db.preferences.put({ ...defaultPreferences, appIcon: 'swole_alligator' })
+  const { container } = render(
+    <MemoryRouter>
+      <ThemeSettings />
+    </MemoryRouter>,
+  )
+
+  await waitFor(() => expect(container.querySelector('[data-pose="badge"]')).toBeInTheDocument())
+  const customBtn = screen.getByRole('button', { name: /custom color/i })
+  expect(customBtn).toBeDisabled()
+  const settingsLink = screen.getByRole('link', { name: /switch back to classic in settings/i })
+  expect(settingsLink).toHaveAttribute('href', '/settings')
+})
+

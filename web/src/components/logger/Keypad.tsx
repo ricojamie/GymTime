@@ -53,15 +53,24 @@ function VernierDial({ value, step, unit, pins, onChange }: {
     const el = track.current
     if (!el) return
     let settle: ReturnType<typeof setTimeout> | undefined
+    const endInteraction = () => { interacting.current = false }
     const snap = () => {
       clearTimeout(settle)
       settle = setTimeout(() => {
+        interacting.current = false
         const tick = Math.round(el.scrollLeft / spacing) * spacing
         if (Math.abs(el.scrollLeft - tick) >= .5) el.scrollLeft = tick
       }, 130)
     }
     el.addEventListener('scroll', snap, {passive:true})
-    return () => { el.removeEventListener('scroll', snap); clearTimeout(settle) }
+    window.addEventListener('pointerup', endInteraction)
+    window.addEventListener('pointercancel', endInteraction)
+    return () => {
+      el.removeEventListener('scroll', snap)
+      window.removeEventListener('pointerup', endInteraction)
+      window.removeEventListener('pointercancel', endInteraction)
+      clearTimeout(settle)
+    }
   }, [])
   const labels = useMemo(() => Array.from({ length: Math.floor(count / 10) + 1 }, (_, index) => {
     const tick = index * 10

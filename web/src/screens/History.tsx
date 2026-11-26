@@ -37,7 +37,7 @@ export default function History() {
     return rows.filter(row => tokens.every(t => row.search.includes(t)))
   }, [rows, query])
   const months = useMemo(() => groupBy(filtered, row => monthLabel(row.w.startTime)), [filtered])
-  const current = rows.find(row => row.w.id === selected)
+  const current = useMemo(() => rows.find(row => row.w.id === selected), [rows, selected])
   const unit = data?.prefs.preferredWeightUnit || 'lbs'
 
   return <main className="screen his-screen">
@@ -70,20 +70,26 @@ function RoutineTarget({workout, title, onDone}: {workout:Workout;title:string;o
   const [routineId, setRoutine] = useState('')
   const [dayId, setDay] = useState('')
   const [name,setName] = useState(workout.routineDayNameSnapshot?.trim() || title)
-  const days = useLiveQuery(() => db.routine_days.where('routineId').equals(Number(routineId)).sortBy('orderIndex'), [routineId], [])
+  const parsedRoutineId = Number(routineId)
+  const hasValidRoutine = Number.isSafeInteger(parsedRoutineId) && parsedRoutineId > 0
+  const days = useLiveQuery(
+    async () => hasValidRoutine ? db.routine_days.where('routineId').equals(parsedRoutineId).sortBy('orderIndex') : [],
+    [hasValidRoutine, parsedRoutineId],
+    [],
+  )
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
   return <form className="his-form" onSubmit={async e => {
     e.preventDefault()
-    if (pending) return
+    if (pending || !hasValidRoutine) return
     setPending(true)
-    try { await addWorkoutToRoutine(workout.id,Number(routineId),dayId ? Number(dayId) : null,name); onDone() }
+    try { await addWorkoutToRoutine(workout.id, parsedRoutineId, dayId ? Number(dayId) : null, name); onDone() }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Couldn’t save the workout to this routine.') }
     finally { setPending(false) }
   }}>
     {routines.length === 0 ? <><p>No routines yet.</p><Link className="btn" to="/routines/new">Create routine</Link></> : <>
       <label>Routine<select className="his-input" value={routineId} required onChange={e => {setRoutine(e.target.value); setDay('');setError('')}}><option value="">Choose a routine</option>{routines.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
-      {routineId && <><label>Workout day<select className="his-input" value={dayId} onChange={e => setDay(e.target.value)}><option value="">Create a new day</option>{days.map(d => <option key={d.id} value={d.id}>Replace {d.name}</option>)}</select></label>
+      {hasValidRoutine && <><label>Workout day<select className="his-input" value={dayId} onChange={e => setDay(e.target.value)}><option value="">Create a new day</option>{days.map(d => <option key={d.id} value={d.id}>Replace {d.name}</option>)}</select></label>
       {!dayId && <label>Day name<input required className="his-input" value={name} maxLength={140} onChange={e => setName(e.target.value)}/></label>}
       {dayId && <p>Saving replaces the planned exercises in {days.find(d => String(d.id) === dayId)?.name}.</p>}
       <button type="submit" className="btn primary" disabled={pending || (!dayId && !name.trim())}>{dayId ? 'Replace day' : 'Add workout day'}</button></>}
@@ -107,10 +113,10 @@ function WorkoutDetails({ workout, data, onClose }: {workout:Workout;data:Histor
   const navigate = useNavigate()
   const exercises = useMemo(() => new Map(data.exercises.map(ex => [ex.id, ex])), [data.exercises])
   const sets = useMemo(() => data.sets.filter(s => s.workoutId === workout.id && s.isComplete).sort((a,b) => a.timestamp - b.timestamp || a.id-b.id), [data.sets, workout.id])
-  const stats = describeWorkout(workout, sets, exercises)
+  const stats = useMemo(() => describeWorkout(workout, sets, exercises), [workout, sets, exercises])
   const share = useMemo(() => buildWorkoutShare(data,workout.id), [data, workout.id])
-  const prIds = new Set(share?.exercises.flatMap(ex => ex.sets.filter(s => s.isPersonalRecord).map(s => s.id)))
-  const active = data.workouts.find(w => w.endTime === null)
+  const prIds = useMemo(() => new Set(share?.exercises.flatMap(ex => ex.sets.filter(s => s.isPersonalRecord).map(s => s.id))), [share])
+  const active = useMemo(() => data.workouts.find(w => w.endTime === null), [data.workouts])
   const unit = data.prefs.preferredWeightUnit
   async function run(action:()=>Promise<void>) {
     if(busy) return

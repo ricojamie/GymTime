@@ -9,7 +9,10 @@ export function iconUrls(icon: Preferences['appIcon']) {
   const gator = icon === 'swole_alligator'
   const stamp = gator ? '/icons/swole-alligator-180.png' : '/icons/apple-touch-icon-180.png'
   return {
-    stamp, touch: stamp, icon: gator ? '/icons/swole-alligator-192.png' : '/icons/classic-192.png',
+    stamp,
+    touch: stamp,
+    svg: gator ? '/icons/swole-alligator.svg' : '/icons/classic.svg',
+    icon: gator ? '/icons/swole-alligator-192.png' : '/icons/classic-192.png',
     manifest: gator ? '/manifest-alligator.webmanifest' : '/manifest.webmanifest',
   }
 }
@@ -78,9 +81,15 @@ export function useTheme() {
   }, [prefs.themeColor, prefs.darkMode, prefs.customThemeColor, prefs.appIcon])
   useLayoutEffect(() => {
     const urls = iconUrls(prefs.appIcon)
-    for (const [rel, val] of [['icon',urls.icon],['apple-touch-icon',urls.touch],['manifest',urls.manifest]]) {
-      document.querySelector('link[rel="'+rel+'"]')?.setAttribute('href',val)
-    }
+    document
+      .querySelector('link[rel="icon"][type="image/svg+xml"]')
+      ?.setAttribute('href', urls.svg)
+    const pngIcon =
+      document.querySelector('link[rel="icon"][type="image/png"]') ??
+      document.querySelector('link[rel="icon"]:not([type="image/svg+xml"])')
+    pngIcon?.setAttribute('href', urls.icon)
+    document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href', urls.touch)
+    document.querySelector('link[rel="manifest"]')?.setAttribute('href', urls.manifest)
   }, [prefs.appIcon])
   useEffect(() => {
     const root = document.documentElement
