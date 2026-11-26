@@ -11,6 +11,15 @@ export const accents = [
 export const fontNames: Record<string, string> = {
   bebas_neue: 'Bebas Neue', oswald: 'Oswald', space_grotesk: 'Space Grotesk', raleway: 'Raleway', pacifico: 'Pacifico',
 }
+export const UF_COLORS = {
+  blue: '#0021A5',
+  royal: '#2563EB',
+  orange: '#FA4616',
+  emerald: '#22C55E',
+  swampDarkCanvas: '#040A1C',
+  swampDarkSurface: '#0B1533',
+  stadiumLightCanvas: '#EFF4FB',
+} as const
 
 type Channels = [number, number, number]
 const hex = ([r,g,b]: Channels) => '#' + [r,g,b].map(c => Math.round(c).toString(16).padStart(2, '0')).join('').toUpperCase()
@@ -35,10 +44,18 @@ export function hsvToHex(h: number, s: number, v: number) {
   const base = [[c,x,0],[x,c,0],[0,c,x],[0,x,c],[x,0,c],[c,0,x]][sector]
   return hex(base.map(n => (n+m)*255) as Channels)
 }
-export function deriveColors(prefs: Pick<Preferences,'themeColor'|'customThemeColor'|'darkMode'>) {
-  const accent = prefs.themeColor === 'custom' && prefs.customThemeColor && isHex(prefs.customThemeColor)
-    ? prefs.customThemeColor : accentPalette[prefs.themeColor] ?? accentPalette.lime
-  const surface = hex(mix(rgb(prefs.darkMode ? '#12141A' : '#FFFFFF'), rgb(accent), 0.025))
+export function deriveColors(
+  prefs: Pick<Preferences,'themeColor'|'customThemeColor'|'darkMode'> & { appIcon?: Preferences['appIcon'] },
+) {
+  const gator = prefs.appIcon === 'swole_alligator'
+  const accent = gator
+    ? (prefs.darkMode ? UF_COLORS.orange : UF_COLORS.blue)
+    : prefs.themeColor === 'custom' && prefs.customThemeColor && isHex(prefs.customThemeColor)
+      ? prefs.customThemeColor : accentPalette[prefs.themeColor] ?? accentPalette.lime
+  const surfaceBase = gator
+    ? (prefs.darkMode ? UF_COLORS.swampDarkSurface : '#FFFFFF')
+    : (prefs.darkMode ? '#12141A' : '#FFFFFF')
+  const surface = hex(mix(rgb(surfaceBase), rgb(accent), 0.025))
   const onAccent = contrast(accent,'#090A0D') > contrast(accent,'#FFFFFF') ? '#090A0D' : '#FFFFFF'
   let accentInk = accent
   if (contrast(accent,surface) < 4.5) {

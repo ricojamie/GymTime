@@ -114,6 +114,14 @@ export function moveDay(routineId: number, dayId: number, direction: -1 | 1) {
     if (!routine || index < 0 || !neighbor) return
     const day = days[index]
     const next = days.find(item => item.orderIndex === routine.nextDayOrderIndex) ?? days[0]
+    if (day.orderIndex === neighbor.orderIndex) {
+      const reordered = [...days]
+      ;[reordered[index], reordered[index + direction]] = [reordered[index + direction], reordered[index]]
+      await Promise.all(reordered.map((item, orderIndex) => db.routine_days.update(item.id, { orderIndex })))
+      const nextIndex = reordered.findIndex(item => item.id === next.id)
+      if (nextIndex >= 0) await db.routines.update(routineId, { nextDayOrderIndex: nextIndex })
+      return
+    }
     await db.routine_days.update(day.id, { orderIndex: neighbor.orderIndex })
     await db.routine_days.update(neighbor.id, { orderIndex: day.orderIndex })
     if (next.id === day.id || next.id === neighbor.id) await db.routines.update(routineId, {

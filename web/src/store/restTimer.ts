@@ -56,8 +56,10 @@ export function stopRestTimer() {
 export function adjustRestTimer(deltaSeconds: number) {
   const { endEpochMs } = restClock.getState()
   if (endEpochMs === null || !Number.isFinite(deltaSeconds)) return
-  const deadline = endEpochMs + Math.round(deltaSeconds) * 1000
-  setDeadline(deadline > Date.now() ? deadline : null)
+  const now = Date.now()
+  const base = deltaSeconds > 0 ? Math.max(now, endEpochMs) : endEpochMs
+  const deadline = base + Math.round(deltaSeconds) * 1000
+  setDeadline(deadline > now ? deadline : null)
 }
 
 export function useRestTimerRemaining() {

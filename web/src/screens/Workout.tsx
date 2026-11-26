@@ -6,7 +6,7 @@ import { db } from '../db/database'
 import { finishWorkout, getActiveWorkout, skipWorkoutExercise } from '../db/repositories'
 import { normalizeMuscleName } from '../db/types'
 import type { WorkoutExerciseInstance, WorkoutSet } from '../db/types'
-import { BottomSheet, CalibrationBar } from '../components/primitives'
+import { AnimatedNumber, BottomSheet, CalibrationBar } from '../components/primitives'
 import './workout.css'
 
 async function readSession() {
@@ -49,9 +49,20 @@ function SessionClock({ start }: { start: number }) {
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
     const tick = () => setNow(Date.now())
-    const timer = window.setInterval(tick, 1000)
-    document.addEventListener('visibilitychange', tick)
-    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', tick) }
+    let timer: number | undefined
+    const sync = () => {
+      if (timer !== undefined) { window.clearInterval(timer); timer = undefined }
+      if (document.visibilityState !== 'hidden') {
+        tick()
+        timer = window.setInterval(tick, 1000)
+      }
+    }
+    sync()
+    document.addEventListener('visibilitychange', sync)
+    return () => {
+      if (timer !== undefined) window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', sync)
+    }
   }, [])
   const seconds = Math.max(0, Math.floor((now - start) / 1000))
   const minutes = Math.floor(seconds / 60) % 60
@@ -132,13 +143,13 @@ export default function Workout() {
       <h1>{name}</h1>
     </header>
     <div className="wk-overview-grid">
-      <section className="wk-readout" aria-label="Session metrics">
+      <section className="wk-readout surface" aria-label="Session metrics">
         <div className="wk-timer-label"><span className="wk-led" />Session elapsed</div>
         <SessionClock start={active.startTime} />
         <dl className="wk-metrics">
-          <div><dt>Working sets</dt><dd>{totals.working}</dd></div>
-          <div><dt>Exercises</dt><dd>{totals.exercised}</dd></div>
-          <div><dt>{targets.length ? 'Targets met' : 'Warm-ups'}</dt><dd>{targets.length ? (targets.length - unresolved.length) + ' / ' + targets.length : totals.warmups}</dd></div>
+          <div><dt>Working sets</dt><dd><AnimatedNumber value={totals.working} /></dd></div>
+          <div><dt>Exercises</dt><dd><AnimatedNumber value={totals.exercised} /></dd></div>
+          <div><dt>{targets.length ? 'Targets met' : 'Warm-ups'}</dt><dd>{targets.length ? (targets.length - unresolved.length) + ' / ' + targets.length : <AnimatedNumber value={totals.warmups} />}</dd></div>
         </dl>
         {totals.planned > 0 && <div className="wk-calibration">
           <div className="wk-cal-label"><span>Plan progress</span><strong>{totals.done} / {totals.planned} sets</strong></div>
@@ -146,7 +157,7 @@ export default function Workout() {
         </div>}
       </section>
       <div className="wk-flow">
-        {next && <button className="wk-next" onClick={() => openExercise(next.exercise.id)}>
+        {next && <button className="wk-next surface hover-lift" onClick={() => openExercise(next.exercise.id)}>
           <span><small>{next.started ? 'Continue' : 'Up next'}</small><strong>{next.exercise.name}</strong>
           <span className="wk-meta">{next.exercise.targetMuscle}{next.target > 0 && ' · ' + next.working + ' / ' + next.target + ' sets'}</span></span>
           <span className="wk-go"><ArrowRight size={23} /></span>
@@ -158,7 +169,7 @@ export default function Workout() {
             {rows.map((row, i) => {
               const ex = row.exercise
               const done = row.target > 0 && row.working >= row.target
-              return <li key={row.instance?.id ?? 'exercise-' + ex.id}>
+              return <li key={row.instance?.id ?? 'exercise-' + ex.id} className="stagger-in" style={{ '--stagger-i': Math.min(i, 12) } as React.CSSProperties}>
                 <span className={'wk-ticket' + (done ? ' done' : '')}>{done ? <Check size={14} aria-label="Target met" /> : String(i + 1).padStart(2, '0')}</span>
                 <button className="wk-timeline-row" onClick={() => openExercise(ex.id)}>
                   <span className="wk-grow"><strong>{ex.name}</strong><small>

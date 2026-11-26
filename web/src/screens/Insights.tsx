@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, BookOpen, CalendarDays, ChevronDown, ChevronRight, Star, Trophy } from 'lucide-react'
 import { calculateTrainingInsights } from '../domain/trainingInsights'
 import { formatWeight, weightLabel } from '../domain/units'
 import type { WeightUnit } from '../db/types'
-import { BottomSheet } from '../components/primitives'
+import { AnimatedNumber, BottomSheet } from '../components/primitives'
+import { SwoleGator, useIsGatorMode } from '../components/mascot/SwoleGator'
 import ProgressSheet from '../components/logger/ProgressSheet'
 import InsightLineChart from '../components/charts/InsightLineChart'
 import WeeklyRhythmBars from '../components/charts/WeeklyRhythmBars'
@@ -63,6 +64,7 @@ function Guide({ data, close }: { data: Dashboard; close: () => void }) {
 export default function Insights() {
   const source = useInsightsSource()
   const now = useReportClock()
+  const gatorMode = useIsGatorMode()
   const [days, setDays] = useState<28|84>(28)
   const [liftId, setLiftId] = useState<number | null>(null)
   const [evidence, setEvidence] = useState<Evidence | null>(null)
@@ -85,18 +87,22 @@ export default function Insights() {
       <div className="il-segments" data-period={days} role="group" aria-label="Comparison period">{([28,84] as const).map(n => <button key={n} aria-pressed={days === n} onClick={() => setDays(n)}>{n/7} weeks</button>)}</div>
       <span>{shortDate.format(data.period.currentStartMs)} – {shortDate.format(data.period.currentEndMs)}</span>
     </div>
-    <section className="il-telemetry surface" aria-label="Training overview">
-      <dl><div><dt>Workouts</dt><dd>{cadence.currentWorkouts}</dd><small>{delta > 0 ? '+' : ''}{delta} vs prior</small></div><div><dt>Working sets</dt><dd>{cadence.currentWorkingSets}</dd><small>{cadence.previousWorkingSets} prior</small></div><div><dt>Active days</dt><dd>{cadence.currentActiveDays}</dd><small>{cadence.previousActiveDays} prior</small></div></dl>
+    <section className="il-telemetry surface stagger-in" style={{ '--stagger-i': 0 } as CSSProperties} aria-label="Training overview">
+      <dl>
+        <div><dt>Workouts</dt><dd><AnimatedNumber value={cadence.currentWorkouts}/></dd><small>{delta > 0 ? '+' : ''}{delta} vs prior</small></div>
+        <div><dt>Working sets</dt><dd><AnimatedNumber value={cadence.currentWorkingSets}/></dd><small>{cadence.previousWorkingSets} prior</small></div>
+        <div><dt>Active days</dt><dd><AnimatedNumber value={cadence.currentActiveDays}/></dd><small>{cadence.previousActiveDays} prior</small></div>
+      </dl>
       <div className="il-cadence" role="img" aria-label={cadence.currentActiveDays + ' active days out of ' + days}>
         <i key={days} style={{width: Math.min(100,100 * cadence.currentActiveDays / days) + '%'}}/>
       </div>
     </section>
-    {observations.length > 0 && <section className="il-observations" aria-label="Observations">{observations.slice(0,2).map(o => <button key={o.text} className="il-linkrow" onClick={() => {
+    {observations.length > 0 && <section className="il-observations stagger-in" style={{ '--stagger-i': 1 } as CSSProperties} aria-label="Observations">{observations.slice(0,2).map(o => <button key={o.text} className="il-linkrow" onClick={() => {
       if (o.exerciseId != null) showExercise(o.exerciseId, true)
       else if (o.muscle) setEvidence({kind:'muscle',name:o.muscle})
     }}>{o.text}<ChevronRight size={16}/></button>)}</section>}
     <div className="il-dashboard-grid">
-      <section className="il-panel surface">
+      <section className="il-panel surface stagger-in" style={{ '--stagger-i': 2 } as CSSProperties}>
         <h2>Lift progress</h2>
         {lift ? <>
           <label className="il-exercise-select">{lift.isStarred && <Star size={15}/>}<select aria-label="Exercise for lift progress" value={lift.id} onChange={e => setLiftId(Number(e.target.value))}>
@@ -105,16 +111,16 @@ export default function Insights() {
           <LiftProgress key={lift.id + '-' + days} lift={lift} unit={source.unit} open={() => showExercise(lift.id)}/>
         </> : <p className="il-empty">Complete a workout to see lift progress.</p>}
       </section>
-      <section className="il-panel surface">
+      <section className="il-panel surface stagger-in" style={{ '--stagger-i': 3 } as CSSProperties}>
         <h2>Training rhythm</h2>
-        <div className="il-rhythm-total"><strong>{cadence.thisWeekWorkouts}</strong><span>{cadence.thisWeekWorkouts === 1 ? 'workout' : 'workouts'} this week so far</span></div>
+        <div className="il-rhythm-total"><strong><AnimatedNumber value={cadence.thisWeekWorkouts}/></strong><span>{cadence.thisWeekWorkouts === 1 ? 'workout' : 'workouts'} this week so far</span></div>
         <WeeklyRhythmBars weeks={cadence.weeks}/>
         <details className="il-details"><summary>Weekly counts <ChevronDown size={15}/></summary><div className="il-table-wrap"><table><thead><tr><th>Week of</th><th>Workouts</th></tr></thead><tbody>
           {cadence.weeks.map(w => <tr key={w.startDate}><td>{shortDate.format(w.startDate)}{w.isPartialWeek && <small> · partial</small>}</td><td>{w.workouts}</td></tr>)}
         </tbody></table></div></details>
         <Link to="/history" className="il-linkrow">Open history <ArrowRight size={17}/></Link>
       </section>
-      <section className="il-panel surface"><h2>Body parts</h2><div className="il-muscles">
+      <section className="il-panel surface stagger-in" style={{ '--stagger-i': 4 } as CSSProperties}><h2>Body parts</h2><div className="il-muscles">
         {muscles.map(m => <button key={m.name} onClick={() => setEvidence({kind:'muscle',name:m.name})}>
           <strong>{m.name}</strong><span>{m.currentWorkingSets} {m.currentWorkingSets === 1 ? 'set' : 'sets'} · {m.previousWorkingSets} prior</span>
           <SpectrumTicks value={m.currentWorkingSets} max={high}/>
@@ -122,14 +128,18 @@ export default function Insights() {
         </button>)}
       </div></section>
       <div className="il-stack">
-        <section className="il-panel surface"><h2>Recent records</h2>
+        <section className="il-panel surface stagger-in" style={{ '--stagger-i': 5 } as CSSProperties}>
+          <div className="il-panel-head">
+            <h2>Recent records</h2>
+            {gatorMode && <SwoleGator pose="pr" size={34} label="" />}
+          </div>
           {recentRecords.length ? recentRecords.slice(0,6).map(r => <button key={r.exerciseId+'-'+r.set.id+'-'+r.metric.label} className="il-record" onClick={() => showExercise(r.exerciseId,true)}>
             <span className={r.kind === 'PERSONAL_RECORD' ? 'il-pr-mark' : ''}><Trophy size={18}/></span>
             <span><strong>{r.exerciseName}</strong><small>{r.metric.label} · {r.kind === 'BENCHMARK' ? 'Benchmark' : 'PR'} · {shortDate.format(r.set.timestamp)}</small></span>
             <b>{metricValue(r.value, r.metric.unit, source.unit)}</b>
           </button>) : <p className="il-empty">No records in this period.</p>}
         </section>
-        <Link to="/report/monthly" className="surface il-month-link"><CalendarDays size={21}/><span>Monthly report</span><ArrowRight size={18}/></Link>
+        <Link to="/report/monthly" className="surface hover-lift il-month-link stagger-in" style={{ '--stagger-i': 6 } as CSSProperties}><CalendarDays size={21}/><span>Monthly report</span><ArrowRight size={18}/></Link>
       </div>
     </div>
     {evidence?.kind === 'guide' && <Guide data={data} close={close}/>}

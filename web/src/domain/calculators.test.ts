@@ -102,8 +102,9 @@ describe('chronological record replay', () => {
     expect(events[1].labels).toEqual(['Heaviest set','Best at 5 reps','Estimated 1RM'])
     expect(paretoBest(sets).map(s=>s.id)).toEqual([3,1])
   })
-  it('awards REP and duration tiebreaks and refuses mixed step and distance measurements', () => {
+  it('awards REP, duration, and distance tiebreaks and refuses mixed step and distance measurements', () => {
     expect(replayRecords([set({id:1,durationSeconds:10}),set({id:2,durationSeconds:15})],'WEIGHT_TIME')).toHaveLength(2)
+    expect(replayRecords([set({id:1,distanceValue:100,distanceUnit:'YARDS'}),set({id:2,distanceValue:200,distanceUnit:'YARDS'})],'WEIGHT_DISTANCE')).toHaveLength(2)
     const runs = [set({id:1,distanceValue:10,distanceUnit:'STEPS',distanceMeters:9999}),
       set({id:2,distanceValue:1,distanceUnit:'MILES'}),set({id:3,distanceValue:2,distanceUnit:'KILOMETERS'})]
     expect(replayRecords(runs,'DISTANCE_TIME').map(e=>e.setId)).toEqual([2,3])

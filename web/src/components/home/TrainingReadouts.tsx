@@ -7,7 +7,7 @@ import { calculateStreak, calculateBestStreak } from '../../domain/streakCalcula
 import { calculateWeeklyVolume } from '../../domain/weeklyVolume'
 import { calculateStrengthMomentum, type MuscleMomentum } from '../../domain/strengthMomentum'
 import { fromLbs, weightLabel } from '../../domain/units'
-import { BottomSheet } from '../primitives'
+import { AnimatedNumber, BottomSheet } from '../primitives'
 import type { CSSProperties, ReactNode } from 'react'
 
 const formatVolume = (value: number, prefs: Preferences) =>
@@ -26,7 +26,7 @@ function tickTiming(order: number): CSSProperties {
 
 function Calibration({count, lit, rest = false}: {count: number; lit: number; rest?: boolean}) {
   return <span className={`home-calibration ${rest ? 'home-rest' : ''}`} aria-hidden="true">
-    {Array.from({length: count}, (_, i) => <i key={i}>{i < lit && <b style={tickTiming(i)}/>}</i>)}
+    {Array.from({length: count}, (_, i) => <i key={i}>{i < lit && <b className={i === lit - 1 ? 'is-tip' : undefined} style={tickTiming(i)}/>}</i>)}
   </span>
 }
 
@@ -59,8 +59,9 @@ export function TrainingReadouts({prefs, dayKey, routine}: {prefs: Preferences; 
     const year = current.getFullYear()
     const yearStart = +new Date(year, 0, 1)
     const priorStart = +new Date(year - 1, 0, 1)
-    const priorEnd = new Date(now)
-    priorEnd.setFullYear(year - 1)
+    const priorEnd = new Date(year - 1, current.getMonth(), 1)
+    priorEnd.setDate(Math.min(current.getDate(), new Date(year, current.getMonth(), 0).getDate()))
+    priorEnd.setHours(current.getHours(), current.getMinutes(), current.getSeconds(), current.getMilliseconds())
     const sets = source.sets.filter(s => s.isComplete && !s.isWarmup && s.timestamp <= now)
     const yearVolume = (start: number, end: number) => sets.reduce((sum, s) => s.timestamp >= start && s.timestamp <= end && s.weight && s.weight > 0 && s.reps && s.reps > 0 ? sum + s.weight * s.reps : sum, 0)
     let sunday = new Date(now)
@@ -75,6 +76,7 @@ export function TrainingReadouts({prefs, dayKey, routine}: {prefs: Preferences; 
       ytdVolume: yearVolume(yearStart, now), priorVolume: yearVolume(priorStart, +priorEnd),
       volume: calculateWeeklyVolume(sets, now), momentum: calculateStrengthMomentum(source, now).muscles,
       week: `${localDate(+sunday)} – ${localDate(+saturday)}`,
+      exerciseMap: new Map(source.exercises.map(e => [e.id, e])),
     }
   }, [source, prefs.restDaysPerWeek, prefs.bestStreak, dayKey])
   if (!data || !source) return <div className="home-loading" role="status">Loading training history…</div>
@@ -91,33 +93,33 @@ export function TrainingReadouts({prefs, dayKey, routine}: {prefs: Preferences; 
   return <>
     <div className="home-readouts">
       <div className="home-metrics-column">
-        <section aria-labelledby="home-training-metrics">
+        <section className="home-stagger" style={{'--stagger-i': 2} as CSSProperties} aria-labelledby="home-training-metrics">
           <div className="home-section-heading"><h2 id="home-training-metrics">Training metrics</h2></div>
           <div className="home-surface home-metrics">
-            <button className="home-metric" onClick={() => setSheet('streak')}>
+            <button className="home-metric hover-lift" onClick={() => setSheet('streak')}>
               <span className="home-metric-label"><Flame size={16}/> Iron streak</span>
-              <span className="home-big-number">{streak.streakDays} <small>{streak.streakDays === 1 ? 'day' : 'days'}</small></span>
+              <span className="home-big-number"><AnimatedNumber value={streak.streakDays} format={n => Math.round(n).toString()} /> <small>{streak.streakDays === 1 ? 'day' : 'days'}</small></span>
               <span className="home-metric-state">{status}</span>
               <Calibration count={Math.max(1, streak.allowedSkipsPerWeek)} lit={streak.streakDays > 0 ? streak.skipsRemaining : 0} rest/>
               <span className="home-metric-meta">Best {data.best} · YTD {data.ytdCount}</span>
             </button>
-            <button className="home-metric" onClick={() => setSheet('volume')}>
+            <button className="home-metric hover-lift" onClick={() => setSheet('volume')}>
               <span className="home-metric-label"><Gauge size={16}/> Weekly volume</span>
-              <span className="home-big-number">{formatVolume(volume.currentWeek, prefs)} <small>{unit}</small></span>
+              <span className="home-big-number"><AnimatedNumber value={fromLbs(volume.currentWeek, prefs.preferredWeightUnit)} format={n => Math.round(n).toLocaleString()} /> <small>{unit}</small></span>
               <span className="home-metric-state">{weekDelta === null ? 'Baseline' : `${weekDelta > 0 ? '+' : ''}${weekDelta}% vs last week`}</span>
               <Calibration count={10} lit={Math.round(volume.progressPercent * 10)}/>
               <span className="home-metric-meta">Last week {formatVolume(volume.lastWeek, prefs)} {unit}</span>
             </button>
           </div>
         </section>
-        <div className="home-routine-slot">{routine}</div>
+        <div className="home-routine-slot home-stagger" style={{'--stagger-i': 4} as CSSProperties}>{routine}</div>
       </div>
-      <section className="home-spectrum" aria-labelledby="home-spectrum-heading">
+      <section className="home-spectrum home-stagger" style={{'--stagger-i': 3} as CSSProperties} aria-labelledby="home-spectrum-heading">
         <div className="home-section-heading"><h2 id="home-spectrum-heading">Strength spectrum</h2>
           <button className="home-plain-arrow" aria-label="Open strength trends" onClick={() => openMuscle(selected?.muscle ?? 'Chest')}><ArrowUpRight size={19}/></button>
         </div>
         <div className="home-surface home-spectrum-grid">
-          {momentum.map(m => <button key={m.muscle} className="home-spectrum-cell" onClick={() => openMuscle(m.muscle)} aria-label={`${muscleLabel(m.muscle)} strength trend, ${m.percentChange === null ? 'building baseline' : signedPercent(m.percentChange)}`}>
+          {momentum.map((m, idx) => <button key={m.muscle} style={{'--stagger-i': idx + 3} as CSSProperties} className="home-spectrum-cell home-stagger" onClick={() => openMuscle(m.muscle)} aria-label={`${muscleLabel(m.muscle)} strength trend, ${m.percentChange === null ? 'building baseline' : signedPercent(m.percentChange)}`}>
             <span className="home-muscle-name"><i className={`home-status-dot ${m.status === 'READY' ? 'ready' : ''}`}/>{muscleLabel(m.muscle)}</span>
             <span className="home-muscle-readout"><StrengthTicks muscle={m}/><span>{m.percentChange === null ? '—' : signedPercent(m.percentChange)}</span></span>
           </button>)}
@@ -151,7 +153,7 @@ export function TrainingReadouts({prefs, dayKey, routine}: {prefs: Preferences; 
         <p className="home-sheet-number">{selected.percentChange === null ? '—' : signedPercent(selected.percentChange)}</p>
         {selected.contributingExercises.length === 0 && <p className="home-sheet-note">No comparable sessions logged for this muscle.</p>}
         {selected.contributingExercises.map(c => {
-          const exercise = source.exercises.find(e => e.id === c.exerciseId)
+          const exercise = data.exerciseMap.get(c.exerciseId)
           const score = (v: number | null) => v === null ? '—' : exercise?.logType === 'REPS_ONLY' ? `${v} reps` : `${formatVolume(v, prefs)} ${unit}`
           return <div className="home-contributor" key={c.exerciseId}><strong>{c.exerciseName}</strong><span>{c.percentChange === null ? c.status === 'STALE' ? 'Last trained over 42 days ago' : 'Building baseline' : signedPercent(c.percentChange)}</span>
             <small>Earlier {score(c.baselineValue)} <ChevronRight size={13}/> Recent {score(c.recentValue)}</small></div>

@@ -47,10 +47,14 @@ export function useAdjacentReorder() {
     for (const { element, x, y } of moves) {
       if (Math.abs(x) + Math.abs(y) < 1) continue
       const clamp = (distance: number) => Math.max(-240, Math.min(240, distance))
-      animations.current.push(element.animate(
+      const anim = element.animate(
         [{ translate: `${clamp(x)}px ${clamp(y)}px` }, { translate: '0 0' }],
         { duration: 220, easing: 'cubic-bezier(.18,.74,.22,1)' },
-      ))
+      )
+      const drop = () => { animations.current = animations.current.filter(a => a !== anim) }
+      anim.addEventListener?.('finish', drop, { once: true })
+      anim.addEventListener?.('cancel', drop, { once: true })
+      animations.current.push(anim)
     }
   })
 

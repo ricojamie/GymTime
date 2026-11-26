@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Archive, ArrowLeft, ArrowRight, CalendarDays, ChevronRight, FolderPlus, MoreHorizontal, Play, Repeat2, Search, Star, Trash2, Trophy, X } from 'lucide-react'
 import { BottomSheet } from '../components/primitives'
+import { SwoleGator, useIsGatorMode } from '../components/mascot'
 import { db } from '../db/database'
 import { deleteWorkout, reopenWorkout, repeatWorkout } from '../db/repositories'
 import type { WeightUnit, Workout, WorkoutSet } from '../db/types'
@@ -15,6 +16,7 @@ import './history.css'
 
 export default function History() {
   const data = useHistoryData()
+  const gatorMode = useIsGatorMode()
   const [query, setQuery] = useState('')
   const [params, setParams] = useSearchParams()
   const selected = Number(params.get('workoutId') || params.get('workout'))
@@ -29,24 +31,27 @@ export default function History() {
       return {w, stats, search}
     })
   }, [data])
-  const tokens = query.trim().toLocaleLowerCase().split(/\s+/)
-  const filtered = rows.filter(row => tokens.every(t => row.search.includes(t)))
-  const months = groupBy(filtered, row => monthLabel(row.w.startTime))
+  const filtered = useMemo(() => {
+    const tokens = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
+    if (!tokens.length) return rows
+    return rows.filter(row => tokens.every(t => row.search.includes(t)))
+  }, [rows, query])
+  const months = useMemo(() => groupBy(filtered, row => monthLabel(row.w.startTime)), [filtered])
   const current = rows.find(row => row.w.id === selected)
   const unit = data?.prefs.preferredWeightUnit || 'lbs'
 
   return <main className="screen his-screen">
     <header className="his-heading"><h1>History</h1><span>{data && rows.length + (rows.length === 1 ? ' session' : ' sessions')}</span></header>
     <label className="his-search"><Search size={19} aria-hidden="true"/><input aria-label="Search history" type="search" placeholder="Search workouts" value={query} onChange={e => setQuery(e.target.value)}/>{query && <button type="button" className="icon-button" aria-label="Clear search" onClick={() => setQuery('')}><X size={17}/></button>}</label>
-    {!data ? <p role="status">Loading history…</p> : !filtered.length ? <section className="his-empty">
-      {rows.length ? <Search size={28}/> : <Archive size={28}/>}
+    {!data ? <p role="status">Loading history…</p> : !filtered.length ? <section className="his-empty surface">
+      {gatorMode && !rows.length ? <SwoleGator pose="spotter" size={96} interactive /> : (rows.length ? <Search size={28}/> : <Archive size={28}/>)}
       <h2>{rows.length ? 'No matching workouts' : 'No completed workouts yet'}</h2>
-      {rows.length ? <button className="btn" onClick={() => setQuery('')}>Clear search</button> : <Link className="btn" to={data.workouts.some(w => w.endTime === null) ? '/workout/active' : '/exercises/select?workoutMode=true'}>{data.workouts.some(w => w.endTime === null) ? 'Resume workout' : 'Start workout'}<ArrowRight size={16}/></Link>}
-    </section> : Array.from(months, ([month, list]) => <section key={month} className="his-month">
+      {rows.length ? <button className="btn" onClick={() => setQuery('')}>Clear search</button> : <Link className="btn primary" to={data.workouts.some(w => w.endTime === null) ? '/workout/active' : '/exercises/select?workoutMode=true'}>{data.workouts.some(w => w.endTime === null) ? 'Resume workout' : 'Start workout'}<ArrowRight size={16}/></Link>}
+    </section> : Array.from(months, ([month, list], monthIndex) => <section key={month} className="his-month stagger-in" style={{ '--stagger-i': Math.min(monthIndex, 6) } as CSSProperties}>
       <h2 className="eyebrow">{month}</h2>
-      <div className="surface his-timeline">{list.map(({w,stats}) => {
+      <div className="surface his-timeline">{list.map(({w,stats}, itemIndex) => {
         const date = new Date(w.startTime)
-        return <button type="button" className="his-session" aria-haspopup="dialog" key={w.id} onClick={() => setParams({workoutId:String(w.id)})}>
+        return <button type="button" className="his-session stagger-in" style={{ '--stagger-i': Math.min(itemIndex, 10) } as CSSProperties} aria-haspopup="dialog" key={w.id} onClick={() => setParams({workoutId:String(w.id)})}>
           <span className="his-date" aria-label={dateLabel(w.startTime)}><strong>{String(date.getDate()).padStart(2,'0')}</strong><small>{date.toLocaleDateString(undefined,{weekday:'short'})}</small></span>
           <span className="his-session-text"><strong>{stats.title}</strong>
             {stats.muscles.length > 0 && <span>{stats.muscles.slice(0,3).join(' · ')}{stats.muscles.length > 3 && ' +' + (stats.muscles.length - 3)}</span>}
@@ -91,7 +96,7 @@ function SetRows({sets,unit,prIds}: {sets:WorkoutSet[];unit:WeightUnit;prIds:Set
   const top = sets.reduce((max, row) => row.weight === null ? max : Math.max(max,row.weight), -Infinity)
   return <ol className="his-sets">{sets.map((s,index) => <li key={s.id}><span className="his-ordinal">{String(index+1).padStart(2,'0')}</span><div><strong>{setText(s,unit)}</strong>
     {s.rpe != null && <small>RPE {s.rpe}</small>}{s.note?.trim() && <p>{s.note}</p>}</div>
-    {prIds.has(s.id) ? <Trophy size={16} aria-label="Personal record" className="his-pr"/> : s.weight === top && top > 0 && !s.isWarmup ? <small>Top weight</small> : null}
+    {prIds.has(s.id) ? <span className="his-pr-badge"><Trophy size={14} aria-label="Personal record" className="his-pr"/>PR</span> : s.weight === top && top > 0 && !s.isWarmup ? <small>Top weight</small> : null}
   </li>)}</ol>
 }
 

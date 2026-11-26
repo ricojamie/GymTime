@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ArrowRight, CalendarDays, ChevronRight, ClipboardList, HardDriveDownload, Play, RotateCcw, Settings, X } from 'lucide-react'
@@ -7,6 +7,8 @@ import { useSaveBackup } from '../db/backup'
 import { startWorkout } from '../db/repositories'
 import { PlateAssembly } from '../components/home/PlateAssembly'
 import { TrainingReadouts } from '../components/home/TrainingReadouts'
+import { SwoleGator } from '../components/mascot'
+import { useIsGatorMode } from '../theme'
 import './home.css'
 
 const DAY = 86_400_000
@@ -32,7 +34,9 @@ function useCalendarDate() {
 function Elapsed({start}: { start: number }) {
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
-    const refresh = () => setNow(Date.now())
+    const refresh = () => {
+      if (document.visibilityState !== 'hidden') setNow(Date.now())
+    }
     const id = window.setInterval(refresh, 1000)
     document.addEventListener('visibilitychange', refresh)
     return () => { window.clearInterval(id); document.removeEventListener('visibilitychange', refresh) }
@@ -53,7 +57,7 @@ function BackupReminder({onDismiss}: {onDismiss: () => void}) {
     try { await save() } catch (e) { setError(e instanceof Error ? e.message : 'Could not save this backup.') }
     finally { setSaving(false) }
   }
-  return <div className="home-backup-wrap"><div className="home-backup">
+  return <div className="home-backup-wrap home-stagger" style={{'--stagger-i': 0} as CSSProperties}><div className="home-backup">
     <HardDriveDownload size={17}/><span>Backup due</span>
     <button onClick={handleSave} disabled={!ready || saving}>{saving ? 'Saving…' : ready ? 'Save backup' : 'Preparing…'}</button>
     <button className="home-dismiss" onClick={onDismiss} aria-label="Dismiss backup reminder"><X size={17}/></button>
@@ -86,7 +90,7 @@ function RoutineControl({ongoing}: {ongoing: boolean}) {
   if (info === undefined) return null
   return <section aria-labelledby="home-routine">
     <div className="home-section-heading"><h2 id="home-routine">Routine</h2>{info && <Link className="home-text-link" to="/routines">Switch</Link>}</div>
-    {!info ? <Link to="/routines" className="home-surface home-routine-link">
+    {!info ? <Link to="/routines" className="home-surface home-routine-link hover-lift">
       <ClipboardList size={20}/><span>Set up a routine</span><ChevronRight size={18}/>
     </Link> : <div className="home-surface home-routine-body">
       <div className="home-routine-title"><h3>{info.routine.name}</h3><Link className="home-text-link" to={`/routines/${info.routine.id}`}>Manage</Link></div>
@@ -100,7 +104,9 @@ function RoutineControl({ongoing}: {ongoing: boolean}) {
 
 export default function Home() {
   const date = useCalendarDate()
+  const gatorHook = useIsGatorMode()
   const prefs = useLiveQuery(() => db.preferences.get('default'), []) ?? defaultPreferences
+  const gatorMode = gatorHook || prefs.appIcon === 'swole_alligator'
   const sessions = useLiveQuery(async () => {
     const workouts = await db.workouts.orderBy('startTime').reverse().toArray()
     return {
@@ -119,6 +125,47 @@ export default function Home() {
   const [dismissed, setDismissed] = useState(() => {
     try { return localStorage.getItem('ironlog.dismissedBackupReminder') } catch { return null }
   })
+  const [rackImpact, setRackImpact] = useState(false)
+  const impactTimer = useRef<number | undefined>(undefined)
+  const artRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => () => {
+    if (impactTimer.current !== undefined) window.clearTimeout(impactTimer.current)
+  }, [])
+
+  function triggerReplay() {
+    window.dispatchEvent(new Event('ironlog:replay-plates'))
+    if (document.documentElement.dataset.motion === 'reduced' ||
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+    setRackImpact(false)
+    window.requestAnimationFrame(() => {
+      setRackImpact(true)
+      if (impactTimer.current !== undefined) window.clearTimeout(impactTimer.current)
+      impactTimer.current = window.setTimeout(() => setRackImpact(false), 300)
+    })
+  }
+
+  function handleArtPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
+    if (e.pointerType !== 'mouse') return
+    if (document.documentElement.dataset.motion === 'reduced' ||
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+    const el = artRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    if (!rect.width || !rect.height) return
+    const nx = ((e.clientX - rect.left) / rect.width - 0.5) * 2
+    const ny = ((e.clientY - rect.top) / rect.height - 0.5) * 2
+    el.style.setProperty('--tilt-x', `${(-ny * 3.5).toFixed(2)}deg`)
+    el.style.setProperty('--tilt-y', `${(nx * 4.2).toFixed(2)}deg`)
+  }
+
+  function handleArtPointerLeave() {
+    const el = artRef.current
+    if (!el) return
+    el.style.setProperty('--tilt-x', '0deg')
+    el.style.setProperty('--tilt-y', '0deg')
+  }
+
   function dismiss() {
     setDismissed(reminderKey)
     try { localStorage.setItem('ironlog.dismissedBackupReminder', reminderKey) } catch { /* In-memory dismissal still applies. */ }
@@ -128,19 +175,43 @@ export default function Home() {
   return <main className="screen home-screen iron-home" aria-labelledby="home-greeting">
     <header className="home-brandbar">
       <div className="home-brand" aria-label="IronLog">
-        <img decoding="async" width="38" height="38" src={prefs.appIcon === 'swole_alligator' ? '/icons/swole-alligator-180.png' : '/icons/apple-touch-icon-180.png'} alt=""/>
-        <span aria-hidden="true">IRON<b>LOG</b></span>
+        {gatorMode
+          ? <SwoleGator pose="badge" size={38} />
+          : <img decoding="async" width="38" height="38" src="/icons/apple-touch-icon-180.png" alt=""/>}
+        <span className="home-brand-text" aria-hidden="true">
+          <span className="home-brand-wordmark">IRON<b>LOG</b></span>
+          {gatorMode && <span className="home-brand-sub">THE SWAMP</span>}
+        </span>
       </div>
       <span className="home-date"><CalendarDays size={15}/>{weekday} · {monthDay}</span>
       <Link className="home-settings" to="/settings" aria-label="Open settings"><Settings size={19}/></Link>
     </header>
     {due && dismissed !== reminderKey && <BackupReminder onDismiss={dismiss}/>}
-    <h1 className="home-greeting" id="home-greeting">Hey, {prefs.userName.trim() || 'Athlete'}</h1>
-    <section className={`home-surface home-session ${active ? 'is-active' : ''}`} aria-labelledby="home-session-title">
+    <h1 className="home-greeting home-stagger" style={{'--stagger-i': 0} as CSSProperties} id="home-greeting">Hey, {prefs.userName.trim() || 'Athlete'}</h1>
+    <section
+      className={`home-surface home-session home-stagger ${active ? 'is-active' : ''} ${rackImpact ? 'is-rack-impact' : ''}`}
+      style={{'--stagger-i': 1} as CSSProperties}
+      aria-labelledby="home-session-title"
+    >
       <div className="home-session-stage">
-        <div className="home-session-art" aria-hidden="true">
-          <span className="home-art-scale"/>
-          <PlateAssembly/>
+        <div
+          ref={artRef}
+          className={`home-session-art ${gatorMode ? 'has-gator' : ''}`}
+          aria-hidden={!gatorMode || undefined}
+          onPointerMove={handleArtPointerMove}
+          onPointerLeave={handleArtPointerLeave}
+          onClick={e => {
+            if ((e.target as HTMLElement).closest('.home-gator-hero-wrap')) return
+            triggerReplay()
+          }}
+        >
+          <span className="home-art-scale" aria-hidden="true"/>
+          <PlateAssembly gatorMode={gatorMode}/>
+          {gatorMode && (
+            <div className="home-gator-hero-wrap">
+              <SwoleGator pose="hero" interactive size="100%" />
+            </div>
+          )}
         </div>
         <div className="home-session-copy">
           <span className="home-session-state"><i className="home-status-dot"/>{active ? 'Session in progress' : 'Free session'}</span>
@@ -151,7 +222,7 @@ export default function Home() {
           </Link>
         </div>
         <button type="button" className="home-art-replay" aria-label="Replay plate animation" title="Replay plate animation"
-          onClick={() => window.dispatchEvent(new Event('ironlog:replay-plates'))}>
+          onClick={triggerReplay}>
           <RotateCcw size={15} aria-hidden="true"/><span>Replay</span>
         </button>
       </div>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Upload } from 'lucide-react'
-import { useSettings } from '../theme'
+import { useIsGatorMode, useSettings } from '../theme'
 import { accents, accentPalette, deriveColors, fontNames, hsvToHex, hexToHsv, isHex } from '../theme/colors'
 import { Group, SettingsHeader, ToggleRow, useSettingsWriter } from '../theme/SettingsUi'
 
@@ -33,6 +33,7 @@ function CustomAccent({initial, apply}:{initial:string; apply:(color:string)=>Pr
 
 export default function ThemeSettings() {
   const prefs = useSettings()
+  const gatorMode = useIsGatorMode()
   const {error,save,run} = useSettingsWriter()
   const file = useRef<HTMLInputElement>(null)
   const [editingCustom,setEditingCustom] = useState(false)
@@ -46,17 +47,21 @@ export default function ThemeSettings() {
     const { updatePreferences } = await import('../db/repositories')
     await updatePreferences({customFontBlob:bytes,customFontName:fontFile.name,themeFont:'custom'})
   }
+  const surfaceLabel = gatorMode
+    ? (prefs.darkMode ? 'UF Swamp Dark' : 'UF Stadium Light')
+    : (prefs.darkMode ? 'Obsidian' : 'Ceramic')
   return <main className="screen st-screen">
     <SettingsHeader title="Theme & fonts"/>
     <div className="st-theme-preview"><span className="eyebrow">Live preview</span>
       <div aria-label="IronLog" className="st-wordmark">IRON<span>LOG</span></div>
-      <span className="st-meta">{prefs.darkMode?'Obsidian':'Ceramic'} · {prefs.themeFont === 'custom' ? prefs.customFontName : fontNames[prefs.themeFont] ?? 'Bebas Neue'}</span></div>
+      <span className="st-meta">{surfaceLabel} · {prefs.themeFont === 'custom' ? prefs.customFontName : fontNames[prefs.themeFont] ?? 'Bebas Neue'}</span></div>
     {error && <p role="alert" className="st-alert">{error}</p>}
     <Group title="Appearance"><ToggleRow label="Dark mode" checked={prefs.darkMode} onChange={()=>void save({darkMode:!prefs.darkMode})}/></Group>
     <Group title="Accent">
+      {gatorMode && <p className="st-note">UF Swole Gator theme is active. Switch back to Classic in Settings to use custom accent colors.</p>}
       <div className="st-swatches">{accents.map(([key,label])=><button className="st-swatch" key={key}
-        aria-pressed={prefs.themeColor===key} onClick={()=>{setEditingCustom(false);void save({themeColor:key})}}>
-        <i style={{background:accentPalette[key]}} aria-hidden="true"/><span>{label}</span>{prefs.themeColor===key && <Check size={17}/>}</button>)}</div>
+        aria-pressed={!gatorMode && prefs.themeColor===key} onClick={()=>{setEditingCustom(false);void save({themeColor:key})}}>
+        <i style={{background:accentPalette[key]}} aria-hidden="true"/><span>{label}</span>{!gatorMode && prefs.themeColor===key && <Check size={17}/>}</button>)}</div>
       <button className="st-action st-row" aria-expanded={editingCustom} onClick={()=>setEditingCustom(!editingCustom)}>
         <span>Custom color</span><span className="st-trailing"><i className="st-small-chip" style={{background:customColor}}/>{customColor.toUpperCase()}</span></button>
       {editingCustom && <CustomAccent initial={customColor} apply={async value => {

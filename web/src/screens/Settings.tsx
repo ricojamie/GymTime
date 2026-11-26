@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Check } from 'lucide-react'
+import { SwoleGator } from '../components/mascot'
 import { chooseIcon, iconUrls, useSettings } from '../theme'
 import { Group, Segments, SettingLink, SettingsHeader, ToggleRow, useSettingsWriter } from '../theme/SettingsUi'
 import BackupSettings from '../theme/BackupSettings'
@@ -10,7 +11,10 @@ const trainOptions = [
   ['timerAutoStart','Auto-start rest timer'], ['timerAudioEnabled','Timer sound'],
   ['timerVibrateEnabled','Timer vibration'], ['keepScreenOn','Keep screen awake'],
 ] as const
-const appIcons = [['classic','Classic'],['swole_alligator','Swole Alligator']] as const
+const appIcons = [
+  ['classic', 'Classic', 'Obsidian & custom accent'],
+  ['swole_alligator', 'Swole Gator', 'Morphs into UF Gators theme & mascot'],
+] as const
 function isStandaloneIOS() {
   return !!(navigator as Navigator & {standalone?:boolean}).standalone
 }
@@ -31,9 +35,16 @@ export default function Settings() {
       <ToggleRow label="Dark mode" checked={prefs.darkMode} onChange={()=>void save({darkMode:!prefs.darkMode})}/>
       <div className="st-row"><span>Motion</span><Segments label="Motion" items={['System','Reduced'] as const}
         value={prefs.reduceMotion ? 'Reduced' : 'System'} onChange={value=>void save({reduceMotion:value==='Reduced'})}/></div>
-      <div className="st-block"><h3>App icon</h3><div className="st-icon-options">{appIcons.map(([key,label])=>
-        <button type="button" key={key} aria-pressed={prefs.appIcon===key} onClick={()=>void iconChange(key)}><img width={38} height={38} src={iconUrls(key).touch} alt=""/>
-          <span>{label}</span>{prefs.appIcon===key && <Check size={15}/>}</button>)}</div>
+      <div className="st-block"><h3>App icon &amp; theme</h3><div className="st-icon-options">{appIcons.map(([key,label,subtitle])=>
+        <button type="button" className="st-icon-card hover-lift" key={key} aria-pressed={prefs.appIcon===key} onClick={()=>void iconChange(key)}>
+          <span className="st-icon-preview" aria-hidden="true">
+            {key === 'swole_alligator'
+              ? <SwoleGator pose="badge" size={38} />
+              : <img width={38} height={38} src={iconUrls(key).touch} alt="" />}
+          </span>
+          <span className="st-icon-copy"><strong>{label}</strong><small>{subtitle}</small></span>
+          {prefs.appIcon===key && <Check className="st-icon-check" size={16}/>}
+        </button>)}</div>
         {isStandaloneIOS() && <p className="st-note">Open in Safari and Add to Home Screen to update the iPhone icon.</p>}
       </div></Group>
     <Group title="While you train">{trainOptions.map(([key,label])=><ToggleRow key={key} label={label} checked={prefs[key]} onChange={()=>void save({[key]:!prefs[key]})}/>)}</Group>

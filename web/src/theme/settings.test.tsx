@@ -6,6 +6,7 @@ import { defaultPreferences } from '../db/types'
 import { toLbs } from '../domain/units'
 import EquipmentSettings from './EquipmentSettings'
 import Settings from '../screens/Settings'
+import { UF_COLORS } from './colors'
 import { chooseIcon, iconUrls, useTheme } from './index'
 
 beforeEach(async () => {
@@ -16,6 +17,8 @@ afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
   delete document.documentElement.dataset.motion
+  delete document.documentElement.dataset.brand
+  delete document.documentElement.dataset.brandMorph
 })
 
 it('respects system changes and persists a local reduction on older installs', async () => {
@@ -72,4 +75,28 @@ it('stores the selected home-screen icon and preserves the router path', async (
   expect(iconUrls('swole_alligator').manifest).toBe('/manifest-alligator.webmanifest')
   await chooseIcon('classic')
   expect(location.pathname + location.search).toBe('/settings?test=1')
+})
+
+it('morphs the entire theme to UF Swole Gator and cleanly restores Classic', async () => {
+  const meta = document.createElement('meta')
+  meta.name = 'theme-color'
+  document.head.appendChild(meta)
+  function ScreenWithTheme() {
+    useTheme()
+    return <MemoryRouter><Settings/></MemoryRouter>
+  }
+  render(<ScreenWithTheme/>)
+  const root = document.documentElement
+  await waitFor(() => expect(root.dataset.brand).toBe('classic'))
+
+  fireEvent.click(screen.getByRole('button', { name: /Swole Gator/i }))
+  await waitFor(() => expect(root.dataset.brand).toBe('gator'))
+  expect(root.style.getPropertyValue('--accent')).toBe(UF_COLORS.orange)
+  expect(meta.getAttribute('content')).toBe(UF_COLORS.swampDarkCanvas)
+
+  fireEvent.click(screen.getByRole('button', { name: /Classic/i }))
+  await waitFor(() => expect(root.dataset.brand).toBe('classic'))
+  expect(root.style.getPropertyValue('--accent')).toBe('#A3E635')
+  expect(meta.getAttribute('content')).toBe('#090A0D')
+  meta.remove()
 })

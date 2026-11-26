@@ -84,7 +84,10 @@ function VernierDial({ value, step, unit, pins, onChange }: {
     <div role="slider" tabIndex={0} aria-label={unit === 'reps' ? 'Repetition dial' : 'Weight dial'}
       aria-valuemin={0} aria-valuemax={count * step} aria-valuenow={value} aria-valuetext={value + ' ' + unit}
       className="log-dial-track" ref={track} onScroll={read}
-      onPointerDown={() => { interacting.current = true }} onWheel={() => { interacting.current = true }}
+      onPointerDown={() => { interacting.current = true }}
+      onPointerUp={() => { interacting.current = false }}
+      onPointerCancel={() => { interacting.current = false }}
+      onWheel={() => { interacting.current = true }}
       onKeyDown={event => {
         let next = value
         if (event.key === 'ArrowRight' || event.key === 'ArrowUp') next += step
@@ -140,20 +143,22 @@ export default function Keypad({ field, value, unit, weightUnit, pins, onChange,
   const step = field === 'weight' ? weightUnit === 'kg' ? 2.5 : 5 : 1
   const stepUnit = field === 'durationSeconds' ? ' second' : field === 'weight' || field === 'distanceValue' ? ' ' + unit : ''
   const adjustment = fieldLabels[field].toLowerCase() + ' by ' + step + stepUnit
+  const writeRef = useRef(write)
+  writeRef.current = write
   useEffect(() => {
     function keydown(e: KeyboardEvent) {
       if (e.altKey || e.metaKey || e.ctrlKey || e.defaultPrevented) return
       if (/^[0-9.:]$/.test(e.key) || e.key === 'Backspace') {
         e.preventDefault()
-        write(e.key === 'Backspace' ? 'back' : e.key)
+        writeRef.current(e.key === 'Backspace' ? 'back' : e.key)
       }
     }
     window.addEventListener('keydown', keydown)
     return () => window.removeEventListener('keydown', keydown)
-  })
+  }, [])
   return <BottomSheet title={fieldLabels[field]} onClose={onClose}>
     <div className="log-pad">
-      <div className="log-pad-display"><output aria-label={fieldLabels[field] + ' value'}>{raw || '—'}</output><span>{unit}</span></div>
+      <div className="log-pad-display"><output aria-label={fieldLabels[field] + ' value'}><span key={raw || 'empty'} className="log-pad-val">{raw || '—'}</span></output><span>{unit}</span></div>
       {canDial && <div className="log-mode" data-dial={dial || undefined} role="group" aria-label="Entry method">
         <button aria-pressed={!dial} onClick={() => setDial(false)}>Keypad</button><button aria-pressed={dial} onClick={() => setDial(true)}>Dial</button>
       </div>}

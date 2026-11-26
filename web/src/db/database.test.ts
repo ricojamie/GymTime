@@ -152,6 +152,7 @@ describe('offline database', () => {
     await logSet({workoutId:id,exerciseId:1,reps:6,weight:135})
     await finishWorkout(id)
     const copy = await repeatWorkout(id)
+    expect((await db.workouts.get(copy))?.startedFromRoutine).toBe(false)
     const slots = await db.workout_exercise_instances.where('workoutId').equals(copy).toArray()
     expect(slots).toHaveLength(2)
     expect(slots[0]).toMatchObject({plannedSets:1,repMin:6})

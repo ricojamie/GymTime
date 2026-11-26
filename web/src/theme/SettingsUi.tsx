@@ -11,7 +11,7 @@ export function SettingsHeader({title,back='/settings'}:{title:string; back?:str
 }
 export function Group({title,children}:{title:string; children:ReactNode}) {
   const id = useId()
-  return <section className="st-group" aria-labelledby={id}><h2 className="eyebrow" id={id}>{title}</h2><div className="st-surface">{children}</div></section>
+  return <section className="st-group stagger-in" aria-labelledby={id}><h2 className="eyebrow" id={id}>{title}</h2><div className="st-surface">{children}</div></section>
 }
 export function SettingLink({to,children,meta}:{to:string; children:ReactNode; meta?:string}) {
   return <Link className="st-row st-action" to={to}><span>{children}</span><span className="st-trailing">{meta}<ChevronRight size={16}/></span></Link>

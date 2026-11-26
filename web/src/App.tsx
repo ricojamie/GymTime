@@ -31,7 +31,24 @@ const tabs = [
 ]
 function SessionDock({workout}:{workout:Workout}) {
   const [now,setNow] = useState(Date.now)
-  useEffect(() => { const id = window.setInterval(() => setNow(Date.now()),1000); return () => clearInterval(id) },[])
+  useEffect(() => {
+    let id: number | null = null
+    const start = () => {
+      if (id === null && document.visibilityState !== 'hidden') {
+        id = window.setInterval(() => setNow(Date.now()), 1000)
+      }
+    }
+    const stop = () => {
+      if (id !== null) { window.clearInterval(id); id = null }
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') stop()
+      else { setNow(Date.now()); start() }
+    }
+    start()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility) }
+  },[])
   const elapsed = Math.max(0,Math.floor((now-workout.startTime)/1000))
   const clock = [Math.floor(elapsed/3600),Math.floor(elapsed%3600/60),elapsed%60].map(n=>String(n).padStart(2,'0')).join(':')
   return <Link className="session-dock" to="/workout/active"><span className="session-led" aria-hidden="true"/><strong>{workout.name || workout.routineDayNameSnapshot || 'Active workout'}</strong><time>{clock}</time><span>Resume</span><ArrowRight size={16}/></Link>
@@ -50,7 +67,7 @@ function Shell() {
   const showTabs = activeTab >= 0
   useEffect(() => { window.scrollTo(0,0) },[pathname])
   return <><div className={'app-main' + (showTabs ? ' has-tabs' : '') + (showTabs && active ? ' has-session':'')}>
-    <Suspense fallback={<div className="screen" role="status">Opening…</div>}><Outlet/></Suspense>
+    <Suspense fallback={<div className="screen" role="status">Opening…</div>}><div key={pathname} className="app-route-stage"><Outlet/></div></Suspense>
   </div>{showTabs && <div className="app-chrome">{active && <SessionDock workout={active}/>}<nav className="app-tabs" aria-label="Main navigation">
     <span className="app-tab-track" aria-hidden="true"><span style={{transform: `translateX(${activeTab * 100}%)`}}/></span>
     {tabs.map(({path,name,icon:Icon})=><NavLink key={path} end to={path}><Icon size={19}/><span>{name}</span></NavLink>)}

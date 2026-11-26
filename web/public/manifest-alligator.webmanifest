@@ -1,13 +1,13 @@
 {
   "id": "/",
-  "name": "IronLog",
+  "name": "IronLog · Swole Gator",
   "short_name": "IronLog",
   "description": "Offline strength training log",
   "start_url": "/?icon=swole-alligator",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#090A0D",
-  "theme_color": "#090A0D",
+  "background_color": "#040A1C",
+  "theme_color": "#040A1C",
   "categories": [
     "fitness",
     "health"

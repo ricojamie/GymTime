@@ -73,6 +73,10 @@ describe('rest countdown', () => {
     adjustRestTimer(-30)
     expect(restClock.getState().endEpochMs).toBeNull()
     expect(ring).not.toHaveBeenCalled()
+    startRestTimer(5)
+    vi.setSystemTime(epoch + 10000)
+    adjustRestTimer(30)
+    expect(restClock.getState().remaining).toBe(30)
   })
 
   it('reflects skips and restarts from another same-origin tab', () => {

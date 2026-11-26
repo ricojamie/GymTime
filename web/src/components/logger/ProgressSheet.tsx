@@ -84,13 +84,14 @@ export function ProgressSheet({ exerciseId, excludeWorkoutId, initialTab = 'prog
     const valid = (s: WorkoutSet) => exercise.targetMuscle !== 'Warmups' && s.isComplete && !s.isWarmup
     const working = sessions.flatMap(session => session.sets.filter(valid))
     const e1rm = (s: WorkoutSet) => calculateE1RM(s.weight ?? 0, s.reps ?? 0)
-    const estimates = exercise.logType === 'WEIGHT_REPS' ? working.flatMap(set => {const value=e1rm(set); return value === null ? [] : [{value,set}]}) : []
+    const useE1rm = exercise.logType === 'WEIGHT_REPS'
+    const estimates = useE1rm ? working.flatMap(set => {const value=e1rm(set); return value === null ? [] : [{value,set}]}) : []
     const estimate = estimates.reduce<(typeof estimates)[number] | null>((best, next) => !best || next.value > best.value ? next : best, null)
     const cutoff = periodStart(period)
     const points = sessions.filter(s => s.workout.startTime >= cutoff).flatMap(({workout,sets}) => {
       let top: number | null = null
       for (const set of sets.filter(valid)) {
-        const value = estimate ? e1rm(set) : recordMetric(set, exercise.logType, exercise.defaultDistanceUnit)
+        const value = useE1rm ? (e1rm(set) ?? recordMetric(set, exercise.logType, exercise.defaultDistanceUnit)) : recordMetric(set, exercise.logType, exercise.defaultDistanceUnit)
         if (value !== null && (top === null || value > top)) top = value
       }
       return top === null ? [] : [{timestampMs:workout.startTime, workoutId:workout.id, value:top}]

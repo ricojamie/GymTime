@@ -123,7 +123,7 @@ export function SmartLogSheet({ initialExerciseId, onOpenQueue, onClose }: Props
               draft.durationSeconds != null ? duration(draft.durationSeconds) : null,
               draft.calories != null ? draft.calories + ' cal' : null,
             ].filter(Boolean)
-            return <div className="smart-draft-row" key={index}>
+            return <div className="smart-draft-row stagger-in" key={index} style={{ '--stagger-i': Math.min(order, 12) } as React.CSSProperties}>
               <span className="tool-number">{String(order + 1).padStart(2, '0')}</span>
               <div><strong>{core.join(' · ')}</strong>{(draft.rpe != null || draft.isWarmup) && <small>{[draft.isWarmup ? 'Warm-up' : null, draft.rpe != null ? 'RPE ' + draft.rpe : null].filter(Boolean).join(' · ')}</small>}</div>
               <button type="button" className="icon-button" aria-label={'Remove draft set ' + (order + 1)} onClick={() => setRemoved(previous => [...previous, index])}><Trash2 size={16} /></button>

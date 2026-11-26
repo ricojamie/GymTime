@@ -21,7 +21,9 @@ function Barbell({ plates, sides }: { plates: number[]; sides: number }) {
       <line className="plate-bar-stop" x1={origin} x2={origin} y1={42} y2={68} />
       {visible.map((weight, index) => {
         const height = Math.min(78, Math.max(21, 17 + Math.sqrt(weight) * 8))
-        return <rect key={index} x={origin + sign * (6 + index * thickness) - (sign < 0 ? thickness : 0)} y={55 - height / 2}
+        return <rect key={`${sign}-${index}-${weight}`} className="plate-bar-disc"
+          style={{ '--plate-dir': sign, '--plate-i': index } as React.CSSProperties}
+          x={origin + sign * (6 + index * thickness) - (sign < 0 ? thickness : 0)} y={55 - height / 2}
           width={Math.max(2, thickness - 1.5)} height={height} rx={2} fill={plateColor(weight)} stroke="var(--bg-well)" strokeWidth={0.8} />
       })}
     </g>

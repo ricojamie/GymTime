@@ -11,27 +11,58 @@
 }
 
 .iron-slide--inner {
-  --travel: 18px;
+  --travel: 32px;
   --seat-delay: 40ms;
   --seat-time: 400ms;
 }
 
 .iron-slide--middle {
-  --travel: 128px;
+  --travel: 146px;
   --seat-delay: 145ms;
   --seat-time: 545ms;
 }
 
 .iron-slide--outer {
-  --travel: 209px;
+  --travel: 224px;
   --seat-delay: 320ms;
   --seat-time: 620ms;
 }
 
 .iron-slide--collar {
-  --travel: 207px;
+  --travel: 215px;
   --seat-delay: 600ms;
   --seat-time: 475ms;
+}
+
+.iron-shockwave,
+.iron-spark,
+.iron-collar-flash {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.iron-shockwave {
+  stroke: var(--accent-ink);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.iron-spark {
+  fill: color-mix(in srgb, var(--accent-ink) 65%, #ffffff);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.iron-collar-flash {
+  stroke: var(--accent);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.iron-plate-sheen {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 /* Artwork is fully assembled by default, including when either motion preference is reduced. */
@@ -42,19 +73,67 @@
 
   :root:not([data-motion="reduced"]) .home-plate .iron-load-flex {
     transform-origin: 52px 120px;
-    animation: iron-take-weight 1370ms ease-out;
+    animation: iron-take-weight 1420ms ease-out;
   }
 
   :root:not([data-motion="reduced"]) .home-plate .iron-clamp-lever {
     transform-origin: 0 0;
-    animation: iron-lock 310ms ease-in-out 950ms backwards;
+    animation: iron-lock 340ms ease-in-out 960ms backwards;
   }
 
-  :root:not([data-motion="reduced"]) .home-plate.iron-rewind :is(.iron-load-flex, .iron-slide, .iron-clamp-lever) {
+  /* Shockwave rings timed to each plate's impact (73% of seat-time + seat-delay) */
+  :root:not([data-motion="reduced"]) .home-plate .iron-shockwave--inner {
+    animation: iron-shockwave 460ms cubic-bezier(.16, 1, .3, 1) 330ms both;
+  }
+  :root:not([data-motion="reduced"]) .home-plate .iron-shockwave--middle {
+    animation: iron-shockwave 520ms cubic-bezier(.16, 1, .3, 1) 540ms both;
+  }
+  :root:not([data-motion="reduced"]) .home-plate .iron-shockwave--outer {
+    animation: iron-shockwave 620ms cubic-bezier(.16, 1, .3, 1) 770ms both;
+  }
+
+  /* Chalk-dust / spark bursts timed to plate impact */
+  :root:not([data-motion="reduced"]) .home-plate .iron-spark--inner {
+    animation: iron-spark-burst 480ms cubic-bezier(.16, 1, .3, 1) calc(330ms + var(--spark-delay, 0ms)) both;
+  }
+  :root:not([data-motion="reduced"]) .home-plate .iron-spark--middle {
+    animation: iron-spark-burst 520ms cubic-bezier(.16, 1, .3, 1) calc(540ms + var(--spark-delay, 0ms)) both;
+  }
+  :root:not([data-motion="reduced"]) .home-plate .iron-spark--outer {
+    animation: iron-spark-burst 580ms cubic-bezier(.16, 1, .3, 1) calc(770ms + var(--spark-delay, 0ms)) both;
+  }
+
+  /* Collar lock snap glow */
+  :root:not([data-motion="reduced"]) .home-plate .iron-collar-flash {
+    animation: iron-collar-flash 520ms cubic-bezier(.16, 1, .3, 1) 1140ms both;
+  }
+
+  /* Specular metallic light sweep across the cast iron */
+  :root:not([data-motion="reduced"]) .home-plate .iron-plate-sheen {
+    animation: iron-sheen-sweep 1150ms cubic-bezier(.25, .8, .25, 1) 1120ms both;
+  }
+
+  :root:not([data-motion="reduced"]) .home-plate.iron-rewind :is(
+    .iron-load-flex,
+    .iron-slide,
+    .iron-clamp-lever,
+    .iron-shockwave,
+    .iron-spark,
+    .iron-collar-flash,
+    .iron-plate-sheen
+  ) {
     animation-name: none;
   }
 
-  :root:not([data-motion="reduced"]) .home-plate[data-intro-preparing] :is(.iron-load-flex, .iron-slide, .iron-clamp-lever) {
+  :root:not([data-motion="reduced"]) .home-plate[data-intro-preparing] :is(
+    .iron-load-flex,
+    .iron-slide,
+    .iron-clamp-lever,
+    .iron-shockwave,
+    .iron-spark,
+    .iron-collar-flash,
+    .iron-plate-sheen
+  ) {
     animation-play-state: paused;
   }
 }
@@ -65,28 +144,78 @@
     animation-timing-function: cubic-bezier(.53, .035, .72, .41);
   }
   73% { transform: translateX(0); animation-timing-function: ease-out; }
-  83% { transform: translateX(2.4px); animation-timing-function: ease-in-out; }
+  83% { transform: translateX(3.2px); animation-timing-function: ease-in-out; }
   100% { transform: translateX(0); }
 }
 
 /* A sleeve rolling about the supported section of shaft gives each impact increasing leverage. */
 @keyframes iron-take-weight {
-  0%, 20% { transform: rotate(-1.5deg); }
-  25% { transform: rotate(-.45deg); }
-  33% { transform: rotate(-.95deg); }
-  39% { transform: rotate(.65deg); }
-  48% { transform: rotate(-.65deg); }
-  55% { transform: rotate(-.6deg); }
-  60% { transform: rotate(2.25deg); }
-  69% { transform: rotate(-.65deg); }
-  76% { transform: rotate(.8deg); }
-  87% { transform: rotate(-.22deg); }
+  0%, 20% { transform: rotate(-1.7deg); }
+  25% { transform: rotate(-.5deg); }
+  33% { transform: rotate(-1.05deg); }
+  39% { transform: rotate(.8deg); }
+  48% { transform: rotate(-.75deg); }
+  55% { transform: rotate(-.65deg); }
+  60% { transform: rotate(2.65deg); }
+  69% { transform: rotate(-.8deg); }
+  76% { transform: rotate(.95deg); }
+  87% { transform: rotate(-.26deg); }
   100% { transform: rotate(0); }
 }
 
 @keyframes iron-lock {
-  0%, 18% { transform: rotate(-52deg); }
-  68% { transform: rotate(4deg); }
-  86% { transform: rotate(-1.5deg); }
+  0%, 18% { transform: rotate(-56deg); }
+  66% { transform: rotate(5deg); }
+  85% { transform: rotate(-2deg); }
   100% { transform: rotate(0); }
+}
+
+@keyframes iron-shockwave {
+  0% {
+    opacity: .85;
+    transform: scale(.58);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.42);
+  }
+}
+
+@keyframes iron-spark-burst {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(.5);
+  }
+  20% {
+    opacity: .95;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--sx, 12px), var(--sy, -18px)) scale(1.15);
+  }
+}
+
+@keyframes iron-collar-flash {
+  0% {
+    opacity: .95;
+    transform: scale(.7);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.95);
+  }
+}
+
+@keyframes iron-sheen-sweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-110px);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(110px);
+  }
 }
