@@ -47,11 +47,24 @@ describe('Home dashboard', { timeout: 30_000 }, () => {
     expect((await db.preferences.get('default'))?.workoutsSinceLastBackup).toBe(3)
   })
 
+  it('renders the interactive Swole Chimp kinetic hero in Normal mode', async () => {
+    const { container } = showHome()
+    expect(await screen.findByRole('button', { name: /swole chimp/i }, { timeout: 12_000 })).toBeInTheDocument()
+    expect(container.querySelector('.apex-mascot-layer.home-hero-mascot-wrap [data-mascot="chimp"][data-pose="hero"]')).toBeInTheDocument()
+    expect(container.querySelector('.apex-canvas-back')).toBeInTheDocument()
+    expect(container.querySelector('.apex-canvas-front')).toBeInTheDocument()
+    expect(container.querySelector('.home-brand-sub')).toHaveTextContent('SWOLE CHIMP')
+    expect(container.querySelector('.home-brand [data-mascot="chimp"][data-pose="badge"]')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /unleash apex surge/i }))
+  })
+
   it('renders the interactive UF Swole Gator hero in Gator mode', async () => {
     await updatePreferences({ appIcon: 'swole_alligator' })
     const { container } = showHome()
     expect(await screen.findByRole('button', { name: /swole gator/i }, { timeout: 12_000 })).toBeInTheDocument()
-    expect(container.querySelector('.home-gator-hero-wrap [data-pose="hero"]')).toBeInTheDocument()
+    expect(container.querySelector('.apex-mascot-layer.home-hero-mascot-wrap [data-mascot="gator"][data-pose="hero"]')).toBeInTheDocument()
+    expect(container.querySelector('.home-brand-sub')).toHaveTextContent('THE SWAMP')
+    expect(container.querySelector('.home-brand [data-mascot="gator"][data-pose="badge"]')).toBeInTheDocument()
   })
 
   it('clamps Feb 29 leap-day prior-year volume to Feb 28 of the prior year', async () => {

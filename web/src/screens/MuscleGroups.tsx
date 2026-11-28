@@ -1,7 +1,7 @@
 import { useRef, useState, type CSSProperties } from 'react'
 import { LockKeyhole, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { SwoleGator, useIsGatorMode } from '../components/mascot'
+import { IronMascot, useIsGatorMode } from '../components/mascot'
 import { BottomSheet } from '../components/primitives'
 import { db } from '../db/database'
 import { addMuscle, renameMuscle, deleteMuscle } from '../db/repositories'
@@ -102,15 +102,13 @@ export default function MuscleGroups() {
       <button type="button" className="btn primary st-add" onClick={() => open({ kind: 'add' })}>
         <Plus size={17} aria-hidden="true" /> Add body part
       </button>
-      {gatorMode && (
-        <footer className="st-footer">
-          <SwoleGator pose="badge" size={28} interactive />
-          <span>Swamp muscle roster</span>
-          <span>
-            {groups.length} groups · {exercises.length} lifts
-          </span>
-        </footer>
-      )}
+      <footer className="st-footer">
+        <IronMascot pose="badge" size={28} interactive />
+        <span>{gatorMode ? 'Swamp muscle roster' : 'Iron muscle roster'}</span>
+        <span>
+          {groups.length} groups · {exercises.length} lifts
+        </span>
+      </footer>
       {edit && (
         <BottomSheet
           title={

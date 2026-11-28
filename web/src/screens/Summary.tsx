@@ -11,7 +11,7 @@ import { dateLabel, describeWorkout } from '../history/presentation'
 import { useHistoryData, type HistoryData } from '../history/sessionData'
 import { ShareActions } from '../history/ShareActions'
 import { AnimatedNumber } from '../components/primitives'
-import { SwoleGator } from '../components/mascot'
+import { IronMascot } from '../components/mascot'
 import { useIsGatorMode } from '../theme'
 import './history.css'
 import './summary-motion.css'
@@ -36,27 +36,12 @@ function FinishStamp({icon, celebrate}:{icon:Preferences['appIcon']; celebrate?:
         <i key={i} style={{'--bx': p.bx, '--by': p.by} as CSSProperties} />
       ))}
     </span>
-    {isGator ? (
-      <div className="finish-stamp finish-stamp--gator" aria-hidden="true">
-        <SwoleGator pose="stamp" size="100%" celebrate={celebrate} />
-      </div>
-    ) : (
-      <svg className="finish-stamp" viewBox="0 0 128 128" aria-hidden="true" focusable="false">
-        <g className="finish-stamp-register" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path d="M5 56v-4h10m98 24h10v-4M8 64h8m96 0h8"/>
-        </g>
-        <path className="finish-stamp-impact" fill="none" stroke="currentColor" d="m44 16 40 0 28 28v40L84 112H44L16 84V44z"/>
-        <g className="finish-stamp-die">
-          <path className="finish-stamp-rim" d="M45 19h38l26 26v38l-26 26H45L19 83V45Z"/>
-          <path className="finish-stamp-groove" d="M47 25h34l22 22v34l-22 22H47L25 81V47Z"/>
-          <path fill="none" stroke="currentColor" strokeWidth="2.5" d="m37 40 10-10h12m10 68h12l10-10"/>
-          <g transform="translate(15 15) scale(.76)">
-            <path fill="currentColor" d="m27 88 18-48h9L36 88z"/>
-            <path className="finish-stamp-monogram" d="m42 88 18-48h12L54 88zm19 0 18-48h12L77 76h25l-4 12z"/>
-          </g>
-        </g>
-      </svg>
-    )}
+    <div
+      className={`finish-stamp finish-stamp--crest ${isGator ? 'finish-stamp--gator' : 'finish-stamp--chimp'}`}
+      aria-hidden="true"
+    >
+      <IronMascot pose="stamp" brand={isGator ? 'gator' : 'chimp'} size="100%" celebrate={celebrate} />
+    </div>
   </div>
 }
 

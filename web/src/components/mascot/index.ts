@@ -1,4 +1,15 @@
-export { SwoleGator, useIsGatorMode, type GatorPose, type SwoleGatorProps } from './SwoleGator'
+export {
+  IronMascot,
+  SwoleChimp,
+  SwoleGator,
+  useIsGatorMode,
+  useMascotBrand,
+  type GatorPose,
+  type IronMascotProps,
+  type MascotBrand,
+  type MascotPose,
+  type SwoleGatorProps,
+} from './SwoleGator'
 
 /**
  * Lightweight synchronous Canvas 2D helper to draw the UF Swole Gator badge

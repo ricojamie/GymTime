@@ -1,9 +1,9 @@
 import { useEffect, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Sparkles, Trophy, X } from 'lucide-react'
+import { Sparkles, X } from 'lucide-react'
 import { db } from '../../db/database'
 import { defaultPreferences } from '../../db/types'
-import { SwoleGator } from '../mascot'
+import { IronMascot } from '../mascot'
 import './pr-celebration.css'
 
 export type PrCelebrationProps = {
@@ -133,21 +133,15 @@ export default function PrCelebration({ id, labels, exerciseName, isGator = fals
         <div className="pr-glare" aria-hidden="true" />
         <div className="pr-medallion-wrap" aria-hidden="true">
           <span className="pr-halo" />
-          {isGator ? (
-            <div className="pr-gator-mascot">
-              <SwoleGator pose="pr" celebrate size={76} />
-            </div>
-          ) : (
-            <span className="pr-medallion">
-              <Trophy size={28} />
-            </span>
-          )}
+          <div className={'pr-mascot' + (isGator ? ' pr-gator-mascot' : ' pr-chimp-mascot')}>
+            <IronMascot pose="pr" brand={isGator ? 'gator' : 'chimp'} celebrate size={76} />
+          </div>
         </div>
 
         <div className="pr-body">
           <div className="pr-kicker">
             <Sparkles size={13} aria-hidden="true" />
-            <span>{isGator ? 'CHOMP! NEW PR' : 'PR UNLOCKED'}</span>
+            <span>{isGator ? 'CHOMP! NEW PR' : 'BEAST MODE · NEW PR'}</span>
           </div>
           <strong className="pr-title">New personal record</strong>
           {exerciseName && <span className="pr-exercise">{exerciseName}</span>}

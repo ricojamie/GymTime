@@ -6,7 +6,7 @@ import { db } from '../db/database'
 import { deleteExercise, ensureWorkoutExercise, getActiveWorkout, groupWorkoutExercises, startWorkout, swapWorkoutExercise, toggleStar } from '../db/repositories'
 import type { Exercise, LogType } from '../db/types'
 import { BottomSheet } from '../components/primitives'
-import { SwoleGator, useIsGatorMode } from '../components/mascot'
+import { IronMascot } from '../components/mascot'
 import './library.css'
 
 export const typeLabels: Record<LogType, string> = {
@@ -33,7 +33,6 @@ function saveList(key: string, list: unknown[]) {
 export default function ExerciseSelect({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate()
   const location = useLocation()
-  const gatorMode = useIsGatorMode()
   const [params, setParams] = useSearchParams()
   const rawMode = params.get('mode')?.toLowerCase()
   const mode: Mode = rawMode === 'swap' || rawMode === 'build_superset' || rawMode === 'add_to_superset' ? rawMode : 'browse'
@@ -219,7 +218,7 @@ export default function ExerciseSelect({ embedded = false }: { embedded?: boolea
     {!embedded && <header className="lib-page-head" data-session-start={params.get('workoutMode') === 'true' && !explicitWorkout || undefined}>
       <button type="button" className="icon-button" aria-label="Back" onClick={goBack}><ArrowLeft/></button>
       <h1>{heading}</h1>
-      {gatorMode && <SwoleGator pose="badge" size={32} label="" className="ml-auto shrink-0" />}
+      <IronMascot pose="badge" size={32} label="" className="ml-auto shrink-0" />
     </header>}
     <div className="lib-sticky-bar">
       <div className="lib-toolbar">
@@ -241,7 +240,7 @@ export default function ExerciseSelect({ embedded = false }: { embedded?: boolea
     {!embedded && mode === 'browse' && <button type="button" className="lib-superset-link" onClick={() => setMode('build_superset')}><Link2 size={16}/>Build superset<ChevronRight size={15}/></button>}
     {error && <div className="lib-error" role="alert">{error}<button type="button" aria-label="Dismiss message" onClick={() => setError('')}><X size={16}/></button></div>}
     {exercises && !results.length ? <div className="lib-empty surface p-6 stagger-in" style={{ '--stagger-i': 0 } as CSSProperties}>
-      {gatorMode ? <SwoleGator pose="spotter" size={72} interactive /> : <Search size={20} aria-hidden="true"/>}
+      <IronMascot pose="spotter" size={72} interactive />
       <h3>No matching exercises</h3>
       <button type="button" className="btn" onClick={create}>Create exercise</button>
     </div> :

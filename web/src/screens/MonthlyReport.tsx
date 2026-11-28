@@ -4,7 +4,7 @@ import { ArrowLeft, ChevronRight, Trophy } from 'lucide-react'
 import { calculateMonthlyReport } from '../domain/monthlyReport'
 import { formatWeight, weightLabel } from '../domain/units'
 import { AnimatedNumber } from '../components/primitives'
-import { SwoleGator, useIsGatorMode } from '../components/mascot/SwoleGator'
+import { IronMascot } from '../components/mascot'
 import ProgressSheet from '../components/logger/ProgressSheet'
 import { numberFormat, useInsightsSource, useReportClock } from './insightsData'
 import './insights.css'
@@ -12,7 +12,6 @@ import './insights.css'
 export default function MonthlyReport() {
   const source = useInsightsSource()
   const now = useReportClock()
-  const gatorMode = useIsGatorMode()
   const [recordId, setRecordId] = useState<number | null>(null)
   const report = useMemo(() => source && calculateMonthlyReport(source, now), [source, now])
   if (!source || !report) return <section className="screen il-page" aria-busy="true"><h1>Monthly report</h1></section>
@@ -29,7 +28,7 @@ export default function MonthlyReport() {
           <h2>{report.monthLabel}</h2>
           <p>{report.narrative}</p>
         </div>
-        {gatorMode && <SwoleGator pose="stamp" size={48} label="" />}
+        <IronMascot pose="stamp" size={48} label="" />
       </div>
       <div className="il-telemetry"><dl>
         <div><dt>Workouts</dt><dd><AnimatedNumber value={report.workoutCount}/></dd></div>
@@ -58,7 +57,7 @@ export default function MonthlyReport() {
       <section className="il-panel surface stagger-in" style={{ '--stagger-i': 4 } as CSSProperties}>
         <div className="il-panel-head">
           <h2>New personal records</h2>
-          {gatorMode && <SwoleGator pose="pr" size={32} label="" />}
+          <IronMascot pose="pr" size={34} label="" />
         </div>
         {report.newPRs.length ? report.newPRs.map((r, i) => <button className="il-record" key={r.exerciseId+'-'+i} onClick={() => setRecordId(r.exerciseId)}>
           <Trophy size={18} className="il-pr-mark"/><span><strong>{r.exerciseName}</strong><small>{weight(r.weight)} × {r.reps}</small></span><ChevronRight size={16}/>

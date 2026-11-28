@@ -2,7 +2,7 @@
 @import "tailwindcss/utilities.css" layer(utilities);
 @import './tokens.css';
 * {box-sizing:border-box}
-html {background:var(--bg-canvas);color:var(--ink-primary);font-family:var(--font-sans);font-size:15px;line-height:1.4;font-variant-numeric:tabular-nums;-webkit-text-size-adjust:100%;text-size-adjust:100%;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
+html {background:var(--bg-canvas);color:var(--ink-primary);font-family:var(--font-sans);font-size:15px;line-height:1.4;font-variant-numeric:tabular-nums;-webkit-text-size-adjust:100%;text-size-adjust:100%;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--accent) 36%,var(--border-strong)) transparent}
 :root[data-brand=gator] {scrollbar-color:rgba(250,70,22,.48) rgba(4,10,28,.45)}
 :root[data-brand=gator][data-theme=light] {scrollbar-color:rgba(0,33,165,.38) rgba(239,244,251,.65)}
 body {margin:0;min-width:280px;min-height:100dvh;overscroll-behavior-x:none;background-image:var(--brand-pattern);background-size:14px 14px}
@@ -33,11 +33,16 @@ img {max-width:100%}
   position:relative;background:var(--bg-surface);border:1px solid var(--border-hairline);
   border-radius:var(--radius-surface);box-shadow:var(--bevel-inset),var(--shadow-surface);
 }
+.surface::before,
+.app-tabs::before,
+.session-dock::before {
+  content:"";position:absolute;top:0;left:14px;right:14px;height:2px;border-radius:0 0 2px 2px;
+  background:var(--brand-stripe);opacity:.72;pointer-events:none;
+}
 :root[data-brand=gator] .surface::before,
 :root[data-brand=gator] .app-tabs::before,
 :root[data-brand=gator] .session-dock::before {
-  content:"";position:absolute;top:0;left:14px;right:14px;height:2px;border-radius:0 0 2px 2px;
-  background:var(--brand-stripe);opacity:.88;pointer-events:none;
+  opacity:.88;
 }
 .eyebrow {font:650 11px/1.2 var(--font-sans);letter-spacing:.11em;text-transform:uppercase;color:var(--ink-secondary)}
 .row {display:flex;align-items:center;gap:12px}

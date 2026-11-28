@@ -1,9 +1,9 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Archive, ArrowLeft, ArrowRight, CalendarDays, ChevronRight, FolderPlus, MoreHorizontal, Play, Repeat2, Search, Star, Trash2, Trophy, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CalendarDays, ChevronRight, FolderPlus, MoreHorizontal, Play, Repeat2, Search, Star, Trash2, Trophy, X } from 'lucide-react'
 import { BottomSheet } from '../components/primitives'
-import { SwoleGator, useIsGatorMode } from '../components/mascot'
+import { IronMascot } from '../components/mascot'
 import { db } from '../db/database'
 import { deleteWorkout, reopenWorkout, repeatWorkout } from '../db/repositories'
 import type { WeightUnit, Workout, WorkoutSet } from '../db/types'
@@ -16,7 +16,6 @@ import './history.css'
 
 export default function History() {
   const data = useHistoryData()
-  const gatorMode = useIsGatorMode()
   const [query, setQuery] = useState('')
   const [params, setParams] = useSearchParams()
   const selected = Number(params.get('workoutId') || params.get('workout'))
@@ -48,7 +47,7 @@ export default function History() {
       <label className="his-search"><Search size={19} aria-hidden="true"/><input aria-label="Search history" type="search" placeholder="Search workouts" value={query} onChange={e => setQuery(e.target.value)}/>{query && <button type="button" className="icon-button his-search-clear" aria-label="Clear search" onClick={() => setQuery('')}><X size={17}/></button>}</label>
     </div>
     {!data ? <p role="status">Loading history…</p> : !filtered.length ? <section key={`empty::${filterKey}`} className="his-empty surface his-card-enter">
-      {gatorMode && !rows.length ? <SwoleGator pose="spotter" size={96} interactive /> : (rows.length ? <Search size={28}/> : <Archive size={28}/>)}
+      {!rows.length ? <IronMascot pose="spotter" size={96} interactive /> : <Search size={28}/>}
       <h2>{rows.length ? 'No matching workouts' : 'No completed workouts yet'}</h2>
       {rows.length ? <button className="btn" onClick={() => setQuery('')}>Clear search</button> : <Link className="btn primary" to={data.workouts.some(w => w.endTime === null) ? '/workout/active' : '/exercises/select?workoutMode=true'}>{data.workouts.some(w => w.endTime === null) ? 'Resume workout' : 'Start workout'}<ArrowRight size={16}/></Link>}
     </section> : Array.from(months, ([month, list], monthIndex) => <section key={`${filterKey}::${month}`} className="his-month">

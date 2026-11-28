@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Upload } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { SwoleGator } from '../components/mascot'
+import { IronMascot } from '../components/mascot'
 import { useIsGatorMode, useSettings } from '../theme'
 import {
   accents,
@@ -177,8 +177,8 @@ export default function ThemeSettings() {
       ? 'UF Swamp Dark'
       : 'UF Stadium Light'
     : prefs.darkMode
-      ? 'Obsidian'
-      : 'Ceramic'
+      ? 'Swole Chimp Dark'
+      : 'Swole Chimp Light'
 
   const fontLabel =
     prefs.themeFont === 'custom'
@@ -201,18 +201,7 @@ export default function ThemeSettings() {
             </div>
           </div>
           <div className="st-theme-preview-badge">
-            {gatorMode ? (
-              <SwoleGator pose="badge" size={48} interactive />
-            ) : (
-              <img
-                src="/icons/classic-192.png"
-                alt=""
-                aria-hidden="true"
-                width={48}
-                height={48}
-                className="st-theme-preview-classic-icon"
-              />
-            )}
+            <IronMascot pose="badge" size={48} interactive />
           </div>
         </div>
         <span className="st-meta">

@@ -1,17 +1,15 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Bell, Check, Minus, Play, Plus, RotateCcw, SkipForward, Timer, Vibrate } from 'lucide-react'
+import { Bell, Check, Minus, Play, Plus, RotateCcw, SkipForward, Vibrate } from 'lucide-react'
 import { db, defaultPreferences } from '../../db/database'
 import { updatePreferences } from '../../db/repositories'
 import { adjustRestTimer, formatRestTime, startRestTimer, stopRestTimer, useRestTimerRemaining } from '../../store/restTimer'
-import { useIsGatorMode } from '../../theme'
-import { SwoleGator } from '../mascot'
+import { IronMascot } from '../mascot'
 import { BottomSheet } from '../primitives'
 import './timer.css'
 
 export default function RestTimerBar({ defaultSeconds }: { defaultSeconds: number }) {
   const remaining = useRestTimerRemaining()
-  const isGator = useIsGatorMode()
   const [open, setOpen] = useState(false)
   const [override, setOverride] = useState<{ base: number; value: number } | null>(null)
   const [error, setError] = useState('')
@@ -132,11 +130,7 @@ export default function RestTimerBar({ defaultSeconds }: { defaultSeconds: numbe
       </span>
       <button type="button" className="rest-readout" aria-label={'Rest timer settings, ' + time} onClick={() => setOpen(true)}>
         <span className="rest-icon" aria-hidden="true">
-          {isGator
-            ? <SwoleGator pose="spotter" size={26} celebrate={completedFlash} />
-            : completedFlash
-              ? <Check size={19} />
-              : <Timer size={19} />}
+          <IronMascot pose="spotter" size={28} celebrate={completedFlash} label="" />
         </span>
         <span>
           <span className="rest-label">{completedFlash ? 'Rest complete' : 'Rest timer'}</span>

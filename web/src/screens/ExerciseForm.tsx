@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ArrowLeft, Check, ChevronDown, ChevronRight, PencilRuler } from 'lucide-react'
+import { ArrowLeft, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { useBlocker, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { db } from '../db/database'
 import { saveExercise } from '../db/repositories'
 import { DISTANCE_UNITS, LOG_TYPES, type DistanceUnit, type Exercise, type LogType } from '../db/types'
 import { BottomSheet } from '../components/primitives'
-import { SwoleGator, useIsGatorMode } from '../components/mascot'
+import { IronMascot } from '../components/mascot'
 import { typeLabels } from './ExerciseSelect'
 import './library.css'
 
@@ -35,7 +35,6 @@ export default function ExerciseForm() {
   const { id } = useParams()
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const gatorMode = useIsGatorMode()
   const parsedId = id !== undefined ? Number(id) : null
   const validId = parsedId !== null && Number.isSafeInteger(parsedId) && parsedId > 0 ? parsedId : null
   const result = useLiveQuery(async () => ({
@@ -47,17 +46,17 @@ export default function ExerciseForm() {
   if (!result) return <main className="screen" aria-busy="true">Loading exercise…</main>
   if (id && !result.exercise) return <main className="screen lib-page">
     <section className="lib-empty surface p-6 stagger-in" style={{ '--stagger-i': 0 } as CSSProperties}>
-      {gatorMode && <SwoleGator pose="spotter" size={76} interactive />}
+      <IronMascot pose="spotter" size={76} interactive />
       <h1>Exercise unavailable</h1>
       <button type="button" className="btn" onClick={() => navigate('/library')}>Back to library</button>
     </section>
   </main>
   return <Editor key={id ?? 'create'} exercise={result.exercise} exercises={result.exercises} muscles={result.muscles.map(m => m.name)}
-    kg={result.prefs?.preferredWeightUnit === 'kg'} gatorMode={gatorMode} returnTo={safeReturn(params.get('returnTo'))}
+    kg={result.prefs?.preferredWeightUnit === 'kg'} returnTo={safeReturn(params.get('returnTo'))}
     initialName={params.get('name')?.trim() ?? ''} initialMuscle={params.get('muscle') ?? ''}/>
 }
-function Editor({ exercise, exercises, muscles, kg, gatorMode, returnTo, initialName, initialMuscle }: {
-  exercise?: Exercise; exercises: Exercise[]; muscles: string[]; kg: boolean; gatorMode: boolean; returnTo: string; initialName: string; initialMuscle: string
+function Editor({ exercise, exercises, muscles, kg, returnTo, initialName, initialMuscle }: {
+  exercise?: Exercise; exercises: Exercise[]; muscles: string[]; kg: boolean; returnTo: string; initialName: string; initialMuscle: string
 }) {
   const navigate = useNavigate()
   const [initial] = useState(() => makeDraft(exercise, initialName, muscles.includes(initialMuscle) ? initialMuscle : ''))
@@ -114,7 +113,7 @@ function Editor({ exercise, exercises, muscles, kg, gatorMode, returnTo, initial
     <header className="lib-page-head lib-sticky-head">
       <button type="button" className="icon-button" aria-label={returnTo.startsWith('/workout/builder') ? 'Back to builder' : 'Back to exercises'} onClick={() => navigate(returnTo, { replace: true })}><ArrowLeft/></button>
       <h1>{exercise ? 'Edit exercise' : 'New exercise'}</h1>
-      {gatorMode && <SwoleGator pose="badge" size={32} label="" className="ml-auto shrink-0" />}
+      <IronMascot pose="badge" size={32} label="" className="ml-auto shrink-0" />
     </header>
     <form className="lib-form stagger-in" style={{ '--stagger-i': 0 } as CSSProperties} noValidate onSubmit={save}>
       <label className="lib-field"><span>Exercise name</span><input ref={nameRef} required value={draft.name} autoComplete="off" onChange={e => update('name', e.target.value)}/></label>
@@ -135,7 +134,7 @@ function Editor({ exercise, exercises, muscles, kg, gatorMode, returnTo, initial
           <span className="eyebrow">Example set</span>
           <output key={previewTick} className={previewTick > 0 ? 'lib-example-value is-popping' : 'lib-example-value'}>{example(draft, kg)}</output>
         </div>
-        {gatorMode ? <SwoleGator pose="spotter" size={44} label="" /> : <PencilRuler aria-hidden="true" size={25}/>}
+        <IronMascot pose="spotter" size={44} label="" />
       </div>
       <section className="lib-extra"><button type="button" aria-expanded={setup} className="lib-sheet-row" onClick={() => setSetup(!setup)}>Rest, targets & notes<ChevronDown size={17}/></button>
         {setup && <div className="lib-extra-fields lib-reveal-in"><label className="lib-field"><span>Rest time (seconds)</span><input type="number" inputMode="numeric" min="1" step="1" value={draft.rest} onChange={e => update('rest', e.target.value)}/></label>

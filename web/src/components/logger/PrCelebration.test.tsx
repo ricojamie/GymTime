@@ -15,7 +15,7 @@ afterEach(() => {
 })
 
 describe('PrCelebration', () => {
-  it('renders classic PR burst with 3 shockwaves, 40 particles, and dismiss callback', () => {
+  it('renders Swole Chimp PR burst with 3 shockwaves, 40 particles, and dismiss callback', () => {
     const onDismiss = vi.fn()
     const { container } = render(
       <PrCelebration
@@ -27,6 +27,11 @@ describe('PrCelebration', () => {
     )
 
     expect(container.querySelector('.pr-overlay')).not.toHaveClass('is-gator')
+    const chimpMascot = container.querySelector('[data-mascot="chimp"][data-pose="pr"]')
+    expect(chimpMascot).toBeInTheDocument()
+    expect(chimpMascot).toHaveClass('gator-mascot--celebrate')
+    expect(chimpMascot?.querySelector('img')).toHaveAttribute('src', '/mascot/chimp-pr.webp')
+    expect(screen.getByText('BEAST MODE · NEW PR')).toBeInTheDocument()
     expect(container.querySelector('.pr-edge-flash')).toBeInTheDocument()
     expect(container.querySelectorAll('.pr-shockwave')).toHaveLength(3)
     expect(container.querySelectorAll('.pr-particle')).toHaveLength(40)
@@ -50,8 +55,13 @@ describe('PrCelebration', () => {
     )
 
     expect(container.querySelector('.pr-overlay')).toHaveClass('is-gator')
-    const gatorSvg = container.querySelector('[data-pose="pr"]')
-    expect(gatorSvg).toBeInTheDocument()
+    const gatorMascot = container.querySelector('[data-mascot="gator"][data-pose="pr"]')
+    expect(gatorMascot).toBeInTheDocument()
+    expect(gatorMascot).toHaveClass('gator-mascot--celebrate')
+    expect(gatorMascot?.querySelector('img')).toHaveAttribute('src', '/mascot/gator-pr.webp')
+    expect(screen.getByText('CHOMP! NEW PR')).toBeInTheDocument()
+    expect(container.querySelectorAll('.pr-shockwave')).toHaveLength(3)
+    expect(container.querySelectorAll('.pr-particle')).toHaveLength(40)
     expect(screen.getByText('Back Squat')).toBeInTheDocument()
     expect(screen.getByText('New rep max')).toBeInTheDocument()
   })

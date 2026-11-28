@@ -17,7 +17,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
-import { SwoleGator, useIsGatorMode } from '../components/mascot'
+import { IronMascot } from '../components/mascot'
 import { db } from '../db/database'
 import { deleteRoutine, setActiveRoutine } from '../db/repositories'
 import { BottomSheet } from '../components/primitives'
@@ -112,7 +112,6 @@ type Menu = { kind: 'routine' | 'delete-routine' } | { kind: 'day' | 'delete-day
 export default function RoutineDetail() {
   const validId = parsePositiveId(useParams().id)
   const navigate = useNavigate()
-  const gatorMode = useIsGatorMode()
   const [tab, setTab] = useState<'days' | 'stats'>('days')
   const [tabFly, setTabFly] = useState<'none' | 'from-right' | 'from-left'>('none')
   const [expanded, setExpanded] = useState<number[]>([])
@@ -285,11 +284,7 @@ export default function RoutineDetail() {
             </div>
             {!days.length ? (
               <div className="surface rt-empty stagger-in" style={{ '--stagger-i': 0 } as CSSProperties}>
-                {gatorMode ? (
-                  <SwoleGator pose="spotter" size={88} interactive />
-                ) : (
-                  <Layers3 size={28} aria-hidden="true" />
-                )}
+                <IronMascot pose="spotter" size={88} interactive />
                 <p className="rt-muted">No workout days yet.</p>
               </div>
             ) : (

@@ -1,0 +1,228 @@
+/* =========================================================================
+   APEX KINETIC STAGE — Dual-Layer 3D Energy Forge + Centerpiece Mascot
+   ========================================================================= */
+
+.apex-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  isolation: isolate;
+  cursor: pointer;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.apex-canvas-back,
+.apex-canvas-front {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+.apex-canvas-back {
+  z-index: 1;
+}
+
+.apex-mascot-layer {
+  position: relative;
+  z-index: 2;
+  width: clamp(144px, 43vw, 174px);
+  height: clamp(144px, 43vw, 174px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  --tilt-x: 0deg;
+  --tilt-y: 0deg;
+  transform: perspective(820px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
+  transform-style: preserve-3d;
+  pointer-events: auto;
+}
+
+.apex-mascot-recoil {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center 68%;
+}
+
+.apex-canvas-front {
+  z-index: 3;
+}
+
+/* Brand-aware heroic rim lighting around the floating centerpiece mascot */
+.apex-mascot-layer .gator-mascot--brand-chimp .gator-mascot__img {
+  filter:
+    drop-shadow(0 12px 22px rgba(0, 0, 0, 0.64))
+    drop-shadow(0 0 18px color-mix(in srgb, var(--accent) 44%, transparent));
+}
+
+:root[data-theme="light"] .apex-mascot-layer .gator-mascot--brand-chimp .gator-mascot__img {
+  filter:
+    drop-shadow(0 10px 18px rgba(15, 23, 42, 0.24))
+    drop-shadow(0 0 14px color-mix(in srgb, var(--accent-ink) 32%, transparent));
+}
+
+.apex-mascot-layer .gator-mascot--brand-gator .gator-mascot__img {
+  filter:
+    drop-shadow(0 12px 22px rgba(2, 6, 23, 0.66))
+    drop-shadow(0 0 16px rgba(250, 70, 22, 0.36))
+    drop-shadow(0 0 26px rgba(37, 99, 235, 0.36));
+}
+
+:root[data-theme="light"] .apex-mascot-layer .gator-mascot--brand-gator .gator-mascot__img {
+  filter:
+    drop-shadow(0 10px 18px rgba(6, 20, 66, 0.28))
+    drop-shadow(0 0 14px rgba(250, 70, 22, 0.26))
+    drop-shadow(0 0 18px rgba(0, 33, 165, 0.22));
+}
+
+.apex-stage.is-overdrive .apex-mascot-layer .gator-mascot--brand-chimp .gator-mascot__img {
+  filter:
+    drop-shadow(0 14px 24px rgba(0, 0, 0, 0.68))
+    drop-shadow(0 0 24px color-mix(in srgb, var(--accent) 62%, transparent));
+}
+
+.apex-stage.is-overdrive .apex-mascot-layer .gator-mascot--brand-gator .gator-mascot__img {
+  filter:
+    drop-shadow(0 14px 24px rgba(2, 6, 23, 0.7))
+    drop-shadow(0 0 24px rgba(250, 70, 22, 0.52))
+    drop-shadow(0 0 32px rgba(37, 99, 235, 0.48));
+}
+
+/* Chimp burst ring & BEAST tag accent harmony inside the kinetic forge */
+.apex-mascot-layer .gator-mascot--brand-chimp .gator-burst-ring {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 14px color-mix(in srgb, var(--accent) 65%, transparent),
+    inset 0 0 8px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.apex-mascot-layer .gator-mascot--brand-chimp .gator-burst-ring--secondary {
+  border-color: color-mix(in srgb, var(--accent) 55%, #ffffff);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 48%, #ffffff);
+}
+
+.apex-mascot-layer .gator-mascot--brand-chimp .gator-chomp-tag {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 82%, #ffffff) 0%, var(--accent) 58%, color-mix(in srgb, var(--accent) 72%, #000000) 100%);
+  color: var(--on-accent);
+  border-color: color-mix(in srgb, var(--ink-primary) 26%, transparent);
+  box-shadow:
+    0 4px 16px color-mix(in srgb, var(--accent) 55%, transparent),
+    0 0 0 1px rgba(255, 255, 255, 0.32) inset;
+}
+
+.apex-mascot-layer .gator-mascot--brand-chimp.gator-mascot--interactive:focus-visible {
+  outline-color: var(--accent);
+}
+
+/* Responsive centerpiece mascot sizing inside the right kinetic arena */
+@media (min-width: 650px) {
+  .apex-mascot-layer {
+    width: clamp(188px, 23vw, 224px);
+    height: clamp(188px, 23vw, 224px);
+  }
+}
+
+@media (min-width: 940px) {
+  .apex-mascot-layer {
+    width: clamp(212px, 20vw, 248px);
+    height: clamp(212px, 20vw, 248px);
+  }
+}
+
+/* =========================================================================
+   GPU-COMPOSITED KEYFRAMES & FLAT MOTION-GATED RULES
+   ========================================================================= */
+
+@keyframes apex-mascot-enter {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 26px, 0) scale(0.84);
+  }
+  62% {
+    opacity: 1;
+    transform: translate3d(0, -6px, 0) scale(1.055);
+  }
+  84% {
+    opacity: 1;
+    transform: translate3d(0, 2px, 0) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes apex-mascot-surge-recoil {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1, 1) rotate(0deg);
+  }
+  18% {
+    transform: translate3d(0, 6px, 0) scale(1.11, 0.87) rotate(-2.4deg);
+  }
+  44% {
+    transform: translate3d(0, -9px, 0) scale(0.94, 1.13) rotate(2.2deg);
+  }
+  68% {
+    transform: translate3d(0, 2px, 0) scale(1.04, 0.96) rotate(-1deg);
+  }
+  85% {
+    transform: translate3d(0, -1.5px, 0) scale(0.99, 1.02) rotate(0.4deg);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1, 1) rotate(0deg);
+  }
+}
+
+@keyframes apex-stage-levitate {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -5px, 0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-motion="full"] .apex-mascot-layer {
+    transition: transform 180ms cubic-bezier(0.2, 0.85, 0.25, 1);
+    will-change: transform;
+  }
+
+  :root[data-motion="full"] .apex-mascot-recoil {
+    animation:
+      apex-mascot-enter 580ms var(--ease-spring, cubic-bezier(0.18, 1.32, 0.32, 1)) 70ms backwards,
+      apex-stage-levitate 4.2s ease-in-out 680ms infinite;
+    will-change: transform;
+  }
+
+  :root[data-motion="full"] .apex-mascot-layer.is-surging .apex-mascot-recoil {
+    animation: apex-mascot-surge-recoil 540ms cubic-bezier(0.2, 1.35, 0.32, 1) both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .apex-mascot-layer,
+  .apex-mascot-recoil {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+:root[data-motion="reduced"] .apex-mascot-layer,
+:root[data-motion="reduced"] .apex-mascot-recoil {
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
+}

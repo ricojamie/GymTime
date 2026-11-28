@@ -7,7 +7,7 @@ import { finishWorkout, getActiveWorkout, skipWorkoutExercise } from '../db/repo
 import { normalizeMuscleName } from '../db/types'
 import type { WorkoutExerciseInstance, WorkoutSet } from '../db/types'
 import { AnimatedNumber, BottomSheet, CalibrationBar } from '../components/primitives'
-import { SwoleGator, useIsGatorMode } from '../components/mascot'
+import { IronMascot } from '../components/mascot'
 import { stopRestTimer } from '../store/restTimer'
 import './workout.css'
 
@@ -75,7 +75,6 @@ function SessionClock({ start }: { start: number }) {
 
 export default function Workout() {
   const session = useLiveQuery(readSession, [])
-  const gatorMode = useIsGatorMode()
   const navigate = useNavigate()
   const [search, setSearch] = useSearchParams()
   const [finish, setFinish] = useState(false)
@@ -97,10 +96,10 @@ export default function Workout() {
     <header className="wk-heading">
       <button className="icon-button" aria-label="Back to home" onClick={() => navigate('/')}><ArrowLeft /></button>
       <h1>Workout</h1>
-      {gatorMode && <SwoleGator pose="badge" size={32} label="" className="wk-head-gator" />}
+      <IronMascot pose="badge" size={32} label="" className="wk-head-gator" />
     </header>
     <section className="wk-empty-card surface stagger-in">
-      {gatorMode && <SwoleGator pose="spotter" size={88} interactive />}
+      <IronMascot pose="spotter" size={88} interactive />
       <p className="wk-empty">No active workout</p>
       <button className="btn primary" onClick={() => navigate('/exercises/select?workoutMode=true')}>Start workout<ArrowRight size={18} /></button>
     </section>
@@ -155,7 +154,7 @@ export default function Workout() {
         <span className="wk-led wk-head-led" aria-hidden="true" />
         <h1>{name}</h1>
       </div>
-      {gatorMode && <SwoleGator pose="badge" size={32} label="" className="wk-head-gator" />}
+      <IronMascot pose="badge" size={32} label="" className="wk-head-gator" />
     </header>
     <div className="wk-overview-grid">
       <section className="wk-readout surface stagger-in" style={{ '--stagger-i': 0 } as CSSProperties} aria-label="Session metrics">
@@ -180,7 +179,7 @@ export default function Workout() {
         <section aria-labelledby="wk-plan-title">
           <div className="wk-section-title"><h2 id="wk-plan-title">{active.routineNameSnapshot || 'Session exercises'}</h2><span>{rows.length}</span></div>
           {rows.length === 0 && <div className="wk-order-empty">
-            {gatorMode && <SwoleGator pose="spotter" size={44} label="" />}
+            <IronMascot pose="spotter" size={44} label="" />
             <p className="wk-empty">No exercises added</p>
           </div>}
           <ol className="wk-timeline">
@@ -214,7 +213,7 @@ export default function Workout() {
     {dialogOpen && <BottomSheet title={finish ? 'Finish workout?' : editing?.exercise.name || 'Exercise'} onClose={closeDialog}>
       <div className="wk-dialog-body">
         {finish ? <>
-          {gatorMode && <div className="wk-finish-gator"><SwoleGator pose="stamp" size={64} label="" /></div>}
+          <div className="wk-finish-gator"><IronMascot pose="stamp" size={68} label="" /></div>
           <p>{totals.working} working {totals.working === 1 ? 'set' : 'sets'} · {totals.exercised} {totals.exercised === 1 ? 'exercise' : 'exercises'}</p>
           <button className="btn primary" disabled={busy} onClick={() => commit(true)}>Finish workout</button>
         </> : editing?.instance && <>

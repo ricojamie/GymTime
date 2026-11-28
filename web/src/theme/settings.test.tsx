@@ -142,10 +142,49 @@ it('shows Swole Gator badge in ThemeSettings preview and locks classic accents w
     </MemoryRouter>,
   )
 
-  await waitFor(() => expect(container.querySelector('[data-pose="badge"]')).toBeInTheDocument())
+  await waitFor(() =>
+    expect(
+      container.querySelector('[data-mascot="gator"][data-pose="badge"]'),
+    ).toBeInTheDocument(),
+  )
   const customBtn = screen.getByRole('button', { name: /custom color/i })
   expect(customBtn).toBeDisabled()
   const settingsLink = screen.getByRole('link', { name: /switch back to classic in settings/i })
   expect(settingsLink).toHaveAttribute('href', '/settings')
 })
+
+it('shows Swole Chimp badge in ThemeSettings normal mode and both Swole Chimp and Swole Gator options in Settings', async () => {
+  const { default: ThemeSettings } = await import('../screens/ThemeSettings')
+  await db.preferences.put({ ...defaultPreferences, appIcon: 'classic' })
+  const themeView = render(
+    <MemoryRouter>
+      <ThemeSettings />
+    </MemoryRouter>,
+  )
+
+  await waitFor(() =>
+    expect(
+      themeView.container.querySelector('[data-mascot="chimp"][data-pose="badge"]'),
+    ).toBeInTheDocument(),
+  )
+  expect(screen.getByText(/Swole Chimp Dark/i)).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /custom color/i })).not.toBeDisabled()
+  themeView.unmount()
+
+  const settingsView = render(
+    <MemoryRouter>
+      <Settings />
+    </MemoryRouter>,
+  )
+  const chimpOption = screen.getByRole('button', { name: /Swole Chimp/i })
+  const gatorOption = screen.getByRole('button', { name: /Swole Gator/i })
+  expect(chimpOption).toBeInTheDocument()
+  expect(chimpOption).toHaveTextContent(/Classic · Custom accents/i)
+  expect(gatorOption).toBeInTheDocument()
+  expect(gatorOption).toHaveTextContent(/UF Blue & Orange/i)
+  expect(chimpOption.querySelector('[data-mascot="chimp"][data-pose="badge"]')).toBeInTheDocument()
+  expect(gatorOption.querySelector('[data-mascot="gator"][data-pose="badge"]')).toBeInTheDocument()
+  expect(settingsView.container.querySelector('.st-brand-pill')).toHaveTextContent('Swole Chimp')
+})
+
 

@@ -5,7 +5,7 @@ import { calculateTrainingInsights } from '../domain/trainingInsights'
 import { formatWeight, weightLabel } from '../domain/units'
 import type { WeightUnit } from '../db/types'
 import { AnimatedNumber, BottomSheet } from '../components/primitives'
-import { SwoleGator, useIsGatorMode } from '../components/mascot/SwoleGator'
+import { IronMascot } from '../components/mascot'
 import ProgressSheet from '../components/logger/ProgressSheet'
 import InsightLineChart from '../components/charts/InsightLineChart'
 import WeeklyRhythmBars from '../components/charts/WeeklyRhythmBars'
@@ -64,7 +64,6 @@ function Guide({ data, close }: { data: Dashboard; close: () => void }) {
 export default function Insights() {
   const source = useInsightsSource()
   const now = useReportClock()
-  const gatorMode = useIsGatorMode()
   const [days, setDays] = useState<28|84>(28)
   const [liftId, setLiftId] = useState<number | null>(null)
   const [evidence, setEvidence] = useState<Evidence | null>(null)
@@ -131,7 +130,7 @@ export default function Insights() {
         <section className="il-panel surface stagger-in" style={{ '--stagger-i': 5 } as CSSProperties}>
           <div className="il-panel-head">
             <h2>Recent records</h2>
-            {gatorMode && <SwoleGator pose="pr" size={34} label="" />}
+            <IronMascot pose="pr" size={36} label="" />
           </div>
           {recentRecords.length ? recentRecords.slice(0,6).map((r, idx) => <button key={`${days}-${r.exerciseId}-${r.set.id}-${r.metric.label}`} className="il-record il-record-enter" style={{ '--stagger-i': Math.min(idx, 10) } as CSSProperties} onClick={() => showExercise(r.exerciseId,true)}>
             <span className={r.kind === 'PERSONAL_RECORD' ? 'il-pr-mark' : ''}><Trophy size={18}/></span>

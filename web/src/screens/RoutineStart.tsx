@@ -2,7 +2,7 @@ import { useState, type CSSProperties } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ArrowLeft, ArrowRight, Layers3, Link2, Play } from 'lucide-react'
-import { SwoleGator, useIsGatorMode } from '../components/mascot'
+import { IronMascot } from '../components/mascot'
 import { db } from '../db/database'
 import { startWorkout } from '../db/repositories'
 import { planBlocks, planLabel } from '../routines/mutations'
@@ -22,7 +22,6 @@ export default function RoutineStart() {
   const validRequestedId = hasRequested ? parsePositiveId(requestedRaw) : null
   const invalidParams = validId === null || (hasRequested && validRequestedId === null)
   const navigate = useNavigate()
-  const gatorMode = useIsGatorMode()
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -98,7 +97,7 @@ export default function RoutineStart() {
             </span>
             <h1>{day.name}</h1>
           </div>
-          {gatorMode && <SwoleGator pose="spotter" size={76} interactive className="rt-start-gator" />}
+          <IronMascot pose="spotter" size={76} interactive className="rt-start-gator" />
         </div>
       </header>
       <dl className="surface rt-stat-grid stagger-in" style={{ '--stagger-i': 0 } as CSSProperties}>

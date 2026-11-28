@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check } from 'lucide-react'
-import { SwoleGator } from '../components/mascot'
-import { chooseIcon, iconUrls, useIsGatorMode, useSettings } from '../theme'
+import { IronMascot, SwoleChimp, SwoleGator } from '../components/mascot'
+import { chooseIcon, useIsGatorMode, useSettings } from '../theme'
 import {
   Group,
   Segments,
@@ -22,8 +22,8 @@ const trainOptions = [
 ] as const
 
 const appIcons = [
-  ['classic', 'Classic', 'Obsidian & custom accent'],
-  ['swole_alligator', 'Swole Gator', 'Morphs into UF Gators theme & mascot'],
+  ['classic', 'Swole Chimp', 'Classic · Custom accents'],
+  ['swole_alligator', 'Swole Gator', 'UF Blue & Orange'],
 ] as const
 
 function isStandaloneIOS() {
@@ -72,7 +72,7 @@ export default function Settings() {
       <SettingsHeader
         title="Settings"
         back="/"
-        badge={gatorMode ? <span className="st-brand-pill">UF Gator</span> : undefined}
+        badge={<span className="st-brand-pill">{gatorMode ? 'UF Gator' : 'Swole Chimp'}</span>}
       />
       {error && (
         <p className="st-alert" role="alert">
@@ -142,9 +142,9 @@ export default function Settings() {
               >
                 <span className="st-icon-preview" aria-hidden="true">
                   {key === 'swole_alligator' ? (
-                    <SwoleGator pose="badge" size={38} label="" />
+                    <SwoleGator pose="badge" size={40} label="" />
                   ) : (
-                    <img width={38} height={38} src={iconUrls(key).touch} alt="" />
+                    <SwoleChimp pose="badge" size={40} label="" />
                   )}
                 </span>
                 <span className="st-icon-copy">
@@ -210,11 +210,7 @@ export default function Settings() {
       <BackupSettings prefs={prefs} />
 
       <footer className="st-footer">
-        {gatorMode ? (
-          <SwoleGator pose="badge" size={28} label="" />
-        ) : (
-          <img width={28} height={28} alt="" src={iconUrls(prefs.appIcon).stamp} />
-        )}
+        <IronMascot pose="badge" size={28} label="" />
         <span>IronLog</span>
         <span>1.0.0</span>
       </footer>

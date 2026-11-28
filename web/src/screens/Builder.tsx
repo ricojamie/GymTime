@@ -5,7 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { db } from '../db/database'
 import { getActiveWorkout, startWorkout } from '../db/repositories'
 import { useAdjacentReorder } from '../components/useAdjacentReorder'
-import { SwoleGator, useIsGatorMode } from '../components/mascot'
+import { IronMascot } from '../components/mascot'
 import './workout.css'
 
 type Draft = { ids: number[]; query: string; muscle: string }
@@ -26,7 +26,6 @@ function readDraft(): Draft {
 
 export default function Builder() {
   const navigate = useNavigate()
-  const gatorMode = useIsGatorMode()
   const [params, setParams] = useSearchParams()
   const [draft, setDraft] = useState(readDraft)
   const [filterBurst, setFilterBurst] = useState(0)
@@ -110,7 +109,7 @@ export default function Builder() {
       <header className="wk-heading">
         <button className="icon-button" aria-label="Back to home" onClick={() => navigate('/')}><ArrowLeft /></button>
         <h1>Plan a workout</h1>
-        {gatorMode && <SwoleGator pose="badge" size={32} label="" className="wk-head-gator" />}
+        <IronMascot pose="badge" size={32} label="" className="wk-head-gator" />
       </header>
       <div className="wk-builder-grid">
         <section className="wk-order stagger-in" style={{ '--stagger-i': 0 } as CSSProperties} aria-labelledby="wk-order-title">
@@ -120,7 +119,7 @@ export default function Builder() {
           </div>
           {selected.length === 0
             ? <div className="wk-order-empty">
-                {gatorMode && <SwoleGator pose="spotter" size={44} label="" />}
+                <IronMascot pose="spotter" size={44} label="" />
                 <p className="wk-empty">No exercises selected</p>
               </div>
             : <ol className="wk-strip">
@@ -164,7 +163,7 @@ export default function Builder() {
               </div>
             })}
             {exercises && !visible.length && <div className="wk-order-empty">
-              {gatorMode && <SwoleGator pose="spotter" size={50} label="" />}
+              <IronMascot pose="spotter" size={50} label="" />
               <p className="wk-empty">No matching exercises</p>
             </div>}
             <button className="wk-create" onClick={createExercise}><Plus size={18} /> Create exercise</button>

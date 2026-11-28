@@ -2,7 +2,7 @@ import { useState, type CSSProperties } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ArrowLeft, ArrowUpRight, ChevronRight, Layers3, Plus } from 'lucide-react'
-import { SwoleGator, useIsGatorMode } from '../components/mascot'
+import { IronMascot } from '../components/mascot'
 import { db } from '../db/database'
 import type { Routine } from '../db/types'
 import { createRoutine, renameRoutine } from '../routines/mutations'
@@ -72,7 +72,6 @@ function RoutineNameForm({ routine }: { routine?: Routine }) {
 export default function Routines({ embedded = false }: { embedded?: boolean }) {
   const { id } = useParams()
   const { pathname } = useLocation()
-  const gatorMode = useIsGatorMode()
   const isNew = !embedded && pathname.endsWith('/new')
   const isEdit = !embedded && pathname.endsWith('/edit')
   const editId = isEdit ? parsePositiveId(id) : null
@@ -129,7 +128,7 @@ export default function Routines({ embedded = false }: { embedded?: boolean }) {
     <div className="rt-head">
       <div className="rt-title-group">
         {embedded ? <h2>Routines</h2> : <h1>Routines</h1>}
-        {!embedded && gatorMode && <SwoleGator pose="badge" size={30} interactive />}
+        {!embedded && <IronMascot pose="badge" size={30} interactive />}
       </div>
       <Link
         className="btn rt-outline rt-new-btn"
@@ -160,11 +159,7 @@ export default function Routines({ embedded = false }: { embedded?: boolean }) {
         <p role="status">Loading routines…</p>
       ) : !data.routines.length ? (
         <div className="surface rt-empty stagger-in" style={{ '--stagger-i': 0 } as CSSProperties}>
-          {gatorMode ? (
-            <SwoleGator pose="hero" size={104} interactive />
-          ) : (
-            <Layers3 size={32} aria-hidden="true" />
-          )}
+          <IronMascot pose="hero" size={104} interactive />
           <h3>No routines yet</h3>
           <p className="rt-muted">Group workout days into a split so your next session is one tap away.</p>
           <Link className="btn primary rt-cta-start" to="/routines/new">

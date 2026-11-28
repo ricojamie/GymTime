@@ -17,7 +17,15 @@
 .wk-heading, .wk-section-title, .wk-cal-label, .wk-item-head, .wk-timer-label, .wk-selected, .wk-create, .wk-link { display: flex; align-items: center; }
 .wk-heading { gap: 8px; min-width: 0; }
 .wk-heading h1 { font: 400 28px/1.1 var(--font-display); letter-spacing: .02em; overflow-wrap: anywhere; min-width: 0; }
-.wk-head-gator { margin-left: auto; flex: none; }
+.wk-head-gator {
+  margin-left: auto;
+  flex: none;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 34%, transparent), 0 0 14px -2px color-mix(in srgb, var(--accent) 42%, transparent);
+}
+.wk-head-gator.gator-mascot--brand-chimp .gator-mascot__art {
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, .48)) drop-shadow(0 0 7px color-mix(in srgb, var(--accent) 40%, transparent));
+}
 
 .wk-head {
   position: sticky;
@@ -162,11 +170,66 @@
 .wk-grow small { margin-top: 4px; }
 .wk-link { gap: 4px; margin-top: 4px; color: var(--wk-quiet); font-size: 12px; }
 .wk-empty { padding: 16px 0; }
-.wk-empty-card { display: grid; justify-items: center; gap: 14px; padding: 32px 20px; text-align: center; }
-.wk-empty-card .wk-empty { padding: 0; font-size: 15px; }
+.wk-empty-card {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 16px;
+  padding: 36px 20px 32px;
+  text-align: center;
+}
+.wk-empty-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 62%);
+  pointer-events: none;
+}
+.wk-empty-card > * { position: relative; z-index: 1; }
+.wk-empty-card .wk-empty { padding: 0; font-size: 15px; font-weight: 500; }
 .wk-empty-card .btn { min-width: 200px; }
-.wk-order-empty { display: flex; align-items: center; gap: 12px; }
-.wk-finish-gator { display: grid; place-items: center; padding-bottom: 4px; }
+.wk-order-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 72px;
+  padding: 14px 16px;
+  border-radius: var(--radius-surface);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 6%, var(--bg-surface)), var(--bg-surface));
+  border: 1px dashed color-mix(in srgb, var(--accent) 26%, var(--border-hairline));
+  text-align: left;
+}
+.wk-order-empty .wk-empty { padding: 0; font-weight: 500; }
+.wk-catalog-list .wk-order-empty { margin: 8px 0; }
+.wk-finish-gator {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 6px 0 4px;
+  isolation: isolate;
+}
+.wk-finish-gator::before {
+  content: '';
+  position: absolute;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 26%, transparent) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+.wk-finish-gator > * { position: relative; z-index: 1; }
+.wk-finish-gator + p { text-align: center; color: var(--ink-secondary); font-size: 14px; }
+.wk-empty-card .gator-mascot--brand-chimp .gator-mascot__img,
+.wk-order-empty .gator-mascot--brand-chimp .gator-mascot__img {
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .52)) drop-shadow(0 0 11px color-mix(in srgb, var(--accent) 36%, transparent));
+}
+.wk-finish-gator .gator-mascot--brand-chimp .gator-mascot__img {
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, .56)) drop-shadow(0 0 12px color-mix(in srgb, var(--accent) 42%, transparent));
+}
 
 .wk-actions {
   position: sticky;
@@ -248,7 +311,45 @@
 .wk-selected { gap: 6px; padding: 4px 9px; border-radius: var(--radius-pill, 999px); color: var(--on-accent); background: var(--accent); font-size: 12px; font-weight: 700; box-shadow: 0 3px 10px -3px color-mix(in srgb, var(--accent) 65%, transparent); }
 .wk-choice-mark { display: inline-flex; align-items: center; justify-content: flex-end; color: var(--wk-quiet); }
 
+/* Normal Swole Chimp — light theme mascot framing & accent glow */
+:root[data-theme="light"]:not([data-brand="gator"]) .wk-head-gator {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-ink) 30%, transparent), 0 3px 10px -2px color-mix(in srgb, var(--accent-ink) 26%, transparent);
+}
+:root[data-theme="light"]:not([data-brand="gator"]) .wk-head-gator.gator-mascot--brand-chimp .gator-mascot__art {
+  filter: drop-shadow(0 2px 6px rgba(17, 19, 24, .22)) drop-shadow(0 0 6px color-mix(in srgb, var(--accent-ink) 26%, transparent));
+}
+:root[data-theme="light"]:not([data-brand="gator"]) .wk-empty-card::after {
+  background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--accent-ink) 12%, transparent), transparent 62%);
+}
+:root[data-theme="light"]:not([data-brand="gator"]) .wk-order-empty {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent-ink) 5%, var(--bg-surface)), var(--bg-surface));
+  border-color: color-mix(in srgb, var(--accent-ink) 24%, var(--border-strong));
+}
+:root[data-theme="light"]:not([data-brand="gator"]) .wk-finish-gator::before {
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent-ink) 18%, transparent) 0%, transparent 70%);
+}
+:root[data-theme="light"]:not([data-brand="gator"]) .wk-empty-card .gator-mascot--brand-chimp .gator-mascot__img,
+:root[data-theme="light"]:not([data-brand="gator"]) .wk-order-empty .gator-mascot--brand-chimp .gator-mascot__img {
+  filter: drop-shadow(0 5px 10px rgba(17, 19, 24, .2)) drop-shadow(0 0 8px color-mix(in srgb, var(--accent-ink) 22%, transparent));
+}
+:root[data-theme="light"]:not([data-brand="gator"]) .wk-finish-gator .gator-mascot--brand-chimp .gator-mascot__img {
+  filter: drop-shadow(0 6px 12px rgba(17, 19, 24, .22)) drop-shadow(0 0 9px color-mix(in srgb, var(--accent-ink) 26%, transparent));
+}
+
 /* UF Swole Gator mode — dark & light high-contrast accents */
+:root[data-brand="gator"] .wk-head-gator {
+  box-shadow: 0 0 0 1px rgba(250, 70, 22, .42), 0 0 14px -2px rgba(250, 70, 22, .46);
+}
+:root[data-brand="gator"] .wk-empty-card::after {
+  background: radial-gradient(circle at 50% 32%, rgba(250, 70, 22, .18), rgba(37, 99, 235, .1) 36%, transparent 64%);
+}
+:root[data-brand="gator"] .wk-order-empty {
+  background: linear-gradient(135deg, rgba(250, 70, 22, .08), rgba(0, 33, 165, .08));
+  border-color: rgba(250, 70, 22, .3);
+}
+:root[data-brand="gator"] .wk-finish-gator::before {
+  background: radial-gradient(circle, rgba(250, 70, 22, .3) 0%, rgba(0, 33, 165, .18) 46%, transparent 72%);
+}
 :root[data-brand="gator"] .wk-led { background: var(--gator-orange, #FA4616); }
 :root[data-brand="gator"] .wk-led::after { border-color: var(--gator-orange, #FA4616); }
 :root[data-brand="gator"] .wk-go { background: var(--gator-orange, #FA4616); color: #FFFFFF; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 6px 16px -6px rgba(250, 70, 22, .65); }
@@ -279,6 +380,19 @@
 }
 :root[data-brand="gator"] .wk-ticket.done { border-color: rgba(34, 197, 94, .45); }
 
+:root[data-brand="gator"][data-theme="light"] .wk-head-gator {
+  box-shadow: 0 0 0 1px rgba(0, 33, 165, .28), 0 3px 10px -2px rgba(0, 33, 165, .24);
+}
+:root[data-brand="gator"][data-theme="light"] .wk-empty-card::after {
+  background: radial-gradient(circle at 50% 32%, rgba(0, 33, 165, .1), rgba(250, 70, 22, .07) 38%, transparent 64%);
+}
+:root[data-brand="gator"][data-theme="light"] .wk-order-empty {
+  background: linear-gradient(135deg, rgba(0, 33, 165, .05), rgba(250, 70, 22, .05));
+  border-color: rgba(0, 33, 165, .24);
+}
+:root[data-brand="gator"][data-theme="light"] .wk-finish-gator::before {
+  background: radial-gradient(circle, rgba(250, 70, 22, .2) 0%, rgba(0, 33, 165, .14) 48%, transparent 72%);
+}
 :root[data-brand="gator"][data-theme="light"] .wk-index,
 :root[data-brand="gator"][data-theme="light"] .wk-count-badge.has-items,
 :root[data-brand="gator"][data-theme="light"] .wk-set-badge.is-active { color: var(--gator-blue, #0021A5); }

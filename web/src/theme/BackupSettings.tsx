@@ -1,10 +1,9 @@
 import { useRef, useState } from 'react'
 import { Download, Upload } from 'lucide-react'
-import { SwoleGator } from '../components/mascot'
+import { IronMascot } from '../components/mascot'
 import { BottomSheet } from '../components/primitives'
 import { readBackup, restoreBackup, useSaveBackup } from '../db/backup'
 import type { Preferences } from '../db/types'
-import { useIsGatorMode } from './index'
 import { Group, Segments } from './SettingsUi'
 
 type Backup = Awaited<ReturnType<typeof readBackup>>
@@ -36,7 +35,6 @@ function Counts({ counts }: { counts: Backup['counts'] }) {
 
 export default function BackupSettings({ prefs }: { prefs: Preferences }) {
   const { ready, save } = useSaveBackup()
-  const gatorMode = useIsGatorMode()
   const file = useRef<HTMLInputElement>(null)
   const running = useRef(false)
   const [pending, setPending] = useState<{ backup: Backup; fileName: string } | null>(null)
@@ -196,12 +194,10 @@ export default function BackupSettings({ prefs }: { prefs: Preferences }) {
       {report && (
         <BottomSheet title="Restore complete" onClose={() => setReport(null)}>
           <div className="st-sheet">
-            {gatorMode && (
-              <div className="st-sheet-gator">
-                <SwoleGator pose="badge" size={44} label="" />
-                <span className="eyebrow">Training log restored</span>
-              </div>
-            )}
+            <div className="st-sheet-gator">
+              <IronMascot pose="badge" size={44} label="" />
+              <span className="eyebrow">Training log restored</span>
+            </div>
             <p>
               {report.inserted.toLocaleString()} inserted ·{' '}
               {report.updated.toLocaleString()} updated ·{' '}

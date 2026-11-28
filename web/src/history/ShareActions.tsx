@@ -3,8 +3,14 @@ import { Copy, ImageDown } from 'lucide-react'
 import { formatWorkoutShare, type ShareableWorkout } from '../domain/workoutShare'
 import { formatWeight, weightLabel } from '../domain/units'
 import type { Preferences } from '../db/types'
-import { iconUrls } from '../theme'
 import { renderGatorBadgeToCanvas } from '../components/mascot'
+
+function hexWithAlpha(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
 
 async function renderShareCardPng(
   share: ShareableWorkout,
@@ -51,10 +57,34 @@ async function renderShareCardPng(
     ctx.fillStyle = '#FA4616'
     ctx.fillRect(width * 0.5, height - 14, width * 0.5, 14)
   } else {
-    ctx.fillStyle = '#090A0D'
+    // Machined obsidian backdrop with subtle radial energy glow
+    const bgGrad = ctx.createLinearGradient(0, 0, width, height)
+    bgGrad.addColorStop(0, '#090A0D')
+    bgGrad.addColorStop(0.55, '#11141C')
+    bgGrad.addColorStop(1, '#090A0D')
+    ctx.fillStyle = bgGrad
     ctx.fillRect(0, 0, width, height)
+
+    const obsidianGlow = ctx.createRadialGradient(width * 0.84, 128, 16, width * 0.84, 128, 620)
+    obsidianGlow.addColorStop(0, hexWithAlpha(resolvedAccent, 0.16))
+    obsidianGlow.addColorStop(0.45, 'rgba(30, 35, 48, 0.28)')
+    obsidianGlow.addColorStop(1, 'rgba(9, 10, 13, 0)')
+    ctx.fillStyle = obsidianGlow
+    ctx.fillRect(0, 0, width, height)
+
+    // Subtle machined plate dot grid
+    ctx.fillStyle = 'rgba(244, 246, 250, 0.035)'
+    for (let x = 28; x < width; x += 28) {
+      for (let y = 28; y < height; y += 28) {
+        ctx.fillRect(x, y, 2, 2)
+      }
+    }
+
+    // Top & bottom accent energy bars
     ctx.fillStyle = resolvedAccent
-    ctx.fillRect(0, 0, width, 12)
+    ctx.fillRect(0, 0, width, 14)
+    ctx.fillStyle = hexWithAlpha(resolvedAccent, 0.48)
+    ctx.fillRect(0, height - 10, width, 10)
   }
 
   function label(text: string, x: number, y: number, px: number, color = '#F4F6FA', weight = 600, maxWidth = 950) {
@@ -75,12 +105,15 @@ async function renderShareCardPng(
       renderGatorBadgeToCanvas(ctx, 896, 48, 120)
     }
   } else {
-    label('IRONLOG', 64, 130, 66, resolvedAccent, 800)
-    const iconUrl = iconUrls(prefs.appIcon).stamp
-    if (iconUrl) {
-      const img = new Image()
-      img.src = iconUrl
-      try { await img.decode(); ctx.drawImage(img, 914, 48, 96, 96) } catch { /* wordmark fallback */ }
+    label('IRONLOG · SWOLE CHIMP', 64, 96, 26, resolvedAccent, 800)
+    label('IRONLOG', 64, 152, 54, '#FFFFFF', 900)
+    const img = new Image()
+    img.src = '/icons/classic-192.png'
+    try {
+      await img.decode()
+      ctx.drawImage(img, 896, 48, 120, 120)
+    } catch {
+      /* wordmark fallback */
     }
   }
 
@@ -101,7 +134,7 @@ async function renderShareCardPng(
   // KPI surface card
   ctx.fillStyle = isGator ? '#0B1533' : '#12141A'
   ctx.fillRect(64, 405, 952, 295)
-  ctx.strokeStyle = isGator ? '#0021A5' : '#262933'
+  ctx.strokeStyle = isGator ? '#0021A5' : hexWithAlpha(resolvedAccent, 0.35)
   ctx.lineWidth = 2
   ctx.strokeRect(64, 405, 952, 295)
 

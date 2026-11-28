@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { BookOpen, Dumbbell, Layers3 } from 'lucide-react'
+import { Dumbbell, Layers3 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
-import { SwoleGator, useIsGatorMode } from '../components/mascot'
+import { IronMascot } from '../components/mascot'
 import ExerciseSelect from './ExerciseSelect'
 import Routines from './Routines'
 import './library.css'
@@ -9,7 +9,6 @@ import './routines.css'
 
 export default function Library() {
   const [params, setParams] = useSearchParams()
-  const gatorMode = useIsGatorMode()
   const routines = params.get('tab') === 'routines'
   const [prevTab, setPrevTab] = useState(routines)
   const [flyDir, setFlyDir] = useState<'none' | 'from-right' | 'from-left'>('none')
@@ -24,11 +23,7 @@ export default function Library() {
       <div className="lib-sticky-bar">
         <header className="lib-page-head">
           <h1>Library</h1>
-          {gatorMode ? (
-            <SwoleGator pose="badge" size={34} interactive className="lib-head-gator" />
-          ) : (
-            <BookOpen aria-hidden="true" size={22} />
-          )}
+          <IronMascot pose="badge" size={34} interactive className="lib-head-gator" />
         </header>
         <div
           className="lib-segment"

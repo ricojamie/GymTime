@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ArrowRight, CalendarDays, ChevronRight, ClipboardList, HardDriveDownload, Play, RotateCcw, Settings, X } from 'lucide-react'
+import { ArrowRight, CalendarDays, ChevronRight, ClipboardList, HardDriveDownload, Play, Settings, X, Zap } from 'lucide-react'
 import { db, defaultPreferences } from '../db/database'
 import { useSaveBackup } from '../db/backup'
 import { startWorkout } from '../db/repositories'
-import { PlateAssembly } from '../components/home/PlateAssembly'
+import { ApexKineticStage } from '../components/home/ApexKineticStage'
 import { TrainingReadouts } from '../components/home/TrainingReadouts'
-import { SwoleGator } from '../components/mascot'
+import { IronMascot } from '../components/mascot'
 import { useIsGatorMode } from '../theme'
 import './home.css'
 
@@ -192,45 +192,33 @@ export default function Home() {
   const [dismissed, setDismissed] = useState(() => {
     try { return localStorage.getItem('ironlog.dismissedBackupReminder') } catch { return null }
   })
-  const [rackImpact, setRackImpact] = useState(false)
-  const impactTimer = useRef<number | undefined>(undefined)
-  const artRef = useRef<HTMLDivElement>(null)
+  const [seismic, setSeismic] = useState(false)
+  const seismicTimer = useRef<number | undefined>(undefined)
+  const seismicRaf = useRef<number | undefined>(undefined)
 
   useEffect(() => () => {
-    if (impactTimer.current !== undefined) window.clearTimeout(impactTimer.current)
+    if (seismicTimer.current !== undefined) window.clearTimeout(seismicTimer.current)
+    if (seismicRaf.current !== undefined) window.cancelAnimationFrame(seismicRaf.current)
   }, [])
 
-  function triggerReplay() {
-    window.dispatchEvent(new Event('ironlog:replay-plates'))
+  const triggerSeismic = useCallback(() => {
     if (document.documentElement.dataset.motion === 'reduced' ||
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
-    setRackImpact(false)
-    window.requestAnimationFrame(() => {
-      setRackImpact(true)
-      if (impactTimer.current !== undefined) window.clearTimeout(impactTimer.current)
-      impactTimer.current = window.setTimeout(() => setRackImpact(false), 300)
+    if (seismicTimer.current !== undefined) window.clearTimeout(seismicTimer.current)
+    if (seismicRaf.current !== undefined) window.cancelAnimationFrame(seismicRaf.current)
+    setSeismic(false)
+    seismicRaf.current = window.requestAnimationFrame(() => {
+      seismicRaf.current = undefined
+      setSeismic(true)
+      seismicTimer.current = window.setTimeout(() => {
+        setSeismic(false)
+        seismicTimer.current = undefined
+      }, 340)
     })
-  }
+  }, [])
 
-  function handleArtPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
-    if (e.pointerType !== 'mouse') return
-    if (document.documentElement.dataset.motion === 'reduced' ||
-      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
-    const el = artRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    if (!rect.width || !rect.height) return
-    const nx = ((e.clientX - rect.left) / rect.width - 0.5) * 2
-    const ny = ((e.clientY - rect.top) / rect.height - 0.5) * 2
-    el.style.setProperty('--tilt-x', `${(-ny * 3.5).toFixed(2)}deg`)
-    el.style.setProperty('--tilt-y', `${(nx * 4.2).toFixed(2)}deg`)
-  }
-
-  function handleArtPointerLeave() {
-    const el = artRef.current
-    if (!el) return
-    el.style.setProperty('--tilt-x', '0deg')
-    el.style.setProperty('--tilt-y', '0deg')
+  function dispatchSurge() {
+    window.dispatchEvent(new Event('ironlog:apex-surge'))
   }
 
   function dismiss() {
@@ -242,12 +230,16 @@ export default function Home() {
   return <main className="screen home-screen iron-home" aria-labelledby="home-greeting">
     <header className="home-brandbar">
       <div className="home-brand" aria-label="IronLog">
-        {gatorMode
-          ? <SwoleGator pose="badge" size={38} />
-          : <img decoding="async" width="38" height="38" src="/icons/apple-touch-icon-180.png" alt=""/>}
+        <IronMascot
+          pose="badge"
+          brand={gatorMode ? 'gator' : 'chimp'}
+          size={38}
+          interactive
+          label={gatorMode ? 'IronLog UF emblem' : 'IronLog emblem'}
+        />
         <span className="home-brand-text" aria-hidden="true">
           <span className="home-brand-wordmark">IRON<b>LOG</b></span>
-          {gatorMode && <span className="home-brand-sub">THE SWAMP</span>}
+          <span className="home-brand-sub">{gatorMode ? 'THE SWAMP' : 'SWOLE CHIMP'}</span>
         </span>
       </div>
       <span className="home-date"><CalendarDays size={15}/>{weekday} · {monthDay}</span>
@@ -256,29 +248,17 @@ export default function Home() {
     {due && dismissed !== reminderKey && <BackupReminder onDismiss={dismiss}/>}
     <h1 className="home-greeting home-stagger" style={{'--stagger-i': 0} as CSSProperties} id="home-greeting">Hey, {prefs.userName.trim() || 'Athlete'}</h1>
     <section
-      className={`home-surface home-session home-stagger ${active ? 'is-active' : ''} ${rackImpact ? 'is-rack-impact' : ''}`}
+      className={`home-surface home-session home-stagger ${active ? 'is-active' : ''} ${seismic ? 'is-seismic' : ''}`}
       style={{'--stagger-i': 1} as CSSProperties}
       aria-labelledby="home-session-title"
     >
       <div className="home-session-stage">
-        <div
-          ref={artRef}
-          className={`home-session-art ${gatorMode ? 'has-gator' : ''}`}
-          aria-hidden={!gatorMode || undefined}
-          onPointerMove={handleArtPointerMove}
-          onPointerLeave={handleArtPointerLeave}
-          onClick={e => {
-            if ((e.target as HTMLElement).closest('.home-gator-hero-wrap')) return
-            triggerReplay()
-          }}
-        >
-          <span className="home-art-scale" aria-hidden="true"/>
-          <PlateAssembly gatorMode={gatorMode}/>
-          {gatorMode && (
-            <div className="home-gator-hero-wrap">
-              <SwoleGator pose="hero" interactive size="100%" />
-            </div>
-          )}
+        <div className="home-session-art">
+          <ApexKineticStage
+            active={Boolean(active)}
+            gatorMode={gatorMode}
+            onSurge={triggerSeismic}
+          />
         </div>
         <div className="home-session-copy">
           <span className="home-session-state"><i className="home-status-dot"/>{active ? 'Session in progress' : 'Free session'}</span>
@@ -288,9 +268,14 @@ export default function Home() {
             <Play size={16} fill="currentColor" strokeWidth={1.75}/>{active ? 'Resume workout' : 'Start workout'}
           </Link>
         </div>
-        <button type="button" className="home-art-replay" aria-label="Replay plate animation" title="Replay plate animation"
-          onClick={triggerReplay}>
-          <RotateCcw size={15} aria-hidden="true"/><span>Replay</span>
+        <button
+          type="button"
+          className="home-art-surge"
+          aria-label="Unleash apex surge"
+          title="Unleash apex surge"
+          onClick={dispatchSurge}
+        >
+          <Zap size={15} aria-hidden="true"/><span>Surge</span>
         </button>
       </div>
       {!active && <Link className="home-plan-row" to="/workout/builder"><ClipboardList size={18}/><span>Plan a workout</span><ArrowRight size={17}/></Link>}
